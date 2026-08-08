@@ -107,6 +107,18 @@ LEGACY_PACKAGING_VALUES = frozenset(
 )
 MAX_LEGACY_PACKAGING = 9
 
+#: The distribution-5 cap, and MovieVault's MAX_PACKAGING. Not a local sanity
+#: limit: exceeding it on the wire raises `record_invalid`, which fails the
+#: whole synchronization, so the two sides must agree on the number.
+MAX_PACKAGING_V5 = 12
+
+#: Everything the feed may legitimately name on any contract, for the
+#: log-and-keep check. A value outside this is still stored; it is only the
+#: warning that distinguishes them.
+ALL_PACKAGING_VALUES = (
+    LEGACY_PACKAGING_VALUES | CARRIER_TYPE_VALUES | OUTER_PACKAGING_VALUES
+)
+
 # Which axis each legacy value belongs to. Matched case-insensitively on the
 # way in: migration 053 backfilled scalars verbatim ("Steelbook") and the
 # movievault_26 plugin emits TitleCase, neither of which the snake_case i18n
@@ -202,13 +214,23 @@ def normalize_finishes(values: Any) -> list[str]:
     return _normalize_list(values, FINISH_VALUES, {})
 
 
-def split_legacy_packaging(values: Any) -> tuple[str | None, list[str]]:
-    """Split a flat legacy packaging list into (carrier, outer_packaging).
+def split_packaging(values: Any) -> tuple[str | None, list[str]]:
+    """Split a flat packaging list into (carrier, outer_packaging).
 
-    Used both by migration 067's backfill and by the MovieVault ingest path,
-    which still receives the flat list on distribution-4. The first recognized
-    carrier wins - a well-formed record names at most one - while every
-    recognized outer value is kept.
+    Accepts both alphabets. The legacy nine arrive on the distribution-4 feed
+    and in rows written before migration 067; the canonical vocabulary arrives
+    on distribution-5 and from any source that already speaks it.
+
+    Accepting canonical values is not hypothetical tidiness - it was a bug.
+    Only the six `LEGACY_CARRIER_MAP` keys were matched, so a feed value that
+    was *already* a `CARRIER_TYPES` member - `futurepak`, `hardbox`,
+    `digisleeve` - was discarded exactly like garbage, and silently: nothing
+    logged it. The raw value survived only in the flat mirror, and the first
+    user edit of the axes recomputed that mirror and erased it. So the finer
+    terms could arrive and still leave the axes empty.
+
+    The first recognized carrier wins - a well-formed record names at most one -
+    while every recognized outer value is kept, de-duplicated, in order.
     """
     if isinstance(values, str):
         values = [values]
@@ -220,13 +242,26 @@ def split_legacy_packaging(values: Any) -> tuple[str | None, list[str]]:
         cleaned = _clean(item)
         if not cleaned:
             continue
-        if carrier is None and cleaned in LEGACY_CARRIER_MAP:
-            carrier = LEGACY_CARRIER_MAP[cleaned]
-            continue
-        mapped = LEGACY_OUTER_MAP.get(cleaned)
+        if carrier is None:
+            # Canonical first, then the legacy alias table. `amaray` is only in
+            # the legacy map, and correctly folds onto `keep_case`.
+            mapped_carrier = (
+                cleaned if cleaned in CARRIER_TYPE_VALUES else LEGACY_CARRIER_MAP.get(cleaned)
+            )
+            if mapped_carrier:
+                carrier = mapped_carrier
+                continue
+        mapped = (
+            cleaned if cleaned in OUTER_PACKAGING_VALUES else LEGACY_OUTER_MAP.get(cleaned)
+        )
         if mapped and mapped not in outer:
             outer.append(mapped)
     return carrier, outer
+
+
+#: Retained under the original name: migration 067's comment and the ingest path
+#: both refer to it, and it now handles more than the legacy alphabet.
+split_legacy_packaging = split_packaging
 
 
 def derive_legacy_packaging(carrier: Any, outer: Any) -> list[str]:
