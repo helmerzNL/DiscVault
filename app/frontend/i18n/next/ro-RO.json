@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Acest serial nu are un identificator de sursa, asa ca nicio sursa nu a putut fi interogata. Vine odata cu datele discului de la MovieVault.",
   "seriesDetail.metadataNoSource": "Niciun plugin activat nu poate descrie un serial. Activati unul in Profil - Pluginuri.",
   "seriesDetail.metadataUnavailable": "Aceasta instalare nu poate stoca inca date despre seriale.",
+  "seriesDetail.identityHelp": "Fara identificator nicio sursa nu poate fi interogata despre acest serial, deci ramane fara rezumat si imagini.",
+  "seriesDetail.identitySearch": "Cauta",
+  "seriesDetail.identitySearchPlaceholder": "Cauta dupa titlu",
+  "seriesDetail.identityUse": "Foloseste acesta",
+  "seriesDetail.identitySearching": "Se cauta in surse...",
+  "seriesDetail.identityNoMatches": "Nicio sursa nu a recunoscut acel titlu.",
+  "seriesDetail.identitySaving": "Se leaga serialul si se preiau datele...",
   "collection.seasonNumber": "Sezonul {number}"
 }

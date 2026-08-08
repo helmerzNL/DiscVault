@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Ten serial nie ma identyfikatora zrodla, wiec nie mozna bylo zapytac zadnego zrodla. Przychodzi wraz z danymi plyty z MovieVault.",
   "seriesDetail.metadataNoSource": "Zadna wlaczona wtyczka nie potrafi opisac serialu. Wlacz jedna w Profil - Wtyczki.",
   "seriesDetail.metadataUnavailable": "Ta instalacja nie moze jeszcze przechowywac danych seriali.",
+  "seriesDetail.identityHelp": "Bez identyfikatora zadne zrodlo nie moze zostac zapytane o ten serial, wiec pozostaje bez opisu i grafik.",
+  "seriesDetail.identitySearch": "Szukaj",
+  "seriesDetail.identitySearchPlaceholder": "Szukaj wedlug tytulu",
+  "seriesDetail.identityUse": "Uzyj tego",
+  "seriesDetail.identitySearching": "Przeszukiwanie zrodel...",
+  "seriesDetail.identityNoMatches": "Zadne zrodlo nie rozpoznalo tego tytulu.",
+  "seriesDetail.identitySaving": "Laczenie serialu i pobieranie danych...",
   "collection.seasonNumber": "Sezon {number}"
 }

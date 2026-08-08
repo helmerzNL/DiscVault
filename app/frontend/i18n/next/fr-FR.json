@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Cette serie n'a pas d'identifiant de source, aucune source n'a donc pu etre interrogee. Il arrive avec les donnees de disque de MovieVault.",
   "seriesDetail.metadataNoSource": "Aucun plug-in active ne peut decrire une serie. Activez-en un sous Profil - Plug-ins.",
   "seriesDetail.metadataUnavailable": "Cette installation ne peut pas encore stocker de donnees de serie.",
+  "seriesDetail.identityHelp": "Sans identifiant, aucune source ne peut etre interrogee sur cette serie, elle reste donc sans synopsis ni images.",
+  "seriesDetail.identitySearch": "Rechercher",
+  "seriesDetail.identitySearchPlaceholder": "Rechercher par titre",
+  "seriesDetail.identityUse": "Utiliser celle-ci",
+  "seriesDetail.identitySearching": "Recherche dans les sources...",
+  "seriesDetail.identityNoMatches": "Aucune source ne reconnait ce titre.",
+  "seriesDetail.identitySaving": "Liaison de la serie et recuperation des donnees...",
   "collection.seasonNumber": "Saison {number}"
 }

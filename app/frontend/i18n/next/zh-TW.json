@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "此影集沒有來源識別碼，因此無法向任何來源查詢。該識別碼隨 MovieVault 的光碟資料一同送達。",
   "seriesDetail.metadataNoSource": "沒有已啟用的外掛程式可以描述影集。請在「個人檔案 - 外掛程式」中啟用一個。",
   "seriesDetail.metadataUnavailable": "此安裝尚無法儲存影集資料。",
+  "seriesDetail.identityHelp": "沒有識別碼就無法向任何來源查詢此影集，因此它將沒有簡介與圖片。",
+  "seriesDetail.identitySearch": "搜尋",
+  "seriesDetail.identitySearchPlaceholder": "依標題搜尋",
+  "seriesDetail.identityUse": "使用這個",
+  "seriesDetail.identitySearching": "正在搜尋來源...",
+  "seriesDetail.identityNoMatches": "沒有來源辨識出該標題。",
+  "seriesDetail.identitySaving": "正在連結影集並取得資料...",
   "collection.seasonNumber": "第 {number} 季"
 }

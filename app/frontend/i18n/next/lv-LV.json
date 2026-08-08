@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Sim serialam nav avota identifikatora, tapec nevareja vaicat nevienam avotam. Tas nak lidzi diska datiem no MovieVault.",
   "seriesDetail.metadataNoSource": "Neviens iespejotais spraudnis nevar aprakstit serialu. Iespejojiet kadu sadala Profils - Spraudni.",
   "seriesDetail.metadataUnavailable": "Si instalacija vel nevar glabat serialu datus.",
+  "seriesDetail.identityHelp": "Bez identifikatora nevienam avotam nevar jautat par so serialu, tapec tas paliek bez apraksta un attelie.",
+  "seriesDetail.identitySearch": "Meklet",
+  "seriesDetail.identitySearchPlaceholder": "Meklet pec nosaukuma",
+  "seriesDetail.identityUse": "Izmantot so",
+  "seriesDetail.identitySearching": "Mekle avotos...",
+  "seriesDetail.identityNoMatches": "Neviens avots neatpazina so nosaukumu.",
+  "seriesDetail.identitySaving": "Saista serialu un iegust datus...",
   "collection.seasonNumber": "Sezona {number}"
 }

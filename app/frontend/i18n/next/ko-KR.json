@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "이 시리즈에는 소스 식별자가 없어 어떤 소스에도 문의할 수 없었습니다. 식별자는 MovieVault의 디스크 데이터와 함께 전달됩니다.",
   "seriesDetail.metadataNoSource": "시리즈를 설명할 수 있는 활성화된 플러그인이 없습니다. 프로필 - 플러그인에서 활성화하세요.",
   "seriesDetail.metadataUnavailable": "이 설치에서는 아직 시리즈 데이터를 저장할 수 없습니다.",
+  "seriesDetail.identityHelp": "식별자가 없으면 이 시리즈에 대해 어떤 소스에도 문의할 수 없어 줄거리와 이미지가 없는 상태로 남습니다.",
+  "seriesDetail.identitySearch": "검색",
+  "seriesDetail.identitySearchPlaceholder": "제목으로 검색",
+  "seriesDetail.identityUse": "이것 사용",
+  "seriesDetail.identitySearching": "소스 검색 중...",
+  "seriesDetail.identityNoMatches": "해당 제목을 인식한 소스가 없습니다.",
+  "seriesDetail.identitySaving": "시리즈를 연결하고 정보를 가져오는 중...",
   "collection.seasonNumber": "시즌 {number}"
 }

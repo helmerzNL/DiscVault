@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Sis serialas neturi saltinio identifikatoriaus, todel nebuvo galima paklausti jokio saltinio. Jis ateina su disko duomenimis is MovieVault.",
   "seriesDetail.metadataNoSource": "Joks ijungtas ipludas negali aprasyti serialo. Ijunkite viena skiltyje Profilis - Ipludai.",
   "seriesDetail.metadataUnavailable": "Si diegtis dar negali saugoti serialu duomenu.",
+  "seriesDetail.identityHelp": "Be identifikatoriaus jokio saltinio negalima paklausti apie si seriala, todel jis lieka be aprasymo ir vaizdu.",
+  "seriesDetail.identitySearch": "Ieskoti",
+  "seriesDetail.identitySearchPlaceholder": "Ieskoti pagal pavadinima",
+  "seriesDetail.identityUse": "Naudoti si",
+  "seriesDetail.identitySearching": "Ieskoma saltiniuose...",
+  "seriesDetail.identityNoMatches": "Joks saltinis neatpazino sio pavadinimo.",
+  "seriesDetail.identitySaving": "Susiejamas serialas ir gaunami duomenys...",
   "collection.seasonNumber": "Sezonas {number}"
 }

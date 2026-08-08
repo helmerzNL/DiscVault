@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Talla sarjalla ei ole lahdetunnistetta, joten yhtaan lahdetta ei voitu kysya. Se tulee levytietojen mukana MovieVaultista.",
   "seriesDetail.metadataNoSource": "Mikaan kaytossa oleva lisaosa ei voi kuvailla sarjaa. Ota jokin kayttoon kohdassa Profiili - Lisaosat.",
   "seriesDetail.metadataUnavailable": "Tama asennus ei voi viela tallentaa sarjatietoja.",
+  "seriesDetail.identityHelp": "Ilman tunnistetta mistaan lahteesta ei voi kysya tasta sarjasta, joten se jaa ilman juonta ja kuvia.",
+  "seriesDetail.identitySearch": "Hae",
+  "seriesDetail.identitySearchPlaceholder": "Hae nimella",
+  "seriesDetail.identityUse": "Kayta tata",
+  "seriesDetail.identitySearching": "Haetaan lahteista...",
+  "seriesDetail.identityNoMatches": "Mikaan lahde ei tunnistanut nimea.",
+  "seriesDetail.identitySaving": "Yhdistetaan sarja ja haetaan tiedot...",
   "collection.seasonNumber": "Kausi {number}"
 }

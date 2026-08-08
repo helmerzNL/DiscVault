@@ -7849,6 +7849,59 @@ def ui_preview_html(
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
+    .series-identity-search {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .series-identity-search input {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .series-identity-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .series-identity-candidate {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line-strong);
+    }
+    .series-identity-thumb {
+      width: 46px;
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--surface-2, rgba(127, 127, 127, 0.12));
+    }
+    .series-identity-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .series-identity-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .series-identity-text span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    /* Two lines of synopsis: enough to tell two same-named shows apart, not so
+       much that the list stops being scannable. */
+    .series-identity-overview {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
     .series-season-list {
       display: grid;
       gap: 8px;
@@ -15753,6 +15806,12 @@ def ui_preview_html(
             <div class="detail-card">
               <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
               <div class="detail-grid" id="seriesDetailIdentifiers"></div>
+              <p class="import-source-meta" data-next-i18n="seriesDetail.identityHelp">Without an identifier no source can be asked about this series, so it stays without a synopsis or artwork.</p>
+              <div class="series-identity-search">
+                <input type="search" id="seriesIdentitySearchInput" data-next-i18n-placeholder="seriesDetail.identitySearchPlaceholder" placeholder="Search by title">
+                <button type="button" class="secondary-button" id="seriesIdentitySearchButton" data-next-i18n="seriesDetail.identitySearch">Search</button>
+              </div>
+              <div id="seriesIdentityCandidates"></div>
             </div>
             <div class="detail-card">
               <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
@@ -17773,6 +17832,10 @@ def ui_preview_html(
     let activeSeriesId = "";
     let activeSeriesPayload = null;
     let seriesDiscsViewMode = normalizeMemberViewMode(localStorage.getItem("dv_next_series_discs_view_mode"));
+    // Never persisted and never restored: a candidate list is an offer about one
+    // typed query, and showing a stale one next to a different series is how a
+    // person links the wrong show.
+    let seriesIdentityCandidates = [];
     let seriesDetailSort = parseLocalJson("dv_next_series_detail_sort", {key: "title", direction: "asc"});
     let activePersonId = "";
     let activePersonPayload = null;
@@ -30341,6 +30404,13 @@ def ui_preview_html(
       ));
       document.getElementById("seriesDetailIdentifiers").innerHTML = identifiers.join("")
         || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
+      // The search box is only useful to somebody who may change the series, and
+      // only honest while it can actually do something.
+      const identityBox = document.querySelector(".series-identity-search");
+      if (identityBox) identityBox.classList.toggle("hidden", !hasPermission("containers.edit"));
+      const identityInput = document.getElementById("seriesIdentitySearchInput");
+      if (identityInput && !identityInput.value) identityInput.value = series.title || "";
+      renderSeriesIdentityCandidates();
       const summary = detail.aggregateSummary || {};
       document.getElementById("seriesDetailMetadataDetails").innerHTML = detailFieldRows([
         [tNext("seriesDetail.discCount", "Discs"), discs.length],
@@ -30399,6 +30469,9 @@ def ui_preview_html(
       activeContainerPayload = null;
       activePersonId = "";
       activePersonPayload = null;
+      // A candidate list belongs to the query that produced it. Carrying one into
+      // another series is how somebody links the wrong show without noticing.
+      seriesIdentityCandidates = [];
       showSeriesDetailLoading(seriesId);
       showSeriesDetailPage();
       if (pushUrl && appMode) {
@@ -30450,6 +30523,87 @@ def ui_preview_html(
         setSeriesEditPanelVisible(false);
         await loadAppSnapshot();
         setSeriesDetailMessage(tNext("seriesDetail.saved", "Series saved."), "good");
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function seriesIdentityCandidateHtml(candidate, index) {
+      const meta = [candidate.year, candidate.providerLabel].filter(Boolean).join(" / ");
+      return `
+        <div class="series-identity-candidate">
+          <div class="series-identity-thumb">${candidate.posterUrl
+            ? `<img src="${escapeHtml(candidate.posterUrl)}" alt="" loading="lazy">`
+            : ""}</div>
+          <div class="series-identity-text">
+            <strong>${escapeHtml(candidate.title || "")}</strong>
+            <span>${escapeHtml(meta)}</span>
+            <span class="series-identity-overview">${escapeHtml(candidate.overview || "")}</span>
+          </div>
+          <button type="button" class="secondary-button" data-series-identity-pick="${index}">${escapeHtml(tNext("seriesDetail.identityUse", "Use this one"))}</button>
+        </div>`;
+    }
+    function renderSeriesIdentityCandidates() {
+      const node = document.getElementById("seriesIdentityCandidates");
+      if (!node) return;
+      if (!seriesIdentityCandidates.length) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `<div class="series-identity-list">${
+        seriesIdentityCandidates.map(seriesIdentityCandidateHtml).join("")
+      }</div>`;
+    }
+    async function searchSeriesIdentity() {
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const input = document.getElementById("seriesIdentitySearchInput");
+      const query = (input?.value || "").trim() || (activeSeriesPayload?.series?.title || "");
+      if (!query) return;
+      setSeriesDetailMessage(tNext("seriesDetail.identitySearching", "Searching sources..."));
+      try {
+        const payload = await authApiJson(
+          `/api/next/series/${encodeURIComponent(activeSeriesId)}/identity/search?q=${encodeURIComponent(query)}`
+        );
+        const result = payload.result || {};
+        seriesIdentityCandidates = result.candidates || [];
+        renderSeriesIdentityCandidates();
+        if (seriesIdentityCandidates.length) {
+          setSeriesDetailMessage("");
+        } else if (result.reason === "no series search source") {
+          setSeriesDetailMessage(tNext("seriesDetail.metadataNoSource", "No enabled plugin can describe a series. Enable one under Profile - Plugins."), "info");
+        } else {
+          setSeriesDetailMessage(tNext("seriesDetail.identityNoMatches", "No source recognised that title."), "info");
+        }
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function chooseSeriesIdentity(index) {
+      const candidate = seriesIdentityCandidates[Number(index)];
+      if (!candidate || !activeSeriesId || !hasPermission("containers.edit")) return;
+      setSeriesDetailMessage(tNext("seriesDetail.identitySaving", "Linking series and fetching details..."));
+      try {
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/identifiers`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            identifierType: candidate.identifierType,
+            identifier: candidate.identifier,
+            providerId: candidate.provider
+          })
+        });
+        // The route sets the identifier and refreshes in one request, so the page
+        // repaints with whatever the sources just supplied rather than showing an
+        // identified-but-still-empty series.
+        seriesIdentityCandidates = [];
+        renderSeriesDetail(payload.detail || {});
+        await loadAppSnapshot();
+        const status = (payload.result || {}).status;
+        setSeriesDetailMessage(
+          status === "ok"
+            ? tNext("seriesDetail.metadataRefreshed", "Series metadata refreshed.")
+            : seriesRefreshExplanation(payload.result || {}),
+          status === "ok" ? "good" : "info"
+        );
       } catch (error) {
         setSeriesDetailMessage(error.message || String(error), "bad");
       }
@@ -45171,6 +45325,22 @@ def ui_preview_html(
       document.getElementById("seriesEditForm")?.addEventListener("submit", (event) => saveSeriesEdit(event));
       document.getElementById("seriesMetadataRefreshButton")?.addEventListener("click", () => refreshActiveSeriesMetadata());
       document.getElementById("seriesDeleteButton")?.addEventListener("click", () => deleteActiveSeries());
+      document.getElementById("seriesIdentitySearchButton")?.addEventListener("click", () => searchSeriesIdentity());
+      document.getElementById("seriesIdentitySearchInput")?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        // The input sits inside no form, so Enter would otherwise do nothing --
+        // which reads as a broken search box rather than as a missing shortcut.
+        event.preventDefault();
+        searchSeriesIdentity();
+      });
+      // Delegated: the candidate cards are rebuilt on every search, so a listener
+      // bound per card would have to be rebound with them.
+      document.getElementById("seriesIdentityCandidates")?.addEventListener("click", (event) => {
+        const pick = event.target.closest("[data-series-identity-pick]");
+        if (!pick) return;
+        event.preventDefault();
+        chooseSeriesIdentity(pick.dataset.seriesIdentityPick);
+      });
       document.querySelectorAll("[data-series-view-mode]").forEach((button) => {
         button.addEventListener("click", (event) => {
           event.preventDefault();

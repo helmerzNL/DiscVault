@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Tento serial nema identifikator zdroja, takze nebolo mozne opytat sa ziadneho zdroja. Prichadza s udajmi disku z MovieVault.",
   "seriesDetail.metadataNoSource": "Ziadny povoleny plugin nedokaze opisat serial. Povolte nejaky v Profil - Pluginy.",
   "seriesDetail.metadataUnavailable": "Tato instalacia zatial nedokaze ukladat udaje serialov.",
+  "seriesDetail.identityHelp": "Bez identifikatora sa nemozno opytat ziadneho zdroja na tento serial, takze zostane bez popisu a obrazkov.",
+  "seriesDetail.identitySearch": "Hladat",
+  "seriesDetail.identitySearchPlaceholder": "Hladat podla nazvu",
+  "seriesDetail.identityUse": "Pouzit tento",
+  "seriesDetail.identitySearching": "Prehladavanie zdrojov...",
+  "seriesDetail.identityNoMatches": "Ziadny zdroj nazov nerozpoznal.",
+  "seriesDetail.identitySaving": "Prepajanie serialu a nacitanie udajov...",
   "collection.seasonNumber": "Séria {number}"
 }

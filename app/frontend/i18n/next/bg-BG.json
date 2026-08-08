@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Tozi serial nyama identifikator na iztochnik, zatova ne beshe vazmozhno da se zapita iztochnik. Toy pristiga s dannite za diska ot MovieVault.",
   "seriesDetail.metadataNoSource": "Nyama vklyuchena priставka, koyato da opishe serial. Vklyuchete edna v Profil - Pristavki.",
   "seriesDetail.metadataUnavailable": "Tazi instalatsiya oshte ne mozhe da sahranyava danni za seriali.",
+  "seriesDetail.identityHelp": "Bez identifikator nikoy iztochnik ne mozhe da bade zapitan za tozi serial, zatova toy ostava bez opisanie i izobrazheniya.",
+  "seriesDetail.identitySearch": "Tarsene",
+  "seriesDetail.identitySearchPlaceholder": "Tarsene po zaglavie",
+  "seriesDetail.identityUse": "Izpolzvay tozi",
+  "seriesDetail.identitySearching": "Tarsene v iztochnitsite...",
+  "seriesDetail.identityNoMatches": "Nikoy iztochnik ne razpozna tova zaglavie.",
+  "seriesDetail.identitySaving": "Svarzvane na seriala i izteglyane na dannite...",
   "collection.seasonNumber": "Сезон {number}"
 }

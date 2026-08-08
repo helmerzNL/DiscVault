@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Questa serie non ha un identificatore di origine, quindi non e stato possibile interrogare alcuna fonte. Arriva con i dati del disco da MovieVault.",
   "seriesDetail.metadataNoSource": "Nessun plug-in attivo puo descrivere una serie. Attivane uno in Profilo - Plug-in.",
   "seriesDetail.metadataUnavailable": "Questa installazione non puo ancora memorizzare dati di serie.",
+  "seriesDetail.identityHelp": "Senza identificatore nessuna fonte puo essere interrogata su questa serie, che resta senza trama ne immagini.",
+  "seriesDetail.identitySearch": "Cerca",
+  "seriesDetail.identitySearchPlaceholder": "Cerca per titolo",
+  "seriesDetail.identityUse": "Usa questa",
+  "seriesDetail.identitySearching": "Ricerca nelle fonti...",
+  "seriesDetail.identityNoMatches": "Nessuna fonte ha riconosciuto quel titolo.",
+  "seriesDetail.identitySaving": "Collegamento della serie e recupero dei dati...",
   "collection.seasonNumber": "Stagione {number}"
 }

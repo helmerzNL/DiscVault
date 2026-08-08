@@ -161,6 +161,13 @@ jobs:
       - name: Test the series detail page
         run: python -m unittest tests.test_next_series_detail_postgres
 
+      # Giving a series the identifier that makes it enrichable at all. The
+      # PostgreSQL half is the one that matters: that one identifier cannot name
+      # two series, and that correcting one replaces rather than accumulates,
+      # are both facts about rows.
+      - name: Test series identity
+        run: python -m unittest tests.test_next_series_identity
+
       # This one has no database at all, but it guards the surface-id and route
       # registration that a new detail page has to join to be reachable.
       - name: Test the app surface router

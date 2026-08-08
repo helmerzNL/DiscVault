@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Denne serien har ingen kildeidentifikator, sa ingen kilde kunne sporres. Den folger med diskdata fra MovieVault.",
   "seriesDetail.metadataNoSource": "Ingen aktivert programtillegg kan beskrive en serie. Aktiver ett under Profil - Programtillegg.",
   "seriesDetail.metadataUnavailable": "Denne installasjonen kan enna ikke lagre seriedata.",
+  "seriesDetail.identityHelp": "Uten identifikator kan ingen kilde sporres om denne serien, sa den forblir uten handling og bilder.",
+  "seriesDetail.identitySearch": "Sok",
+  "seriesDetail.identitySearchPlaceholder": "Sok pa tittel",
+  "seriesDetail.identityUse": "Bruk denne",
+  "seriesDetail.identitySearching": "Soker i kilder...",
+  "seriesDetail.identityNoMatches": "Ingen kilde kjente igjen tittelen.",
+  "seriesDetail.identitySaving": "Kobler serien og henter data...",
   "collection.seasonNumber": "Sesong {number}"
 }

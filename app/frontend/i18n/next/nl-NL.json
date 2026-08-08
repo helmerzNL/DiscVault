@@ -2872,5 +2872,12 @@
   "seriesDetail.metadataNoIdentifier": "Deze serie heeft geen bron-identifier, dus kon geen bron worden bevraagd. Die komt mee met de schijfgegevens van MovieVault.",
   "seriesDetail.metadataNoSource": "Geen ingeschakelde plug-in kan een serie beschrijven. Schakel er een in onder Profiel - Plug-ins.",
   "seriesDetail.metadataUnavailable": "Deze installatie kan nog geen seriegegevens opslaan.",
+  "seriesDetail.identityHelp": "Zonder identifier kan geen enkele bron over deze serie worden bevraagd, dus blijft hij zonder samenvatting of afbeeldingen.",
+  "seriesDetail.identitySearch": "Zoeken",
+  "seriesDetail.identitySearchPlaceholder": "Zoek op titel",
+  "seriesDetail.identityUse": "Deze gebruiken",
+  "seriesDetail.identitySearching": "Bronnen doorzoeken...",
+  "seriesDetail.identityNoMatches": "Geen bron herkende die titel.",
+  "seriesDetail.identitySaving": "Serie koppelen en gegevens ophalen...",
   "collection.seasonNumber": "Seizoen {number}"
 }

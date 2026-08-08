@@ -1,7 +1,7 @@
 {
   "id": "tmdb",
   "name": "TMDb",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": [
@@ -12,6 +12,7 @@
     "lookup_external_id",
     "movie_details",
     "series_details",
+    "search_series",
     "people",
     "person_details",
     "person_filmography",
