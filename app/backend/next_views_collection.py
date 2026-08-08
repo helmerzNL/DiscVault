@@ -4055,6 +4055,10 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       document.getElementById("detailSpecs").innerHTML = fieldsFromObject([
         ["HDR", specs.hdr || metadata.hdr],
         ["Packaging", specs.packaging || metadata.packaging],
+        ["Case type", specs.carrier_type || metadata.carrier_type],
+        ["Steelbook format", specs.steelbook_format || metadata.steelbook_format],
+        ["Outer packaging", specs.outer_packaging || metadata.outer_packaging],
+        ["Finish", specs.finishes || metadata.finishes],
         ["Screen ratio", specs.screen_ratios || metadata.screen_ratios],
         ["Audio", specs.audio_tracks || metadata.audio_tracks],
         ["Subtitles", specs.subtitles || metadata.subtitles],

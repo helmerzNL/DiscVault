@@ -20,6 +20,19 @@ from contextlib import nullcontext
 from datetime import date, datetime, timezone
 from typing import Any, Callable, ContextManager
 
+try:  # pragma: no cover - supports gunicorn next_app:app
+    from .next_packaging import (
+        LEGACY_PACKAGING_VALUES,
+        MAX_LEGACY_PACKAGING,
+        split_legacy_packaging,
+    )
+except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+    from next_packaging import (
+        LEGACY_PACKAGING_VALUES,
+        MAX_LEGACY_PACKAGING,
+        split_legacy_packaging,
+    )
+
 try:
     from psycopg.types.json import Jsonb
 except ModuleNotFoundError:  # pragma: no cover - allows policy tests without psycopg
@@ -105,18 +118,12 @@ LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,8}(-[a-z0-9]{1,8})*$")
 # distribution-4 packaging enum. Same forward-compat leniency as the audio
 # track enums above - an unrecognized value is stored as-is with a logged
 # warning rather than rejecting the whole release record.
-PACKAGING_VALUES = {
-    "keep_case",
-    "amaray",
-    "steelbook",
-    "slipcover",
-    "slipcase",
-    "digibook",
-    "mediabook",
-    "digipak",
-    "box",
-}
-MAX_PACKAGING = 9
+#
+# The vocabulary itself lives in next_packaging, not here: it drives the edit
+# form and the collection views too, so a sync provider is the wrong owner.
+# Re-exported under the original names so existing call sites keep working.
+PACKAGING_VALUES = LEGACY_PACKAGING_VALUES
+MAX_PACKAGING = MAX_LEGACY_PACKAGING
 
 # distribution-4 subtitle variants (MovieVault PR #162). A disc carries several
 # tracks in the same language - a full track, an SDH track that also transcribes
@@ -1514,17 +1521,8 @@ def _release_details_release(value: Any) -> dict[str, Any]:
         result["packaging"] = _release_details_enum_list(
             item["packaging"],
             maximum=MAX_PACKAGING,
-            allowed={
-                "keep_case",
-                "amaray",
-                "steelbook",
-                "slipcover",
-                "slipcase",
-                "digibook",
-                "mediabook",
-                "digipak",
-                "box",
-            },
+            allowed=PACKAGING_VALUES,
+            label="packaging",
         )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
@@ -3955,7 +3953,9 @@ def release_technical_contribution_payload(
     )
     if regions:
         release["regions"] = regions
-    packaging = _contribution_enum_list(source.get("packaging"), PACKAGING_VALUES, 8)
+    packaging = _contribution_enum_list(
+        source.get("packaging"), PACKAGING_VALUES, MAX_PACKAGING
+    )
     if packaging:
         release["packaging"] = packaging
     video = _contribution_video(source.get("video"))
