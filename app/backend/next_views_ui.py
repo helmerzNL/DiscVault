@@ -2364,6 +2364,22 @@ def ui_preview_html(
         linear-gradient(145deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 58%),
         linear-gradient(145deg, #2f3742, #171b22);
     }
+    .preview-poster.series-tile .preview-poster-art {
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 34%, transparent), transparent 62%),
+        linear-gradient(145deg, #2b3446, #14181f);
+    }
+    .series-tile-seasons {
+      opacity: .82;
+    }
+    .series-focus-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .series-focus-bar.hidden {
+      display: none;
+    }
     .container-tile-badge {
       position: absolute;
       right: 8px;
@@ -13936,6 +13952,7 @@ def ui_preview_html(
         <div class="filter-row">
           <span class="bulk-count" id="librarySummary">""" + h(counts.get("movies", 0)) + """ movies</span>
         </div>
+        <div class="filter-row series-focus-bar hidden" id="librarySeriesFocus"></div>
       </section>
       <section class="bulk-bar" id="bulkBar" role="region" aria-labelledby="bulkPanelTitle">
         <div class="library-panel-head bulk-panel-head">
@@ -17456,6 +17473,14 @@ def ui_preview_html(
     let containers = state.containers || [];
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
+    // The series a disc belongs to is not a second archive of the same fact: it
+    // is filled from the feed's own television id, so these arrays are read-only
+    // as far as the Library is concerned.
+    let seriesList = state.series || [];
+    let seriesSeasonCoverage = state.seriesSeasonCoverage || [];
+    // Set while the user has drilled into one series tile. Not persisted: it is
+    // a place in a list, not a filter the next visit should inherit.
+    let librarySeriesFocusId = "";
     let mediaGroups = state.mediaGroups || [];
     let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
@@ -24844,6 +24869,79 @@ def ui_preview_html(
         return String(row.child_container_id || "") === id && (!visibleContainerIds || visibleContainerIds.has(parentId));
       });
     }
+    // Same reasoning as the container index above: grouping by series used to
+    // mean scanning the whole movie list once per series. Both source arrays are
+    // replaced rather than mutated, so identity is a sound cache key.
+    let seriesMemberIndexCache = null;
+    function seriesMemberIndex() {
+      const movieRows = movies || [];
+      const coverageRows = seriesSeasonCoverage || [];
+      if (
+        seriesMemberIndexCache
+        && seriesMemberIndexCache.movies === movieRows
+        && seriesMemberIndexCache.coverage === coverageRows
+      ) {
+        return seriesMemberIndexCache;
+      }
+      const bySeries = new Map();
+      movieRows.forEach((movie) => {
+        const seriesId = String(movie?.series?.id || "");
+        if (!seriesId) return;
+        const bucket = bySeries.get(seriesId);
+        if (bucket) bucket.push(movie);
+        else bySeries.set(seriesId, [movie]);
+      });
+      const seasonsByMovie = new Map();
+      coverageRows.forEach((row) => {
+        const movieId = String(row?.movieId || "");
+        if (!movieId) return;
+        const bucket = seasonsByMovie.get(movieId);
+        if (bucket) bucket.push(row);
+        else seasonsByMovie.set(movieId, [row]);
+      });
+      seriesMemberIndexCache = {
+        movies: movieRows,
+        coverage: coverageRows,
+        bySeries,
+        seasonsByMovie,
+      };
+      return seriesMemberIndexCache;
+    }
+    function seriesById(seriesId) {
+      const id = String(seriesId || "");
+      if (!id) return null;
+      return (seriesList || []).find((entry) => String(entry.id || "") === id) || null;
+    }
+    function seriesMemberMovies(seriesId) {
+      return seriesMemberIndex().bySeries.get(String(seriesId || "")) || [];
+    }
+    function seriesCoveredSeasonNumbers(memberMovies) {
+      const seasonsByMovie = seriesMemberIndex().seasonsByMovie;
+      const numbers = new Set();
+      (memberMovies || []).forEach((movie) => {
+        (seasonsByMovie.get(String(movie?.id || "")) || []).forEach((row) => {
+          const value = Number.parseInt(row?.seasonNumber, 10);
+          if (Number.isFinite(value)) numbers.add(value);
+        });
+      });
+      return [...numbers].sort((a, b) => a - b);
+    }
+    function seriesSeasonSummaryText(item) {
+      // A disc that names no season is the complete-series set. It covers the
+      // show without covering a numbered season, so it must not read as "none".
+      const numbers = seriesCoveredSeasonNumbers(itemMovieRows(item));
+      if (!numbers.length) return "";
+      const total = Number.parseInt(item?.series?.seasonCount, 10);
+      const label = tNext("collection.seasonsCovered", "Seasons {covered}").replace("{covered}", numbers.join(", "));
+      if (!Number.isFinite(total) || total <= 0) return label;
+      return `${label} / ${total}`;
+    }
+    function seriesMatchesSearch(series, memberMovies) {
+      const query = activeSearchQuery();
+      if (!query) return true;
+      if (String(series?.title || "").toLowerCase().includes(query)) return true;
+      return (memberMovies || []).some((movie) => movieMatchesSearch(movie));
+    }
     function movieMatchesGroup(movie) {
       const selected = effectiveCollectionGroupFilter();
       const groups = Array.isArray(movie.media_groups) ? movie.media_groups : [];
@@ -25107,21 +25205,48 @@ def ui_preview_html(
       // the container itself carries no type -- its members do.
       return containerMemberMovies(container.id).some((movie) => movieMatchesType(movie));
     }
+    // A Library item is a movie, a container or a series. The three differ only
+    // in which entity they carry and where a click goes; everything else asks
+    // these accessors rather than branching on the kind again.
+    function itemIsGroup(item) {
+      return item?.kind === "container" || item?.kind === "series";
+    }
+    function itemEntity(item) {
+      if (item?.kind === "container") return item.container || null;
+      if (item?.kind === "series") return item.series || null;
+      return item?.movie || null;
+    }
+    function itemEntityId(item) {
+      return String(itemEntity(item)?.id || "");
+    }
+    function itemPreviewAttr(item) {
+      const id = itemEntityId(item);
+      if (item?.kind === "container") return `data-preview-container="${escapeHtml(id)}"`;
+      if (item?.kind === "series") return `data-preview-series="${escapeHtml(id)}"`;
+      return `data-preview-movie="${escapeHtml(id)}"`;
+    }
+    function itemDebugIdLabel(item) {
+      if (item?.kind === "container") return "Container ID";
+      if (item?.kind === "series") return "Series ID";
+      return "Movie ID";
+    }
     function itemDateValue(item, mode) {
-      if (item.kind === "container") {
-        const values = containerMemberMovies(item.container?.id)
+      if (itemIsGroup(item)) {
+        const values = itemMovieRows(item)
           .map((movie) => Date.parse(movie.created_at || movie.updated_at || ""))
           .filter((time) => Number.isFinite(time));
         if (values.length) return mode === "added_asc" ? Math.min(...values) : Math.max(...values);
       }
-      const value = item?.movie?.created_at || item?.movie?.updated_at || item?.container?.created_at || item?.container?.updated_at || "";
+      const entity = itemEntity(item) || {};
+      const value = entity.created_at || entity.updated_at || "";
       const time = Date.parse(value);
       return Number.isFinite(time) ? time : 0;
     }
     function itemYearValue(item, mode) {
       if (item.kind === "movie") return Number.parseInt(item.movie?.year || "0", 10) || 0;
-      const years = containerMemberMovies(item.container?.id).map((movie) => Number.parseInt(movie.year || "0", 10) || 0).filter(Boolean);
+      const years = itemMovieRows(item).map((movie) => Number.parseInt(movie.year || "0", 10) || 0).filter(Boolean);
       if (years.length) return mode === "year_asc" ? Math.min(...years) : Math.max(...years);
+      if (item.kind === "series") return Number.parseInt(item.series?.startYear || "0", 10) || 0;
       return Number.parseInt(item.container?.year || "0", 10) || 0;
     }
     function sortLibraryItems(items) {
@@ -25153,6 +25278,17 @@ def ui_preview_html(
       const visibleContainerIds = new Set(visibleItems.map((item) => String(item.container?.id || "")).filter(Boolean));
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
+    function visibleSeriesItems(eligibleMovieIds, visibleMovieIds) {
+      if (!seriesList.length) return [];
+      return (seriesList || [])
+        .map((series) => {
+          const members = seriesMemberMovies(series.id);
+          const allowedIds = seriesMatchesSearch(series, members) ? eligibleMovieIds : visibleMovieIds;
+          const visibleMovies = members.filter((movie) => allowedIds.has(String(movie.id || "")));
+          return {kind: "series", series, visibleMovies, title: series.title || ""};
+        })
+        .filter((item) => item.visibleMovies.length > 0);
+    }
     function libraryDisplayItems(filters = effectiveAdvancedSearchFilters()) {
       const eligibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
@@ -25170,24 +25306,46 @@ def ui_preview_html(
       if (collectionItemFilter === "containers") {
         return sortLibraryItems(visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters));
       }
+      // Drilled into one series: its discs, flat, whatever the merge switch says.
+      // The point of opening a series tile is to see what is inside it.
+      if (librarySeriesFocusId) {
+        return sortLibraryItems(
+          visibleMovies
+            .filter((movie) => String(movie?.series?.id || "") === librarySeriesFocusId)
+            .map((movie) => ({kind: "movie", movie, title: movie.title || ""}))
+        );
+      }
       if (!mergeEditionsAsTitleEnabled()) {
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
       const representedMovieIds = new Set();
-      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters);
+      // Series first, and a disc a series claims is gone from the containers as
+      // well as from the flat list. Both group the same shelf; the series is the
+      // one that fills itself, so it wins -- the same move `containerIsNestedChild`
+      // already makes when one container sits inside another.
+      const seriesItems = visibleSeriesItems(eligibleMovieIds, visibleMovieIds);
+      seriesItems.forEach((item) => {
+        item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
+      });
+      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters)
+        .map((item) => ({
+          ...item,
+          visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || ""))),
+        }))
+        .filter((item) => item.visibleMovies.length > 0);
       containerItems.forEach((item) => {
         item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
       });
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
-      return sortLibraryItems([...containerItems, ...movieItems]);
+      return sortLibraryItems([...seriesItems, ...containerItems, ...movieItems]);
     }
     function libraryDisplayMovieCount(items) {
       const ids = new Set();
       (items || []).forEach((item) => {
         if (item.kind === "movie") ids.add(String(item.movie?.id || ""));
-        if (item.kind === "container") {
+        if (itemIsGroup(item)) {
           itemMovieRows(item).forEach((movie) => ids.add(String(movie?.id || "")));
         }
       });
@@ -25196,6 +25354,8 @@ def ui_preview_html(
     function bulkSelectableLibraryItems() {
       return libraryDisplayItems().filter((item) => {
         if (item.kind === "movie") return !!item.movie?.id;
+        // A series tile is a view of discs, not a thing to act on in bulk: there
+        // is nothing to move, lend or delete that is not one of its discs.
         if (item.kind === "container") return collectorsModeEnabled() && !!item.container?.id;
         return false;
       });
@@ -25226,11 +25386,11 @@ def ui_preview_html(
       return {directors, actors};
     }
     function itemMovieRows(item) {
-      if (item?.kind === "movie") return item.movie ? [item.movie] : [];
-      if (item?.kind === "container") {
-        if (Array.isArray(item.visibleMovies)) return item.visibleMovies;
-        return containerMemberMovies(item.container?.id);
-      }
+      if (!item) return [];
+      if (item.kind === "movie") return item.movie ? [item.movie] : [];
+      if (Array.isArray(item.visibleMovies)) return item.visibleMovies;
+      if (item?.kind === "container") return containerMemberMovies(item.container?.id);
+      if (item?.kind === "series") return seriesMemberMovies(item.series?.id);
       return [];
     }
     function itemDirectorCredits(item) {
@@ -25276,12 +25436,17 @@ def ui_preview_html(
       }).join("");
     }
     function itemTitleValue(item) {
-      return item?.kind === "container"
-        ? (item.container?.title || tNext("common.untitled", "Untitled"))
-        : (item.movie?.title || tNext("common.untitled", "Untitled"));
+      return itemEntity(item)?.title || tNext("common.untitled", "Untitled");
     }
     function itemYearLabel(item) {
       if (item?.kind === "movie") return item.movie?.year || "";
+      if (item?.kind === "series") {
+        // The show's own run, not the years its discs were pressed.
+        const start = item.series?.startYear || "";
+        const end = item.series?.endYear || "";
+        if (start && end && String(start) !== String(end)) return `${start}-${end}`;
+        if (start) return String(start);
+      }
       const years = itemMovieRows(item).map((movie) => Number.parseInt(movie.year || "0", 10)).filter(Boolean);
       if (!years.length) return item.container?.year || "";
       const minYear = Math.min(...years);
@@ -25290,18 +25455,25 @@ def ui_preview_html(
     }
     function itemFormatLabel(item) {
       if (item?.kind === "movie") return physicalFormatLabel(item.movie?.format || item.movie?.edition_type || item.movie?.metadata?.format);
+      if (item?.kind === "series") return tNext("collection.seriesTile", "Series");
       return containerTypeLabel(item.container?.container_type);
     }
     function itemPosterUrl(item) {
-      return item?.kind === "container"
-        ? usableImage(item.container?.poster_url || item.container?.backdrop_url)
-        : usableImage(item.movie?.poster_url);
+      if (item?.kind === "container") return usableImage(item.container?.poster_url || item.container?.backdrop_url);
+      // A series has no artwork of its own yet, so it borrows the first disc that
+      // has one. Deliberate: series artwork is its own piece of work, and an
+      // empty tile would read as a bug rather than as a gap.
+      if (item?.kind === "series") return usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
+      return usableImage(item?.movie?.poster_url);
     }
     function itemMembersHtml(item, limit = 6) {
-      if (item?.kind !== "container") return "";
-      const members = containerMemberMovies(item.container?.id).slice(0, limit);
+      if (!itemIsGroup(item)) return "";
+      const allMembers = item?.kind === "series"
+        ? seriesMemberMovies(item.series?.id)
+        : containerMemberMovies(item.container?.id);
+      const members = allMembers.slice(0, limit);
       if (!members.length) return "";
-      const overflow = movieIdSetForContainer(item.container?.id).size - members.length;
+      const overflow = allMembers.length - members.length;
       return `
         <div class="mode-card-members">
           ${members.map((movie) => `<button type="button" data-member-movie="${escapeHtml(movie.id)}">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</button>`).join("")}
@@ -25315,12 +25487,10 @@ def ui_preview_html(
       const year = itemYearLabel(item);
       const directors = itemDirectorCredits(item);
       const actors = itemActorCredits(item);
-      const isContainer = item.kind === "container";
-      const targetAttr = isContainer
-        ? `data-preview-container="${escapeHtml(item.container?.id)}"`
-        : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+      const isGroup = itemIsGroup(item);
+      const targetAttr = itemPreviewAttr(item);
       return `
-        <article class="mode-list-card ${isContainer ? "container-row" : ""}" ${targetAttr} tabindex="0">
+        <article class="mode-list-card ${isGroup ? "container-row" : ""}${item.kind === "series" ? " series-row" : ""}" ${targetAttr} tabindex="0">
           <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(title)}</strong>
@@ -25328,7 +25498,7 @@ def ui_preview_html(
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.director", "Director"))}</span>${personCreditLinksHtml(directors)}</span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.actors", "Actors"))}</span>${personCreditLinksHtml(actors)}</span>
             ${itemMembersHtml(item)}
-            ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+            ${debugIdHtml(itemEntityId(item), itemDebugIdLabel(item))}
           </span>
         </article>
       `;
@@ -25613,18 +25783,16 @@ def ui_preview_html(
             </thead>
             <tbody>
               ${sorted.map((item) => {
-                const isContainer = item.kind === "container";
+                const isGroup = itemIsGroup(item);
                 const title = itemTitleValue(item);
                 const year = itemYearLabel(item);
                 const poster = itemPosterUrl(item);
-                const targetAttr = isContainer
-                  ? `data-preview-container="${escapeHtml(item.container?.id)}"`
-                  : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
-                const selected = isContainer
+                const targetAttr = itemPreviewAttr(item);
+                const selected = item.kind === "container"
                   ? selectedContainerIds.has(String(item.container?.id || ""))
-                  : selectedMovieIds.has(String(item.movie?.id || ""));
+                  : item.kind === "movie" && selectedMovieIds.has(String(item.movie?.id || ""));
                 return `
-                  <tr class="${isContainer ? "container-row " : ""}${selected ? "bulk-selected" : ""}">
+                  <tr class="${isGroup ? "container-row " : ""}${item.kind === "series" ? "series-row " : ""}${selected ? "bulk-selected" : ""}">
                     <td class="library-list-poster-column">
                       <button type="button" class="library-list-poster-target" ${targetAttr} aria-label="${escapeHtml(title)}">
                         ${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span class="library-list-poster-placeholder" aria-hidden="true">&mdash;</span>`}
@@ -25635,7 +25803,7 @@ def ui_preview_html(
                         <strong>${escapeHtml(title)}</strong>
                         ${year ? `<span class="library-list-year">(${escapeHtml(year)})</span>` : ""}
                       </button>
-                      ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+                      ${debugIdHtml(itemEntityId(item), itemDebugIdLabel(item))}
                     </td>
                     <td class="library-list-format-column">${libraryListFormatsHtml(item)}</td>
                     <td class="library-list-director-column library-list-desktop-column">${libraryListPeopleHtml(itemDirectorCredits(item))}</td>
@@ -25688,13 +25856,10 @@ def ui_preview_html(
             <span role="columnheader">${detailSortButton(scope, "actors", tNext("movieDetail.actors", "Actors"), sortState)}</span>
           </div>
           ${sorted.map((item) => {
-            const isContainer = item.kind === "container";
-            const targetAttr = isContainer
-              ? `data-preview-container="${escapeHtml(item.container?.id)}"`
-              : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+            const targetAttr = itemPreviewAttr(item);
             return `
               <div class="mode-detail-row" role="row" ${targetAttr} tabindex="0">
-                <span role="cell"><strong>${escapeHtml(itemTitleValue(item))}</strong>${isContainer ? itemMembersHtml(item, 4) : ""}</span>
+                <span role="cell"><strong>${escapeHtml(itemTitleValue(item))}</strong>${itemMembersHtml(item, 4)}</span>
                 <span role="cell">${escapeHtml(itemYearLabel(item))}</span>
                 <span role="cell">${escapeHtml(itemFormatLabel(item))}</span>
                 <span role="cell">${personCreditLinksHtml(itemDirectorCredits(item))}</span>
@@ -26062,6 +26227,36 @@ def ui_preview_html(
           ${debugIdHtml(container.id, "Container ID")}
         </button>
       `;
+    }
+    function seriesPosterCardHtml(item, index) {
+      const series = item?.series || {};
+      const discCount = itemMovieRows(item).length;
+      const poster = itemPosterUrl(item);
+      const typeLabel = tNext("collection.seriesTile", "Series");
+      const posterHtml = poster
+        ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">`
+        : `<span>${escapeHtml(typeLabel)}</span>`;
+      const meta = [
+        typeLabel,
+        discCount ? `${discCount} ${tNext("collection.discs", "discs")}` : "",
+        itemYearLabel(item)
+      ].filter(Boolean).join(" / ");
+      const seasonSummary = seriesSeasonSummaryText(item);
+      const selected = index === 0 ? " selected" : "";
+      return `
+        <button type="button" class="preview-poster container-tile series-tile${selected}" data-preview-series="${escapeHtml(series.id)}">
+          <span class="preview-poster-art">${posterHtml}${discCount ? `<span class="container-member-badge">${escapeHtml(discCount)}</span>` : ""}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
+          <span class="preview-poster-title">${escapeHtml(series.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+          ${seasonSummary ? `<span class="preview-poster-meta series-tile-seasons">${escapeHtml(seasonSummary)}</span>` : ""}
+          ${debugIdHtml(series.id, "Series ID")}
+        </button>
+      `;
+    }
+    function libraryPosterCardHtml(item, index) {
+      if (item.kind === "series") return seriesPosterCardHtml(item, index);
+      if (item.kind === "container") return containerPosterCardHtml(item.container, index);
+      return posterCardHtml(item.movie, index);
     }
     function containerCardHtml(container) {
       const label = String(container.container_type || "container").replace(/_/g, " ");
@@ -39436,6 +39631,46 @@ def ui_preview_html(
           openAppContainerDetail(button.dataset.previewContainer);
         });
       });
+      root.querySelectorAll("[data-preview-series]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (consumeLongPressClick()) return;
+          // No bulk selection here: a series tile stands for its discs, and the
+          // discs are what the bulk bar can act on.
+          if (selectionMode) return;
+          focusLibrarySeries(button.dataset.previewSeries);
+        });
+      });
+    }
+    function focusLibrarySeries(seriesId) {
+      librarySeriesFocusId = String(seriesId || "");
+      libraryRenderLimit = LIBRARY_RENDER_STEP;
+      renderCollectionSurface();
+    }
+    function clearLibrarySeriesFocus() {
+      if (!librarySeriesFocusId) return;
+      librarySeriesFocusId = "";
+      libraryRenderLimit = LIBRARY_RENDER_STEP;
+      renderCollectionSurface();
+    }
+    function renderLibrarySeriesFocusBar() {
+      const bar = document.getElementById("librarySeriesFocus");
+      if (!bar) return;
+      const series = seriesById(librarySeriesFocusId);
+      bar.classList.toggle("hidden", !series);
+      if (!series) {
+        bar.innerHTML = "";
+        return;
+      }
+      bar.innerHTML = `
+        <button type="button" id="librarySeriesFocusClear" class="ghost">${escapeHtml(tNext("collection.backToLibrary", "Back to library"))}</button>
+        <strong>${escapeHtml(series.title || tNext("common.untitled", "Untitled"))}</strong>
+      `;
+      document.getElementById("librarySeriesFocusClear")?.addEventListener("click", (event) => {
+        event.preventDefault();
+        clearLibrarySeriesFocus();
+      });
     }
     function renderLocationDetailPage() {
       if (!activeLocationRoutePublicId) return;
@@ -39516,11 +39751,7 @@ def ui_preview_html(
           ? libraryVisibleSlice(displayItems).map((item, index) => (
               libraryViewMode === "list"
                 ? libraryListItemHtml(item)
-                : (
-                    item.kind === "container"
-                      ? containerPosterCardHtml(item.container, index)
-                      : posterCardHtml(item.movie, index)
-                  )
+                : libraryPosterCardHtml(item, index)
             )).join("") + libraryRenderSentinelHtml(displayItems.length)
           : `<div class="preview-empty">${escapeHtml(
               activeLocationRouteMissing
@@ -39672,11 +39903,7 @@ def ui_preview_html(
               (
                 libraryViewMode === "list"
                   ? libraryListTableHtml(displayItems)
-                  : libraryVisibleSlice(displayItems).map((item, index) => (
-                      item.kind === "container"
-                        ? containerPosterCardHtml(item.container, index)
-                        : posterCardHtml(item.movie, index)
-                    )).join("")
+                  : libraryVisibleSlice(displayItems).map((item, index) => libraryPosterCardHtml(item, index)).join("")
               ) + libraryRenderSentinelHtml(displayItems.length)
             )
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
@@ -39704,9 +39931,16 @@ def ui_preview_html(
       if (navMovieCount) navMovieCount.textContent = String(libraryMovieTotal);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
+      renderLibrarySeriesFocusBar();
       const firstItem = libraryViewMode === "list" ? sortLibraryListItems(displayItems)[0] : displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
+      // A series has no artwork or hero of its own yet, so the featured panel
+      // shows the first disc under it rather than going blank.
+      if (firstItem?.kind === "series") {
+        const firstDisc = itemMovieRows(firstItem)[0];
+        if (firstDisc?.id) selectMovie(firstDisc.id);
+      }
       updateBulkBar();
       renderLibraryMetadataJobs();
       libraryAfterRender();
@@ -41770,6 +42004,11 @@ def ui_preview_html(
       containers = state.containers || [];
       locations = state.locations || locations || [];
       containerMembership = state.containerMembership || [];
+      seriesList = state.series || [];
+      seriesSeasonCoverage = state.seriesSeasonCoverage || [];
+      if (librarySeriesFocusId && !seriesList.some((entry) => String(entry.id) === librarySeriesFocusId)) {
+        librarySeriesFocusId = "";
+      }
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
@@ -44455,7 +44694,10 @@ def ui_preview_html(
         if (!items.length) return;
         const item = items[Math.floor(Math.random() * items.length)];
         if (item.kind === "container") selectContainer(item.container.id);
-        else selectMovie(item.movie.id);
+        else if (item.kind === "series") {
+          const disc = itemMovieRows(item)[0];
+          if (disc?.id) selectMovie(disc.id);
+        } else selectMovie(item.movie.id);
       });
       refreshAppFlow().catch((error) => {
         if (appMode) {

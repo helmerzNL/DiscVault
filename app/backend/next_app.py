@@ -4575,6 +4575,144 @@ def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, An
     return movies
 
 
+def attach_movie_series_membership(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the series a disc belongs to, as `movie["series"]` or None.
+
+    Only what the Library needs to group by: the id, and a title to render while
+    the series list is still being read. The full series -- seasons, overview --
+    stays behind `movie_series_payload`, which the detail view already calls.
+
+    This reads `movies.series_id` here rather than adding it to the preview
+    SELECT because that column and the series tables arrive together in
+    migration 063: one guard covers both, and an instance that has not run it
+    still gets a Library.
+    """
+    if not movies:
+        return movies
+    for movie in movies:
+        movie["series"] = None
+    if not series_tables_available(conn):
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    if not movie_ids:
+        return movies
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id AS movie_id, s.id AS series_id, s.public_id, s.title
+            FROM movies m
+            JOIN series s ON s.id = m.series_id AND s.deleted_at IS NULL
+            WHERE m.id = ANY(%s)
+            """,
+            (movie_ids,),
+        )
+        by_movie = {
+            str(row["movie_id"]): {
+                "id": str(row["series_id"]),
+                "publicId": row["public_id"],
+                "title": row["title"],
+            }
+            for row in cur.fetchall()
+        }
+    for movie in movies:
+        movie["series"] = by_movie.get(str(movie.get("id")))
+    return movies
+
+
+def collection_series_preview_entities(
+    conn, *, limit: int = 200, actor: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """The series the Library can group by, in one query.
+
+    `series_entity` runs a second query per series for its seasons, which turns
+    into N+1 on a collection overview. This carries only the counts a tile shows;
+    opening a series still goes to the detail route for the rest.
+
+    A series with no discs the actor may see is left out entirely -- otherwise a
+    shared instance would hand every user the titles of every other user's shelf.
+    """
+    if not series_tables_available(conn):
+        return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("m.deleted_at IS NULL", [])
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                s.id,
+                s.public_id,
+                s.title,
+                s.sort_title,
+                s.start_year,
+                s.end_year,
+                (
+                    SELECT count(*) FROM series_seasons ss
+                    WHERE ss.series_id = s.id AND ss.deleted_at IS NULL
+                ) AS season_count,
+                count(m.id) AS disc_count
+            FROM series s
+            JOIN movies m ON m.series_id = s.id AND {visibility_where}
+            WHERE s.deleted_at IS NULL
+            GROUP BY s.id, s.public_id, s.title, s.sort_title, s.start_year, s.end_year
+            ORDER BY lower(COALESCE(s.sort_title, s.title))
+            LIMIT %s
+            """,
+            (*visibility_params, limit),
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "publicId": row["public_id"],
+            "title": row["title"],
+            "sortTitle": row["sort_title"],
+            "startYear": row["start_year"],
+            "endYear": row["end_year"],
+            "seasonCount": int(row["season_count"] or 0),
+            "discCount": int(row["disc_count"] or 0),
+        }
+        for row in rows
+    ]
+
+
+def collection_series_membership_entities(
+    conn, *, limit: int = 10000, actor: dict[str, Any] | None = None
+) -> list[dict[str, Any]]:
+    """Which seasons each disc carries, so a series tile can answer "have I got 4?".
+
+    A linked disc with no rows here is the complete-series set: it covers the
+    series without naming a season. That is the same `None`-versus-`[]` line the
+    feed draws, and the tile has to keep it -- "no season named" is not "no
+    seasons".
+    """
+    if not series_tables_available(conn) or not table_exists(conn, "movie_seasons"):
+        return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("m.deleted_at IS NULL", [])
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT ms.movie_id, ss.id AS season_id, ss.season_number, ss.title, ss.year
+            FROM movie_seasons ms
+            JOIN series_seasons ss ON ss.id = ms.season_id AND ss.deleted_at IS NULL
+            JOIN movies m ON m.id = ms.movie_id
+            WHERE {visibility_where}
+            ORDER BY ms.movie_id, ss.season_number
+            LIMIT %s
+            """,
+            (*visibility_params, limit),
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "movieId": str(row["movie_id"]),
+            "seasonId": str(row["season_id"]),
+            "seasonNumber": row["season_number"],
+            "title": row["title"],
+            "year": row["year"],
+        }
+        for row in rows
+    ]
+
+
 def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not movies or not table_exists(conn, "movie_credits") or not table_exists(conn, "people"):
         return movies
@@ -4867,6 +5005,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
     counts["notifications"] = notification_counts(conn, user_id)
     movies = collection_movie_preview_entities(conn, limit=COLLECTION_MOVIE_PAGE_SIZE, actor=user)
     movies = attach_personal_list_state(conn, movies, user_id)
+    movies = attach_movie_series_membership(conn, movies)
     movies_total = collection_movie_total_count(conn, actor=user)
     return {
         "counts": counts,
@@ -4876,6 +5015,8 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "moviesHasMore": len(movies) < movies_total,
         "containers": collection_container_preview_entities(conn, actor=user),
         "containerMembership": collection_container_membership_entities(conn, actor=user),
+        "series": collection_series_preview_entities(conn, actor=user),
+        "seriesSeasonCoverage": collection_series_membership_entities(conn, actor=user),
         "locations": location_list_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
@@ -4910,6 +5051,8 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "moviesHasMore": False,
         "containers": [],
         "containerMembership": [],
+        "series": [],
+        "seriesSeasonCoverage": [],
         "locations": [],
         "mediaGroups": [],
         "plugins": [],

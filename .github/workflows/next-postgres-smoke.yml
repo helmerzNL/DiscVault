@@ -112,6 +112,16 @@ jobs:
           tests.test_next_series
           tests.test_next_series_postgres
 
+      # The Library groups by series through the dashboard snapshot rather than
+      # through the sync wire, so nothing else in this list would notice if the
+      # grouping regressed. The PostgreSQL half needs the real schema: whether a
+      # series with no visible disc is listed is a visibility rule, not a mapping.
+      - name: Test the series as a Library grouping
+        run: >-
+          python -m unittest
+          tests.test_next_library_series_ui
+          tests.test_next_library_series_postgres
+
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as
       # the bootstrap/delta drift they exist to catch - a guard nobody invokes
