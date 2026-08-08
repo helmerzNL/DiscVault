@@ -816,6 +816,18 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # carries it. Listing the field here is what keeps a MovieVault release
         # from taking every DiscVault instance's sync down with it.
         optional.add("workType")
+        # Which seasons a television release covers. Listed here purely so the
+        # key is tolerated; nothing consumes it yet.
+        #
+        # This one is not merely additive-in-principle: MovieVault publishes
+        # `seasons` on *every* v4 release record, including `[]` for a film,
+        # because upstream an empty list is a statement ("the complete series,
+        # or unspecified") rather than an omission. So the moment an origin
+        # ships that change, every record carries a key this allow-list did not
+        # have - and by the rule above that is not a degraded sync but no sync
+        # at all. Tolerating the key has to reach instances before the origin
+        # does, which is why it lands separately from anything that reads it.
+        optional.add("seasons")
     _exact_keys(value, required=required, optional=optional, label="release record")
     if _is_v4_or_later(contract_version):
         _backdrop(value.get("backdrop"), release_id=str(value.get("releaseId")))
