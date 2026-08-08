@@ -162,6 +162,14 @@ MAX_AUDIO_TRACKS = 50
 MAX_SUBTITLE_LANGUAGES = 50
 LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,8}(-[a-z0-9]{1,8})*$")
 
+# The seasons a television release covers. MovieVault caps its own list at 100
+# and season numbers at 0-200; both are mirrored here rather than derived,
+# because this side must stay sane if the producer ever widens its own limits.
+# Season 0 is specials, on TMDB and on the disc, which is why the floor is 0.
+MAX_SEASONS = 100
+MIN_SEASON_NUMBER = 0
+MAX_SEASON_NUMBER = 200
+
 # distribution-4 packaging enum. Same forward-compat leniency as the audio
 # track enums above - an unrecognized value is stored as-is with a logged
 # warning rather than rejecting the whole release record.
@@ -748,6 +756,95 @@ def _finishes(value: Any, *, release_id: str) -> list[str]:
     return result
 
 
+def _seasons(value: Any, *, release_id: str) -> list[dict[str, Any]]:
+    """Parse the seasons a release covers. distribution-4 and later.
+
+    Unlike every other parser in this file, this one never raises. 563 landed the
+    tolerance for this key precisely because it cannot arrive gradually -- upstream
+    publishes it on *every* release record, so a rejection here is not one lost
+    season list but a dead catalog for every instance. Having just paid for that
+    lesson, refusing a malformed shape one layer deeper would reintroduce it.
+
+    So the posture is: skip what cannot be read, log it, keep the rest. A release
+    whose season list is unusable arrives with no seasons, which is exactly the
+    state it was in before this column existed.
+
+    `[]` and `None` are different answers and both are returned as-is by the
+    caller: `[]` is MovieVault saying the release covers no particular season,
+    while a missing key means it has not said. Only the first is a statement.
+    """
+    if not isinstance(value, list):
+        logger.warning(
+            "movievault_v2: seasons on release %s is not a list - ignoring",
+            release_id,
+        )
+        return []
+    if len(value) > MAX_SEASONS:
+        logger.warning(
+            "movievault_v2: seasons on release %s exceeds %d entries - truncating",
+            release_id,
+            MAX_SEASONS,
+        )
+        value = value[:MAX_SEASONS]
+    seasons: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            logger.warning(
+                "movievault_v2: season entry on release %s is not an object - skipping",
+                release_id,
+            )
+            continue
+        number = item.get("seasonNumber")
+        # bool is an int in Python, and `True` must not become season 1.
+        if not isinstance(number, int) or isinstance(number, bool):
+            logger.warning(
+                "movievault_v2: season on release %s has no usable seasonNumber - skipping",
+                release_id,
+            )
+            continue
+        if not MIN_SEASON_NUMBER <= number <= MAX_SEASON_NUMBER:
+            logger.warning(
+                "movievault_v2: season %d on release %s is out of range - skipping",
+                number,
+                release_id,
+            )
+            continue
+        if number in seen:
+            # Upstream enforces one row per (film, season number) and rejects a
+            # duplicate before publishing, so this can only be producer drift.
+            # Keeping the first is arbitrary but stable; the alternative is
+            # writing the same season twice into series_seasons, which its own
+            # unique index would then refuse mid-sync.
+            logger.warning(
+                "movievault_v2: duplicate season %d on release %s - keeping the first",
+                number,
+                release_id,
+            )
+            continue
+        seen.add(number)
+        seasons.append(
+            {
+                "seasonNumber": number,
+                "title": item["title"] if isinstance(item.get("title"), str) else None,
+                "releaseYear": (
+                    item["releaseYear"]
+                    if isinstance(item.get("releaseYear"), int)
+                    and not isinstance(item.get("releaseYear"), bool)
+                    else None
+                ),
+                "episodeCount": (
+                    item["episodeCount"]
+                    if isinstance(item.get("episodeCount"), int)
+                    and not isinstance(item.get("episodeCount"), bool)
+                    and item["episodeCount"] >= 0
+                    else None
+                ),
+            }
+        )
+    return seasons
+
+
 def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
     required = {
         "contractVersion",
@@ -920,6 +1017,16 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
             value["workType"]
             if _is_v4_or_later(contract_version)
             and value.get("workType") in ("movie", "tv")
+            else None
+        ),
+        # None and [] are different answers and the difference is load-bearing.
+        # A missing key means the feed has not said - a record projected before
+        # MovieVault carried seasons, or a pre-v4 contract. `[]` means it has
+        # said, and the answer is "no particular season": a film, or a
+        # complete-series set. Only the second may clear an existing season list.
+        "seasons": (
+            _seasons(value["seasons"], release_id=str(value.get("releaseId")))
+            if _is_v4_or_later(contract_version) and "seasons" in value
             else None
         ),
         **(
@@ -2603,13 +2710,13 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             language_code, release_date, disc_count, studio, distributor,
             runtime_minutes, assets, revision, poster, packaging, finishes,
             video_resolution, video_codecs, hdr_formats, aspect_ratios,
-            disc_regions, work_type
+            disc_regions, work_type, seasons
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s
+            %s, %s, %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -2637,7 +2744,8 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             hdr_formats = EXCLUDED.hdr_formats,
             aspect_ratios = EXCLUDED.aspect_ratios,
             disc_regions = EXCLUDED.disc_regions,
-            work_type = EXCLUDED.work_type
+            work_type = EXCLUDED.work_type,
+            seasons = EXCLUDED.seasons
         """,
         (
             generation,
@@ -2668,6 +2776,10 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             Jsonb(record.get("aspectRatios") or []),
             Jsonb(record.get("discRegions") or []),
             record.get("workType"),
+            # `or []` is wrong here, unlike every list beside it: it would turn
+            # "the feed has not said" into "the feed says no seasons", and the
+            # consuming side is entitled to tell those apart. NULL stays NULL.
+            Jsonb(record["seasons"]) if record.get("seasons") is not None else None,
         ),
     )
     for lookup_hash in record["eanHashes"]:
@@ -3450,6 +3562,11 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "aspectRatios": _json_value(row.get("aspect_ratios") or []),
         "discRegions": _json_value(row.get("disc_regions") or []),
         "workType": row.get("work_type"),
+        # Carried through as None when the column is NULL, keeping "not said"
+        # distinct from the `[]` that means "no particular season".
+        "seasons": (
+            _json_value(row["seasons"]) if row.get("seasons") is not None else None
+        ),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))
     payload["audioTracks"], payload["subtitles"] = _release_track_fields(
