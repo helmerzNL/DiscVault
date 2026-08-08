@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 import re
 import unicodedata
@@ -38,7 +39,9 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from .next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
     from .next_series import ensure_seasons, ensure_series, provider_series_payload
+    from .next_series import series_id_for_identifier
 except ImportError:  # pragma: no cover - supports direct module execution
     from dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from dedup_identity import extract_identity_identifiers
@@ -57,11 +60,20 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
     from next_series import ensure_seasons, ensure_series, provider_series_payload
+    from next_series import series_id_for_identifier
 
+
+logger = logging.getLogger(__name__)
 
 METADATA_REFRESH_JOB_TYPE = "metadata.refresh_movie"
 PERSON_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_person"
+# A series is enriched on its own schedule rather than as part of the disc that
+# revealed it. One series is shared by every edition a collector owns, so
+# attaching the work to a disc would repeat it once per pressing and make which
+# disc happened to sync first decide when the series got described.
+SERIES_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_series"
 
 METADATA_MAIN_FIELDS = {
     "title",
@@ -4851,6 +4863,9 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         current_series = row["series_id"] if isinstance(row, dict) else row[1]
         if media_type != MEDIA_TYPE_SHOW:
             return None
+        existing_series = series_id_for_identifier(
+            cur, provider_id=payload["provider_id"], identifier=payload["identifier"]
+        )
         series_uuid = ensure_series(
             cur,
             provider_id=payload["provider_id"],
@@ -4877,6 +4892,13 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
                 """,
                 (movie_uuid, season_id, series_uuid, index),
             )
+    if existing_series is None:
+        # Queued only on creation. The row is empty exactly once, and enqueuing
+        # on every sync of every edition would repeat the same lookup per
+        # pressing for a series that is already described. Outside the cursor
+        # block above because the job is a side effect of the link having
+        # happened, not part of writing it.
+        enqueue_series_metadata_refresh(conn, series_uuid)
     return {
         "seriesId": str(series_uuid),
         "created": current_series is None,
@@ -5226,6 +5248,131 @@ def apply_metadata_proposal(
             applied={"changed": True, "applied": applied_payload},
             dry_run=False,
         ),
+    }
+
+
+def enqueue_series_metadata_refresh(conn, series_id: UUID | str) -> None:
+    """Queue the description lookup for a series that has just been created.
+
+    Best effort on purpose. The series and the disc's link to it are already
+    written and correct; the description is an enhancement on top. A queue that
+    is unavailable -- an older database without `background_jobs`, a table the
+    caller has no rights to -- must not undo a link that succeeded.
+
+    The import is deferred because `next_app` imports this module, so naming it
+    at module level would close the cycle. The same pattern is already used in
+    `next_worker` for the person-refresh cascade.
+    """
+    try:
+        try:
+            from .next_app import create_background_job
+        except ImportError:  # pragma: no cover - supports direct module execution
+            from next_app import create_background_job
+
+        create_background_job(
+            conn,
+            job_type=SERIES_METADATA_REFRESH_JOB_TYPE,
+            payload={"seriesId": str(series_id)},
+        )
+    except Exception:
+        logger.warning(
+            "series metadata refresh could not be queued for %s", series_id, exc_info=True
+        )
+
+
+def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
+    """Fill a series' description from DiscVault's own TMDB plugin.
+
+    This is the second half of the division of labour the feed established.
+    MovieVault states *identity and structure* -- which series, which seasons --
+    and stops there, deliberately: it is not licensed to redistribute provider
+    prose and has no reason to. The description therefore comes from a source
+    DiscVault has its own relationship with, which is also why nothing here ever
+    travels back over the feed.
+
+    Never overwrites. An existing overview may have been written by hand through
+    the series API, and a refresh is not a reason to replace it -- the same
+    posture `ensure_seasons` already takes for a season row somebody edited.
+    Filling only what is empty also makes this safe to re-run, which matters
+    because a failed job is retried.
+
+    A series with no TMDB television identifier is skipped rather than searched.
+    The id is what makes this exact; falling back to a title search would trade a
+    known answer for a guess, and §7b of the media-type document is explicit that
+    only a source querying a series namespace may speak to series identity.
+    """
+    series_uuid = UUID(str(series_id))
+    if not table_exists(conn, "series") or not table_exists(conn, "series_identifiers"):
+        return {"status": "unavailable"}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id, s.overview, si.identifier
+            FROM series s
+            LEFT JOIN series_identifiers si
+              ON si.series_id = s.id AND si.identifier_type = %s
+            WHERE s.id = %s AND s.deleted_at IS NULL
+            """,
+            (SERIES_IDENTIFIER_TYPE, series_uuid),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"status": "missing"}
+    identifier = clean_text(row.get("identifier"))
+    if not identifier:
+        return {"status": "skipped", "reason": "no series identifier"}
+
+    context = plugin_config_from_db(conn, TMDB_PLUGIN_ID)
+    execution = run_plugin_entrypoint(
+        TMDB_PLUGIN_ID, "series_details", {"tmdbTvId": identifier}, context
+    )
+    result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+    if execution.get("status") != "ok" or result.get("status") != "hit":
+        # Deliberately not raised. The series keeps the title it already has, and
+        # a source being unreachable is not a reason to fail a job that will be
+        # retried; the disc it belongs to is unaffected either way.
+        return {"status": "miss", "error": execution.get("error")}
+
+    stated = result.get("series") if isinstance(result.get("series"), dict) else {}
+    overview = clean_text(stated.get("overview"))
+    updated_series = False
+    with conn.cursor() as cur:
+        if overview and not clean_text(row.get("overview")):
+            cur.execute(
+                "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
+                (overview[:SERIES_TEXT_LIMITS["overview"]], series_uuid),
+            )
+            updated_series = True
+        updated_seasons = 0
+        for season in result.get("seasons") or []:
+            if not isinstance(season, dict):
+                continue
+            number = season.get("seasonNumber")
+            season_overview = clean_text(season.get("overview"))
+            if not isinstance(number, int) or isinstance(number, bool) or not season_overview:
+                continue
+            # `overview IS NULL OR overview = ''` rather than a read-then-write:
+            # the check and the write are one statement, so a second worker
+            # running the same job cannot land between them.
+            cur.execute(
+                """
+                UPDATE series_seasons
+                SET overview = %s, updated_at = now()
+                WHERE series_id = %s AND season_number = %s AND deleted_at IS NULL
+                  AND (overview IS NULL OR overview = '')
+                """,
+                (
+                    season_overview[: SEASON_TEXT_LIMITS["overview"]],
+                    series_uuid,
+                    number,
+                ),
+            )
+            updated_seasons += cur.rowcount or 0
+    return {
+        "status": "ok",
+        "seriesId": str(series_uuid),
+        "seriesUpdated": updated_series,
+        "seasonsUpdated": updated_seasons,
     }
 
 

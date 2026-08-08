@@ -386,6 +386,86 @@ def movie_details(payload, context=None):
     return _normalize_details(_details(context or {}, tmdb_id))
 
 
+def _series_details_request(context, tmdb_tv_id):
+    """`/tv/{id}`, which carries the season list in the same response.
+
+    That is the reason there is no per-season request here. A `/tv/{id}` payload
+    already contains a `seasons` array with an `overview` on each entry, so one
+    call answers both questions. `/tv/{id}/season/{n}` exists and is richer, but
+    it costs one request *per season* -- a ten-season show turns one call into
+    eleven -- and everything this feature needs is already in the cheap response.
+    Reaching for it should be a deliberate later decision with a reason attached,
+    not a default nobody re-examined.
+    """
+    return _request(
+        context,
+        f"/tv/{tmdb_tv_id}",
+        language=_language(context),
+    )
+
+
+def _normalize_series(data):
+    """Shape a TMDB television payload into the little this feature stores.
+
+    Deliberately narrow. TMDB returns creators, networks, episode counts, artwork
+    and ratings here, and none of it is mapped: `series` has columns for a title
+    and an overview, and inventing a mapping for fields nothing reads would be
+    guessing at a schema that does not exist yet. Artwork in particular is its
+    own piece of work -- a series is a third entity type in the media-asset path
+    -- and is deliberately absent rather than half-done.
+
+    Season 0 travels like any other. It is specials on TMDB and specials on the
+    disc, and a box set that includes them is a real thing to own.
+    """
+    seasons = []
+    for season in data.get("seasons") or []:
+        if not isinstance(season, dict):
+            continue
+        number = season.get("season_number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        seasons.append(
+            {
+                "seasonNumber": number,
+                "title": season.get("name") or "",
+                "overview": season.get("overview") or "",
+                "year": str(season.get("air_date") or "")[:4],
+                "episodeCount": season.get("episode_count"),
+            }
+        )
+    return {
+        "status": "hit",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "sourceRef": f"tmdb:tv:{data.get('id')}",
+        "series": {
+            "title": data.get("name") or "",
+            "originalTitle": data.get("original_name") or "",
+            "overview": data.get("overview") or "",
+            "startYear": str(data.get("first_air_date") or "")[:4],
+            "endYear": str(data.get("last_air_date") or "")[:4],
+        },
+        "seasons": seasons,
+        "tmdbTvId": data.get("id"),
+    }
+
+
+def series_details(payload, context=None):
+    """Describe a series DiscVault already knows the identity of.
+
+    Unlike `movie_details` this never searches. The caller holds a TMDB
+    television id -- it arrived on the distribution feed and was stored in
+    `series_identifiers` -- so there is an exact answer available, and falling
+    back to a title search would be trading it for a guess. A series without an
+    id is a miss, which is the honest answer: nothing here can establish identity
+    that the feed did not.
+    """
+    tmdb_tv_id = str((payload or {}).get("tmdbTvId") or "").strip()
+    if not tmdb_tv_id.isdigit():
+        return {"status": "miss", "provider": "tmdb"}
+    return _normalize_series(_series_details_request(context or {}, tmdb_tv_id))
+
+
 def _import_wikidata_awards():
     try:
         import wikidata_awards  # type: ignore

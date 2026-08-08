@@ -10,6 +10,7 @@ import os
 import sys
 import unittest
 import uuid
+from unittest.mock import patch
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -24,6 +25,7 @@ except ModuleNotFoundError:
     dict_row = None
 
 from app.backend import next_app
+from app.backend import next_metadata
 from app.backend.next_common import NextApiError
 
 
@@ -231,6 +233,172 @@ class SeriesHierarchyPostgresTests(unittest.TestCase):
             with conn.cursor() as cur:
                 cur.execute("SELECT media_type FROM movies WHERE id = %s", (movie_id,))
                 self.assertEqual(cur.fetchone()["media_type"], "MOVIE")
+
+
+@unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
+class SeriesMetadataRefreshPostgresTests(unittest.TestCase):
+    """Filling a series description from DiscVault's own TMDB plugin.
+
+    The rule under test is *fill what is empty, never overwrite*. It is a
+    database claim, not a Python one: the season write is a single conditional
+    UPDATE rather than a read-then-write, so that a second worker running the
+    same job cannot land between the check and the write.
+    """
+
+    TITLE = "Refresh Test Show"
+
+    def connect(self):
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
+
+    def _clear(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute("DELETE FROM series WHERE title = %s", (self.TITLE,))
+
+    def setUp(self):
+        self._clear()
+
+    def tearDown(self):
+        self._clear()
+
+    def _series(self, conn, *, identifier="1399", overview=None):
+        series_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO series (id, public_id, title, overview) VALUES (%s, %s, %s, %s)",
+                (series_id, f"refresh-{series_id.hex[:12]}", self.TITLE, overview),
+            )
+            if identifier:
+                cur.execute(
+                    """
+                    INSERT INTO series_identifiers
+                        (series_id, provider_id, identifier_type, identifier)
+                    VALUES (%s, 'movievault_v2', 'tmdb_tv', %s)
+                    """,
+                    (series_id, identifier),
+                )
+        return series_id
+
+    def _season(self, conn, series_id, number, *, overview=None):
+        season_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO series_seasons
+                    (id, public_id, series_id, season_number, overview)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (season_id, f"refresh-s-{season_id.hex[:12]}", series_id, number, overview),
+            )
+        return season_id
+
+    def _hit(self, **overrides):
+        result = {
+            "status": "hit",
+            "series": {"overview": "Fetched overview."},
+            "seasons": [
+                {"seasonNumber": 1, "overview": "Fetched season one."},
+                {"seasonNumber": 2, "overview": "Fetched season two."},
+            ],
+        }
+        result.update(overrides)
+        return {"status": "ok", "result": result}
+
+    def _run(self, conn, series_id, execution):
+        with patch.object(next_metadata, "run_plugin_entrypoint", return_value=execution):
+            return next_metadata.refresh_series_metadata(conn, series_id)
+
+    def _overviews(self, conn, series_id):
+        with conn.cursor() as cur:
+            cur.execute("SELECT overview FROM series WHERE id = %s", (series_id,))
+            series_overview = cur.fetchone()["overview"]
+            cur.execute(
+                "SELECT season_number, overview FROM series_seasons "
+                "WHERE series_id = %s ORDER BY season_number",
+                (series_id,),
+            )
+            seasons = {row["season_number"]: row["overview"] for row in cur.fetchall()}
+        return series_overview, seasons
+
+    def test_an_empty_series_and_its_seasons_are_filled(self):
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            self._season(conn, series_id, 1)
+            self._season(conn, series_id, 2)
+            result = self._run(conn, series_id, self._hit())
+            series_overview, seasons = self._overviews(conn, series_id)
+
+        self.assertEqual(result["status"], "ok")
+        self.assertTrue(result["seriesUpdated"])
+        self.assertEqual(result["seasonsUpdated"], 2)
+        self.assertEqual(series_overview, "Fetched overview.")
+        self.assertEqual(seasons, {1: "Fetched season one.", 2: "Fetched season two."})
+
+    def test_an_existing_overview_is_never_overwritten(self):
+        """A description may have been written by hand through the series API.
+        A refresh is not a reason to replace it, and this job is retried on
+        failure, so re-running must be safe."""
+        with self.connect() as conn:
+            series_id = self._series(conn, overview="Written by a person.")
+            self._season(conn, series_id, 1, overview="Also written by a person.")
+            self._season(conn, series_id, 2)
+            result = self._run(conn, series_id, self._hit())
+            series_overview, seasons = self._overviews(conn, series_id)
+
+        self.assertFalse(result["seriesUpdated"])
+        self.assertEqual(result["seasonsUpdated"], 1)
+        self.assertEqual(series_overview, "Written by a person.")
+        self.assertEqual(seasons[1], "Also written by a person.")
+        self.assertEqual(seasons[2], "Fetched season two.")
+
+    def test_an_empty_string_counts_as_empty_not_as_an_answer(self):
+        """063 has no NOT NULL here, so a row can carry `''` as easily as NULL.
+        Treating one as written and the other as blank would make the outcome
+        depend on which write path created the row."""
+        with self.connect() as conn:
+            series_id = self._series(conn, overview="")
+            self._season(conn, series_id, 1, overview="")
+            self._run(conn, series_id, self._hit())
+            series_overview, seasons = self._overviews(conn, series_id)
+
+        self.assertEqual(series_overview, "Fetched overview.")
+        self.assertEqual(seasons[1], "Fetched season one.")
+
+    def test_a_series_without_an_identifier_is_skipped(self):
+        """There is nothing to look it up by. Falling back to the title is the
+        mistake the whole identity design refuses to make."""
+        with self.connect() as conn:
+            series_id = self._series(conn, identifier=None)
+            result = next_metadata.refresh_series_metadata(conn, series_id)
+
+        self.assertEqual(result["status"], "skipped")
+
+    def test_a_provider_failure_leaves_the_series_untouched(self):
+        """A source being unreachable is not a reason to damage a row, and not a
+        reason to fail a job that will be retried."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            self._season(conn, series_id, 1)
+            result = self._run(conn, series_id, {"status": "error", "error": "boom"})
+            series_overview, seasons = self._overviews(conn, series_id)
+
+        self.assertEqual(result["status"], "miss")
+        self.assertIsNone(series_overview)
+        self.assertIsNone(seasons[1])
+
+    def test_a_season_the_feed_never_recorded_is_not_created(self):
+        """The plugin knows every season TMDB has; the collection knows the ones
+        a disc actually covers. This job describes what is there, it does not
+        add seasons nobody owns."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            self._season(conn, series_id, 1)
+            self._run(conn, series_id, self._hit())
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM series_seasons WHERE series_id = %s",
+                    (series_id,),
+                )
+                self.assertEqual(cur.fetchone()["n"], 1)
 
 
 if __name__ == "__main__":  # pragma: no cover
