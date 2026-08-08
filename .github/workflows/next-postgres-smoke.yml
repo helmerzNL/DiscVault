@@ -110,6 +110,13 @@ jobs:
       - name: Test per-source attribution
         run: python -m unittest tests.test_next_source_attribution
 
+      # Where the version bump happens. Nothing else in this repository fails when
+      # the bump job stops running: the next image simply keeps carrying the
+      # previous version number, which looks exactly like a build that was not
+      # needed. Only these assertions tell the difference.
+      - name: Test the version bump pipeline
+        run: python -m unittest tests.test_version_bump_pipeline
+
       - name: Apply Next migrations
         run: python next_database.py migrate
 

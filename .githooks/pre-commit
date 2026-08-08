@@ -1,6 +1,10 @@
 #!/usr/bin/env sh
-# DiscVault: reject purged iOS artifacts, then keep app/VERSION in step with
-# app/runtime changes so the CI guards pass.
+# DiscVault: reject purged iOS artifacts.
+#
+# This hook used to bump app/VERSION as well. It must not: the bump is applied by
+# CI on release/v26-beta after the merge, and a pull request that carries a bump is
+# now refused by the version guard. Bumping here would make every commit fail the
+# check it was meant to satisfy.
 #
 # Enable once per clone:
 #   git config core.hooksPath .githooks
@@ -15,6 +19,5 @@ else
 fi
 
 "$PYTHON" app/scripts/check_forbidden_paths.py --staged || exit $?
-"$PYTHON" app/scripts/bump_version.py || true
 
 exit 0

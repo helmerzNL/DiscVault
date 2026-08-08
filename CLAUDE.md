@@ -124,12 +124,39 @@ If it was merged, treat the follow-up as a fresh change:
 
 ---
 
-## Version guard: always bump `app/VERSION`
+## Version guard: CI bumps `app/VERSION`, a PR must not
 
-CI runs `.github/workflows/version-guard.yml` (via `app/scripts/check_version_bumped.py`) and
-**fails any push or PR that touches a protected path without changing `app/VERSION`**.
+**Never bump `app/VERSION` in a pull request.** The bump is applied by CI on
+`release/v26-beta` after the merge; a PR that carries one is refused by
+`.github/workflows/version-guard.yml` with:
 
-Protected paths:
+```
+app/VERSION must not be changed in a pull request: CI bumps it on release/v26-beta after the merge.
+```
+
+### Why it moved out of the PR
+
+A hand-written bump is only valid against the base as it stood when it was written, and GitHub
+does not re-run a check when the base moves. A PR could be green when opened and wrong when
+merged, with nothing in between to notice.
+
+This happened three times: #473/#474, #516/#517 (repaired by #520), and finally #570/#571/#572
+merging within 26 seconds, all bumping to 26.8.39 — two guards red on beta, no image built for
+beta's head until #573 bumped it by hand.
+
+The old rule was "re-check the bump right before merging". Three sessions merging seconds apart
+cannot satisfy it: the bump goes stale in between and no human wins that race. Applied after the
+merge, the bump is derived from the branch it lands on and cannot go stale.
+
+### Where each thing now happens
+
+| Event | Behaviour |
+|---|---|
+| PR into `release/v26-beta` | `app/VERSION` must be **unchanged** (`check_version_bumped.py --forbid-change`) |
+| Push to `release/v26-beta` | The `version-bump` job in `docker-publish.yml` bumps the patch, commits to beta, and the image is built **from that commit** |
+| Push to `main` (a promotion) | Unchanged: the version must be strictly greater, and promotions carry beta's bump commits |
+
+Protected paths are unchanged — they decide whether a bump is *due*, not who applies it:
 
 - `.github/workflows/`
 - `app/Dockerfile`, `app/docker-compose*`
@@ -140,43 +167,19 @@ Protected paths:
 - `app/scripts/`
 - `dist/plugins/`
 
-`*.md` and `*.txt` files are ignored — documentation-only changes need no bump.
+`*.md` and `*.txt` are ignored.
 
-**What to do:** when a change set touches a protected path, bump `app/VERSION` (semver
-`MAJOR.MINOR.PATCH` — bump the patch unless a larger change is intended). One bump per PR/range is
-enough. Easiest is to let the helper do it after staging your changes:
+### Two consequences worth holding on to
 
-```sh
-python app/scripts/bump_version.py     # bumps the patch and stages app/VERSION
-```
+**The pre-commit hook no longer bumps.** `.githooks/pre-commit` still rejects forbidden iOS
+artifacts, but calling `bump_version.py` there would write the one file a PR must leave alone.
+`app/scripts/bump_version.py` still exists — CI invokes it with `--force` — but running it by
+hand on a feature branch produces a change the guard then refuses.
 
-Or enable the pre-commit hook once per clone/worktree so it happens automatically:
+**The bump job may never force-push.** `Block force pushes` is active on every branch in this
+repository. A rejected push is retried by restarting from beta's new tip, never with `--force`.
 
-```sh
-git config core.hooksPath .githooks
-```
-
-### Re-check the bump right before merging
-
-**A bump is only valid against the base as it is at merge time.** The guard requires
-`app/VERSION` to be *strictly greater* than the version on `release/v26-beta`, and both the
-helper and the pre-commit hook can only compare against the base as it looked when you
-committed. If another PR merges into beta while yours is open and bumps to the same patch
-number, your bump silently goes stale and the guard fails with `… is not strictly greater than
-the actual base … - this is stale/redundant, not a real bump`.
-
-So before merging — not only before opening the PR:
-
-```sh
-git fetch origin release/v26-beta
-git rebase origin/release/v26-beta      # or merge the base in
-python app/scripts/bump_version.py      # moves past the *new* base
-```
-
-**Never merge a PR whose version guard is red, and say so when someone is about to.** Merging
-anyway lands two different code states on beta under one version, so the beta image tag stops
-identifying a build, and repairing it costs a second PR that does nothing but bump. This has
-happened twice: #473/#474, and #516/#517 (repaired by #520).
+If a guard is red, **do not merge**, and say so when someone is about to.
 
 ---
 
@@ -281,15 +284,15 @@ source.
 ### When committing
 
 1. Confirm you are on a **beta-based branch**, not on `main`.
-2. If the change touches a protected path, ensure `app/VERSION` is bumped (helper or pre-commit
-   hook). Docs-only (`*.md`/`*.txt`) needs no bump.
+2. **Leave `app/VERSION` untouched** — CI bumps it on beta after the merge, and the guard
+   refuses a PR that carries a bump.
 3. Start the commit message with the classified type prefix (`fix:`/`feat:`/`docs:`/…).
 4. Add a Claude co-author trailer, e.g. `Co-Authored-By: Claude <noreply@anthropic.com>`
    (mirroring the Copilot trailer the Copilot doc mandates), unless the user opts out.
 5. Push and open the PR **into `release/v26-beta`** with the same type prefix in its title.
 6. Confirm translations are complete across all locales.
-7. Before the PR is merged, re-check the bump against the *current* base — beta may have moved
-   while the PR was open, which makes an earlier bump stale.
+7. Never merge a PR whose version guard is red. There is nothing left to re-check about the
+   bump before merging — moving it into CI is what removed that step.
 8. Let it build/test on the beta channel before considering promotion.
 9. After the PR merges, delete the feature branch — unless it is the active session branch or a
    permanent branch.
