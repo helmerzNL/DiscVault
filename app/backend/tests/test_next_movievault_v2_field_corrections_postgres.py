@@ -298,6 +298,56 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         )
         self.assertNotIn("countryCode", {item["field"] for item in preview["changes"]})
 
+    def test_a_lower_case_country_code_is_normalised_rather_than_withheld(self):
+        """`movies.country` is free text, so the same country arrives written
+        several ways. Two ASCII letters name a country whatever their case, so
+        upper-casing is a normalisation and not a guess -- and without it a user
+        was told their value is not a country code about a value that is one.
+        """
+        # The mirror holds "NL", so a local "de" is a real disagreement and has
+        # to survive as one; a local "nl" would simply agree.
+        movie = self._movie(barcode=BARCODE, country="de")
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        preview = corrections.correction_preview(self.conn, entity="movie", record=movie, metadata={})
+
+        self.assertNotIn("countryCode", preview["withheld"])
+        change = next(item for item in preview["changes"] if item["field"] == "countryCode")
+        self.assertEqual(change["proposed"], "DE")
+        self.assertEqual(change["expected"], "NL")
+
+    def test_a_country_code_that_already_agrees_in_another_case_is_not_a_correction(self):
+        """The normalisation must run before the diff, or "nl" against a mirror
+        holding "NL" reads as a change and proposes a correction that corrects
+        nothing."""
+        movie = self._movie(barcode=BARCODE, country="nl")
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        preview = corrections.correction_preview(self.conn, entity="movie", record=movie, metadata={})
+
+        self.assertNotIn("countryCode", preview["withheld"])
+        self.assertNotIn("countryCode", {item["field"] for item in preview["changes"]})
+
+    def test_a_country_that_needs_a_lookup_table_stays_withheld(self):
+        """The line is case-folding, not derivation. "NLD" and "nl-NL" name the
+        Netherlands to a reader and to nothing else here; mapping them needs a
+        table, which is a data decision with a silent wrong-answer mode."""
+        for value in ("NLD", "nl-NL", "Nederland"):
+            with self.subTest(country=value):
+                # Resolved through the stored identifier rather than a barcode:
+                # `movies.barcode` is UNIQUE, so several movies in one test
+                # cannot each carry the same one.
+                movie = self._movie(country=value)
+                self._identifier(movie["id"], self.release_id)
+
+                preview = corrections.correction_preview(
+                    self.conn, entity="movie", record=movie, metadata={}
+                )
+
+                self.assertEqual(
+                    preview["withheld"]["countryCode"], "local_value_is_not_a_country_code"
+                )
+
     def test_a_language_that_is_not_a_code_is_withheld(self):
         """MovieVault puts no pattern on `language_code`, so it would accept
         "Dutch" and poison a shared catalogue. Refusing here is the only guard."""

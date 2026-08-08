@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Laukas kitoje pusėje nėra tas pats laukas - jį išsiuntus būtų sukurti išgalvoti duomenys.",
   "contribute.withheld.list": "DiscVault čia saugo sąrašą, o MovieVault vieną reikšmę - juos sujungus būtų prarasta detalių.",
   "contribute.withheld.notStored": "DiscVault šio lauko nesaugo.",
+  "contribute.withheld.countryCode": "„MovieVault“ reikia dviejų raidžių šalies kodo. Pakeiskite šį lauką į kodą, pvz., NL, kad galėtumėte jį pateikti.",
+  "contribute.withheld.languageCode": "„MovieVault“ reikia kalbos kodo. Pakeiskite šį lauką į kodą, pvz., nl, kad galėtumėte jį pateikti.",
   "contribute.field.title": "Pavadinimas",
   "contribute.field.edition": "Leidimas",
   "contribute.field.format": "Formatas",

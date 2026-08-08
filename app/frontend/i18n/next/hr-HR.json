@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Polje s druge strane nije isto polje - slanje bi izmislilo podatke.",
   "contribute.withheld.list": "DiscVault ovdje vodi popis, a MovieVault jednu vrijednost - spajanje bi izgubilo detalje.",
   "contribute.withheld.notStored": "DiscVault ne pohranjuje ovo polje.",
+  "contribute.withheld.countryCode": "MovieVault treba dvoslovnu oznaku države. Promijenite ovo polje u oznaku poput NL da biste ga poslali.",
+  "contribute.withheld.languageCode": "MovieVault treba oznaku jezika. Promijenite ovo polje u oznaku poput nl da biste ga poslali.",
   "contribute.field.title": "Naslov",
   "contribute.field.edition": "Izdanje",
   "contribute.field.format": "Format",

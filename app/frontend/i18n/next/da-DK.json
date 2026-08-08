@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Feltet i den anden ende er ikke det samme felt - at sende det ville opfinde data.",
   "contribute.withheld.list": "DiscVault har en liste her, og MovieVault én værdi - at slå dem sammen ville miste detaljer.",
   "contribute.withheld.notStored": "DiscVault gemmer ikke dette felt.",
+  "contribute.withheld.countryCode": "MovieVault kræver en landekode på to bogstaver. Ret dette felt til en kode som NL for at bidrage med det.",
+  "contribute.withheld.languageCode": "MovieVault kræver en sprogkode. Ret dette felt til en kode som nl for at bidrage med det.",
   "contribute.field.title": "Titel",
   "contribute.field.edition": "Udgave",
   "contribute.field.format": "Format",

@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Το πεδίο στην άλλη πλευρά δεν είναι το ίδιο πεδίο - η αποστολή του θα επινοούσε δεδομένα.",
   "contribute.withheld.list": "Το DiscVault κρατά εδώ λίστα και το MovieVault μία τιμή - η συγχώνευσή τους θα έχανε λεπτομέρειες.",
   "contribute.withheld.notStored": "Το DiscVault δεν αποθηκεύει αυτό το πεδίο.",
+  "contribute.withheld.countryCode": "Το MovieVault χρειάζεται διψήφιο κωδικό χώρας. Αλλάξτε αυτό το πεδίο σε κωδικό όπως NL για να το συνεισφέρετε.",
+  "contribute.withheld.languageCode": "Το MovieVault χρειάζεται κωδικό γλώσσας. Αλλάξτε αυτό το πεδίο σε κωδικό όπως nl για να το συνεισφέρετε.",
   "contribute.field.title": "Τίτλος",
   "contribute.field.edition": "Έκδοση",
   "contribute.field.format": "Μορφή",

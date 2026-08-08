@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Полето от другата страна не е същото поле - изпращането му би измислило данни.",
   "contribute.withheld.list": "DiscVault поддържа тук списък, а MovieVault една стойност - обединяването им би загубило детайли.",
   "contribute.withheld.notStored": "DiscVault не съхранява това поле.",
+  "contribute.withheld.countryCode": "MovieVault изисква двубуквен код на държава. Променете това поле на код като NL, за да го изпратите.",
+  "contribute.withheld.languageCode": "MovieVault изисква езиков код. Променете това поле на код като nl, за да го изпратите.",
   "contribute.field.title": "Заглавие",
   "contribute.field.edition": "Издание",
   "contribute.field.format": "Формат",

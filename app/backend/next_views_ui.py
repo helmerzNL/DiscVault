@@ -28481,7 +28481,12 @@ def ui_preview_html(
       discvault_holds_one_barcode: ["contribute.withheld.oneBarcode", "MovieVault keeps a list of barcodes and DiscVault keeps one, so sending it would delete the others."],
       different_field_upstream: ["contribute.withheld.differentField", "The upstream field is not the same field, so sending it would invent data."],
       discvault_holds_a_list: ["contribute.withheld.list", "DiscVault keeps a list here and MovieVault keeps one value, so joining them would lose detail."],
-      not_stored_by_discvault: ["contribute.withheld.notStored", "DiscVault does not store this field."]
+      not_stored_by_discvault: ["contribute.withheld.notStored", "DiscVault does not store this field."],
+      // The two value-level refusals. Unlike the four above, these are about
+      // this one record rather than about the two data models, so the text says
+      // what to change -- without it the raw code reached the screen.
+      local_value_is_not_a_country_code: ["contribute.withheld.countryCode", "MovieVault needs a two-letter country code. Change this field to a code such as NL to contribute it."],
+      local_value_is_not_a_language_code: ["contribute.withheld.languageCode", "MovieVault needs a language code. Change this field to a code such as nl to contribute it."]
     };
     const contributeState = {movie: null, container: null};
     function contributeFieldLabel(field) {

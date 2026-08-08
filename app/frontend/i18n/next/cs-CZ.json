@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Pole na druhé straně není totéž pole - odesláním by vznikla vymyšlená data.",
   "contribute.withheld.list": "DiscVault zde vede seznam a MovieVault jedinou hodnotu - spojením by se ztratil detail.",
   "contribute.withheld.notStored": "DiscVault toto pole neukládá.",
+  "contribute.withheld.countryCode": "MovieVault vyžaduje dvoupísmenný kód země. Změňte toto pole na kód jako NL, abyste jej mohli přispět.",
+  "contribute.withheld.languageCode": "MovieVault vyžaduje kód jazyka. Změňte toto pole na kód jako nl, abyste jej mohli přispět.",
   "contribute.field.title": "Název",
   "contribute.field.edition": "Edice",
   "contribute.field.format": "Formát",

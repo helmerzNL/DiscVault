@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Toisen pään kenttä ei ole sama kenttä - sen lähettäminen keksisi tietoa.",
   "contribute.withheld.list": "DiscVault pitää tässä luetteloa ja MovieVault yhtä arvoa - niiden yhdistäminen menettäisi yksityiskohtia.",
   "contribute.withheld.notStored": "DiscVault ei tallenna tätä kenttää.",
+  "contribute.withheld.countryCode": "MovieVault tarvitsee kaksikirjaimisen maakoodin. Vaihda tämä kenttä koodiksi kuten NL, jotta voit lähettää sen.",
+  "contribute.withheld.languageCode": "MovieVault tarvitsee kielikoodin. Vaihda tämä kenttä koodiksi kuten nl, jotta voit lähettää sen.",
   "contribute.field.title": "Nimi",
   "contribute.field.edition": "Julkaisu",
   "contribute.field.format": "Formaatti",

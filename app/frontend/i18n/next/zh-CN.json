@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "对面的字段并不是同一个字段，发送会凭空生成数据。",
   "contribute.withheld.list": "DiscVault 在这里保存的是列表，MovieVault 保存的是单个值，合并会丢失细节。",
   "contribute.withheld.notStored": "DiscVault 不存储此字段。",
+  "contribute.withheld.countryCode": "MovieVault 需要两个字母的国家/地区代码。请将此字段改为 NL 之类的代码后再提交。",
+  "contribute.withheld.languageCode": "MovieVault 需要语言代码。请将此字段改为 nl 之类的代码后再提交。",
   "contribute.field.title": "标题",
   "contribute.field.edition": "版本",
   "contribute.field.format": "格式",

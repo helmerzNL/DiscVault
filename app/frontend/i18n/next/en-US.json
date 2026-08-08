@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "The upstream field is not the same field, so sending it would invent data.",
   "contribute.withheld.list": "DiscVault keeps a list here and MovieVault keeps one value, so joining them would lose detail.",
   "contribute.withheld.notStored": "DiscVault does not store this field.",
+  "contribute.withheld.countryCode": "MovieVault needs a two-letter country code. Change this field to a code such as NL to contribute it.",
+  "contribute.withheld.languageCode": "MovieVault needs a language code. Change this field to a code such as nl to contribute it.",
   "contribute.field.title": "Title",
   "contribute.field.edition": "Edition",
   "contribute.field.format": "Format",

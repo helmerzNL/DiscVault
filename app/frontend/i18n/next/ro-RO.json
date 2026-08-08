@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Câmpul de cealaltă parte nu este același câmp - trimiterea lui ar inventa date.",
   "contribute.withheld.list": "DiscVault păstrează aici o listă, iar MovieVault o singură valoare - unirea lor ar pierde detalii.",
   "contribute.withheld.notStored": "DiscVault nu stochează acest câmp.",
+  "contribute.withheld.countryCode": "MovieVault are nevoie de un cod de țară din două litere. Schimbați acest câmp într-un cod precum NL pentru a-l trimite.",
+  "contribute.withheld.languageCode": "MovieVault are nevoie de un cod de limbă. Schimbați acest câmp într-un cod precum nl pentru a-l trimite.",
   "contribute.field.title": "Titlu",
   "contribute.field.edition": "Ediție",
   "contribute.field.format": "Format",

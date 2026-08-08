@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Karşı taraftaki alan aynı alan değil - göndermek uydurma veri üretirdi.",
   "contribute.withheld.list": "DiscVault burada bir liste tutar, MovieVault tek bir değer - birleştirmek ayrıntı kaybettirirdi.",
   "contribute.withheld.notStored": "DiscVault bu alanı saklamıyor.",
+  "contribute.withheld.countryCode": "MovieVault iki harfli bir ülke kodu bekliyor. Göndermek için bu alanı NL gibi bir koda değiştirin.",
+  "contribute.withheld.languageCode": "MovieVault bir dil kodu bekliyor. Göndermek için bu alanı nl gibi bir koda değiştirin.",
   "contribute.field.title": "Başlık",
   "contribute.field.edition": "Sürüm",
   "contribute.field.format": "Biçim",

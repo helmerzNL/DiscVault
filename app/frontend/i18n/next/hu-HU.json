@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "A túloldali mező nem ugyanaz a mező - elküldése kitalált adatot hozna létre.",
   "contribute.withheld.list": "A DiscVault itt listát tart, a MovieVault egyetlen értéket - összevonásuk részleteket veszítene.",
   "contribute.withheld.notStored": "A DiscVault nem tárolja ezt a mezőt.",
+  "contribute.withheld.countryCode": "A MovieVault kétbetűs országkódot vár. Módosítsa ezt a mezőt egy NL-hez hasonló kódra a beküldéshez.",
+  "contribute.withheld.languageCode": "A MovieVault nyelvkódot vár. Módosítsa ezt a mezőt egy nl-hez hasonló kódra a beküldéshez.",
   "contribute.field.title": "Cím",
   "contribute.field.edition": "Kiadás",
   "contribute.field.format": "Formátum",

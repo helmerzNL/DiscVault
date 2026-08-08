@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Teise poole väli ei ole sama väli - selle saatmine looks väljamõeldud andmeid.",
   "contribute.withheld.list": "DiscVault hoiab siin loendit ja MovieVault ühte väärtust - nende ühendamine kaotaks detaile.",
   "contribute.withheld.notStored": "DiscVault ei salvesta seda välja.",
+  "contribute.withheld.countryCode": "MovieVault vajab kahetähelist riigikoodi. Muutke see väli koodiks nagu NL, et seda jagada.",
+  "contribute.withheld.languageCode": "MovieVault vajab keelekoodi. Muutke see väli koodiks nagu nl, et seda jagada.",
   "contribute.field.title": "Pealkiri",
   "contribute.field.edition": "Väljaanne",
   "contribute.field.format": "Vorming",

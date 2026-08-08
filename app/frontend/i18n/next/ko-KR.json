@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "상대편 항목은 같은 항목이 아니므로, 보내면 없는 데이터를 만들어내게 됩니다.",
   "contribute.withheld.list": "DiscVault는 여기에 목록을, MovieVault는 하나의 값을 보관하므로, 합치면 세부 정보가 사라집니다.",
   "contribute.withheld.notStored": "DiscVault는 이 항목을 저장하지 않습니다.",
+  "contribute.withheld.countryCode": "MovieVault에는 두 글자 국가 코드가 필요합니다. 이 항목을 NL과 같은 코드로 변경하면 보낼 수 있습니다.",
+  "contribute.withheld.languageCode": "MovieVault에는 언어 코드가 필요합니다. 이 항목을 nl과 같은 코드로 변경하면 보낼 수 있습니다.",
   "contribute.field.title": "제목",
   "contribute.field.edition": "에디션",
   "contribute.field.format": "포맷",

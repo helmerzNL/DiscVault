@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "O campo do outro lado não é o mesmo campo, pelo que enviá-lo inventaria dados.",
   "contribute.withheld.list": "O DiscVault guarda aqui uma lista e o MovieVault um único valor, pelo que juntá-los perderia detalhe.",
   "contribute.withheld.notStored": "O DiscVault não armazena este campo.",
+  "contribute.withheld.countryCode": "O MovieVault precisa de um código de país de duas letras. Altere este campo para um código como NL para o contribuir.",
+  "contribute.withheld.languageCode": "O MovieVault precisa de um código de idioma. Altere este campo para um código como nl para o contribuir.",
   "contribute.field.title": "Título",
   "contribute.field.edition": "Edição",
   "contribute.field.format": "Formato",

@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "Otrā pusē esošais lauks nav tas pats lauks - tā nosūtīšana radītu izdomātus datus.",
   "contribute.withheld.list": "DiscVault šeit glabā sarakstu, bet MovieVault vienu vērtību - to apvienošana zaudētu detaļas.",
   "contribute.withheld.notStored": "DiscVault šo lauku neglabā.",
+  "contribute.withheld.countryCode": "MovieVault ir nepieciešams divburtu valsts kods. Nomainiet šo lauku uz kodu, piemēram, NL, lai to nosūtītu.",
+  "contribute.withheld.languageCode": "MovieVault ir nepieciešams valodas kods. Nomainiet šo lauku uz kodu, piemēram, nl, lai to nosūtītu.",
   "contribute.field.title": "Nosaukums",
   "contribute.field.edition": "Izdevums",
   "contribute.field.format": "Formāts",

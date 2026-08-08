@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "另一端的欄位並不是同一個欄位，傳送會憑空產生資料。",
   "contribute.withheld.list": "DiscVault 在這裡保存的是清單，MovieVault 保存的是單一值，合併會失去細節。",
   "contribute.withheld.notStored": "DiscVault 不會儲存這個欄位。",
+  "contribute.withheld.countryCode": "MovieVault 需要兩個字母的國家/地區代碼。請將此欄位改為 NL 之類的代碼後再提交。",
+  "contribute.withheld.languageCode": "MovieVault 需要語言代碼。請將此欄位改為 nl 之類的代碼後再提交。",
   "contribute.field.title": "標題",
   "contribute.field.edition": "版本",
   "contribute.field.format": "格式",

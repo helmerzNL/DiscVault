@@ -47,6 +47,12 @@ _UUID_PATTERN = re.compile(
 )
 #: MovieVault stores `country_code char(2)` and validates `^[A-Z]{2}$`.
 _COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
+#: The same two letters in any case. `movies.country` is free text, so a record
+#: holding "nl" names exactly the country MovieVault spells "NL" -- upper-casing
+#: it is a normalisation, not a guess. Anything that needs a lookup table
+#: ("Netherlands", "NLD", "Nederland") stays on the other side of that line and
+#: is withheld, because there the wrong answer is silent.
+_COUNTRY_LIKE_PATTERN = re.compile(r"^[A-Za-z]{2}$")
 #: MovieVault puts no pattern on `language_code`, which means it would happily
 #: store "Dutch". DiscVault's `movies.language` is free text, so the shape is
 #: checked here rather than upstream -- the alternative is polluting a shared
@@ -292,11 +298,29 @@ def _clean(value: Any) -> Any:
     return value
 
 
+def _normalise_country(value: Any) -> Any:
+    """Upper-case a two-letter country value, and change nothing else.
+
+    `movies.country` is free text, so the same country arrives written several
+    ways. Two ASCII letters name a country unambiguously whatever their case,
+    so `nl` -> `NL` costs nothing and stops a user being told their value is
+    not a country code when it is one. Everything longer needs a lookup table,
+    which is a data decision with a wrong-answer mode: those stay withheld.
+    """
+    if isinstance(value, str) and _COUNTRY_LIKE_PATTERN.fullmatch(value):
+        return value.upper()
+    return value
+
+
 def _local_release_values(record: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for field, (source, column) in RELEASE_FIELD_SOURCES.items():
         raw = metadata.get(column) if source == "metadata" else record.get(column)
         value = _clean(raw)
+        if field == "countryCode":
+            # Normalise before anything reads it, so the eligibility check, the
+            # `proposed` value and the submitted payload cannot disagree.
+            value = _normalise_country(value)
         if field == "releaseDate" and value is not None:
             value = value.isoformat() if hasattr(value, "isoformat") else str(value)
         if field == "runtimeMinutes" and value is not None:

@@ -2736,6 +2736,8 @@
   "contribute.withheld.differentField": "相手側の項目は同じ項目ではないため、送信するとデータを捏造することになります。",
   "contribute.withheld.list": "DiscVault はここで一覧を保持し、MovieVault は 1 つの値を保持するため、まとめると詳細が失われます。",
   "contribute.withheld.notStored": "DiscVault はこの項目を保存していません。",
+  "contribute.withheld.countryCode": "MovieVault は 2 文字の国コードを必要とします。この項目を NL のようなコードに変更すると送信できます。",
+  "contribute.withheld.languageCode": "MovieVault は言語コードを必要とします。この項目を nl のようなコードに変更すると送信できます。",
   "contribute.field.title": "タイトル",
   "contribute.field.edition": "エディション",
   "contribute.field.format": "フォーマット",
