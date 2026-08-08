@@ -28,13 +28,17 @@ from typing import Any
 try:
     from .next_metadata import movie_identifiers
     from .next_metadata import movie_locked_fields
+    from .next_metadata import movie_technical_specs
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_connection import _table_exists, _text
+    from .next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_metadata import movie_identifiers
     from next_metadata import movie_locked_fields
+    from next_metadata import movie_technical_specs
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_connection import _table_exists, _text
+    from next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 
 #: The provider whose identifier names a MovieVault release. Written by the v2
 #: plugin since 26.8.9; read here as the first and most reliable way to say
@@ -47,11 +51,22 @@ _UUID_PATTERN = re.compile(
 )
 #: MovieVault stores `country_code char(2)` and validates `^[A-Z]{2}$`.
 _COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
+#: The same two letters in any case. `movies.country` is free text, so a record
+#: holding "nl" names exactly the country MovieVault spells "NL" -- upper-casing
+#: it is a normalisation, not a guess. Anything that needs a lookup table
+#: ("Netherlands", "NLD", "Nederland") stays on the other side of that line and
+#: is withheld, because there the wrong answer is silent.
+_COUNTRY_LIKE_PATTERN = re.compile(r"^[A-Za-z]{2}$")
 #: MovieVault puts no pattern on `language_code`, which means it would happily
 #: store "Dutch". DiscVault's `movies.language` is free text, so the shape is
 #: checked here rather than upstream -- the alternative is polluting a shared
 #: catalogue with a value only this instance can read.
 _LANGUAGE_PATTERN = re.compile(r"^[A-Za-z]{2,3}(?:[-_][A-Za-z0-9]{2,8})*$")
+#: The disc-region vocabulary, identical on both sides. Stated here rather than
+#: imported because DiscVault stores it in a jsonb column with no constraint,
+#: so an unrecognised value is a local possibility that must not travel --
+#: upstream would refuse the whole envelope, not just the field.
+DISC_REGIONS = frozenset({"A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"})
 
 
 class FieldCorrectionError(Exception):
@@ -73,7 +88,20 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     "languageCode": ("movie", "language"),
     "releaseDate": ("movie", "release_date"),
     "runtimeMinutes": ("movie", "runtime_minutes"),
+    # Held since 26.8.22. Nullable, so "nobody said" stays distinct from
+    # "one disc" -- and a record nobody has answered proposes nothing.
+    "discCount": ("movie", "disc_count"),
     "distributor": ("metadata", "distributor"),
+    # Not a column: the complete EAN list, assembled from
+    # `movie_product_identifiers` plus the scanned `movies.barcode`. Withheld
+    # until 26.8.20, when DiscVault gained somewhere to hold more than one code.
+    "eans": ("identifiers", "eans"),
+    # Not on `movies` either: disc regions live on `movie_technical_specs`, and
+    # upstream on `release_technical_profiles`. Both sides hold the same
+    # normalised vocabulary, which is what makes this the one region-shaped
+    # field that can travel -- `region` below is free-text market region and a
+    # different fact.
+    "discRegions": ("technical", "regions"),
 }
 
 #: Eligible upstream, deliberately not offered here. Each entry is a place where
@@ -94,11 +122,6 @@ RELEASE_FIELDS_WITHHELD: dict[str, str] = {
     # offer instead: what it stores per pressing is `edition` and `format`,
     # which are already correctable separately.
     "title": "different_field_upstream",
-    # MovieVault holds a list and the contract makes it a complete replacement.
-    # DiscVault holds one `movies.barcode`. Sending `[barcode]` would delete
-    # every other EAN the release has, and the moderator would see a plausible
-    # one-item list rather than a deletion.
-    "eans": "discvault_holds_one_barcode",
     # `content.releases.region` is free text at release level. DiscVault's
     # `regions` is a normalised list of disc regions on the technical spec.
     # Same word, different fact.
@@ -106,9 +129,6 @@ RELEASE_FIELDS_WITHHELD: dict[str, str] = {
     # MovieVault has one `studio`; DiscVault has `studios`, a list. Joining a
     # list into one string is lossy in a way a moderator cannot see.
     "studio": "discvault_holds_a_list",
-    # DiscVault has no disc count. `movie_technical_specs` does not carry one
-    # and the edit form does not offer one.
-    "discCount": "not_stored_by_discvault",
 }
 
 #: A box set is nearly empty on this route, and that is a fact about the data
@@ -141,6 +161,10 @@ _FIELD_LOCK_NAMES: dict[str, tuple[str, ...]] = {
     "releaseDate": ("release_date",),
     "runtimeMinutes": ("runtime_minutes",),
     "distributor": ("distributor",),
+    # The local lock is spelled `regions`; the wire field is `discRegions`.
+    # Without this row a user who pinned their disc regions against metadata
+    # refresh would have them published anyway.
+    "discRegions": ("regions",),
 }
 
 
@@ -292,14 +316,82 @@ def _clean(value: Any) -> Any:
     return value
 
 
-def _local_release_values(record: dict[str, Any], metadata: dict[str, Any]) -> dict[str, Any]:
+def _normalise_country(value: Any) -> Any:
+    """Upper-case a two-letter country value, and change nothing else.
+
+    `movies.country` is free text, so the same country arrives written several
+    ways. Two ASCII letters name a country unambiguously whatever their case,
+    so `nl` -> `NL` costs nothing and stops a user being told their value is
+    not a country code when it is one. Everything longer needs a lookup table,
+    which is a data decision with a wrong-answer mode: those stay withheld.
+    """
+    if isinstance(value, str) and _COUNTRY_LIKE_PATTERN.fullmatch(value):
+        return value.upper()
+    return value
+
+
+def _mirror_disc_regions(value: Any) -> list[str] | None:
+    """The catalogue's disc regions, normalised the same way the local ones are.
+
+    Both sides are compared as whole lists, so they have to be sorted the same
+    way or every record with regions reads as a disagreement. An absent or
+    empty set is `None`, matching `_disc_regions`: upstream's column defaults to
+    an empty array, and "nothing recorded" is not "plays nowhere".
+    """
+    if not isinstance(value, list) or not value:
+        return None
+    values = sorted({str(item).strip().upper() for item in value if str(item).strip()})
+    return [item for item in values if item in DISC_REGIONS] or None
+
+
+def _disc_regions(technical: dict[str, Any], metadata: dict[str, Any]) -> list[str] | None:
+    """The local disc regions, normalised the way upstream compares them.
+
+    Read from `movie_technical_specs` first and from `metadata` second, which is
+    the same precedence the edit panel and the sync payload use. Sorted and
+    deduplicated because the value is compared against `expected` as a whole,
+    so two orderings of one answer would read as a disagreement about the discs.
+
+    An empty set is `None` rather than `[]`: upstream treats an empty list as
+    "this release plays nowhere", and a movie with nothing recorded locally
+    means "nobody said", not that.
+    """
+    raw = technical.get("regions")
+    if not isinstance(raw, list) or not raw:
+        raw = metadata.get("regions")
+    if not isinstance(raw, list) or not raw:
+        return None
+    values = sorted({str(item).strip().upper() for item in raw if str(item).strip()})
+    return [value for value in values if value in DISC_REGIONS] or None
+
+
+def _local_release_values(
+    record: dict[str, Any],
+    metadata: dict[str, Any],
+    identifiers: list[dict[str, str]] | None = None,
+    technical: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     values: dict[str, Any] = {}
     for field, (source, column) in RELEASE_FIELD_SOURCES.items():
+        if source == "technical":
+            values[field] = _disc_regions(technical or {}, metadata)
+            continue
+        if source == "identifiers":
+            # A list rather than a column, and empty means "nothing to say"
+            # rather than "delete everything upstream": an empty replacement
+            # list would wipe the release's identifiers, so it is never offered.
+            eans = contributable_eans(identifiers or [], barcode=record.get("barcode"))
+            values[field] = eans or None
+            continue
         raw = metadata.get(column) if source == "metadata" else record.get(column)
         value = _clean(raw)
+        if field == "countryCode":
+            # Normalise before anything reads it, so the eligibility check, the
+            # `proposed` value and the submitted payload cannot disagree.
+            value = _normalise_country(value)
         if field == "releaseDate" and value is not None:
             value = value.isoformat() if hasattr(value, "isoformat") else str(value)
-        if field == "runtimeMinutes" and value is not None:
+        if field in {"runtimeMinutes", "discCount"} and value is not None:
             value = int(value)
         values[field] = value
     return values
@@ -324,7 +416,8 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             cur.execute(
                 """
                 SELECT release_title, edition, format, country_code, language_code,
-                       release_date, runtime_minutes, distributor
+                       release_date, runtime_minutes, distributor, disc_regions,
+                       disc_count
                 FROM movievault_v2_releases
                 WHERE generation = %s AND release_id = %s
                 """,
@@ -343,7 +436,11 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             "languageCode": _clean(row.get("language_code")),
             "releaseDate": release_date.isoformat() if release_date else None,
             "runtimeMinutes": int(row["runtime_minutes"]) if row.get("runtime_minutes") else None,
+            "discCount": int(row["disc_count"]) if row.get("disc_count") else None,
             "distributor": _clean(row.get("distributor")),
+            # The mirror does carry this one, unlike `eans` -- so a correction
+            # can be composed offline and `expected` is still a real value.
+            "discRegions": _mirror_disc_regions(row.get("disc_regions")),
         }
     with conn.cursor() as cur:
         cur.execute(
@@ -380,17 +477,26 @@ def eligible_fields(
     entity: str,
     local: dict[str, Any],
     locked: set[str],
+    extra_withheld: dict[str, str] | None = None,
 ) -> tuple[list[str], dict[str, str]]:
     """The fields this record may offer, and why each of the others may not.
 
     The refusals are returned rather than dropped so a client can explain
     itself. "Not offered" and "offered but unchanged" look identical in a UI
     that only receives a list.
+
+    `extra_withheld` carries refusals that depend on this *call* rather than on
+    the two data models -- today only `eans`, which needs a live catalogue read
+    to have an honest `expected`. They are merged in the same map so a caller
+    has one place to look.
     """
     sources = RELEASE_FIELD_SOURCES if entity == "movie" else BOX_SET_FIELD_SOURCES
     withheld = dict(RELEASE_FIELDS_WITHHELD if entity == "movie" else BOX_SET_FIELDS_WITHHELD)
+    withheld.update(extra_withheld or {})
     allowed: list[str] = []
     for field in sources:
+        if field in withheld:
+            continue
         lock_names = _FIELD_LOCK_NAMES.get(field, ())
         if any(name in locked for name in lock_names):
             # A lock is a local override, pinned against metadata refresh.
@@ -493,7 +599,10 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "languageCode": _clean(summary.get("languageCode")),
             "releaseDate": _clean(summary.get("releaseDate")),
             "runtimeMinutes": int(summary["runtimeMinutes"]) if summary.get("runtimeMinutes") else None,
+            "discCount": int(summary["discCount"]) if summary.get("discCount") else None,
             "distributor": _clean(summary.get("distributor")),
+            "eans": catalogue_eans(summary.get("barcodes")),
+            "discRegions": _mirror_disc_regions(summary.get("discRegions")),
         }
     # The film is known but this release is not among its active ones: it was
     # merged, retired or deleted. Correcting a record that is no longer served
@@ -605,9 +714,29 @@ def correction_preview(
             mirror = live
             source = "catalogue"
 
+    extra_withheld: dict[str, str] = {}
     if entity == "movie":
-        local = _local_release_values(record, metadata or {})
+        local = _local_release_values(
+            record,
+            metadata or {},
+            movie_identifiers_by_type(conn, record.get("id")),
+            movie_technical_specs(conn, record.get("id")) if record.get("id") else {},
+        )
         locked = movie_locked_fields(metadata or {})
+        if source != "catalogue" or not isinstance(mirror.get("eans"), list):
+            # `eans` is a complete replacement list and the mirror cannot say
+            # what it would replace: `movievault_v2_releases` has no barcode
+            # column and the lookup index holds hashes, by design.
+            #
+            # A live read that came back without a barcode list is refused for
+            # the same reason rather than a weaker one. "The catalogue did not
+            # say" would otherwise leave `expected` as None, and a replacement
+            # list proposed against None is a deletion nobody reviewed -- which
+            # is exactly what withholding this field has been preventing.
+            #
+            # Refused out loud: a field that silently vanishes from the sheet
+            # reads as a bug rather than as a reason.
+            extra_withheld["eans"] = "needs_live_catalogue"
     else:
         local = _local_box_set_values(record)
         # Containers have no field locks -- the only container lock is artwork,
@@ -615,7 +744,9 @@ def correction_preview(
         # equally nothing on a box set can be protected from being offered.
         locked = set()
 
-    allowed, withheld = eligible_fields(entity=entity, local=local, locked=locked)
+    allowed, withheld = eligible_fields(
+        entity=entity, local=local, locked=locked, extra_withheld=extra_withheld
+    )
     return {
         "mode": "correction",
         "target": target,
