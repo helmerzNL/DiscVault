@@ -19,6 +19,7 @@ here rather than being enforced only at write time:
 
 from __future__ import annotations
 
+import uuid
 from typing import Any
 from uuid import UUID
 
@@ -189,3 +190,176 @@ def normalize_season_ids(value: Any) -> list[UUID]:
         seen.add(season_id)
         season_ids.append(season_id)
     return season_ids
+
+
+# --------------------------------------------------------------------------
+# Resolving a series a metadata source stated
+# --------------------------------------------------------------------------
+#
+# These live here rather than beside the series routes in ``next_app`` for a
+# concrete reason: ``next_app`` imports ``next_metadata``, and the caller is
+# ``next_metadata``. Putting the SQL where the routes are would close that
+# import loop. This module already owns the validation half and has no heavy
+# dependencies, so it is the seam that does not cost an import cycle.
+
+SERIES_IDENTIFIER_TYPE = "tmdb_tv"
+
+
+def series_id_for_identifier(cur: Any, *, provider_id: str, identifier: str) -> UUID | None:
+    """The live series carrying this provider identifier, if one already does.
+
+    Soft-deleted series are ignored rather than resurrected. A deleted series is
+    a statement by whoever deleted it, and quietly reviving it because a feed
+    mentioned the show again would overrule that with no trace.
+    """
+    cur.execute(
+        """
+        SELECT s.id
+        FROM series_identifiers si
+        JOIN series s ON s.id = si.series_id
+        WHERE si.provider_id = %s
+          AND si.identifier_type = %s
+          AND si.identifier = %s
+          AND s.deleted_at IS NULL
+        LIMIT 1
+        """,
+        (provider_id, SERIES_IDENTIFIER_TYPE, identifier),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    return row["id"] if isinstance(row, dict) else row[0]
+
+
+def ensure_series(cur: Any, *, provider_id: str, identifier: str, title: str) -> UUID:
+    """Find the series this identifier names, or create it once.
+
+    The lookup is by identifier and never by title. A title match would mint a
+    fresh series for every edition of the same show, and it is not identity in
+    any case: the same show is titled differently across regions, and two
+    unrelated shows can share a name. The identifier is the only anchor that
+    survives both.
+
+    A created series carries nothing but its title. That is deliberate rather
+    than lazy: the feed states identity and structure, and the descriptive
+    content -- overview, artwork -- is fetched separately from a source DiscVault
+    has its own relationship with. A row with a title and an id is enough to
+    hang seasons and discs off, which is what this exists to do.
+    """
+    existing = series_id_for_identifier(cur, provider_id=provider_id, identifier=identifier)
+    if existing is not None:
+        return existing
+    series_uuid = uuid.uuid4()
+    cur.execute(
+        """
+        INSERT INTO series (id, public_id, title)
+        VALUES (%s, %s, %s)
+        """,
+        (series_uuid, f"next-series-{series_uuid.hex[:12]}", title),
+    )
+    cur.execute(
+        """
+        INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
+        VALUES (%s, %s, %s, %s)
+        ON CONFLICT (series_id, provider_id, identifier_type, identifier) DO NOTHING
+        """,
+        (series_uuid, provider_id, SERIES_IDENTIFIER_TYPE, identifier),
+    )
+    return series_uuid
+
+
+def ensure_seasons(cur: Any, series_uuid: UUID, seasons: list[dict[str, Any]]) -> list[UUID]:
+    """The season rows for these numbers, creating the ones that do not exist.
+
+    Returns ids in the order given, because that order is the curator's: the
+    feed publishes seasons by ``release_seasons.position`` rather than by number,
+    since a set may present specials first or lead with the season it is marketed
+    on. ``movie_seasons.sort_order`` preserves it.
+
+    An existing season is reused and never rewritten. Its title may have been
+    edited locally, and a re-sync is not a reason to overwrite that -- the same
+    posture the merge policy takes for every other field a user can touch.
+    """
+    season_ids: list[UUID] = []
+    for season in seasons:
+        number = season.get("season_number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        cur.execute(
+            """
+            SELECT id FROM series_seasons
+            WHERE series_id = %s AND season_number = %s AND deleted_at IS NULL
+            """,
+            (series_uuid, number),
+        )
+        row = cur.fetchone()
+        if row:
+            season_ids.append(row["id"] if isinstance(row, dict) else row[0])
+            continue
+        season_uuid = uuid.uuid4()
+        cur.execute(
+            """
+            INSERT INTO series_seasons (
+                id, public_id, series_id, season_number, title, year, episode_count
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """,
+            (
+                season_uuid,
+                f"next-season-{season_uuid.hex[:12]}",
+                series_uuid,
+                number,
+                season.get("title"),
+                season.get("year"),
+                season.get("episode_count"),
+            ),
+        )
+        season_ids.append(season_uuid)
+    return season_ids
+
+
+def provider_series_payload(value: Any) -> dict[str, Any] | None:
+    """Shape a provider's stated series into what the resolver needs.
+
+    Returns None when the source said nothing usable. That is not the same as
+    saying "no series": nothing here ever proposes *unlinking*, because a
+    provider that stays silent has not disagreed with a link a user made.
+    """
+    if not isinstance(value, dict):
+        return None
+    identifier = clean_text(value.get("tmdbTvId"))
+    provider_id = clean_text(value.get("providerId") or value.get("provider"))
+    title = clean_text(value.get("title"))
+    if not identifier or not provider_id or not title:
+        return None
+    seasons: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for entry in value.get("seasons") or []:
+        if not isinstance(entry, dict):
+            continue
+        number = entry.get("seasonNumber")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        if not 0 <= number <= MAX_SEASON_NUMBER or number in seen:
+            continue
+        seen.add(number)
+        seasons.append(
+            {
+                "season_number": number,
+                "title": clean_text(entry.get("title")),
+                "year": clean_text(entry.get("year")),
+                "episode_count": (
+                    entry["episodeCount"]
+                    if isinstance(entry.get("episodeCount"), int)
+                    and not isinstance(entry.get("episodeCount"), bool)
+                    and entry["episodeCount"] >= 0
+                    else None
+                ),
+            }
+        )
+    return {
+        "provider_id": provider_id,
+        "identifier": identifier,
+        "title": title,
+        "seasons": seasons,
+    }

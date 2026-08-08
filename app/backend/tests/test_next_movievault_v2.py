@@ -1476,6 +1476,134 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
             record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
         )
 
+    def test_seasons_are_parsed_into_the_stored_shape(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[
+                    {
+                        "seasonNumber": 1,
+                        "title": "Season One",
+                        "releaseYear": 2005,
+                        "episodeCount": 13,
+                    },
+                    {
+                        "seasonNumber": 0,
+                        "title": None,
+                        "releaseYear": None,
+                        "episodeCount": None,
+                    },
+                ]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(
+            parsed["seasons"],
+            [
+                {
+                    "seasonNumber": 1,
+                    "title": "Season One",
+                    "releaseYear": 2005,
+                    "episodeCount": 13,
+                },
+                # Season 0 is specials, on TMDB and on the disc, so the floor is
+                # 0 rather than 1 and this entry must survive.
+                {
+                    "seasonNumber": 0,
+                    "title": None,
+                    "releaseYear": None,
+                    "episodeCount": None,
+                },
+            ],
+        )
+
+    def test_an_absent_season_list_is_not_the_same_as_an_empty_one(self):
+        """The distinction the whole column rests on.
+
+        A missing key means the feed has not said -- an older projection, or a
+        pre-v4 contract. `[]` means it has said, and the answer is "no particular
+        season": a film, or a complete-series set. Collapsing the two would let a
+        record that never mentioned seasons clear a list somebody else recorded.
+        """
+        absent = next_movievault_v2.validate_record(
+            self._v4_release(), contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        stated = next_movievault_v2.validate_record(
+            self._v4_release(seasons=[]),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertIsNone(absent["seasons"])
+        self.assertEqual(stated["seasons"], [])
+
+    def test_an_unusable_season_is_skipped_rather_than_costing_the_record(self):
+        """563 paid for this lesson at the key level; the same has to hold here.
+
+        A rejection one layer deeper would still be a rejection, and this field
+        arrives on every record at once -- so it would still be a dead catalogue
+        rather than one missing season list.
+        """
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[
+                    {"seasonNumber": 1},
+                    "not-an-object",
+                    {"seasonNumber": "two"},
+                    {"seasonNumber": True},
+                    {"title": "no number at all"},
+                    {"seasonNumber": 999},
+                    {"seasonNumber": -1},
+                ]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual([season["seasonNumber"] for season in parsed["seasons"]], [1])
+
+    def test_a_duplicate_season_number_keeps_the_first(self):
+        """Upstream rejects a duplicate before publishing, so this is producer
+        drift. Storing both would hand `series_seasons` two rows for one number,
+        which its own unique index refuses mid-sync."""
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[
+                    {"seasonNumber": 2, "title": "First seen"},
+                    {"seasonNumber": 2, "title": "Second seen"},
+                ]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(len(parsed["seasons"]), 1)
+        self.assertEqual(parsed["seasons"][0]["title"], "First seen")
+
+    def test_an_over_long_season_list_is_truncated_rather_than_refused(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[{"seasonNumber": number} for number in range(0, 150)]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(len(parsed["seasons"]), next_movievault_v2.MAX_SEASONS)
+
+    def test_a_v3_record_never_carries_seasons(self):
+        """The field is distribution-4 and later. A v3 contract has no key for it
+        and must not invent an empty answer -- `None` here, not `[]`, so a v3
+        generation cannot read as "this release covers no seasons"."""
+        record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
+        for key in (
+            "audioTracks",
+            "subtitles",
+            "packaging",
+            "poster",
+            "videoResolution",
+            "videoCodecs",
+            "hdrFormats",
+            "aspectRatios",
+            "discRegions",
+        ):
+            del record[key]
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
+        )
+        self.assertIsNone(parsed["seasons"])
+
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         for key in (

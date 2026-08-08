@@ -80,6 +80,13 @@ jobs:
       - name: Test MovieVault v2 release contributions
         run: python -m unittest tests.test_next_movievault_v2_contributions
 
+      # Another module the hand-written list had simply never been given, in the
+      # same class as the three below. It holds the plugin's own mapping tests -
+      # what a release proposes, and which series a television disc belongs to -
+      # so without it those assertions ran only on a contributor's machine.
+      - name: Test the MovieVault v2 plugin mapping
+        run: python -m unittest tests.test_next_movievault_v2_plugin
+
       - name: Apply Next migrations
         run: python next_database.py migrate
 

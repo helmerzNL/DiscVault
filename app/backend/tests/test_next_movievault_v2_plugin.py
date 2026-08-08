@@ -156,6 +156,82 @@ class ReleaseMappingTests(unittest.TestCase):
         self.assertNotIn("identifiers", item)
 
 
+class SeriesIdentityTests(unittest.TestCase):
+    """What the plugin says about the series a television release belongs to.
+
+    The identity has to travel by id. Matching on a title instead would mint a
+    fresh series for every edition of the same show, which is the failure this
+    whole block exists to prevent.
+    """
+
+    def _tv(self, **overrides):
+        record = _synced_release(
+            workType="tv",
+            providerIds={"tmdb": "1399", "tmdb_tv": "1399"},
+            seasons=[
+                {"seasonNumber": 1, "title": "Season One", "releaseYear": 2011, "episodeCount": 10},
+                {"seasonNumber": 2, "title": None, "releaseYear": None, "episodeCount": None},
+            ],
+        )
+        record.update(overrides)
+        return record
+
+    def test_a_television_release_carries_its_series(self):
+        series = movievault_v2._release(self._tv())["series"]
+        self.assertEqual(series["tmdbTvId"], "1399")
+        self.assertEqual(series["title"], "Example Film")
+        self.assertEqual([s["seasonNumber"] for s in series["seasons"]], [1, 2])
+        # Absent facts are dropped rather than sent as nulls, matching the rest
+        # of this mapper: a key the feed did not fill proposes nothing.
+        self.assertEqual(series["seasons"][1], {"seasonNumber": 2})
+
+    def test_a_film_carries_no_series_even_with_a_tv_id(self):
+        """The schema forbids a series link on a MOVIE (`movies_series_requires_show`),
+        so proposing one would be proposing a constraint violation."""
+        record = self._tv(workType="movie")
+        self.assertNotIn("series", movievault_v2._release(record))
+
+    def test_a_release_with_no_work_type_carries_no_series(self):
+        """An absent type is "the feed has not said", never "film". It must not
+        be enough to establish a series either way."""
+        record = self._tv()
+        record.pop("workType")
+        self.assertNotIn("series", movievault_v2._release(record))
+
+    def test_a_series_without_a_tmdb_tv_id_is_not_proposed(self):
+        """There is nothing to resolve it by. Falling back to the title here is
+        exactly the mistake this design refuses to make."""
+        record = self._tv(providerIds={"tmdb": "1399"})
+        self.assertNotIn("series", movievault_v2._release(record))
+
+    def test_the_movie_tv_id_is_never_mistaken_for_the_series_id(self):
+        """`tmdb` and `tmdb_tv` are separate namespaces upstream precisely so a
+        work can carry both. Reading the wrong one would resolve a series by a
+        film's id."""
+        record = self._tv(providerIds={"tmdb": "603", "tmdb_tv": "1399"})
+        self.assertEqual(movievault_v2._release(record)["series"]["tmdbTvId"], "1399")
+
+    def test_a_series_with_no_curated_seasons_still_travels(self):
+        """A show whose seasons nobody has recorded yet is still a series, and
+        linking the disc to it is worth doing on its own."""
+        series = movievault_v2._release(self._tv(seasons=[]))["series"]
+        self.assertEqual(series["tmdbTvId"], "1399")
+        # Omitted rather than sent empty: an empty list would read as "this
+        # release covers no seasons", which is a statement this plugin cannot
+        # tell apart from "nobody has curated them".
+        self.assertNotIn("seasons", series)
+
+    def test_a_tvdb_identifier_never_appears(self):
+        """It cannot reach us -- MovieVault filters `tvdb` out of providerIds
+        while its licence question is open -- and nothing here would read it if
+        it did."""
+        record = self._tv(providerIds={"tmdb_tv": "1399", "tvdb": "121361"})
+        series = movievault_v2._release(record)["series"]
+        self.assertEqual(series["tmdbTvId"], "1399")
+        self.assertNotIn("tvdbId", series)
+        self.assertNotIn("121361", json.dumps(series))
+
+
 class SearchBarcodeResolverFallbackTests(unittest.TestCase):
     def _context(self, *, lookup_results, resolver_result=None):
         calls = {"resolver": 0}
@@ -323,13 +399,28 @@ class ContractNegotiationTests(unittest.TestCase):
         with open(path, "rb") as handle:
             return json.load(handle)
 
-    def test_the_shipped_manifest_negotiates_distribution_4(self):
+    def test_the_shipped_manifest_negotiates_distribution_5(self):
+        """The declared maximum is not a preference, it is the request.
+
+        `_negotiated_contract` does not negotiate despite its name: it returns
+        this plugin's own maximum and never asks the origin what it serves. So
+        raising it makes the very next sync request /v5/index/manifest, and an
+        origin without v5 activated answers 503 - which fails the whole
+        synchronisation rather than one record. #562 reverted exactly this line
+        for exactly that reason, when v5 support had landed but no origin served
+        it yet.
+
+        MovieVault has served distribution-5 since its #206, and the operator has
+        confirmed it is activated on the instance this syncs against. That
+        confirmation is the precondition; this assertion is what makes lowering
+        or raising the pin a deliberate, visible act rather than a silent drift.
+        """
         manifest = self._manifest()
         self.assertEqual(
             next_movievault_v2._negotiated_contract(
                 {"distributionContractRange": manifest["distributionContractRange"]}
             ),
-            next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+            next_movievault_v2.MOVIEVAULT_V5_CONTRACT,
         )
 
     def test_the_manifest_range_stays_within_what_the_code_supports(self):
