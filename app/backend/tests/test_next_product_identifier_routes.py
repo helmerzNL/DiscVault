@@ -55,7 +55,12 @@ class ProductIdentifierRouteTests(unittest.TestCase):
             patch("app.backend.next_app.movie_entity", return_value={"id": MOVIE_ID, "metadata": {}}),
             patch("app.backend.next_app.actor_can_edit_visible_movie", return_value=True),
             patch("app.backend.next_app.actor_can_view_movie", return_value=True),
-            patch("app.backend.next_app.audit_event", return_value=None),
+            # `autospec` rather than a bare mock, and that is the point of this
+            # line. A plain MagicMock accepts any keyword, so a call written
+            # with the wrong argument names passes every test here and fails
+            # the first time a user presses Save. That is exactly how
+            # `entity_type=` reached beta.
+            patch("app.backend.next_app.audit_event", autospec=True),
             setter,
         )
 
