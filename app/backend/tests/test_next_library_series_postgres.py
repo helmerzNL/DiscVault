@@ -1,0 +1,265 @@
+"""What the Library snapshot says about series, against a real database.
+
+The three helpers here are the only reason the Library can group by series
+without the sync wire knowing about it. Each carries a rule that a fake
+connection would not enforce: a series is only listed when the actor can see a
+disc under it, a disc that names no season is a complete-series set rather than
+an empty one, and every read is a no-op on an instance that has not run
+migration 063.
+"""
+
+import os
+import sys
+import unittest
+import uuid
+
+
+repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+if repo_root not in sys.path:
+    sys.path.insert(0, repo_root)
+
+try:
+    import psycopg
+    from psycopg.rows import dict_row
+except ModuleNotFoundError:
+    psycopg = None
+    dict_row = None
+
+from app.backend import next_app
+
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+PREFIX = "series-library-test"
+
+
+@unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
+class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
+    def connect(self):
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
+
+    def tearDown(self):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                # movie_seasons cites both sides, so it goes before either. The
+                # production path documents the same ordering.
+                cur.execute(
+                    """
+                    DELETE FROM movie_seasons WHERE movie_id IN (
+                        SELECT id FROM movies WHERE public_id LIKE %s
+                    )
+                    """,
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute("DELETE FROM movies WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+                cur.execute("DELETE FROM series_seasons WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+                cur.execute("DELETE FROM series WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+            conn.commit()
+
+    # --- fixtures -----------------------------------------------------------
+
+    def _series(self, conn, title="Fargo", *, start_year=None, end_year=None):
+        series_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO series (id, public_id, title, sort_title, start_year, end_year)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (series_id, f"{PREFIX}-{series_id}", title, title, start_year, end_year),
+            )
+        conn.commit()
+        return series_id
+
+    def _season(self, conn, series_id, number):
+        season_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO series_seasons (id, public_id, series_id, season_number)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (season_id, f"{PREFIX}-{season_id}", series_id, number),
+            )
+        conn.commit()
+        return season_id
+
+    def _disc(self, conn, *, series_id=None, title="A Disc", owner_id=None):
+        movie_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movies (id, public_id, title, sort_title, media_type, series_id, owner_id)
+                VALUES (%s, %s, %s, %s, 'SHOW', %s, %s)
+                """,
+                (movie_id, f"{PREFIX}-{movie_id}", title, title, series_id, owner_id),
+            )
+        conn.commit()
+        return movie_id
+
+    def _cover(self, conn, movie_id, series_id, season_id):
+        # `movie_seasons` names the series as well as the season: the composite
+        # foreign key back to `movies(id, series_id)` is what stops a disc from
+        # covering a season of a show it does not belong to.
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO movie_seasons (movie_id, series_id, season_id) VALUES (%s, %s, %s)",
+                (movie_id, series_id, season_id),
+            )
+        conn.commit()
+
+    def _listed(self, conn, series_id, **kwargs):
+        rows = next_app.collection_series_preview_entities(conn, **kwargs)
+        return next((row for row in rows if row["id"] == str(series_id)), None)
+
+    # --- the list ------------------------------------------------------------
+
+    def test_a_series_reports_its_seasons_and_the_discs_under_it(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo", start_year="2014", end_year="2024")
+            self._season(conn, series_id, 1)
+            self._season(conn, series_id, 2)
+            self._disc(conn, series_id=series_id, title="Season 1")
+            self._disc(conn, series_id=series_id, title="Season 2")
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNotNone(row)
+        self.assertEqual(row["title"], "Fargo")
+        self.assertEqual(row["seasonCount"], 2)
+        self.assertEqual(row["discCount"], 2)
+        self.assertEqual(row["startYear"], "2014")
+
+    def test_a_series_nobody_owns_a_disc_of_is_not_listed(self):
+        """The series row carries no owner of its own. Listing it unconditionally
+        would leak the titles on one user's shelf to everyone else."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Yellowstone")
+            self._season(conn, series_id, 1)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row)
+
+    def test_a_deleted_disc_does_not_keep_a_series_on_the_shelf(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Deadwood")
+            movie_id = self._disc(conn, series_id=series_id)
+            with conn.cursor() as cur:
+                cur.execute("UPDATE movies SET deleted_at = now() WHERE id = %s", (movie_id,))
+            conn.commit()
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row)
+
+    def test_a_disc_counts_once_however_many_seasons_it_carries(self):
+        """The count is of discs, not of coverage rows; a box set of four
+        seasons is one thing on the shelf."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "The Wire")
+            movie_id = self._disc(conn, series_id=series_id, title="Complete Box")
+            for number in (1, 2, 3, 4):
+                self._cover(conn, movie_id, series_id, self._season(conn, series_id, number))
+
+            row = self._listed(conn, series_id)
+
+        self.assertEqual(row["discCount"], 1)
+        self.assertEqual(row["seasonCount"], 4)
+
+    # --- the per-movie reference --------------------------------------------
+
+    def test_a_disc_carries_its_series_and_a_film_carries_none(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            linked = self._disc(conn, series_id=series_id)
+            loose = self._disc(conn)
+
+            rows = next_app.attach_movie_series_membership(
+                conn,
+                [{"id": linked}, {"id": loose}],
+            )
+
+        self.assertEqual(rows[0]["series"]["id"], str(series_id))
+        self.assertEqual(rows[0]["series"]["title"], "Fargo")
+        self.assertIsNone(rows[1]["series"])
+
+    def test_the_key_is_always_present_even_with_nothing_to_say(self):
+        """The frontend groups on `movie.series?.id`; an absent key and a null
+        one must not read differently there."""
+        with self.connect() as conn:
+            rows = next_app.attach_movie_series_membership(conn, [{"id": self._disc(conn)}])
+        self.assertIn("series", rows[0])
+        self.assertIsNone(rows[0]["series"])
+
+    # --- season coverage -----------------------------------------------------
+
+    def test_coverage_names_the_seasons_a_disc_actually_carries(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season_two = self._season(conn, series_id, 2)
+            self._season(conn, series_id, 1)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season_two)
+
+            rows = [
+                row
+                for row in next_app.collection_series_membership_entities(conn)
+                if row["movieId"] == str(movie_id)
+            ]
+
+        self.assertEqual([row["seasonNumber"] for row in rows], [2])
+
+    def test_a_complete_series_set_names_no_season_at_all(self):
+        """Zero coverage rows on a linked disc is the complete-series case. It is
+        not the same as covering season zero, and the tile has to be able to tell
+        those apart."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            self._season(conn, series_id, 1)
+            movie_id = self._disc(conn, series_id=series_id)
+
+            rows = [
+                row
+                for row in next_app.collection_series_membership_entities(conn)
+                if row["movieId"] == str(movie_id)
+            ]
+
+        self.assertEqual(rows, [])
+
+    def test_a_deleted_season_stops_being_reported_as_covered(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season_id = self._season(conn, series_id, 1)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season_id)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE series_seasons SET deleted_at = now() WHERE id = %s", (season_id,)
+                )
+            conn.commit()
+
+            rows = [
+                row
+                for row in next_app.collection_series_membership_entities(conn)
+                if row["movieId"] == str(movie_id)
+            ]
+
+        self.assertEqual(rows, [])
+
+    # --- the snapshot itself -------------------------------------------------
+
+    def test_the_dashboard_snapshot_carries_both_arrays(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            self._disc(conn, series_id=series_id)
+
+            snapshot = next_app.collection_dashboard_snapshot(conn)
+
+        self.assertIn("series", snapshot)
+        self.assertIn("seriesSeasonCoverage", snapshot)
+        self.assertTrue(any(row["id"] == str(series_id) for row in snapshot["series"]))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    unittest.main()
