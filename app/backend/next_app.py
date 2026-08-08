@@ -98,6 +98,7 @@ try:
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import refresh_series_metadata
     from .next_metadata import (
         normalize_audio_tracks,
         normalize_movie_field_locks,
@@ -366,6 +367,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
+    from next_metadata import refresh_series_metadata
     from next_metadata import (
         normalize_audio_tracks,
         normalize_movie_field_locks,
@@ -15329,22 +15331,43 @@ def create_uploaded_movie_media_asset(
     return {"movieId": str(movie_id), "kind": kind, "media": media, "revision": revision}
 
 
-def set_primary_container_media_asset(
+# Which table owns an entity that can carry artwork. A series joined this map
+# rather than getting its own copy of the media plumbing: the SQL below differs
+# only in this table name and the `entity_type` string, so a parallel set of
+# functions would have been the same code drifting apart.
+ENTITY_ARTWORK_TABLES = {
+    "movie": "movies",
+    "container": "containers",
+    "series": "series",
+}
+
+
+def entity_artwork_table(entity_type: str) -> str:
+    table = ENTITY_ARTWORK_TABLES.get(entity_type)
+    if not table:
+        raise NextApiError("entityType must be movie, container or series", 400)
+    return table
+
+
+def set_primary_entity_media_asset(
     conn,
     *,
-    container_id: UUID,
+    entity_type: str,
+    entity_id: UUID,
     media_id: UUID,
     kind: str,
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    entity_table = entity_artwork_table(entity_type)
     if kind not in MOVIE_ARTWORK_KINDS:
         raise NextApiError("kind must be poster or backdrop", 400)
-    if not table_exists(conn, "containers") or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+    if not table_exists(conn, entity_table) or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         raise NextApiError("Media asset tables are not available", 503)
+    container_id = entity_id
     with conn.cursor() as cur:
-        cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
+        cur.execute(f"SELECT id FROM {entity_table} WHERE id=%s", (entity_id,))
         if not cur.fetchone():
-            raise NextApiError("Container not found", 404)
+            raise NextApiError("Item not found", 404)
         cur.execute(
             """
             SELECT
@@ -15377,14 +15400,14 @@ def set_primary_container_media_asset(
                 sort_order=GREATEST(em.sort_order, 1)
             FROM media_assets ma
             WHERE ma.id = em.media_id
-              AND em.entity_type='container'
+              AND em.entity_type=%s
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
               AND em.hidden_at IS NULL
               AND ma.kind=%s
               AND em.is_primary=true
             """,
-            (container_id, kind),
+            (entity_type, container_id, kind),
         )
         cur.execute(
             """
@@ -15396,7 +15419,7 @@ def set_primary_container_media_asset(
                 is_primary,
                 sort_order
             )
-            VALUES ('container', %s, %s, %s, true, 0)
+            VALUES (%s, %s, %s, %s, true, 0)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=true,
                 sort_order=0,
@@ -15405,7 +15428,7 @@ def set_primary_container_media_asset(
                 purge_after=NULL,
                 restore_metadata='{}'::jsonb
             """,
-            (container_id, media_id, kind),
+            (entity_type, container_id, media_id, kind),
         )
         media_metadata = media.get("metadata") if isinstance(media, dict) else {}
         media_metadata = media_metadata if isinstance(media_metadata, dict) else {}
@@ -15419,7 +15442,7 @@ def set_primary_container_media_asset(
         )
         cur.execute("UPDATE media_assets SET metadata=%s WHERE id=%s", (Jsonb(json_ready(media_metadata)), media_id))
         cur.execute(
-            "UPDATE containers SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+            f"UPDATE {entity_table} SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
             (
                 Jsonb(
                     json_ready(
@@ -15436,24 +15459,40 @@ def set_primary_container_media_asset(
     media["sort_order"] = 0
     media["role"] = kind
     media["url"] = media_asset_public_url(media)
-    return {"containerId": str(container_id), "kind": kind, "media": media, "revision": 0}
+    return {f"{entity_type}Id": str(entity_id), "kind": kind, "media": media, "revision": 0}
 
 
-def create_uploaded_container_media_asset(
+def set_primary_container_media_asset(
+    conn, *, container_id: UUID, media_id: UUID, kind: str, actor: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    return set_primary_entity_media_asset(
+        conn,
+        entity_type="container",
+        entity_id=container_id,
+        media_id=media_id,
+        kind=kind,
+        actor=actor,
+    )
+
+
+def create_uploaded_entity_media_asset(
     conn,
     *,
-    container_id: UUID,
+    entity_type: str,
+    entity_id: UUID,
     kind: str,
     upload_info: dict[str, Any],
     primary: bool,
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if not table_exists(conn, "containers") or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+    entity_table = entity_artwork_table(entity_type)
+    if not table_exists(conn, entity_table) or not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
         raise NextApiError("Media asset tables are not available", 503)
+    container_id = entity_id
     with conn.cursor() as cur:
-        cur.execute("SELECT id FROM containers WHERE id=%s", (container_id,))
+        cur.execute(f"SELECT id FROM {entity_table} WHERE id=%s", (entity_id,))
         if not cur.fetchone():
-            raise NextApiError("Container not found", 404)
+            raise NextApiError("Item not found", 404)
         storage_key = clean_text(upload_info.get("storageKey")) or ""
         if not storage_key:
             raise NextApiError("Uploaded artwork did not produce a storage key", 500)
@@ -15530,12 +15569,12 @@ def create_uploaded_container_media_asset(
                     sort_order=GREATEST(em.sort_order, 1)
                 FROM media_assets ma
                 WHERE ma.id = em.media_id
-                  AND em.entity_type='container'
+                  AND em.entity_type=%s
                   AND em.entity_id=%s
                   AND ma.kind=%s
                   AND em.is_primary=true
                 """,
-                (container_id, kind),
+                (entity_type, container_id, kind),
             )
             sort_order = 0
         else:
@@ -15544,13 +15583,13 @@ def create_uploaded_container_media_asset(
                 SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort
                 FROM entity_media em
                 JOIN media_assets ma ON ma.id = em.media_id
-                WHERE em.entity_type='container'
+                WHERE em.entity_type=%s
                   AND em.entity_id=%s
                   AND em.deleted_at IS NULL
                   AND em.hidden_at IS NULL
                   AND ma.kind=%s
                 """,
-                (container_id, kind),
+                (entity_type, container_id, kind),
             )
             row = cur.fetchone()
             sort_order = int(row["next_sort"] if row else 1)
@@ -15564,7 +15603,7 @@ def create_uploaded_container_media_asset(
                 is_primary,
                 sort_order
             )
-            VALUES ('container', %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=EXCLUDED.is_primary,
                 sort_order=EXCLUDED.sort_order,
@@ -15573,10 +15612,10 @@ def create_uploaded_container_media_asset(
                 purge_after=NULL,
                 restore_metadata='{}'::jsonb
             """,
-            (container_id, media["id"], kind, primary, sort_order),
+            (entity_type, container_id, media["id"], kind, primary, sort_order),
         )
         cur.execute(
-            "UPDATE containers SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
+            f"UPDATE {entity_table} SET metadata=metadata || %s, updated_at=now() WHERE id=%s",
             (
                 Jsonb(
                     json_ready(
@@ -15590,7 +15629,27 @@ def create_uploaded_container_media_asset(
     media["is_primary"] = primary
     media["sort_order"] = sort_order
     media["url"] = media_asset_public_url(media)
-    return {"containerId": str(container_id), "kind": kind, "media": media, "revision": 0}
+    return {f"{entity_type}Id": str(entity_id), "kind": kind, "media": media, "revision": 0}
+
+
+def create_uploaded_container_media_asset(
+    conn,
+    *,
+    container_id: UUID,
+    kind: str,
+    upload_info: dict[str, Any],
+    primary: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    return create_uploaded_entity_media_asset(
+        conn,
+        entity_type="container",
+        entity_id=container_id,
+        kind=kind,
+        upload_info=upload_info,
+        primary=primary,
+        actor=actor,
+    )
 
 
 def artwork_trash_settings(conn) -> dict[str, Any]:
@@ -15985,18 +16044,16 @@ def delete_entity_artwork_media_asset(
     kind: str,
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if entity_type not in {"movie", "container"}:
-        raise NextApiError("entityType must be movie or container", 400)
+    entity_table = entity_artwork_table(entity_type)
     if kind not in MOVIE_ARTWORK_KINDS:
         raise NextApiError("kind must be poster or backdrop", 400)
-    entity_table = "movies" if entity_type == "movie" else "containers"
     if not table_exists(conn, entity_table) or not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         raise NextApiError("Media asset tables are not available", 503)
 
     with conn.cursor() as cur:
         cur.execute(f"SELECT id FROM {entity_table} WHERE id=%s", (entity_id,))
         if not cur.fetchone():
-            raise NextApiError("Movie not found" if entity_type == "movie" else "Container not found", 404)
+            raise NextApiError("Movie not found" if entity_type == "movie" else "Item not found", 404)
         cur.execute(
             """
             SELECT
@@ -17428,6 +17485,114 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "actions": {
             "canConvert": actor_can_convert_container(container, actor),
         },
+    }
+
+
+def series_identifier_entities(conn, series_id: UUID) -> list[dict[str, Any]]:
+    if not table_exists(conn, "series_identifiers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT provider_id, identifier_type, identifier, created_at
+            FROM series_identifiers
+            WHERE series_id=%s
+            ORDER BY provider_id, identifier_type, identifier
+            """,
+            (series_id,),
+        )
+        return cur.fetchall()
+
+
+def series_disc_entities(conn, series_id: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """The discs filed under this series, in the same shape a container's members take.
+
+    Deliberately the same columns as `container_member_movie_entities`: the discs
+    tab renders with the movie card helpers, and a second, slightly different row
+    shape would mean a second set of renderers to keep in step.
+
+    Ordered by title rather than by an explicit sort order, because a series has
+    no curated member order to preserve -- `container_movies.sort_order` has no
+    equivalent here, and the season each disc covers is the ordering a reader
+    actually wants (which the discs tab shows per row).
+    """
+    if not table_exists(conn, "movies"):
+        return []
+    visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                m.id,
+                m.public_id,
+                m.barcode,
+                m.title,
+                m.sort_title,
+                m.original_title,
+                m.year,
+                m.release_date,
+                m.format,
+                m.media_type,
+                m.edition,
+                m.edition_type,
+                m.country,
+                m.language,
+                m.runtime_minutes,
+                m.overview,
+                m.rating,
+                m.metadata,
+                m.created_at,
+                m.updated_at,
+                m.metadata->>'poster_url' AS poster_url,
+                m.metadata->>'backdrop_url' AS backdrop_url
+            FROM movies m
+            WHERE m.series_id=%s
+              AND {visibility_where}
+            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+            """,
+            (series_id, *visibility_params),
+        )
+        return cur.fetchall()
+
+
+def series_detail_entity(
+    conn, series_id: UUID, actor: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    """Everything the series page shows, in one read.
+
+    Modelled on `container_detail_entity`, with one deliberate difference: a
+    series owns almost nothing. It has no artwork of its own until somebody
+    uploads one and no videos at all, because a video is a `movies.metadata`
+    fact and there is no series-shaped source for one.
+
+    So the artwork and video tabs are filled by aggregation from the discs, using
+    the very helpers the container page uses -- both of them take a plain list of
+    movies rather than a container, so nothing had to be generalised. An
+    inherited asset arrives labelled with the disc it came from, which is what
+    keeps "the series' poster" from quietly meaning "some disc's poster".
+    """
+    series = series_entity(conn, series_id)
+    if not series:
+        return None
+    discs = series_disc_entities(conn, series_id, actor=actor)
+    aggregate_assets = container_aggregate_media_asset_entities(conn, discs)
+    aggregate_videos = container_aggregate_video_entities(discs)
+    own_assets = entity_media_asset_entities(conn, "series", series_id)
+    coverage = [
+        row
+        for row in collection_series_membership_entities(conn, actor=actor)
+        if row.get("movieId") in {str(disc.get("id")) for disc in discs}
+    ]
+    return {
+        "series": series,
+        "identifiers": series_identifier_entities(conn, series_id),
+        "discs": discs,
+        "seasonCoverage": coverage,
+        "mediaAssets": own_assets,
+        "aggregateMovies": discs,
+        "aggregateMediaAssets": aggregate_assets,
+        "aggregateVideos": aggregate_videos,
+        "aggregateSummary": container_aggregate_summary(discs, aggregate_assets, aggregate_videos),
     }
 
 
@@ -21227,6 +21392,7 @@ PUBLIC_NEXT_PREFIXES = (
     "/app/movies/",
     "/app/discover/",
     "/app/containers/",
+    "/app/series/",
     "/app/people/",
     "/app/locations/",
 )
@@ -22971,6 +23137,152 @@ def register_routes(flask_app: Flask) -> None:
                     summary="Deleted season",
                 )
             return response({"status": "ok", "series": series_entity(conn, series_uuid)})
+
+    # A sibling of GET /api/next/series/<id> rather than a reshaping of it. That
+    # route answers under the key `series` and the movie edit form's season
+    # picker already reads it; changing its shape would break the picker to save
+    # one route.
+    @flask_app.get("/api/next/series/<series_id>/detail")
+    def series_detail(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.view")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            detail = series_detail_entity(conn, series_uuid, actor=actor)
+            if detail is None:
+                raise NextApiError("Series not found", 404)
+        return response({"status": "ok", "detail": detail})
+
+    @flask_app.post("/api/next/series/<series_id>/metadata/refresh")
+    def refresh_series_metadata_route(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            if series_entity(conn, series_uuid, with_seasons=False) is None:
+                raise NextApiError("Series not found", 404)
+            with conn.transaction():
+                # Runs in the request rather than through the queue: the caller is
+                # watching, and the job it would queue does the same never-overwrite
+                # work. Queueing would only add a wait with nothing to show for it.
+                result = refresh_series_metadata(conn, series_uuid)
+                audit_event(
+                    conn,
+                    event_type="metadata.series_refreshed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Refreshed series metadata",
+                    metadata=result,
+                )
+            detail = series_detail_entity(conn, series_uuid, actor=actor)
+        return response({"status": "ok", "result": result, "detail": detail})
+
+    @flask_app.post("/api/next/series/<series_id>/media/primary")
+    def series_media_primary(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Media selection body must be an object", 400)
+        media_uuid = parse_uuid(body.get("mediaId") or body.get("media_id") or body.get("mediaAssetId"), "mediaId")
+        if not media_uuid:
+            raise NextApiError("mediaId is required", 400)
+        kind = clean_text(body.get("kind") or body.get("role")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            with conn.transaction():
+                result = set_primary_entity_media_asset(
+                    conn,
+                    entity_type="series",
+                    entity_id=series_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="series.media_primary_changed",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Changed primary series artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.post("/api/next/series/<series_id>/media/upload")
+    def series_media_upload(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+        upload, inferred_kind = uploaded_artwork_file()
+        kind = clean_text(request.form.get("kind") or request.args.get("kind") or inferred_kind) or ""
+        primary_value = request.form.get("primary")
+        if primary_value is None:
+            primary_value = request.args.get("primary")
+        primary = parse_bool_value(primary_value, default=True)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            upload_info = save_uploaded_artwork_file(upload, kind=kind)
+            with conn.transaction():
+                result = create_uploaded_entity_media_asset(
+                    conn,
+                    entity_type="series",
+                    entity_id=series_uuid,
+                    kind=kind,
+                    upload_info=upload_info,
+                    primary=primary,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="series.media_uploaded",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Uploaded series artwork",
+                    metadata={"kind": kind, "primary": primary, "result": result},
+                )
+        return response({"status": "ok", **result})
+
+    @flask_app.delete("/api/next/series/<series_id>/media/<media_id>")
+    def series_media_delete(series_id, media_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        media_uuid = parse_uuid(media_id, "mediaId")
+        kind = clean_text(request.args.get("kind")) or ""
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            with conn.transaction():
+                result = delete_entity_artwork_media_asset(
+                    conn,
+                    entity_type="series",
+                    entity_id=series_uuid,
+                    media_id=media_uuid,
+                    kind=kind,
+                    actor=actor,
+                )
+                audit_event(
+                    conn,
+                    event_type="series.media_deleted",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Deleted series artwork",
+                    metadata={"mediaId": str(media_uuid), "kind": kind, "result": result},
+                )
+        return response({"status": "ok", **result})
 
     @flask_app.post("/api/next/containers")
     def create_container():
@@ -32297,6 +32609,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/movies/<movie_id>")
     @flask_app.get("/containers/<container_id>")
     @flask_app.get("/app/containers/<container_id>")
+    @flask_app.get("/series/<series_id>")
+    @flask_app.get("/app/series/<series_id>")
     @flask_app.get("/people/<person_id>")
     @flask_app.get("/app/people/<person_id>")
     @flask_app.get("/locations/<location_id>")
@@ -32304,6 +32618,7 @@ def register_routes(flask_app: Flask) -> None:
     def next_app_shell(
         movie_id: str | None = None,
         container_id: str | None = None,
+        series_id: str | None = None,
         person_id: str | None = None,
         location_id: str | None = None,
         discover_media_type: str | None = None,
