@@ -87,6 +87,11 @@ jobs:
       - name: Test the MovieVault v2 plugin mapping
         run: python -m unittest tests.test_next_movievault_v2_plugin
 
+      # The TMDB series shaping needs no database, so it runs before the
+      # migrations with the other pure-Python modules.
+      - name: Test the TMDB series mapping
+        run: python -m unittest tests.test_next_tmdb_series
+
       - name: Apply Next migrations
         run: python next_database.py migrate
 
@@ -95,6 +100,17 @@ jobs:
 
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
+
+      # Two more the hand-written list never named, and they cover the rules
+      # migration 063 pushed into the schema rather than into code - a series
+      # only on a SHOW, a season only from its own series, and now filling a
+      # description without overwriting one somebody wrote. None of it was
+      # running anywhere but a contributor's machine.
+      - name: Test the series hierarchy and its description refresh
+        run: >-
+          python -m unittest
+          tests.test_next_series
+          tests.test_next_series_postgres
 
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as

@@ -39,6 +39,8 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -83,6 +85,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
+    from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
+    from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
@@ -551,6 +555,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == PERSON_METADATA_REFRESH_JOB_TYPE:
         return process_person_metadata_refresh(payload, worker_id)
 
+    if job_type == SERIES_METADATA_REFRESH_JOB_TYPE:
+        return process_series_metadata_refresh(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
@@ -573,6 +580,24 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
         return process_movievault_v2_poster_cleanup(payload, worker_id)
 
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_series_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Fill a series' description, queued when the series was first created.
+
+    Takes no dry-run and no actor, unlike its movie counterpart. Nothing invokes
+    this from a screen: it exists because a series row appeared with nothing in
+    it, and there is no proposal for anyone to preview or approve. The moment a
+    person is choosing what a series says, they are editing it through the series
+    API and this job must not overwrite them - which is why the refresh only ever
+    fills what is empty.
+    """
+    series_id = clean_text(payload.get("seriesId") or payload.get("series_id"))
+    if not series_id:
+        raise RuntimeError("seriesId is required for series metadata refresh jobs")
+    with connect() as conn:
+        result = refresh_series_metadata(conn, series_id)
+    return {"workerId": worker_id, "seriesId": series_id, "result": result}
 
 
 def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
