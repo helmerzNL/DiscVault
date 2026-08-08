@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Päivitetään sarjan tietoja...",
   "seriesDetail.metadataRefreshed": "Sarjan tiedot päivitetty.",
   "seriesDetail.metadataNoAnswer": "Millään lähteellä ei ollut lisättävää.",
+  "seriesDetail.metadataNoIdentifier": "Talla sarjalla ei ole lahdetunnistetta, joten yhtaan lahdetta ei voitu kysya. Se tulee levytietojen mukana MovieVaultista.",
+  "seriesDetail.metadataNoSource": "Mikaan kaytossa oleva lisaosa ei voi kuvailla sarjaa. Ota jokin kayttoon kohdassa Profiili - Lisaosat.",
+  "seriesDetail.metadataUnavailable": "Tama asennus ei voi viela tallentaa sarjatietoja.",
   "collection.seasonNumber": "Kausi {number}"
 }

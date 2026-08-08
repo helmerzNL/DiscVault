@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Opdaterer seriemetadata...",
   "seriesDetail.metadataRefreshed": "Seriemetadata opdateret.",
   "seriesDetail.metadataNoAnswer": "Ingen kilde havde noget at tilføje.",
+  "seriesDetail.metadataNoIdentifier": "Denne serie har ingen kildeidentifikator, sa ingen kilde kunne sporges. Den folger med diskdata fra MovieVault.",
+  "seriesDetail.metadataNoSource": "Ingen aktiveret plugin kan beskrive en serie. Aktiver et under Profil - Plugins.",
+  "seriesDetail.metadataUnavailable": "Denne installation kan endnu ikke gemme seriedata.",
   "collection.seasonNumber": "Sæson {number}"
 }

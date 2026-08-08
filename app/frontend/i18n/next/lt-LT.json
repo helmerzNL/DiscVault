@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Atnaujinami serialo metaduomenys...",
   "seriesDetail.metadataRefreshed": "Serialo metaduomenys atnaujinti.",
   "seriesDetail.metadataNoAnswer": "Nė vienas šaltinis neturėjo ką pridurti.",
+  "seriesDetail.metadataNoIdentifier": "Sis serialas neturi saltinio identifikatoriaus, todel nebuvo galima paklausti jokio saltinio. Jis ateina su disko duomenimis is MovieVault.",
+  "seriesDetail.metadataNoSource": "Joks ijungtas ipludas negali aprasyti serialo. Ijunkite viena skiltyje Profilis - Ipludai.",
+  "seriesDetail.metadataUnavailable": "Si diegtis dar negali saugoti serialu duomenu.",
   "collection.seasonNumber": "Sezonas {number}"
 }

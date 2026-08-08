@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Odświeżanie metadanych serialu...",
   "seriesDetail.metadataRefreshed": "Metadane serialu odświeżone.",
   "seriesDetail.metadataNoAnswer": "Żadne źródło nie miało nic do dodania.",
+  "seriesDetail.metadataNoIdentifier": "Ten serial nie ma identyfikatora zrodla, wiec nie mozna bylo zapytac zadnego zrodla. Przychodzi wraz z danymi plyty z MovieVault.",
+  "seriesDetail.metadataNoSource": "Zadna wlaczona wtyczka nie potrafi opisac serialu. Wlacz jedna w Profil - Wtyczki.",
+  "seriesDetail.metadataUnavailable": "Ta instalacja nie moze jeszcze przechowywac danych seriali.",
   "collection.seasonNumber": "Sezon {number}"
 }

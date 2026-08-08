@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Sorozat metaadatainak frissítése...",
   "seriesDetail.metadataRefreshed": "A sorozat metaadatai frissítve.",
   "seriesDetail.metadataNoAnswer": "Egyik forrásnak sem volt mit hozzátennie.",
+  "seriesDetail.metadataNoIdentifier": "Ennek a sorozatnak nincs forrasazonositoja, ezert egyetlen forrast sem lehetett lekerdezni. A lemezadatokkal erkezik a MovieVaultbol.",
+  "seriesDetail.metadataNoSource": "Egyetlen engedelyezett bovitmeny sem tud sorozatot leirni. Engedelyezzen egyet a Profil - Bovitmenyek alatt.",
+  "seriesDetail.metadataUnavailable": "Ez a telepites meg nem tud sorozatadatokat tarolni.",
   "collection.seasonNumber": "{number}. évad"
 }

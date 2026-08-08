@@ -30454,6 +30454,28 @@ def ui_preview_html(
         setSeriesDetailMessage(error.message || String(error), "bad");
       }
     }
+    function seriesRefreshExplanation(result) {
+      // `skipped` carries the reason the backend already knows; the others are
+      // states rather than reasons. Nothing is composed here beyond the mapping,
+      // so a new backend status falls through to the honest generic sentence
+      // rather than to a guess about what it meant.
+      if (result.status === "skipped" && result.reason === "no series identifier") {
+        return tNext(
+          "seriesDetail.metadataNoIdentifier",
+          "This series has no source identifier, so no source could be asked. It arrives with the disc data from MovieVault."
+        );
+      }
+      if (result.status === "skipped" && result.reason === "no series source") {
+        return tNext(
+          "seriesDetail.metadataNoSource",
+          "No enabled plugin can describe a series. Enable one under Profile - Plugins."
+        );
+      }
+      if (result.status === "unavailable") {
+        return tNext("seriesDetail.metadataUnavailable", "This installation cannot store series data yet.");
+      }
+      return tNext("seriesDetail.metadataNoAnswer", "No source had anything to add.");
+    }
     async function refreshActiveSeriesMetadata() {
       if (!activeSeriesId) return;
       setSeriesDetailMessage(tNext("seriesDetail.refreshingMetadata", "Refreshing series metadata..."));
@@ -30464,13 +30486,20 @@ def ui_preview_html(
           body: JSON.stringify({})
         });
         renderSeriesDetail(payload.detail || activeSeriesPayload || {});
-        const status = (payload.result || {}).status;
+        const result = payload.result || {};
+        const status = result.status;
         if (status === "ok") {
           setSeriesDetailMessage(tNext("seriesDetail.metadataRefreshed", "Series metadata refreshed."), "good");
         } else {
           // A miss is not a failure: nothing was damaged and the existing text
           // stands. Saying "refreshed" would claim something happened.
-          setSeriesDetailMessage(tNext("seriesDetail.metadataNoAnswer", "No source had anything to add."), "info");
+          //
+          // But "nothing to add" is three different situations, and collapsing
+          // them into one sentence is what makes an empty series page
+          // undiagnosable: a series nobody can look up, a build with no source
+          // installed, and a source that genuinely had nothing all read the
+          // same. The reason is the whole answer here, so it is shown.
+          setSeriesDetailMessage(seriesRefreshExplanation(result), "info");
         }
       } catch (error) {
         setSeriesDetailMessage(error.message || String(error), "bad");

@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Atjaunina seriāla metadatus...",
   "seriesDetail.metadataRefreshed": "Seriāla metadati atjaunināti.",
   "seriesDetail.metadataNoAnswer": "Nevienam avotam nebija ko piebilst.",
+  "seriesDetail.metadataNoIdentifier": "Sim serialam nav avota identifikatora, tapec nevareja vaicat nevienam avotam. Tas nak lidzi diska datiem no MovieVault.",
+  "seriesDetail.metadataNoSource": "Neviens iespejotais spraudnis nevar aprakstit serialu. Iespejojiet kadu sadala Profils - Spraudni.",
+  "seriesDetail.metadataUnavailable": "Si instalacija vel nevar glabat serialu datus.",
   "collection.seasonNumber": "Sezona {number}"
 }

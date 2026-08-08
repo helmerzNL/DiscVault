@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "正在刷新剧集元数据...",
   "seriesDetail.metadataRefreshed": "剧集元数据已刷新。",
   "seriesDetail.metadataNoAnswer": "没有来源可补充内容。",
+  "seriesDetail.metadataNoIdentifier": "此剧集没有来源标识符，因此无法向任何来源查询。该标识符随 MovieVault 的碟片数据一同到达。",
+  "seriesDetail.metadataNoSource": "没有已启用的插件可以描述剧集。请在“个人资料 - 插件”中启用一个。",
+  "seriesDetail.metadataUnavailable": "此安装尚无法存储剧集数据。",
   "collection.seasonNumber": "第 {number} 季"
 }

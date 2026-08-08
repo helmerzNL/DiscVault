@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "正在重新整理影集中繼資料...",
   "seriesDetail.metadataRefreshed": "影集中繼資料已更新。",
   "seriesDetail.metadataNoAnswer": "沒有來源可補充內容。",
+  "seriesDetail.metadataNoIdentifier": "此影集沒有來源識別碼，因此無法向任何來源查詢。該識別碼隨 MovieVault 的光碟資料一同送達。",
+  "seriesDetail.metadataNoSource": "沒有已啟用的外掛程式可以描述影集。請在「個人檔案 - 外掛程式」中啟用一個。",
+  "seriesDetail.metadataUnavailable": "此安裝尚無法儲存影集資料。",
   "collection.seasonNumber": "第 {number} 季"
 }

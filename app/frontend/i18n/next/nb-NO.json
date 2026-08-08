@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Oppdaterer seriemetadata...",
   "seriesDetail.metadataRefreshed": "Seriemetadata oppdatert.",
   "seriesDetail.metadataNoAnswer": "Ingen kilde hadde noe å legge til.",
+  "seriesDetail.metadataNoIdentifier": "Denne serien har ingen kildeidentifikator, sa ingen kilde kunne sporres. Den folger med diskdata fra MovieVault.",
+  "seriesDetail.metadataNoSource": "Ingen aktivert programtillegg kan beskrive en serie. Aktiver ett under Profil - Programtillegg.",
+  "seriesDetail.metadataUnavailable": "Denne installasjonen kan enna ikke lagre seriedata.",
   "collection.seasonNumber": "Sesong {number}"
 }

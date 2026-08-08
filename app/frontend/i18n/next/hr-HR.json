@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Osvježavanje metapodataka serije...",
   "seriesDetail.metadataRefreshed": "Metapodaci serije osvježeni.",
   "seriesDetail.metadataNoAnswer": "Nijedan izvor nije imao što dodati.",
+  "seriesDetail.metadataNoIdentifier": "Ova serija nema identifikator izvora, pa nijedan izvor nije mogao biti upitan. Stize s podacima diska iz MovieVaulta.",
+  "seriesDetail.metadataNoSource": "Nijedan omoguceni dodatak ne moze opisati seriju. Omogucite jedan u Profil - Dodaci.",
+  "seriesDetail.metadataUnavailable": "Ova instalacija jos ne moze pohraniti podatke o serijama.",
   "collection.seasonNumber": "Sezona {number}"
 }

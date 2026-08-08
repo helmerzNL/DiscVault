@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Обновяване на метаданните...",
   "seriesDetail.metadataRefreshed": "Метаданните на сериала са обновени.",
   "seriesDetail.metadataNoAnswer": "Нито един източник нямаше какво да добави.",
+  "seriesDetail.metadataNoIdentifier": "Tozi serial nyama identifikator na iztochnik, zatova ne beshe vazmozhno da se zapita iztochnik. Toy pristiga s dannite za diska ot MovieVault.",
+  "seriesDetail.metadataNoSource": "Nyama vklyuchena priставka, koyato da opishe serial. Vklyuchete edna v Profil - Pristavki.",
+  "seriesDetail.metadataUnavailable": "Tazi instalatsiya oshte ne mozhe da sahranyava danni za seriali.",
   "collection.seasonNumber": "Сезон {number}"
 }

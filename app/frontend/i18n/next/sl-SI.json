@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Osveževanje metapodatkov serije...",
   "seriesDetail.metadataRefreshed": "Metapodatki serije osveženi.",
   "seriesDetail.metadataNoAnswer": "Noben vir ni imel česa dodati.",
+  "seriesDetail.metadataNoIdentifier": "Ta serija nima identifikatorja vira, zato ni bilo mogoce vprasati nobenega vira. Pride s podatki o disku iz MovieVaulta.",
+  "seriesDetail.metadataNoSource": "Noben omogocen vticnik ne more opisati serije. Omogocite enega v Profil - Vticniki.",
+  "seriesDetail.metadataUnavailable": "Ta namestitev se ne more shranjevati podatkov o serijah.",
   "collection.seasonNumber": "Sezona {number}"
 }

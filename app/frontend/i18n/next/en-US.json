@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Refreshing series metadata...",
   "seriesDetail.metadataRefreshed": "Series metadata refreshed.",
   "seriesDetail.metadataNoAnswer": "No source had anything to add.",
+  "seriesDetail.metadataNoIdentifier": "This series has no source identifier, so no source could be asked. It arrives with the disc data from MovieVault.",
+  "seriesDetail.metadataNoSource": "No enabled plugin can describe a series. Enable one under Profile - Plugins.",
+  "seriesDetail.metadataUnavailable": "This installation cannot store series data yet.",
   "collection.seasonNumber": "Season {number}"
 }

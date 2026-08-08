@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Dizi meta verileri yenileniyor...",
   "seriesDetail.metadataRefreshed": "Dizi meta verileri yenilendi.",
   "seriesDetail.metadataNoAnswer": "Hiçbir kaynağın ekleyecek bir şeyi yoktu.",
+  "seriesDetail.metadataNoIdentifier": "Bu dizinin kaynak tanimlayicisi yok, bu yuzden hicbir kaynaga sorulamadi. MovieVault'tan gelen disk verileriyle birlikte gelir.",
+  "seriesDetail.metadataNoSource": "Etkin hicbir eklenti bir diziyi tanimlayamaz. Profil - Eklentiler altinda bir tane etkinlestirin.",
+  "seriesDetail.metadataUnavailable": "Bu kurulum henuz dizi verisi saklayamiyor.",
   "collection.seasonNumber": "{number}. sezon"
 }

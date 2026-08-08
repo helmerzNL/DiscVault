@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Se actualizează metadatele serialului...",
   "seriesDetail.metadataRefreshed": "Metadatele serialului au fost actualizate.",
   "seriesDetail.metadataNoAnswer": "Nicio sursă nu a avut ceva de adăugat.",
+  "seriesDetail.metadataNoIdentifier": "Acest serial nu are un identificator de sursa, asa ca nicio sursa nu a putut fi interogata. Vine odata cu datele discului de la MovieVault.",
+  "seriesDetail.metadataNoSource": "Niciun plugin activat nu poate descrie un serial. Activati unul in Profil - Pluginuri.",
+  "seriesDetail.metadataUnavailable": "Aceasta instalare nu poate stoca inca date despre seriale.",
   "collection.seasonNumber": "Sezonul {number}"
 }

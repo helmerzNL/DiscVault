@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Uppdaterar seriemetadata...",
   "seriesDetail.metadataRefreshed": "Seriemetadata uppdaterad.",
   "seriesDetail.metadataNoAnswer": "Ingen källa hade något att tillägga.",
+  "seriesDetail.metadataNoIdentifier": "Den har serien saknar kallidentifierare, sa ingen kalla kunde tillfragas. Den kommer med skivdata fran MovieVault.",
+  "seriesDetail.metadataNoSource": "Inget aktiverat tillagg kan beskriva en serie. Aktivera ett under Profil - Tillagg.",
+  "seriesDetail.metadataUnavailable": "Den har installationen kan annu inte lagra seriedata.",
   "collection.seasonNumber": "Säsong {number}"
 }

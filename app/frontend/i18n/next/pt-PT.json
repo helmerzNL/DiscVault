@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "A atualizar metadados...",
   "seriesDetail.metadataRefreshed": "Metadados da série atualizados.",
   "seriesDetail.metadataNoAnswer": "Nenhuma fonte tinha algo a acrescentar.",
+  "seriesDetail.metadataNoIdentifier": "Esta serie nao tem identificador de fonte, por isso nenhuma fonte pode ser consultada. Chega com os dados do disco do MovieVault.",
+  "seriesDetail.metadataNoSource": "Nenhum plug-in ativado consegue descrever uma serie. Ative um em Perfil - Plug-ins.",
+  "seriesDetail.metadataUnavailable": "Esta instalacao ainda nao consegue guardar dados de series.",
   "collection.seasonNumber": "Temporada {number}"
 }

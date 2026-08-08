@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Seriegegevens verversen...",
   "seriesDetail.metadataRefreshed": "Seriegegevens ververst.",
   "seriesDetail.metadataNoAnswer": "Geen bron had iets toe te voegen.",
+  "seriesDetail.metadataNoIdentifier": "Deze serie heeft geen bron-identifier, dus kon geen bron worden bevraagd. Die komt mee met de schijfgegevens van MovieVault.",
+  "seriesDetail.metadataNoSource": "Geen ingeschakelde plug-in kan een serie beschrijven. Schakel er een in onder Profiel - Plug-ins.",
+  "seriesDetail.metadataUnavailable": "Deze installatie kan nog geen seriegegevens opslaan.",
   "collection.seasonNumber": "Seizoen {number}"
 }

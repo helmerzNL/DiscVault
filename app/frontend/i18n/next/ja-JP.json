@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "シリーズのメタデータを更新中...",
   "seriesDetail.metadataRefreshed": "シリーズのメタデータを更新しました。",
   "seriesDetail.metadataNoAnswer": "追加できる情報を持つソースはありませんでした。",
+  "seriesDetail.metadataNoIdentifier": "このシリーズにはソース識別子がないため、どのソースにも問い合わせできませんでした。識別子は MovieVault のディスクデータとともに届きます。",
+  "seriesDetail.metadataNoSource": "有効なプラグインでシリーズを説明できるものがありません。プロフィール - プラグインで有効にしてください。",
+  "seriesDetail.metadataUnavailable": "このインストールではまだシリーズデータを保存できません。",
   "collection.seasonNumber": "シーズン {number}"
 }

@@ -2869,5 +2869,8 @@
   "seriesDetail.refreshingMetadata": "Sarja metaandmete värskendamine...",
   "seriesDetail.metadataRefreshed": "Sarja metaandmed värskendatud.",
   "seriesDetail.metadataNoAnswer": "Ükski allikas ei osanud midagi lisada.",
+  "seriesDetail.metadataNoIdentifier": "Sellel sarjal pole allika identifikaatorit, seega ei saanud ühtegi allikat kusida. See saabub koos ketta andmetega MovieVaultist.",
+  "seriesDetail.metadataNoSource": "Ukski lubatud plugin ei suuda sarja kirjeldada. Lubage moni jaotises Profiil - Pluginad.",
+  "seriesDetail.metadataUnavailable": "See paigaldus ei saa veel sarjaandmeid salvestada.",
   "collection.seasonNumber": "Hooaeg {number}"
 }
