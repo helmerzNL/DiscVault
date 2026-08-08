@@ -117,6 +117,13 @@ jobs:
       - name: Test the version bump pipeline
         run: python -m unittest tests.test_version_bump_pipeline
 
+      # How several sources' artwork becomes one answer. Text is forgiving -- a
+      # missing overview leaves a blank somebody notices. A poster that quietly
+      # did not arrive looks exactly like a series whose source has none, because
+      # the borrowed disc artwork underneath hides the difference.
+      - name: Test series artwork merging
+        run: python -m unittest tests.test_next_series_artwork
+
       - name: Apply Next migrations
         run: python next_database.py migrate
 

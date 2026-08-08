@@ -78,16 +78,83 @@ class NormalizeSeriesTests(unittest.TestCase):
         )
         self.assertEqual([s["seasonNumber"] for s in result["seasons"]], [1])
 
-    def test_no_artwork_is_mapped(self):
-        """Artwork is deliberately absent rather than half-done: a series is a
-        third entity type in the media-asset path, which is its own piece of
-        work. A partial mapping here would look like support and store nothing."""
+    def test_artwork_uses_the_same_key_names_as_a_movie(self):
+        """Matching `movie`\'s names is what keeps the merge layer free of
+        per-source vocabulary, so a second series source can answer in a shape
+        that already works."""
         result = tmdb._normalize_series(
             _payload(poster_path="/poster.jpg", backdrop_path="/backdrop.jpg")
         )
-        flattened = repr(result)
-        self.assertNotIn("poster", flattened)
-        self.assertNotIn("backdrop", flattened)
+        series = result["series"]
+        self.assertEqual(series["posterUrl"], tmdb._image("/poster.jpg"))
+        self.assertEqual(series["posters"], [tmdb._image("/poster.jpg")])
+        self.assertEqual(series["backdropUrl"], tmdb._image("/backdrop.jpg"))
+        self.assertEqual(series["backdropUrls"], [tmdb._image("/backdrop.jpg")])
+
+    def test_the_images_list_outranks_the_default_path(self):
+        """`poster_path` is what TMDB shows by default; the `images` list is
+        ordered by what people actually voted for. Taking the default when a
+        ranked list exists would quietly ignore the ranking."""
+        result = tmdb._normalize_series(
+            _payload(
+                poster_path="/default.jpg",
+                images={
+                    "posters": [
+                        {"file_path": "/meh.jpg", "vote_average": 1.0},
+                        {"file_path": "/best.jpg", "vote_average": 9.0},
+                    ]
+                },
+            )
+        )
+        self.assertEqual(result["series"]["posterUrl"], tmdb._image("/best.jpg"))
+        # The runner-up survives as an option rather than being discarded -- it is
+        # what fills the Posters tab with a choice.
+        self.assertIn(tmdb._image("/meh.jpg"), result["series"]["posters"])
+
+    def test_a_series_with_no_artwork_at_all_says_so_with_empty_values(self):
+        """A miss must not read as `None` downstream: the caller skips empties."""
+        result = tmdb._normalize_series(_payload())
+        self.assertEqual(result["series"]["posterUrl"], "")
+        self.assertEqual(result["series"]["posters"], [])
+        self.assertEqual(result["series"]["backdropUrls"], [])
+
+    def test_a_season_poster_rides_along_on_the_payload_already_fetched(self):
+        """`/tv/{id}` carries `seasons[].poster_path`, so season artwork costs no
+        request. `/tv/{id}/season/{n}` is richer and costs one call per season --
+        a ten-season show turns one request into eleven."""
+        result = tmdb._normalize_series(
+            _payload(
+                seasons=[
+                    {"season_number": 1, "overview": "x", "poster_path": "/s1.jpg"},
+                    {"season_number": 2, "overview": "y"},
+                ]
+            )
+        )
+        posters = {s["seasonNumber"]: s["posterUrl"] for s in result["seasons"]}
+        self.assertEqual(posters[1], tmdb._image("/s1.jpg"))
+        self.assertEqual(posters[2], "")
+
+    def test_artwork_is_asked_for_on_the_request_that_was_happening_anyway(self):
+        """The argument in this plugin is against extra *requests*, not extra
+        fields. `append_to_response` costs neither a round trip nor a rate-limit
+        slot -- so this must stay one call."""
+        calls = []
+
+        def fake_request(context, path, **params):
+            calls.append((path, params))
+            return {"id": 1399}
+
+        original = tmdb._request
+        tmdb._request = fake_request
+        try:
+            tmdb._series_details_request({}, "1399")
+        finally:
+            tmdb._request = original
+
+        self.assertEqual(len(calls), 1)
+        path, params = calls[0]
+        self.assertEqual(path, "/tv/1399")
+        self.assertIn("images", params["append_to_response"])
 
     def test_an_empty_payload_yields_empty_strings_not_none(self):
         """The caller writes these into text columns and skips empties, so `""`
