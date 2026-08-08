@@ -186,6 +186,35 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         self.assertNotIn("seriesBackdropLockToggle", self.source)
         self.assertIn('data-upload-artwork="series"', self.source)
 
+    def test_the_series_page_shares_the_container_layout_rules(self):
+        """The submenu and the panels have to span `.movie-detail-body`, which is
+        a two-column grid. Without `grid-column: 1 / -1` the tab bar renders as a
+        narrow pill in the left column and the panels leave half the page empty --
+        which is exactly what shipped, because the series classes carried no CSS
+        at all.
+
+        Asserting they are *the same selector list* rather than that each has its
+        own copy: a second copy of these rules is how two pages that should look
+        identical drift apart.
+        """
+        for selector in (
+            ".container-detail-submenu,\n    .series-detail-submenu {",
+            ".container-detail-panel,\n    .series-detail-panel {",
+            ".container-detail-panel.hidden,\n    .series-detail-panel.hidden {",
+        ):
+            with self.subTest(selector=selector.split("{")[0].strip()):
+                self.assertIn(selector, self.source)
+        # The responsive overrides too -- a sticky bar that cannot scroll
+        # horizontally on a phone is a bar with tabs you cannot reach.
+        self.assertIn(
+            "      .container-detail-submenu,\n      .series-detail-submenu {\n        position: static;",
+            self.source,
+        )
+        self.assertIn(
+            "      .container-detail-panel,\n      .series-detail-panel,\n      .container-overview-grid {",
+            self.source,
+        )
+
     def test_deleting_a_series_says_the_discs_survive(self):
         """The route already keeps them; the sentence is what makes that
         knowable before clicking. It also names the recreate, which is the part
