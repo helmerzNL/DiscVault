@@ -107,6 +107,18 @@ LEGACY_PACKAGING_VALUES = frozenset(
 )
 MAX_LEGACY_PACKAGING = 9
 
+#: The distribution-5 cap, and MovieVault's MAX_PACKAGING. Not a local sanity
+#: limit: exceeding it on the wire raises `record_invalid`, which fails the
+#: whole synchronization, so the two sides must agree on the number.
+MAX_PACKAGING_V5 = 12
+
+#: Everything the feed may legitimately name on any contract, for the
+#: log-and-keep check. A value outside this is still stored; it is only the
+#: warning that distinguishes them.
+ALL_PACKAGING_VALUES = (
+    LEGACY_PACKAGING_VALUES | CARRIER_TYPE_VALUES | OUTER_PACKAGING_VALUES
+)
+
 # Which axis each legacy value belongs to. Matched case-insensitively on the
 # way in: migration 053 backfilled scalars verbatim ("Steelbook") and the
 # movievault_26 plugin emits TitleCase, neither of which the snake_case i18n

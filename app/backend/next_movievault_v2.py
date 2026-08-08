@@ -23,13 +23,21 @@ from typing import Any, Callable, ContextManager
 try:  # pragma: no cover - supports gunicorn next_app:app
     from .next_packaging import (
         LEGACY_PACKAGING_VALUES,
+        ALL_PACKAGING_VALUES,
+        FINISH_VALUES,
+        MAX_FINISHES,
         MAX_LEGACY_PACKAGING,
+        MAX_PACKAGING_V5,
         split_legacy_packaging,
     )
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_packaging import (
         LEGACY_PACKAGING_VALUES,
+        ALL_PACKAGING_VALUES,
+        FINISH_VALUES,
+        MAX_FINISHES,
         MAX_LEGACY_PACKAGING,
+        MAX_PACKAGING_V5,
         split_legacy_packaging,
     )
 
@@ -45,12 +53,44 @@ MOVIEVAULT_V2_PLUGIN_ID = "movievault_v2"
 MOVIEVAULT_V2_CONTRACT = "distribution-2"
 MOVIEVAULT_V3_CONTRACT = "distribution-3"
 MOVIEVAULT_V4_CONTRACT = "distribution-4"
-SUPPORTED_CONTRACTS = (MOVIEVAULT_V2_CONTRACT, MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT)
+MOVIEVAULT_V5_CONTRACT = "distribution-5"
+# Ordered lowest to highest: _negotiated_contract() indexes into this to pick
+# the highest version both sides support.
+SUPPORTED_CONTRACTS = (
+    MOVIEVAULT_V2_CONTRACT,
+    MOVIEVAULT_V3_CONTRACT,
+    MOVIEVAULT_V4_CONTRACT,
+    MOVIEVAULT_V5_CONTRACT,
+)
 CONTRACT_PATH_VERSIONS = {
     MOVIEVAULT_V2_CONTRACT: "2",
     MOVIEVAULT_V3_CONTRACT: "3",
     MOVIEVAULT_V4_CONTRACT: "4",
+    MOVIEVAULT_V5_CONTRACT: "5",
 }
+# Contract feature predicates. Every technical field used to be gated on an
+# equality check against distribution-4, which quietly means "v4 only" - so
+# adding v5 by equality would have had to repeat `or v5` at fourteen sites, and
+# missing one would drop that field on v5 with nothing failing. These say what
+# is actually meant: the field exists from that version onward.
+def _is_v3_or_later(contract_version: str) -> bool:
+    return contract_version in (
+        MOVIEVAULT_V3_CONTRACT,
+        MOVIEVAULT_V4_CONTRACT,
+        MOVIEVAULT_V5_CONTRACT,
+    )
+
+
+def _is_v4_or_later(contract_version: str) -> bool:
+    """True for the contracts carrying posters and the technical profile."""
+    return contract_version in (MOVIEVAULT_V4_CONTRACT, MOVIEVAULT_V5_CONTRACT)
+
+
+def _is_v5_or_later(contract_version: str) -> bool:
+    """True for the contracts carrying the full packaging vocabulary and finishes."""
+    return contract_version == MOVIEVAULT_V5_CONTRACT
+
+
 SYNC_LOCK_KEY = 2_026_261
 DEFAULT_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_MANIFEST_BYTES = 64 * 1024
@@ -88,6 +128,7 @@ ASSET_PATH_PATTERNS = {
     MOVIEVAULT_V2_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V3_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V4_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V5_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
 }
 POSTER_ASSET_TYPE = "front_cover"
 POSTER_ATTESTATIONS = {"original", "licensed"}
@@ -651,16 +692,49 @@ def _release_video_fields(value: dict[str, Any], *, release_id: str) -> dict[str
     }
 
 
-def _packaging(value: Any, *, release_id: str) -> list[str]:
-    if not isinstance(value, list) or len(value) > MAX_PACKAGING:
+def _packaging(value: Any, *, release_id: str, contract_version: str) -> list[str]:
+    """Parse the feed's flat packaging list.
+
+    The cap depends on the contract: v4 publishes at most the nine values it
+    knows, v5 the twelve the catalogue stores. Note the asymmetry in
+    strictness, which is deliberate and long-standing - an unrecognized *value*
+    is logged and kept, because MovieVault may ship vocabulary before this
+    allow-list catches up, but an over-long list or an over-long item raises
+    `record_invalid`, which fails the whole synchronization rather than one
+    record. The caps must therefore match MovieVault's MAX_PACKAGING exactly;
+    they are a contract term, not a local sanity check.
+    """
+    maximum = MAX_PACKAGING_V5 if _is_v5_or_later(contract_version) else MAX_PACKAGING
+    if not isinstance(value, list) or len(value) > maximum:
         raise MovieVaultV2Error("record_invalid")
     result: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item or len(item) > 24:
             raise MovieVaultV2Error("record_invalid")
-        if item not in PACKAGING_VALUES:
+        if item not in ALL_PACKAGING_VALUES:
             logger.warning(
                 "movievault_v2: unrecognized packaging value %r on release %s - storing raw value",
+                item,
+                release_id,
+            )
+        result.append(item)
+    return result
+
+
+def _finishes(value: Any, *, release_id: str) -> list[str]:
+    """Parse the feed's finish list. distribution-5 and later only.
+
+    Same posture as _packaging: lenient about vocabulary, strict about size.
+    """
+    if not isinstance(value, list) or len(value) > MAX_FINISHES:
+        raise MovieVaultV2Error("record_invalid")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 24:
+            raise MovieVaultV2Error("record_invalid")
+        if item not in FINISH_VALUES:
+            logger.warning(
+                "movievault_v2: unrecognized finish value %r on release %s - storing raw value",
                 item,
                 release_id,
             )
@@ -692,9 +766,9 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "releaseDate",
         "discCount",
     }
-    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
+    if _is_v3_or_later(contract_version):
         optional.update({"studio", "distributor", "runtimeMinutes"})
-    if contract_version == MOVIEVAULT_V4_CONTRACT:
+    if _is_v4_or_later(contract_version):
         required.add("poster")
         # Optional rather than required, even though MovieVault's own v4 schema
         # marks them required. The live feed serves release records that carry
@@ -718,6 +792,12 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
                 "discRegions",
             }
         )
+    if _is_v5_or_later(contract_version):
+        # distribution-5's one addition. Optional for the same reason as the
+        # eight above: a v5 record projected before the field existed simply
+        # has no key, and a missing key must never cost the record.
+        optional.add("finishes")
+    if _is_v4_or_later(contract_version):
         # Nullable, added after poster/assets (Fanart.tv artwork source, ADR
         # 0008). Not stored - see _backdrop()'s own docstring.
         optional.add("backdrop")
@@ -731,7 +811,7 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # from taking every DiscVault instance's sync down with it.
         optional.add("workType")
     _exact_keys(value, required=required, optional=optional, label="release record")
-    if contract_version == MOVIEVAULT_V4_CONTRACT:
+    if _is_v4_or_later(contract_version):
         _backdrop(value.get("backdrop"), release_id=str(value.get("releaseId")))
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -783,7 +863,7 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "assets": _assets(value["assets"], contract_version),
         "poster": (
             _poster(value["poster"], contract_version)
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             else None
         ),
         # A pre-v4 contract has no technical fields at all, and a v4 record may
@@ -792,17 +872,26 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # costing the record.
         "audioTracks": (
             _audio_tracks(value["audioTracks"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT and "audioTracks" in value
+            if _is_v4_or_later(contract_version) and "audioTracks" in value
             else []
         ),
         "subtitles": (
             _subtitles(value["subtitles"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT and "subtitles" in value
+            if _is_v4_or_later(contract_version) and "subtitles" in value
             else []
         ),
         "packaging": (
-            _packaging(value["packaging"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT and "packaging" in value
+            _packaging(
+                value["packaging"],
+                release_id=str(value.get("releaseId")),
+                contract_version=contract_version,
+            )
+            if _is_v4_or_later(contract_version) and "packaging" in value
+            else []
+        ),
+        "finishes": (
+            _finishes(value["finishes"], release_id=str(value.get("releaseId")))
+            if _is_v5_or_later(contract_version) and "finishes" in value
             else []
         ),
         # None means "the feed has not said", which must stay distinguishable
@@ -811,13 +900,13 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # than guessed at.
         "workType": (
             value["workType"]
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             and value.get("workType") in ("movie", "tv")
             else None
         ),
         **(
             _release_video_fields(value, release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             else {
                 "videoResolution": None,
                 "videoCodecs": [],
@@ -849,7 +938,7 @@ def _member(value: Any, contract_version: str) -> dict[str, Any]:
         "discFormat",
         "discBarcodeHash",
     }
-    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
+    if _is_v3_or_later(contract_version):
         optional.update({"studio", "distributor", "runtimeMinutes"})
     _exact_keys(value, required=required, optional=optional, label="box-set member")
     if value["relationship"] != "contains":
@@ -891,7 +980,7 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "members",
     }
     optional = {"edition", "yearRange", "format", "countryCode", "languageCode"}
-    if contract_version == MOVIEVAULT_V4_CONTRACT:
+    if _is_v4_or_later(contract_version):
         required.add("poster")
     _exact_keys(value, required=required, optional=optional, label="box-set record")
     members_value = value["members"]
@@ -922,7 +1011,7 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "members": sorted(members, key=lambda member: member["position"]),
         "poster": (
             _poster(value["poster"], contract_version)
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             else None
         ),
     }
@@ -2272,7 +2361,7 @@ def _verify_digest(
         or not hmac.compare_digest(header_digest, digest)
     ):
         raise MovieVaultV2Error("checksum_invalid")
-    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
+    if _is_v3_or_later(contract_version):
         content_digest = _content_digest_sha256(headers.get("content-digest"))
         if not hmac.compare_digest(content_digest, bytes.fromhex(digest)):
             raise MovieVaultV2Error("checksum_invalid")
@@ -2494,7 +2583,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             generation, release_id, film_id, canonical_title, release_year,
             provider_ids, release_title, edition, format, region, country_code,
             language_code, release_date, disc_count, studio, distributor,
-            runtime_minutes, assets, revision, poster, packaging,
+            runtime_minutes, assets, revision, poster, packaging, finishes,
             video_resolution, video_codecs, hdr_formats, aspect_ratios,
             disc_regions, work_type
         )
@@ -2502,7 +2591,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s
+            %s, %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -2524,6 +2613,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             revision = EXCLUDED.revision,
             poster = EXCLUDED.poster,
             packaging = EXCLUDED.packaging,
+            finishes = EXCLUDED.finishes,
             video_resolution = EXCLUDED.video_resolution,
             video_codecs = EXCLUDED.video_codecs,
             hdr_formats = EXCLUDED.hdr_formats,
@@ -2553,6 +2643,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             record["revision"],
             Jsonb(record["poster"]) if record.get("poster") is not None else None,
             Jsonb(record.get("packaging") or []),
+            Jsonb(record.get("finishes") or []),
             record.get("videoResolution"),
             Jsonb(record.get("videoCodecs") or []),
             Jsonb(record.get("hdrFormats") or []),
@@ -3334,6 +3425,7 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "assets": _json_value(row.get("assets") or []),
         "revision": int(row["revision"]),
         "packaging": _json_value(row.get("packaging") or []),
+        "finishes": _json_value(row.get("finishes") or []),
         "videoResolution": row.get("video_resolution"),
         "videoCodecs": _json_value(row.get("video_codecs") or []),
         "hdrFormats": _json_value(row.get("hdr_formats") or []),
