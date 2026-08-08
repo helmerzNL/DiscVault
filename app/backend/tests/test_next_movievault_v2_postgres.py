@@ -27,6 +27,7 @@ except ModuleNotFoundError:
     Jsonb = None
 
 from app.backend import next_app
+from app.backend import next_metadata
 from app.backend import next_movievault_v2
 from app.backend import next_movievault_v2_posters
 from app.backend import next_plugin_runtime
@@ -1862,6 +1863,208 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             if record.get("recordType") == "release" and record.get("releaseId") == release_id:
                 return record
         raise AssertionError(f"fixture release {release_id} not found")
+
+
+@unittest.skipUnless(
+    DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
+)
+class SeriesLinkPostgresTests(unittest.TestCase):
+    """Linking a disc to the series a feed named, against a real database.
+
+    Every claim here is about SQL and schema constraints, which is exactly what a
+    stub cannot be trusted for. Migration 063 makes the ordering structural --
+    `movies_series_requires_show`, and a composite foreign key that demands the
+    disc already carry the series before a season may reference it -- so a test
+    with a fake cursor would happily accept writes the database refuses.
+    """
+
+    SERIES_TITLE = "Series Link Test Show"
+
+    def connect(self):
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
+
+    def _clear(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM movies WHERE title LIKE %s", (f"{self.SERIES_TITLE}%",)
+            )
+            cur.execute("DELETE FROM series WHERE title = %s", (self.SERIES_TITLE,))
+
+    def setUp(self):
+        self._clear()
+
+    def tearDown(self):
+        self._clear()
+
+    def _movie(self, conn, *, media_type: str = "SHOW", suffix: str = "") -> uuid.UUID:
+        movie_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movies (id, public_id, title, media_type)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (
+                    movie_id,
+                    f"next-movie-{movie_id.hex[:12]}",
+                    f"{self.SERIES_TITLE}{suffix or ' Disc'}",
+                    media_type,
+                ),
+            )
+        return movie_id
+
+    def _stated(self, *, seasons: list[dict] | None = None) -> dict:
+        return {
+            "provider": next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,
+            "tmdbTvId": "1399",
+            "title": self.SERIES_TITLE,
+            "seasons": seasons
+            if seasons is not None
+            else [
+                {"seasonNumber": 1, "title": "Season One", "episodeCount": 10},
+                {"seasonNumber": 2},
+            ],
+        }
+
+    def _links(self, conn, movie_id) -> list[dict]:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ms.series_id, ms.sort_order, ss.season_number
+                FROM movie_seasons ms
+                JOIN series_seasons ss ON ss.id = ms.season_id
+                WHERE ms.movie_id = %s
+                ORDER BY ms.sort_order
+                """,
+                (movie_id,),
+            )
+            return list(cur.fetchall())
+
+    def test_a_series_is_created_once_and_reused_by_identifier(self):
+        """The claim the whole design rests on.
+
+        A second release of the same show must land on the same series. If this
+        resolved by title -- or resolved twice -- a collector with three
+        pressings of one show would end up with three series, and no screen would
+        make that obviously wrong.
+        """
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            second = self._movie(conn, suffix=" 4K")
+            a = next_metadata.apply_movie_series_link(conn, first, self._stated())
+            b = next_metadata.apply_movie_series_link(conn, second, self._stated())
+
+            self.assertEqual(a["seriesId"], b["seriesId"])
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM series WHERE title = %s", (self.SERIES_TITLE,)
+                )
+                self.assertEqual(cur.fetchone()["n"], 1)
+                cur.execute(
+                    """
+                    SELECT count(*) AS n FROM series_identifiers
+                    WHERE identifier_type = 'tmdb_tv' AND identifier = '1399'
+                    """
+                )
+                self.assertEqual(cur.fetchone()["n"], 1)
+
+    def test_season_links_carry_the_series_and_the_curators_order(self):
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            applied = next_metadata.apply_movie_series_link(conn, movie_id, self._stated())
+            links = self._links(conn, movie_id)
+
+        self.assertEqual([row["season_number"] for row in links], [1, 2])
+        self.assertEqual([row["sort_order"] for row in links], [0, 1])
+        # The composite foreign key would have refused a mismatch outright, so
+        # asserting it is asserting that the write actually happened as claimed.
+        self.assertEqual(
+            {str(row["series_id"]) for row in links}, {applied["seriesId"]}
+        )
+
+    def test_a_series_with_no_stated_seasons_links_nothing(self):
+        """A show nobody has curated seasons for is still worth linking, and the
+        absence of seasons must not become an invented season."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            applied = next_metadata.apply_movie_series_link(
+                conn, movie_id, self._stated(seasons=[])
+            )
+            self.assertIsNotNone(applied)
+            self.assertEqual(applied["seasonCount"], 0)
+            self.assertEqual(self._links(conn, movie_id), [])
+
+    def test_a_film_is_never_linked(self):
+        """`movies_series_requires_show` forbids it, so a link here would be a
+        constraint violation rather than a wrong-but-valid row. This is also what
+        makes a locked type protect itself: the type never becomes SHOW, so the
+        link never happens, with no second rule to keep in step."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn, media_type="MOVIE")
+            self.assertIsNone(
+                next_metadata.apply_movie_series_link(conn, movie_id, self._stated())
+            )
+            with conn.cursor() as cur:
+                cur.execute("SELECT series_id FROM movies WHERE id = %s", (movie_id,))
+                self.assertIsNone(cur.fetchone()["series_id"])
+
+    def test_silence_never_unlinks(self):
+        """A provider with no opinion has not disagreed with a link a user made."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            applied = next_metadata.apply_movie_series_link(conn, movie_id, self._stated())
+            self.assertIsNotNone(applied)
+            self.assertIsNone(next_metadata.apply_movie_series_link(conn, movie_id, None))
+            with conn.cursor() as cur:
+                cur.execute("SELECT series_id FROM movies WHERE id = %s", (movie_id,))
+                self.assertEqual(str(cur.fetchone()["series_id"]), applied["seriesId"])
+            self.assertEqual(len(self._links(conn, movie_id)), 2)
+
+    def test_a_disc_already_on_another_series_is_left_alone(self):
+        """Re-pointing a disc is a decision, not a refresh."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            other = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO series (id, public_id, title) VALUES (%s, %s, %s)",
+                    (other, f"next-series-{other.hex[:12]}", self.SERIES_TITLE),
+                )
+                cur.execute(
+                    "UPDATE movies SET series_id = %s WHERE id = %s", (other, movie_id)
+                )
+            self.assertIsNone(
+                next_metadata.apply_movie_series_link(conn, movie_id, self._stated())
+            )
+            with conn.cursor() as cur:
+                cur.execute("SELECT series_id FROM movies WHERE id = %s", (movie_id,))
+                self.assertEqual(cur.fetchone()["series_id"], other)
+
+    def test_a_soft_deleted_series_is_not_resurrected(self):
+        """A deletion is a statement. Reviving it because a feed mentioned the
+        show again would overrule whoever deleted it, with no trace."""
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            applied = next_metadata.apply_movie_series_link(conn, first, self._stated())
+            with conn.cursor() as cur:
+                # Links first, then the disc's series_id. The composite key
+                # points at (movies.id, movies.series_id), so clearing the disc
+                # while a link still cites it is a foreign key violation -- the
+                # same ordering the edit API comments on, met here by writing
+                # the test the wrong way round once.
+                cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (first,))
+                cur.execute(
+                    "UPDATE movies SET series_id = NULL WHERE id = %s", (first,)
+                )
+                cur.execute(
+                    "UPDATE series SET deleted_at = now() WHERE id = %s",
+                    (applied["seriesId"],),
+                )
+            second = self._movie(conn, suffix=" 4K")
+            again = next_metadata.apply_movie_series_link(conn, second, self._stated())
+
+        self.assertIsNotNone(again)
+        self.assertNotEqual(again["seriesId"], applied["seriesId"])
 
 
 if __name__ == "__main__":
