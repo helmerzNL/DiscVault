@@ -1425,6 +1425,57 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
             record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
         )
 
+    def test_v4_release_accepts_the_seasons_a_release_covers(self):
+        """The next field MovieVault publishes, and the one most able to break us.
+
+        `workType` above could at least be argued to arrive gradually. This one
+        cannot: upstream publishes `seasons` on *every* v4 release record,
+        because an empty list there is a statement -- "the complete series, or
+        unspecified" -- rather than an omission. So there is no window in which
+        only some records carry it. The first sync after an origin ships it
+        either tolerates the key on every record or fails on every record.
+        """
+        record = self._v4_release(
+            seasons=[
+                {"seasonNumber": 1, "title": "Season One", "releaseYear": 2005, "episodeCount": 13},
+                {"seasonNumber": 2, "title": None, "releaseYear": None, "episodeCount": None},
+            ]
+        )
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
+    def test_v4_release_accepts_an_empty_seasons_list(self):
+        """This is the case that arrives on every film in the catalogue.
+
+        A film covers no seasons, so upstream publishes `[]` -- and `[]` is what
+        the overwhelming majority of records carry. A tolerance that only handled
+        the populated shape would still take the whole feed down.
+        """
+        record = self._v4_release(seasons=[])
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
+    def test_v4_release_tolerates_malformed_seasons(self):
+        """Nothing reads the field yet, so there is nothing to protect by
+        refusing it -- and refusing it would cost the entire catalogue rather
+        than one release's season list."""
+        for value in ("not-a-list", [{"seasonNumber": "one"}], [None], [{}]):
+            with self.subTest(seasons=value):
+                record = self._v4_release(seasons=value)
+                next_movievault_v2.validate_record(
+                    record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+                )
+
+    def test_v4_release_without_seasons_still_parses(self):
+        """Records projected before the field existed have no key at all."""
+        record = self._v4_release()
+        self.assertNotIn("seasons", record)
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
         for key in (
