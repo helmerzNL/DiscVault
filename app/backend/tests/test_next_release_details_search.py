@@ -233,5 +233,82 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
         self.assertEqual(next_app.release_candidate_movie_payload(None), {})
 
 
+class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
+    """A chosen edition must be applicable to a disc that is already on the shelf.
+
+    The movie detail page fills the disc locally through the ordinary edit
+    route - MovieVault has no server-side choice endpoint - so every key the
+    candidate mapper emits has to be one the movie edit payload actually reads.
+    A key that neither `movie_update_payload` nor `movie_technical_edits`
+    consumes would be dropped silently, and the picked edition would only
+    partially land."""
+
+    CANDIDATE = {
+        "releaseRef": "discovery_abcdef123456",
+        "source": "external",
+        "title": "Example Film - Collector's Edition",
+        "edition": "Collector's Edition",
+        "format": "4K UHD",
+        "countryCode": "NL",
+        "languageCode": "en",
+        "releaseDate": "2024-05-01",
+        "discCount": 2,
+        "runtimeMinutes": 148,
+        "discRegions": ["FREE"],
+        "packaging": ["steelbook"],
+        "video": {
+            "resolution": "2160p",
+            "codecs": ["hevc"],
+            "hdrFormats": ["dolby_vision"],
+            "aspectRatios": ["2.39:1"],
+        },
+        "audioTracks": [
+            {"languageCode": "en", "codec": "dolby_truehd", "channels": "7.1", "immersiveFormat": "dolby_atmos"}
+        ],
+        "subtitles": [{"languageCode": "en", "subtitleType": "sdh"}],
+    }
+
+    def test_candidate_payload_lands_on_movie_columns_and_technical_edits(self):
+        body = next_app.release_candidate_movie_payload(dict(self.CANDIDATE))
+        existing = {"title": "Example Film", "barcode": "4006381333931"}
+
+        payload = next_app.movie_update_payload(body, existing=existing)
+
+        self.assertEqual(payload["title"], "Example Film")
+        self.assertEqual(payload["release_title"], "Example Film - Collector's Edition")
+        self.assertEqual(payload["edition"], "Collector's Edition")
+        self.assertEqual(payload["format"], "4K UHD")
+        self.assertEqual(payload["country"], "NL")
+        self.assertEqual(payload["language"], "en")
+        self.assertEqual(payload["runtime_minutes"], 148)
+        self.assertEqual(str(payload["release_date"]), "2024-05-01")
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["regions"], ["FREE"])
+        self.assertEqual(technical["packaging"], ["steelbook"])
+        self.assertEqual(technical["video_resolution"], "2160p")
+        self.assertEqual(technical["video_codecs"], ["hevc"])
+        self.assertEqual(technical["hdr"], ["dolby_vision"])
+        self.assertEqual(technical["screen_ratios"], ["2.39:1"])
+        self.assertEqual(technical["audio_tracks"][0]["codec"], "dolby_truehd")
+        self.assertEqual(technical["subtitles"][0]["subtitleType"], "sdh")
+
+    def test_a_second_pick_reassigns_the_first_picks_tracks(self):
+        # The first pick carried audio and subtitles; the second names none.
+        # An explicit empty list clears them - fill-if-empty would let the
+        # first edition's tracks survive into the second.
+        body = next_app.release_candidate_movie_payload(
+            {"title": "Example Film", "audioTracks": [], "subtitles": [], "packaging": []}
+        )
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["audio_tracks"], [])
+        self.assertEqual(technical["subtitles"], [])
+        self.assertEqual(technical["packaging"], [])
+
+
 if __name__ == "__main__":
     unittest.main()

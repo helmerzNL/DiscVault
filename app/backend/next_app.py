@@ -26699,6 +26699,19 @@ def register_routes(flask_app: Flask) -> None:
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
             raise NextApiError("Movie request body must be an object", 400)
+        release_candidate = body.get("releaseCandidate") or body.get("release_candidate")
+        if not isinstance(release_candidate, dict):
+            release_candidate = {}
+        release_candidate_film = body.get("releaseCandidateFilm") or body.get("release_candidate_film")
+        if not isinstance(release_candidate_film, dict):
+            release_candidate_film = {}
+        if release_candidate:
+            # An edition picked from a v2 candidate list describes the disc in
+            # the user's hand, so it wins over anything else the body carries.
+            # Assignment, not fill-if-empty: picking a second edition after a
+            # first must not leave the first one's audio or packaging behind -
+            # the same rule the import route applies.
+            body = {**body, **release_candidate_movie_payload(release_candidate)}
         with connect() as conn:
             actor = require_next_permission(conn, "collection.edit_all")
             if not table_exists(conn, "movies"):
@@ -26771,6 +26784,26 @@ def register_routes(flask_app: Flask) -> None:
                     )
                 except Exception as exc:
                     receiver_summary = {"status": "error", "error": str(exc)}
+            # The same closing of the loop as the import route: MovieVault's
+            # resolver returned a list precisely because it could not choose,
+            # and it creates no moderation candidate for that. Queued so a
+            # MovieVault outage cannot reach this request, and gated by the
+            # owner setting and the user's own sharing preference.
+            release_contribution_job = None
+            if release_candidate and release_contribution_enabled(conn, actor.get("id") if actor else None):
+                contribution_payload = release_technical_contribution_payload(
+                    release_candidate,
+                    scanned_barcode=payload.get("barcode") or "",
+                    film=release_candidate_film
+                    or {"title": payload.get("title"), "year": payload.get("year")},
+                    provenance="candidate_selection",
+                )
+                release_contribution_job = queue_release_contribution_job(
+                    conn,
+                    contribution_payload,
+                    actor=actor,
+                    reason="movie_detail_release_selection",
+                )
             audit_event(
                 conn,
                 event_type="movie.updated",
@@ -26779,7 +26812,23 @@ def register_routes(flask_app: Flask) -> None:
                 target_type="movie",
                 target_id=movie_uuid,
                 summary=f"Updated movie {payload['title']}",
-                metadata={"title": payload["title"], "barcode": payload["barcode"]},
+                metadata={
+                    "title": payload["title"],
+                    "barcode": payload["barcode"],
+                    **(
+                        {
+                            "releaseCandidate": {
+                                "releaseRef": clean_text(release_candidate.get("releaseRef")),
+                                "source": clean_text(release_candidate.get("source")),
+                                "edition": clean_text(release_candidate.get("edition")),
+                                "format": clean_text(release_candidate.get("format")),
+                            },
+                            "releaseContributionQueued": bool(release_contribution_job),
+                        }
+                        if release_candidate
+                        else {}
+                    ),
+                },
             )
             if receiver_proposal:
                 audit_event(

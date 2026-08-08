@@ -151,15 +151,21 @@ def _resolver_lookup(payload, context):
         # merged onto a movie. It is also not a miss - the film was identified
         # and its pressings are on offer. The list is carried through so the
         # caller can hand it to the user instead of reporting "not found".
+        candidates = {
+            "film": (result or {}).get("film") or {},
+            "releases": (result or {}).get("releases") or [],
+        }
+        # The provenance rides along: a picker built from this list must keep
+        # the unreviewed-source warning visible through to save, and it cannot
+        # do that if only the hit statuses carry verificationStatus.
+        if (result or {}).get("verificationStatus") in ("canonical", "unreviewed_external"):
+            candidates["verificationStatus"] = result["verificationStatus"]
         return {
             "result": None,
             "attempted": True,
             "outcome": "candidates",
             "errorCode": None,
-            "candidates": {
-                "film": (result or {}).get("film") or {},
-                "releases": (result or {}).get("releases") or [],
-            },
+            "candidates": candidates,
         }
     if status == "ambiguous":
         return {"result": None, "attempted": True, "outcome": "ambiguous", "errorCode": None}
