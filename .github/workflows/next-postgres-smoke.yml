@@ -140,6 +140,18 @@ jobs:
           tests.test_next_library_series_ui
           tests.test_next_library_series_postgres
 
+      # The series detail page. The PostgreSQL half is the one that matters: it
+      # pins that series artwork really is stored with entity_type='series', a
+      # value migration 003 leaves unconstrained and which therefore has nothing
+      # but a test standing behind it.
+      - name: Test the series detail page
+        run: python -m unittest tests.test_next_series_detail_postgres
+
+      # This one has no database at all, but it guards the surface-id and route
+      # registration that a new detail page has to join to be reachable.
+      - name: Test the app surface router
+        run: python -m unittest tests.test_next_app_surface_router
+
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as
       # the bootstrap/delta drift they exist to catch - a guard nobody invokes

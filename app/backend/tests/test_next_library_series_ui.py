@@ -28,6 +28,12 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         with open(NEXT_APP_PATH, encoding="utf-8") as handle:
             cls.app_source = handle.read()
 
+    def locale(self, name):
+        import json
+
+        with open(os.path.join(I18N_DIR, f"{name}.json"), encoding="utf-8") as handle:
+            return json.load(handle)
+
     def _function_body(self, name):
         start = self.source.index(f"function {name}(")
         end = self.source.index("\n    function ", start + 1)
@@ -110,25 +116,14 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         self.assertNotIn('item.kind === "series"', body)
         self.assertIn('if (item.kind === "container") return collectorsModeEnabled()', body)
 
-    def test_drilling_into_a_series_shows_its_discs_flat(self):
-        body = self._function_body("libraryDisplayItems")
-        focus_at = body.index("if (librarySeriesFocusId) {")
-        merge_at = body.index("if (!mergeEditionsAsTitleEnabled())")
-        self.assertLess(
-            focus_at,
-            merge_at,
-            "opening a series tile must show its discs whatever the merge switch says",
-        )
-        self.assertIn("function clearLibrarySeriesFocus()", self.source)
-        self.assertIn('id="librarySeriesFocus"', self.source)
-
-    def test_the_focus_is_dropped_when_the_series_leaves_the_snapshot(self):
-        """Otherwise a refresh after the last disc is deleted leaves the Library
-        stuck on an empty grid with no way back."""
-        self.assertIn(
-            "if (librarySeriesFocusId && !seriesList.some((entry) => String(entry.id) === librarySeriesFocusId))",
-            self.source,
-        )
+    def test_a_series_tile_opens_the_series_page(self):
+        """The tile used to drill into the Library itself, because there was no
+        page to open. There is one now, and two ways into the same list is one
+        too many -- so the focus mode is gone rather than kept alongside it."""
+        self.assertIn("openAppSeriesDetail(button.dataset.previewSeries)", self.source)
+        self.assertNotIn("librarySeriesFocusId", self.source)
+        self.assertNotIn("focusLibrarySeries", self.source)
+        self.assertNotIn("librarySeriesFocus", self.source)
 
     def test_a_complete_series_set_does_not_read_as_zero_seasons(self):
         body = self._function_body("seriesSeasonSummaryText")
@@ -141,6 +136,65 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         self.assertIn("seriesMemberIndex()", body)
         self.assertNotIn(".filter(", body)
 
+    def test_the_series_page_is_a_real_route_and_surface(self):
+        """A series must be linkable. Without the shell route the URL 404s before
+        any JavaScript runs, and without the surface id the page can never be the
+        visible one."""
+        self.assertIn('@flask_app.get("/series/<series_id>")', self.app_source)
+        self.assertIn('@flask_app.get("/app/series/<series_id>")', self.app_source)
+        self.assertIn('"/app/series/"', self.app_source)
+        self.assertIn('"seriesDetailPage",', self.source)
+        self.assertIn('return {view: "series", seriesId:', self.source)
+        # Every dispatch site, not just the boot one: back/forward and in-app
+        # navigation each go through their own copy.
+        self.assertEqual(self.source.count('route.view === "series"'), 3)
+
+    def test_the_six_tabs_use_the_shared_submenu_mechanism(self):
+        """No new JavaScript for tab switching. A page that rolled its own would
+        also have to reimplement restoring the active tab after a re-render."""
+        self.assertEqual(self.source.count('data-detail-tab="seriesDetail"'), 6)
+        self.assertEqual(self.source.count('data-detail-panel-group="seriesDetail"'), 6)
+        self.assertIn('activateDetailTab("seriesDetail", document.getElementById(activePanelId)', self.source)
+
+    def test_a_three_way_view_control_is_normalised_three_ways(self):
+        """`normalizeViewMode` knows only poster and list, so routing a Detail
+        button through it silently produced Posters -- the button highlighted and
+        nothing changed. The container control had the same bug."""
+        self.assertIn("function normalizeMemberViewMode(value)", self.source)
+        self.assertIn('["poster", "list", "detail"].includes(value)', self.source)
+        self.assertIn("normalizeMemberViewMode(button.dataset.seriesViewMode)", self.source)
+        self.assertIn("normalizeMemberViewMode(button.dataset.containerViewMode)", self.source)
+        start = self.source.index("function setContainerMemberGridMode(")
+        body = self.source[start:self.source.index("\n    function ", start + 1)]
+        self.assertIn("normalizeMemberViewMode(mode)", body)
+
+    def test_artwork_handlers_dispatch_on_the_entity_rather_than_a_boolean(self):
+        """Three entities carry artwork now, and `isContainer ? a : b` cannot say
+        three. A missed branch would have posted a series to the movies route."""
+        self.assertIn("function detailArtworkEntity(entity)", self.source)
+        for name in ("setPrimaryArtwork", "uploadDetailArtwork", "deleteDetailArtwork"):
+            start = self.source.index(f"function {name}(")
+            body = self.source[start:self.source.index("\n    async function ", start + 1)]
+            self.assertNotIn("isContainer", body, name)
+            self.assertIn("detailArtworkEntity(entity)", body, name)
+
+    def test_the_series_artwork_tabs_carry_no_lock_button(self):
+        """A lock stops an automatic source overwriting a chosen image, and
+        nothing fetches series artwork yet. The button would guard nothing while
+        implying it guards something."""
+        self.assertNotIn("seriesPosterLockToggle", self.source)
+        self.assertNotIn("seriesBackdropLockToggle", self.source)
+        self.assertIn('data-upload-artwork="series"', self.source)
+
+    def test_deleting_a_series_says_the_discs_survive(self):
+        """The route already keeps them; the sentence is what makes that
+        knowable before clicking. It also names the recreate, which is the part
+        a reader would otherwise discover only after the next sync."""
+        self.assertIn("seriesDetail.deleteConfirm", self.source)
+        confirm = self.locale("en-US")["seriesDetail.deleteConfirm"]
+        self.assertIn("discs stay", confirm)
+        self.assertIn("recreate", confirm)
+
     def test_the_new_labels_exist_in_every_locale(self):
         import json
 
@@ -148,7 +202,17 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             "collection.seriesTile",
             "collection.seasonsCovered",
             "collection.discs",
-            "collection.backToLibrary",
+            "collection.seasonNumber",
+            "seriesDetail.title",
+            "seriesDetail.discs",
+            "seriesDetail.deleteSeries",
+            "seriesDetail.deleteConfirm",
+            "seriesDetail.completeSeries",
+            "seriesDetail.seasonOwned",
+            "seriesDetail.seasonMissing",
+            "seriesDetail.episodeCount",
+            "seriesDetail.videosHelp",
+            "seriesDetail.metadataNoAnswer",
         )
         for name in sorted(os.listdir(I18N_DIR)):
             if not name.endswith(".json"):

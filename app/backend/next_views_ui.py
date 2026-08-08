@@ -2447,14 +2447,6 @@ def ui_preview_html(
     .series-tile-seasons {
       opacity: .82;
     }
-    .series-focus-bar {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    .series-focus-bar.hidden {
-      display: none;
-    }
     .container-tile-badge {
       position: absolute;
       right: 8px;
@@ -14027,7 +14019,6 @@ def ui_preview_html(
         <div class="filter-row">
           <span class="bulk-count" id="librarySummary">""" + h(counts.get("movies", 0)) + """ movies</span>
         </div>
-        <div class="filter-row series-focus-bar hidden" id="librarySeriesFocus"></div>
       </section>
       <section class="bulk-bar" id="bulkBar" role="region" aria-labelledby="bulkPanelTitle">
         <div class="library-panel-head bulk-panel-head">
@@ -15570,6 +15561,156 @@ def ui_preview_html(
                 </summary>
                 <div class="debug-sources" id="containerDetailDebugSources"></div>
               </details>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section class="movie-detail-page series-detail-page hidden" id="seriesDetailPage" aria-labelledby="seriesDetailTitle">
+        <section class="movie-detail-hero" id="seriesDetailHero">
+          <img id="seriesDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="seriesDetailBackButton" data-next-i18n="seriesDetail.backToLibrary">Back</button>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="seriesDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div>
+              <span class="eyebrow" data-next-i18n="seriesDetail.title">Series details</span>
+              <h2 class="movie-detail-title" id="seriesDetailTitle">-</h2>
+              <div class="hero-meta" id="seriesDetailTags"></div>
+              <p class="movie-detail-overview" id="seriesDetailOverview"></p>
+              <div class="container-detail-stats" id="seriesDetailStats"></div>
+            </div>
+          </div>
+        </section>
+        <div class="movie-detail-action-strip">
+          <div class="movie-detail-actions">
+            <button type="button" class="action secondary hidden" id="seriesEditToggleButton" data-next-i18n="common.edit">Edit</button>
+            <button type="button" class="action secondary hidden" id="seriesEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
+            <button type="button" class="action secondary hidden" id="seriesMetadataRefreshButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+            <button type="button" class="action danger hidden" id="seriesDeleteButton" data-next-i18n="seriesDetail.deleteSeries">Delete series</button>
+          </div>
+          <div class="detail-message" id="seriesDetailMessage"></div>
+        </div>
+        <section class="movie-detail-body">
+          <nav class="detail-submenu series-detail-submenu" aria-label="Series sections" data-next-i18n-aria="seriesDetail.sections">
+            <button type="button" class="active" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailDiscsPanel" data-next-i18n="seriesDetail.discs">Discs</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
+          </nav>
+          <div class="detail-subpanel series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailDiscsPanel">
+            <div class="detail-card full container-content-card">
+              <div class="detail-card-head">
+                <div>
+                  <h3 data-next-i18n="seriesDetail.discs">Discs</h3>
+                  <p data-next-i18n="seriesDetail.discsHelp">Every box set and disc set filed under this series.</p>
+                </div>
+                <div class="segmented compact view-mode-control container-view-mode-control" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                  <button type="button" class="active" data-series-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
+                  <button type="button" data-series-view-mode="list" data-next-i18n="collection.viewList">List</button>
+                  <button type="button" data-series-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+                </div>
+              </div>
+              <div class="container-member-grid" id="seriesDetailDiscs"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailOverviewPanel">
+            <div class="container-overview-grid">
+              <div class="detail-card">
+                <h3 data-next-i18n="movieDetail.overview">Overview</h3>
+                <p class="movie-detail-overview" id="seriesDetailOverviewText"></p>
+              </div>
+              <div class="detail-card full" id="seriesEditCard" hidden>
+                <h3 data-next-i18n="seriesDetail.editSeries">Edit series</h3>
+                <form id="seriesEditForm" class="movie-edit-grid" autocomplete="off">
+                  <label for="seriesEditTitle">
+                    <span data-next-i18n="seriesDetail.fieldTitle">Title</span>
+                    <input id="seriesEditTitle" name="title" maxlength="160" required>
+                  </label>
+                  <label for="seriesEditSortTitle">
+                    <span data-next-i18n="seriesDetail.fieldSortTitle">Sort title</span>
+                    <input id="seriesEditSortTitle" name="sortTitle" maxlength="160">
+                  </label>
+                  <label for="seriesEditOriginalTitle">
+                    <span data-next-i18n="seriesDetail.fieldOriginalTitle">Original title</span>
+                    <input id="seriesEditOriginalTitle" name="originalTitle" maxlength="160">
+                  </label>
+                  <label for="seriesEditStartYear">
+                    <span data-next-i18n="seriesDetail.fieldStartYear">First year</span>
+                    <input id="seriesEditStartYear" name="startYear" maxlength="20">
+                  </label>
+                  <label for="seriesEditEndYear">
+                    <span data-next-i18n="seriesDetail.fieldEndYear">Last year</span>
+                    <input id="seriesEditEndYear" name="endYear" maxlength="20">
+                  </label>
+                  <label for="seriesEditOverview" class="wide">
+                    <span data-next-i18n="movieDetail.overview">Overview</span>
+                    <textarea id="seriesEditOverview" name="overview" maxlength="4000"></textarea>
+                  </label>
+                  <div class="button-row compact wide">
+                    <button type="submit" class="primary-button" data-next-i18n="common.save">Save</button>
+                    <button type="button" class="secondary-button" id="seriesEditCancelButton" data-next-i18n="common.cancel">Cancel</button>
+                  </div>
+                </form>
+              </div>
+              <div class="detail-card full">
+                <div class="detail-card-head">
+                  <div>
+                    <h3 data-next-i18n="movieDetail.seasons">Seasons</h3>
+                    <p data-next-i18n="seriesDetail.seasonsHelp">Every season the series has, and whether a disc in your collection covers it.</p>
+                  </div>
+                </div>
+                <div class="detail-fields" id="seriesDetailSeasons"></div>
+              </div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailPostersPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.posters">Posters</h3>
+              <div class="art-option-grid" id="seriesDetailPosterArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="seriesPosterUploadInput" accept="image/*">
+                <!--
+                  No lock toggle here, unlike movies and containers. A lock exists
+                  to stop an automatic source overwriting a chosen image, and
+                  nothing fetches series artwork yet -- so the button would guard
+                  against nothing while implying it guards against something.
+                -->
+                <button type="button" class="secondary-button" data-upload-artwork="series" data-kind="poster" data-input="seriesPosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailBackdropsPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.backdrops">Backdrops</h3>
+              <div class="art-option-grid backdrops" id="seriesDetailBackdropArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="seriesBackdropUploadInput" accept="image/*">
+                <!--
+                  No lock toggle here, unlike movies and containers. A lock exists
+                  to stop an automatic source overwriting a chosen image, and
+                  nothing fetches series artwork yet -- so the button would guard
+                  against nothing while implying it guards against something.
+                -->
+                <button type="button" class="secondary-button" data-upload-artwork="series" data-kind="backdrop" data-input="seriesBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailVideosPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.videos">Videos</h3>
+              <p class="import-source-meta" data-next-i18n="seriesDetail.videosHelp">A series carries no videos of its own; these come from the discs filed under it.</p>
+              <div class="detail-grid" id="seriesDetailVideos"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailMetadataPanel">
+            <div class="detail-card">
+              <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
+              <div class="detail-grid" id="seriesDetailIdentifiers"></div>
+            </div>
+            <div class="detail-card">
+              <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
+              <div class="detail-fields" id="seriesDetailMetadataDetails"></div>
             </div>
           </div>
         </section>
@@ -17545,7 +17686,6 @@ def ui_preview_html(
     let seriesSeasonCoverage = state.seriesSeasonCoverage || [];
     // Set while the user has drilled into one series tile. Not persisted: it is
     // a place in a list, not a filter the next visit should inherit.
-    let librarySeriesFocusId = "";
     let mediaGroups = state.mediaGroups || [];
     let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
@@ -17584,6 +17724,10 @@ def ui_preview_html(
     let movieIdentityDebugState = [];
     let activeContainerId = "";
     let activeContainerPayload = null;
+    let activeSeriesId = "";
+    let activeSeriesPayload = null;
+    let seriesDiscsViewMode = normalizeMemberViewMode(localStorage.getItem("dv_next_series_discs_view_mode"));
+    let seriesDetailSort = parseLocalJson("dv_next_series_detail_sort", {key: "title", direction: "asc"});
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
@@ -18905,6 +19049,17 @@ def ui_preview_html(
       setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
       if (!canEditContainers) setContainerEditPanelVisible(false);
       setElementVisible(document.getElementById("containerDeleteButton"), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete));
+      // A series is edited and deleted under `containers.edit`, the same permission
+      // its API routes require. It is not gated on Collectors mode: a series is
+      // filled from the feed for every user, not archived by hand like a box set.
+      const canEditSeries = hasPermission("containers.edit");
+      setElementVisible(document.getElementById("seriesEditToggleButton"), canEditSeries);
+      setElementVisible(document.getElementById("seriesDeleteButton"), canEditSeries);
+      setElementVisible(document.getElementById("seriesMetadataRefreshButton"), hasPermission("metadata.refresh_one"));
+      document.querySelectorAll("[data-upload-artwork='series']").forEach((node) => {
+        node.classList.toggle("hidden", !hasPermission("collection.edit_all"));
+      });
+      if (!canEditSeries) setSeriesEditPanelVisible(false);
       if (!collectorsEnabled && activeContainerId) {
         activeContainerId = "";
         activeContainerPayload = null;
@@ -25371,15 +25526,6 @@ def ui_preview_html(
       if (collectionItemFilter === "containers") {
         return sortLibraryItems(visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters));
       }
-      // Drilled into one series: its discs, flat, whatever the merge switch says.
-      // The point of opening a series tile is to see what is inside it.
-      if (librarySeriesFocusId) {
-        return sortLibraryItems(
-          visibleMovies
-            .filter((movie) => String(movie?.series?.id || "") === librarySeriesFocusId)
-            .map((movie) => ({kind: "movie", movie, title: movie.title || ""}))
-        );
-      }
       if (!mergeEditionsAsTitleEnabled()) {
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
@@ -25427,6 +25573,14 @@ def ui_preview_html(
     }
     function normalizeViewMode(value) {
       return ["poster", "list"].includes(value) ? value : "poster";
+    }
+    // Member grids offer a third mode. `normalizeViewMode` knows only two, so
+    // routing a three-way control through it silently turned "detail" into
+    // "poster" -- the button highlighted, the view did not change, and the
+    // `view-detail` class was never applied. Both the container control and the
+    // series one need this wider normaliser.
+    function normalizeMemberViewMode(value) {
+      return ["poster", "list", "detail"].includes(value) ? value : "poster";
     }
     function normalizeLibraryViewMode(value) {
       return value === "list" ? "list" : "poster";
@@ -25961,7 +26115,9 @@ def ui_preview_html(
           event.stopPropagation();
           const scope = button.dataset.detailSortScope || "library";
           const key = button.dataset.detailSortKey || "title";
-          const current = scope === "lists" ? listsDetailSort : libraryDetailSort;
+          let current = libraryDetailSort;
+          if (scope === "lists") current = listsDetailSort;
+          if (scope === "series") current = seriesDetailSort;
           const next = {
             key,
             direction: current?.key === key && current.direction === "asc" ? "desc" : "asc"
@@ -25970,6 +26126,10 @@ def ui_preview_html(
             listsDetailSort = next;
             localStorage.setItem("dv_next_lists_detail_sort", JSON.stringify(next));
             renderListsView();
+          } else if (scope === "series") {
+            seriesDetailSort = next;
+            localStorage.setItem("dv_next_series_detail_sort", JSON.stringify(next));
+            if (activeSeriesPayload) renderSeriesDetail(activeSeriesPayload);
           } else {
             libraryDetailSort = next;
             localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(next));
@@ -26497,15 +26657,21 @@ def ui_preview_html(
     function miniCard(title, subtitle, href) {
       const movieMatch = String(href || "").match(/\\/movies\\/([^/?#]+)/);
       const containerMatch = String(href || "").match(/\\/containers\\/([^/?#]+)/);
-      const debugId = (movieMatch && decodeURIComponent(movieMatch[1])) || (containerMatch && decodeURIComponent(containerMatch[1])) || "";
+      const seriesMatch = String(href || "").match(/\\/series\\/([^/?#]+)/);
+      const debugId = (movieMatch && decodeURIComponent(movieMatch[1]))
+        || (containerMatch && decodeURIComponent(containerMatch[1]))
+        || (seriesMatch && decodeURIComponent(seriesMatch[1]))
+        || "";
+      const debugLabel = movieMatch ? "Movie ID" : (seriesMatch ? "Series ID" : "Container ID");
       const body = `
         <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
         <span>${escapeHtml(subtitle || "")}</span>
-        ${debugIdHtml(debugId, movieMatch ? "Movie ID" : "Container ID")}
+        ${debugIdHtml(debugId, debugLabel)}
       `;
       let linkAttrs = "";
       if (movieMatch) linkAttrs = ` data-open-movie="${escapeHtml(decodeURIComponent(movieMatch[1]))}"`;
       if (containerMatch) linkAttrs = ` data-open-container="${escapeHtml(decodeURIComponent(containerMatch[1]))}"`;
+      if (seriesMatch) linkAttrs = ` data-open-series="${escapeHtml(decodeURIComponent(seriesMatch[1]))}"`;
       return href
         ? `<a class="detail-mini-card" href="${escapeHtml(href)}"${linkAttrs}>${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
@@ -26905,7 +27071,7 @@ def ui_preview_html(
           <div class="art-option-preview">${preview}</div>
           <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
           ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
-          ${artworkOptionActionsHtml({asset, entity: "container", kind, canDelete: options.canDelete})}
+          ${artworkOptionActionsHtml({asset, entity: options.entity || "container", kind, canDelete: options.canDelete})}
         </div>
       `;
     }
@@ -29781,7 +29947,7 @@ def ui_preview_html(
     }
     function setContainerMemberGridMode(node, mode) {
       if (!node) return;
-      const normalized = normalizeViewMode(mode);
+      const normalized = normalizeMemberViewMode(mode);
       node.classList.toggle("view-list", normalized === "list");
       node.classList.toggle("view-detail", normalized === "detail");
     }
@@ -29954,6 +30120,317 @@ def ui_preview_html(
       syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
+    }
+    function setSeriesDetailMessage(message, tone) {
+      const node = document.getElementById("seriesDetailMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `detail-message ${tone || ""}`.trim();
+    }
+    function setSeriesEditPanelVisible(show) {
+      const card = document.getElementById("seriesEditCard");
+      if (card) card.hidden = !show;
+      setElementVisible(document.getElementById("seriesEditCancelTopButton"), show);
+    }
+    function seriesDiscSeasonLabel(detail, movieId) {
+      const rows = (detail.seasonCoverage || []).filter((row) => String(row.movieId) === String(movieId));
+      // Zero rows on a linked disc is the complete-series set. Rendering it as
+      // "no seasons" would state the opposite of what the disc actually is.
+      if (!rows.length) return tNext("seriesDetail.completeSeries", "Complete series");
+      const numbers = rows
+        .map((row) => Number.parseInt(row.seasonNumber, 10))
+        .filter((value) => Number.isFinite(value))
+        .sort((a, b) => a - b);
+      if (!numbers.length) return "";
+      return tNext("collection.seasonsCovered", "Seasons {covered}").replace("{covered}", numbers.join(", "));
+    }
+    function seriesArtworkOptionsHtml(detail, kind, emptyKey) {
+      const ownAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind && !asset.hidden);
+      const inherited = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === kind);
+      if (!ownAssets.length && !inherited.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
+      }
+      const metadata = (detail.series || {}).metadata || {};
+      // Own artwork first and actionable; inherited artwork after it and read
+      // only, because deleting a disc's poster from the series page would reach
+      // into a disc the reader did not open.
+      const own = ownAssets.map((asset) => containerArtworkOptionCardHtml(asset, kind, {
+        aggregate: false,
+        canDelete: true,
+        metadata,
+        entity: "series",
+      })).join("");
+      const borrowed = inherited.map((asset) => containerArtworkOptionCardHtml(asset, kind, {
+        aggregate: true,
+        canDelete: false,
+        metadata,
+        entity: "series",
+      })).join("");
+      return own + borrowed;
+    }
+    function renderSeriesDiscs(detail) {
+      const node = document.getElementById("seriesDetailDiscs");
+      if (!node) return;
+      const discs = detail.discs || [];
+      if (!discs.length) {
+        node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noDiscs", "No discs are filed under this series yet."))}</div>`;
+        setContainerMemberGridMode(node, seriesDiscsViewMode);
+        return;
+      }
+      const decorated = discs.map((disc) => Object.assign({}, disc, {
+        edition: disc.edition || seriesDiscSeasonLabel(detail, disc.id),
+      }));
+      const entries = decorated.map((disc, index) => ({
+        type: "movie", item: disc, index, total: decorated.length, canEdit: false, options: {},
+      }));
+      if (seriesDiscsViewMode === "detail") {
+        node.innerHTML = seriesDiscDetailTableHtml(entries);
+      } else if (seriesDiscsViewMode === "list") {
+        node.innerHTML = entries.map((entry) => containerMemberMovieListHtml(entry.item, entry.index, entry.total, false, {})).join("");
+      } else {
+        node.innerHTML = entries.map((entry) => containerMemberMovieCardHtml(entry.item, entry.index, entry.total, false, {})).join("");
+      }
+      setContainerMemberGridMode(node, seriesDiscsViewMode);
+    }
+    function seriesDiscDetailTableHtml(entries) {
+      // Sortable column headers, unlike the container detail table, which has
+      // fixed ones. A series is read to answer "which season am I missing", and
+      // that question is a sort away rather than a scan away.
+      const items = entries.map((entry) => ({kind: "movie", movie: entry.item, title: entry.item.title || ""}));
+      return detailTableHtml(items, "series", seriesDetailSort);
+    }
+    function syncSeriesViewModeControls() {
+      document.querySelectorAll("[data-series-view-mode]").forEach((button) => {
+        const active = button.dataset.seriesViewMode === seriesDiscsViewMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+    function seriesSeasonRowsHtml(detail) {
+      const seasons = ((detail.series || {}).seasons) || [];
+      if (!seasons.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noSeasons", "No seasons recorded for this series yet."))}</div>`;
+      }
+      const coveredNumbers = new Set(
+        (detail.seasonCoverage || [])
+          .map((row) => Number.parseInt(row.seasonNumber, 10))
+          .filter((value) => Number.isFinite(value))
+      );
+      return detailFieldRows(seasons.map((season) => {
+        const label = season.title
+          ? `${season.seasonNumber} - ${season.title}`
+          : tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
+        const owned = coveredNumbers.has(Number.parseInt(season.seasonNumber, 10));
+        const parts = [
+          owned ? tNext("seriesDetail.seasonOwned", "In your collection") : tNext("seriesDetail.seasonMissing", "Not on a disc yet"),
+          season.year || "",
+          season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
+        ].filter(Boolean);
+        return [label, parts.join(" / ")];
+      }));
+    }
+    function renderSeriesDetail(detail) {
+      activeSeriesPayload = detail || {};
+      const series = detail.series || {};
+      activeSeriesId = String(series.id || activeSeriesId || "");
+      const activePanelId = activeDetailPanel("seriesDetail", "seriesDetailDiscsPanel");
+      const discs = detail.discs || [];
+      const poster = mediaAssetImage(detail.mediaAssets, "poster")
+        || mediaAssetImage(detail.aggregateMediaAssets, "poster");
+      const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop")
+        || mediaAssetImage(detail.aggregateMediaAssets, "backdrop");
+      const hero = document.getElementById("seriesDetailHero");
+      if (hero) hero.classList.toggle("is-flat", !backdrop);
+      const backdropNode = document.getElementById("seriesDetailBackdrop");
+      if (backdropNode) backdropNode.src = backdrop || "";
+      const posterNode = document.getElementById("seriesDetailPoster");
+      if (posterNode) {
+        posterNode.innerHTML = poster
+          ? `<img src="${escapeHtml(poster)}" alt="">`
+          : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      }
+      document.getElementById("seriesDetailTitle").textContent = series.title || tNext("common.untitled", "Untitled");
+      const years = [series.startYear, series.endYear].filter(Boolean);
+      const yearLabel = years.length === 2 && years[0] !== years[1] ? `${years[0]}-${years[1]}` : (years[0] || "");
+      document.getElementById("seriesDetailTags").innerHTML = [
+        yearLabel,
+        series.originalTitle && series.originalTitle !== series.title ? series.originalTitle : "",
+      ].filter(Boolean).map((value) => `<span class="tag">${escapeHtml(value)}</span>`).join("");
+      document.getElementById("seriesDetailOverview").textContent = series.overview || "";
+      document.getElementById("seriesDetailOverviewText").textContent = series.overview
+        || tNext("seriesDetail.noOverview", "No description yet.");
+      const seasonCount = (series.seasons || []).length;
+      document.getElementById("seriesDetailStats").innerHTML = [
+        `${discs.length} ${tNext("seriesDetail.discsLower", "discs")}`,
+        `${seasonCount} ${tNext("movieDetail.seasons", "Seasons").toLowerCase()}`,
+      ].map((value) => `<span>${escapeHtml(value)}</span>`).join("");
+      renderSeriesDiscs(detail);
+      syncSeriesViewModeControls();
+      document.getElementById("seriesDetailSeasons").innerHTML = seriesSeasonRowsHtml(detail);
+      document.getElementById("seriesDetailPosterArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
+      document.getElementById("seriesDetailBackdropArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      document.getElementById("seriesDetailVideos").innerHTML = movieVideoGroupsHtml(detail.aggregateVideos || []);
+      const identifiers = (detail.identifiers || []).map((item) => miniCard(
+        `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
+        item.identifier
+      ));
+      document.getElementById("seriesDetailIdentifiers").innerHTML = identifiers.join("")
+        || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
+      const summary = detail.aggregateSummary || {};
+      document.getElementById("seriesDetailMetadataDetails").innerHTML = detailFieldRows([
+        [tNext("seriesDetail.discCount", "Discs"), discs.length],
+        [tNext("movieDetail.seasons", "Seasons"), seasonCount],
+        [tNext("containerDetail.aggregateYearRange", "Year range"), summary.yearRange],
+        [tNext("containerDetail.aggregateFormats", "Formats"), summary.formats],
+        [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
+        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount],
+      ]);
+      fillSeriesEditForm(series);
+      activateDetailTab("seriesDetail", document.getElementById(activePanelId) ? activePanelId : "seriesDetailDiscsPanel");
+      applyAppPermissionVisibility();
+      bindViewModeInteractions(document.getElementById("seriesDetailPage") || document);
+      setSeriesDetailMessage("");
+    }
+    function fillSeriesEditForm(series) {
+      const values = {
+        seriesEditTitle: series.title || "",
+        seriesEditSortTitle: series.sortTitle || "",
+        seriesEditOriginalTitle: series.originalTitle || "",
+        seriesEditStartYear: series.startYear || "",
+        seriesEditEndYear: series.endYear || "",
+        seriesEditOverview: series.overview || "",
+      };
+      Object.entries(values).forEach(([id, value]) => {
+        const node = document.getElementById(id);
+        if (node && document.activeElement !== node) node.value = value;
+      });
+    }
+    function showSeriesDetailLoading(seriesId) {
+      activeSeriesId = seriesId || "";
+      activeSeriesPayload = null;
+      setSeriesEditPanelVisible(false);
+      document.getElementById("seriesDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("seriesDetailOverview").textContent = "";
+      document.getElementById("seriesDetailOverviewText").textContent = "";
+      document.getElementById("seriesDetailTags").innerHTML = "";
+      document.getElementById("seriesDetailStats").innerHTML = "";
+      document.getElementById("seriesDetailDiscs").innerHTML = "";
+      document.getElementById("seriesDetailSeasons").innerHTML = "";
+      document.getElementById("seriesDetailIdentifiers").innerHTML = "";
+      document.getElementById("seriesDetailMetadataDetails").innerHTML = "";
+      document.getElementById("seriesDetailPosterArtwork").innerHTML = "";
+      document.getElementById("seriesDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("seriesDetailVideos").innerHTML = "";
+      document.getElementById("seriesDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
+      document.getElementById("seriesDetailBackdrop").src = "";
+      activateDetailTab("seriesDetail", "seriesDetailDiscsPanel");
+      setSeriesDetailMessage("");
+    }
+    async function openAppSeriesDetail(seriesId, pushUrl = true) {
+      if (!seriesId) return;
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      showSeriesDetailLoading(seriesId);
+      showSeriesDetailPage();
+      if (pushUrl && appMode) {
+        const nextPath = `/series/${encodeURIComponent(seriesId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({seriesId}, "", nextPath);
+        }
+      }
+      try {
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(seriesId)}/detail`);
+        renderSeriesDetail(payload.detail || {});
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function closeAppSeriesDetail(pushUrl = true) {
+      showLibraryPage(false);
+      activeSeriesId = "";
+      activeSeriesPayload = null;
+      setSeriesEditPanelVisible(false);
+      if (pushUrl && appMode && window.location.pathname !== "/") {
+        history.pushState({}, "", "/");
+      }
+    }
+    async function saveSeriesEdit(event) {
+      event?.preventDefault();
+      if (!activeSeriesId) return;
+      const body = {
+        title: document.getElementById("seriesEditTitle")?.value?.trim() || "",
+        sortTitle: document.getElementById("seriesEditSortTitle")?.value?.trim() || "",
+        originalTitle: document.getElementById("seriesEditOriginalTitle")?.value?.trim() || "",
+        startYear: document.getElementById("seriesEditStartYear")?.value?.trim() || "",
+        endYear: document.getElementById("seriesEditEndYear")?.value?.trim() || "",
+        overview: document.getElementById("seriesEditOverview")?.value?.trim() || "",
+      };
+      if (!body.title) {
+        setSeriesDetailMessage(tNext("seriesDetail.titleRequired", "A series needs a title."), "bad");
+        return;
+      }
+      setSeriesDetailMessage(tNext("seriesDetail.saving", "Saving series..."));
+      try {
+        await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/detail`);
+        renderSeriesDetail(payload.detail || {});
+        setSeriesEditPanelVisible(false);
+        await loadAppSnapshot();
+        setSeriesDetailMessage(tNext("seriesDetail.saved", "Series saved."), "good");
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function refreshActiveSeriesMetadata() {
+      if (!activeSeriesId) return;
+      setSeriesDetailMessage(tNext("seriesDetail.refreshingMetadata", "Refreshing series metadata..."));
+      try {
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        renderSeriesDetail(payload.detail || activeSeriesPayload || {});
+        const status = (payload.result || {}).status;
+        if (status === "ok") {
+          setSeriesDetailMessage(tNext("seriesDetail.metadataRefreshed", "Series metadata refreshed."), "good");
+        } else {
+          // A miss is not a failure: nothing was damaged and the existing text
+          // stands. Saying "refreshed" would claim something happened.
+          setSeriesDetailMessage(tNext("seriesDetail.metadataNoAnswer", "No source had anything to add."), "info");
+        }
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteActiveSeries() {
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const title = activeSeriesPayload?.series?.title || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(
+        tNext(
+          "seriesDetail.deleteConfirm",
+          "Delete {title}? The discs stay in your collection, only the grouping goes. A later sync can recreate the series."
+        ).replace("{title}", title)
+      );
+      if (!confirmed) return;
+      setSeriesDetailMessage(tNext("seriesDetail.deleting", "Deleting series..."));
+      try {
+        await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}`, {method: "DELETE"});
+        activeSeriesId = "";
+        activeSeriesPayload = null;
+        await loadAppSnapshot();
+        showLibraryPage(true);
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
     }
     function showContainerDetailLoading(containerId) {
       activeContainerId = containerId || "";
@@ -37905,6 +38382,7 @@ def ui_preview_html(
       const route = appRouteFromPath();
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "series") openAppSeriesDetail(route.seriesId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
@@ -38211,6 +38689,7 @@ def ui_preview_html(
       "adminView",
       "movieDetailPage",
       "containerDetailPage",
+      "seriesDetailPage",
       "personDetailPage",
       "locationDetailPage",
       "discoverDetailPage",
@@ -38777,6 +39256,11 @@ def ui_preview_html(
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
+    function showSeriesDetailPage() {
+      showAppSurface("seriesDetailPage");
+      setActiveAppRoute("library");
+      scrollPreviewTop();
+    }
     function showPersonDetailPage() {
       showAppSurface("personDetailPage");
       setActiveAppRoute("library");
@@ -38973,6 +39457,10 @@ def ui_preview_html(
       const containerMatch = window.location.pathname.match(/^\\/app\\/containers\\/([^/]+)$|^\\/containers\\/([^/]+)$/);
       if (containerMatch) {
         return {view: "container", containerId: decodeURIComponent(containerMatch[1] || containerMatch[2])};
+      }
+      const seriesMatch = window.location.pathname.match(/^\\/app\\/series\\/([^/]+)$|^\\/series\\/([^/]+)$/);
+      if (seriesMatch) {
+        return {view: "series", seriesId: decodeURIComponent(seriesMatch[1] || seriesMatch[2])};
       }
       const personMatch = window.location.pathname.match(/^\\/app\\/people\\/([^/]+)$|^\\/people\\/([^/]+)$/);
       if (personMatch) {
@@ -39260,71 +39748,96 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    // Three entities now carry artwork, and `isContainer ? a : b` cannot express
+    // three. A descriptor per entity keeps the difference in one table instead of
+    // scattered across each handler, where a missed branch would silently send a
+    // series to the movies route.
+    function detailArtworkEntity(entity) {
+      const entities = {
+        movie: {
+          path: "movies",
+          activeId: () => activeDetailMovieId,
+          detailUrl: (id) => `/api/next/movies/${encodeURIComponent(id)}`,
+          setMessage: setMovieDetailMessage,
+          render: (detail) => renderMovieDetail(detail),
+        },
+        container: {
+          path: "containers",
+          activeId: () => activeContainerId,
+          detailUrl: (id) => `/api/next/containers/${encodeURIComponent(id)}`,
+          setMessage: setContainerDetailMessage,
+          render: (detail) => renderContainerDetail(detail),
+        },
+        series: {
+          path: "series",
+          activeId: () => activeSeriesId,
+          // A series reads its own sibling route: `/api/next/series/<id>` answers
+          // under `series`, not `detail`, and is what the movie edit form uses.
+          detailUrl: (id) => `/api/next/series/${encodeURIComponent(id)}/detail`,
+          setMessage: setSeriesDetailMessage,
+          render: (detail) => renderSeriesDetail(detail),
+        },
+      };
+      return entities[entity] || entities.movie;
+    }
+    async function reloadDetailAfterArtwork(target, targetId) {
+      const payload = await authApiJson(target.detailUrl(targetId));
+      target.render(payload.detail || {});
+      await loadAppSnapshot();
+    }
     async function setPrimaryArtwork(entity, mediaId, kind) {
-      const isContainer = entity === "container";
-      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
       if (!targetId || !mediaId) return;
-      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
-      setMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+      target.setMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
       try {
-        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/primary`, {
+        await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/media/primary`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({mediaId, kind})
         });
-        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
-        if (isContainer) renderContainerDetail(payload.detail || {});
-        else renderMovieDetail(payload.detail || {});
-        await loadAppSnapshot();
-        setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+        await reloadDetailAfterArtwork(target, targetId);
+        target.setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
       } catch (error) {
-        setMessage(error.message || String(error), "bad");
+        target.setMessage(error.message || String(error), "bad");
       }
     }
     async function uploadDetailArtwork(entity, kind, inputId) {
       const input = document.getElementById(inputId);
-      const isContainer = entity === "container";
-      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
-      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
       if (!targetId || !input || !input.files || !input.files.length) return;
-      setMessage(tNext("movieDetail.uploadingArtwork", "Uploading artwork..."));
+      target.setMessage(tNext("movieDetail.uploadingArtwork", "Uploading artwork..."));
       try {
         const data = new FormData();
         data.append("file", input.files[0]);
         data.append("kind", kind);
         data.append("primary", "true");
-        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/upload`, {
+        await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/media/upload`, {
           method: "POST",
           body: data
         });
         input.value = "";
-        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
-        if (isContainer) renderContainerDetail(payload.detail || {});
-        else renderMovieDetail(payload.detail || {});
-        await loadAppSnapshot();
-        setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+        await reloadDetailAfterArtwork(target, targetId);
+        target.setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
       } catch (error) {
-        setMessage(error.message || String(error), "bad");
+        target.setMessage(error.message || String(error), "bad");
       }
     }
     async function deleteDetailArtwork(entity, mediaId, kind) {
-      const isContainer = entity === "container";
-      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
-      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
       if (!targetId || !mediaId) return;
       if (!window.confirm(tNext("movieDetail.deleteArtworkConfirm", "Delete this artwork option?"))) return;
-      setMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
+      target.setMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
       try {
-        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
+        await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
           method: "DELETE"
         });
-        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
-        if (isContainer) renderContainerDetail(payload.detail || {});
-        else renderMovieDetail(payload.detail || {});
-        await loadAppSnapshot();
-        setMessage(tNext("movieDetail.artworkDeleted", "Artwork deleted."), "good");
+        await reloadDetailAfterArtwork(target, targetId);
+        target.setMessage(tNext("movieDetail.artworkDeleted", "Artwork deleted."), "good");
       } catch (error) {
-        setMessage(error.message || String(error), "bad");
+        target.setMessage(error.message || String(error), "bad");
       }
     }
     function movieArtworkLockSet(detail) {
@@ -39704,37 +40217,8 @@ def ui_preview_html(
           // No bulk selection here: a series tile stands for its discs, and the
           // discs are what the bulk bar can act on.
           if (selectionMode) return;
-          focusLibrarySeries(button.dataset.previewSeries);
+          openAppSeriesDetail(button.dataset.previewSeries);
         });
-      });
-    }
-    function focusLibrarySeries(seriesId) {
-      librarySeriesFocusId = String(seriesId || "");
-      libraryRenderLimit = LIBRARY_RENDER_STEP;
-      renderCollectionSurface();
-    }
-    function clearLibrarySeriesFocus() {
-      if (!librarySeriesFocusId) return;
-      librarySeriesFocusId = "";
-      libraryRenderLimit = LIBRARY_RENDER_STEP;
-      renderCollectionSurface();
-    }
-    function renderLibrarySeriesFocusBar() {
-      const bar = document.getElementById("librarySeriesFocus");
-      if (!bar) return;
-      const series = seriesById(librarySeriesFocusId);
-      bar.classList.toggle("hidden", !series);
-      if (!series) {
-        bar.innerHTML = "";
-        return;
-      }
-      bar.innerHTML = `
-        <button type="button" id="librarySeriesFocusClear" class="ghost">${escapeHtml(tNext("collection.backToLibrary", "Back to library"))}</button>
-        <strong>${escapeHtml(series.title || tNext("common.untitled", "Untitled"))}</strong>
-      `;
-      document.getElementById("librarySeriesFocusClear")?.addEventListener("click", (event) => {
-        event.preventDefault();
-        clearLibrarySeriesFocus();
       });
     }
     function renderLocationDetailPage() {
@@ -39996,7 +40480,6 @@ def ui_preview_html(
       if (navMovieCount) navMovieCount.textContent = String(libraryMovieTotal);
       if (navListCount) navListCount.textContent = String((movies || []).filter((movie) => movie.on_watchlist).length);
       if (containerPanelCount) containerPanelCount.textContent = collectorsModeEnabled() ? String(containers.length) : "0";
-      renderLibrarySeriesFocusBar();
       const firstItem = libraryViewMode === "list" ? sortLibraryListItems(displayItems)[0] : displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
@@ -42071,9 +42554,6 @@ def ui_preview_html(
       containerMembership = state.containerMembership || [];
       seriesList = state.series || [];
       seriesSeasonCoverage = state.seriesSeasonCoverage || [];
-      if (librarySeriesFocusId && !seriesList.some((entry) => String(entry.id) === librarySeriesFocusId)) {
-        librarySeriesFocusId = "";
-      }
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
@@ -43370,6 +43850,7 @@ def ui_preview_html(
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "series") openAppSeriesDetail(route.seriesId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
@@ -43532,7 +44013,7 @@ def ui_preview_html(
       }
       document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
-          const mode = normalizeViewMode(button.dataset.containerViewMode);
+          const mode = normalizeMemberViewMode(button.dataset.containerViewMode);
           const scope = button.dataset.containerViewScope || "movies";
           if (scope === "items") {
             containerItemsViewMode = mode;
@@ -44556,6 +45037,12 @@ def ui_preview_html(
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";
         const movieMatch = href.match(/\\/movies\\/([^/?#]+)/);
+        const seriesMatch = href.match(/\\/series\\/([^/?#]+)/);
+        if (seriesMatch) {
+          event.preventDefault();
+          openAppSeriesDetail(decodeURIComponent(seriesMatch[1]));
+          return;
+        }
         const containerMatch = href.match(/\\/containers\\/([^/?#]+)/);
         if (!movieMatch && !containerMatch) return;
         event.preventDefault();
@@ -44570,6 +45057,36 @@ def ui_preview_html(
         if (activeDiscoverItem) addDiscoverItemToWishlist(activeDiscoverItem, {detail: true});
       });
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppContainerDetail()));
+      document.getElementById("seriesDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppSeriesDetail()));
+      document.getElementById("seriesEditToggleButton")?.addEventListener("click", () => {
+        const card = document.getElementById("seriesEditCard");
+        const show = Boolean(card?.hidden);
+        setSeriesEditPanelVisible(show);
+        // The form lives on the Overview tab. Revealing it while another tab is
+        // open would leave the button looking broken -- it did nothing visible.
+        if (show) activateDetailTab("seriesDetail", "seriesDetailOverviewPanel");
+      });
+      document.getElementById("seriesEditCancelTopButton")?.addEventListener("click", () => {
+        setSeriesEditPanelVisible(false);
+        fillSeriesEditForm((activeSeriesPayload || {}).series || {});
+      });
+      document.getElementById("seriesEditCancelButton")?.addEventListener("click", () => {
+        setSeriesEditPanelVisible(false);
+        fillSeriesEditForm((activeSeriesPayload || {}).series || {});
+      });
+      document.getElementById("seriesEditForm")?.addEventListener("submit", (event) => saveSeriesEdit(event));
+      document.getElementById("seriesMetadataRefreshButton")?.addEventListener("click", () => refreshActiveSeriesMetadata());
+      document.getElementById("seriesDeleteButton")?.addEventListener("click", () => deleteActiveSeries());
+      document.querySelectorAll("[data-series-view-mode]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          const mode = normalizeMemberViewMode(button.dataset.seriesViewMode);
+          seriesDiscsViewMode = mode;
+          localStorage.setItem("dv_next_series_discs_view_mode", mode);
+          if (activeSeriesPayload) renderSeriesDetail(activeSeriesPayload);
+          else syncSeriesViewModeControls();
+        });
+      });
       document.getElementById("locationDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => showLibraryPage(true)));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
@@ -44690,6 +45207,21 @@ def ui_preview_html(
       });
       document.getElementById("personFilmographyRefreshButton")?.addEventListener("click", () => refreshActivePersonFilmography(false));
       document.getElementById("personMetadataRefreshButton")?.addEventListener("click", () => refreshActivePersonMetadata(false));
+      // The series page carries member cards built by the container renderers, so
+      // it needs the same open-a-disc delegate. Only that one: reordering and
+      // removing are container-only affordances and the cards render without them.
+      document.getElementById("seriesDetailPage")?.addEventListener("click", (event) => {
+        const movieLink = event.target.closest("[data-open-movie]");
+        if (!movieLink) return;
+        event.preventDefault();
+        openAppMovieDetail(movieLink.dataset.openMovie);
+      });
+      document.addEventListener("click", (event) => {
+        const seriesLink = event.target.closest("[data-open-series]");
+        if (!seriesLink) return;
+        event.preventDefault();
+        openAppSeriesDetail(seriesLink.dataset.openSeries);
+      });
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
         const containerLink = event.target.closest("[data-open-container]");
@@ -44777,6 +45309,7 @@ def ui_preview_html(
         const route = appRouteFromPath();
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "series") openAppSeriesDetail(route.seriesId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);
