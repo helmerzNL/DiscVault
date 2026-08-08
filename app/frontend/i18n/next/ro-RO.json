@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Gestionat de setul {title}",
   "errors.databaseOffline": "DiscVault este temporar offline",
   "errors.databaseOfflineRetry": "Încearcă din nou",
+  "errors.databaseBusy": "DiscVault este ocupat momentan — încercați din nou în scurt timp",
   "movieDetail.debugIdentityTitle": "Identitate (Debug)",
   "movieDetail.debugIdentityCopy": "Copiază diagnosticul",
   "movieDetail.debugIdentityHint": "Numele câmpurilor provin din contractul de sincronizare partajat și rămân intenționat în engleză. Vizibil doar cât timp modul Debug este activ.",

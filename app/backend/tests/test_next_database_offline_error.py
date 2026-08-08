@@ -113,5 +113,60 @@ class DatabaseOfflineErrorTests(unittest.TestCase):
         self.assertIn("DiscVault is temporarily offline", body)
 
 
+@unittest.skipIf(create_app is None, "Flask is not installed in this test environment")
+class DatabaseBusyErrorTests(unittest.TestCase):
+    """A lock/statement timeout means Postgres is alive but busy — typically a
+    metadata refresh briefly holding the global sync_state row. That must be
+    presented as "busy" with a short retry, never as the outage page: telling
+    the user the app is offline while a refresh runs sends them (and
+    operators) chasing a failure that does not exist."""
+
+    @classmethod
+    def setUpClass(cls):
+        env_overrides = {"DATABASE_URL": "postgresql://nouser:nopass@127.0.0.1:1/nonexistentdb"}
+        cls._env_patcher = patch.dict(os.environ, env_overrides)
+        cls._env_patcher.start()
+        cls.app = create_app()
+        cls.client = cls.app.test_client()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._env_patcher.stop()
+
+    def test_lock_timeout_renders_busy_page_with_short_retry(self):
+        import psycopg
+
+        error = psycopg.errors.LockNotAvailable("canceling statement due to lock timeout")
+        with patch.object(next_app, "connect", side_effect=error):
+            response = self.client.get("/", headers={"Accept-Language": "en-US,en;q=0.9"})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers.get("Retry-After"), "5")
+        body = response.get_data(as_text=True)
+        self.assertIn("DiscVault is busy right now", body)
+        self.assertNotIn("temporarily offline", body)
+        self.assertIn('content="5"', body)
+        self.assertNotIn("lock timeout", body)
+
+    def test_statement_timeout_returns_translated_busy_json(self):
+        import psycopg
+
+        error = psycopg.errors.QueryCanceled("canceling statement due to statement timeout")
+        with patch.object(next_app, "connect", side_effect=error):
+            response = self.client.get("/api/next/stats", headers={"Accept-Language": "nl-NL,nl;q=0.9"})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers.get("Retry-After"), "5")
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "error")
+        self.assertEqual(payload["error"], "DiscVault is even druk bezig — probeer het zo opnieuw")
+
+    def test_connection_failure_still_renders_the_offline_page(self):
+        # No patching: the dead DSN raises a real psycopg connection error,
+        # which must keep the original offline behavior (20s retry).
+        response = self.client.get("/", headers={"Accept-Language": "en-US,en;q=0.9"})
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.headers.get("Retry-After"), "20")
+        self.assertIn("DiscVault is temporarily offline", response.get_data(as_text=True))
+
+
 if __name__ == "__main__":
     unittest.main()

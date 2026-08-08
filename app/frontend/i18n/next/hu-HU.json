@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "A(z) {title} díszdoboz kezeli",
   "errors.databaseOffline": "A DiscVault átmenetileg nem érhető el",
   "errors.databaseOfflineRetry": "Próbáld újra",
+  "errors.databaseBusy": "A DiscVault éppen elfoglalt — próbáld újra egy pillanat múlva",
   "movieDetail.debugIdentityTitle": "Azonosság (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnosztika másolása",
   "movieDetail.debugIdentityHint": "A mezőnevek a közös szinkronszerződésből származnak, és szándékosan angolul maradnak. Csak bekapcsolt hibakeresési módban látható.",

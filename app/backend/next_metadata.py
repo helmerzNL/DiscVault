@@ -5521,6 +5521,16 @@ def refresh_movie_metadata(
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Fetch, merge, apply and fan out provider metadata for one movie.
+
+    Owns its transaction boundaries: applying the proposal locks the movie
+    rows and the single global ``sync_state`` row (``record_sync_change``), so
+    the apply is committed *before* the receiver-plugin push runs its network
+    I/O. Holding those locks across a slow plugin call blocks every other
+    writer in the app until the API-side ``lock_timeout`` fires, which used to
+    surface as a bogus "DiscVault is temporarily offline" error. Callers must
+    pass a connection that is not inside an explicit transaction block.
+    """
     preview = preview_movie_metadata(conn, movie_id, actor)
     if dry_run:
         insert_metadata_audit_event(
@@ -5553,6 +5563,7 @@ def refresh_movie_metadata(
             applied=applied,
         ),
     )
+    conn.commit()
     receiver_summary: dict[str, Any]
     if applied.get("changed"):
         receiver_summary = push_metadata_to_receivers(
@@ -5585,4 +5596,5 @@ def refresh_movie_metadata(
             **receiver_summary,
         },
     )
+    conn.commit()
     return {"dryRun": False, "preview": preview, "applied": applied, "receivers": receiver_summary}

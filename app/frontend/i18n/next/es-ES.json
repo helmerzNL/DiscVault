@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Gestionado por el pack {title}",
   "errors.databaseOffline": "DiscVault está temporalmente fuera de línea",
   "errors.databaseOfflineRetry": "Reintentar",
+  "errors.databaseBusy": "DiscVault está ocupado en este momento; inténtalo de nuevo enseguida",
   "movieDetail.debugIdentityTitle": "Identidad (Debug)",
   "movieDetail.debugIdentityCopy": "Copiar diagnóstico",
   "movieDetail.debugIdentityHint": "Los nombres de campo provienen del contrato de sincronización compartido y se mantienen en inglés a propósito. Solo visible mientras el modo Debug está activado.",

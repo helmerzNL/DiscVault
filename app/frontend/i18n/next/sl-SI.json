@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Upravlja komplet {title}",
   "errors.databaseOffline": "DiscVault je začasno nedosegljiv",
   "errors.databaseOfflineRetry": "Poskusi znova",
+  "errors.databaseBusy": "DiscVault je trenutno zaseden — poskusite znova čez trenutek",
   "movieDetail.debugIdentityTitle": "Identiteta (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiraj diagnostiko",
   "movieDetail.debugIdentityHint": "Imena polj izhajajo iz skupne sinhronizacijske pogodbe in namenoma ostajajo v angleščini. Vidno samo, dokler je način za razhroščevanje vklopljen.",

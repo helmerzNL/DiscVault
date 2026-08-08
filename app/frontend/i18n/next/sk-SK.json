@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Spravuje box {title}",
   "errors.databaseOffline": "DiscVault je dočasne offline",
   "errors.databaseOfflineRetry": "Skúsiť znova",
+  "errors.databaseBusy": "DiscVault je práve zaneprázdnený — skúste to o chvíľu znova",
   "movieDetail.debugIdentityTitle": "Identita (Debug)",
   "movieDetail.debugIdentityCopy": "Kopírovať diagnostiku",
   "movieDetail.debugIdentityHint": "Názvy polí pochádzajú zo zdieľaného synchronizačného kontraktu a zámerne zostávajú v angličtine. Zobrazuje sa len pri zapnutom režime ladenia.",

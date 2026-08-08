@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Pārvalda komplekts {title}",
   "errors.databaseOffline": "DiscVault īslaicīgi nav pieejams",
   "errors.databaseOfflineRetry": "Mēģināt vēlreiz",
+  "errors.databaseBusy": "DiscVault pašlaik ir aizņemts — pēc brīža mēģiniet vēlreiz",
   "movieDetail.debugIdentityTitle": "Identitāte (Debug)",
   "movieDetail.debugIdentityCopy": "Kopēt diagnostiku",
   "movieDetail.debugIdentityHint": "Lauku nosaukumi nāk no kopīgā sinhronizācijas līguma un apzināti paliek angļu valodā. Redzams tikai tad, kad ieslēgts atkļūdošanas režīms.",

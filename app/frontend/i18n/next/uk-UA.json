@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Керується бокс-сетом {title}",
   "errors.databaseOffline": "DiscVault тимчасово офлайн",
   "errors.databaseOfflineRetry": "Спробувати ще раз",
+  "errors.databaseBusy": "DiscVault зараз зайнятий — спробуйте ще раз за мить",
   "movieDetail.debugIdentityTitle": "Ідентичність (Debug)",
   "movieDetail.debugIdentityCopy": "Скопіювати діагностику",
   "movieDetail.debugIdentityHint": "Назви полів походять зі спільного контракту синхронізації та навмисно залишаються англійською. Видно лише доки увімкнено режим налагодження.",

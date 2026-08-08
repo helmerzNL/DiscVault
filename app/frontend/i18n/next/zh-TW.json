@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "由套裝 {title} 管理",
   "errors.databaseOffline": "DiscVault 暫時離線",
   "errors.databaseOfflineRetry": "重試",
+  "errors.databaseBusy": "DiscVault 目前忙碌中，請稍後再試",
   "movieDetail.debugIdentityTitle": "識別 (Debug)",
   "movieDetail.debugIdentityCopy": "複製診斷資訊",
   "movieDetail.debugIdentityHint": "欄位名稱來自共用同步合約，刻意保持英文。僅在偵錯模式開啟時顯示。",
