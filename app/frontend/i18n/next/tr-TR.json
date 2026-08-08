@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "{title} kutu seti tarafından yönetiliyor",
   "errors.databaseOffline": "DiscVault geçici olarak çevrimdışı",
   "errors.databaseOfflineRetry": "Tekrar dene",
+  "errors.databaseBusy": "DiscVault şu anda meşgul — birazdan tekrar deneyin",
   "movieDetail.debugIdentityTitle": "Kimlik (Debug)",
   "movieDetail.debugIdentityCopy": "Tanılamayı kopyala",
   "movieDetail.debugIdentityHint": "Alan adları ortak eşitleme sözleşmesinden gelir ve bilerek İngilizce kalır. Yalnızca Hata Ayıklama Modu açıkken görünür.",

@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Styres af bokssættet {title}",
   "errors.databaseOffline": "DiscVault er midlertidigt offline",
   "errors.databaseOfflineRetry": "Prøv igen",
+  "errors.databaseBusy": "DiscVault har travlt lige nu — prøv igen om et øjeblik",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiér diagnostik",
   "movieDetail.debugIdentityHint": "Feltnavnene kommer fra den fælles synkroniseringskontrakt og forbliver bevidst på engelsk. Kun synlig, mens fejlfindingstilstand er slået til.",

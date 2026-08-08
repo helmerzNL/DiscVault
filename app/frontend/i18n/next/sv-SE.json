@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Hanteras av boxen {title}",
   "errors.databaseOffline": "DiscVault är tillfälligt offline",
   "errors.databaseOfflineRetry": "Försök igen",
+  "errors.databaseBusy": "DiscVault är upptagen just nu — försök igen om en stund",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiera diagnostik",
   "movieDetail.debugIdentityHint": "Fältnamnen kommer från det gemensamma synkkontraktet och står medvetet kvar på engelska. Visas bara medan felsökningsläget är på.",

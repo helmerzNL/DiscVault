@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Wird vom Box-Set {title} verwaltet",
   "errors.databaseOffline": "DiscVault ist vorübergehend offline",
   "errors.databaseOfflineRetry": "Erneut versuchen",
+  "errors.databaseBusy": "DiscVault ist gerade ausgelastet — bitte gleich erneut versuchen",
   "movieDetail.debugIdentityTitle": "Identität (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnose kopieren",
   "movieDetail.debugIdentityHint": "Die Feldnamen stammen aus dem gemeinsamen Sync-Vertrag und bleiben bewusst englisch. Nur sichtbar, solange der Debug-Modus aktiv ist.",

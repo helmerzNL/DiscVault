@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Beheerd door box-set {title}",
   "errors.databaseOffline": "DiscVault is tijdelijk offline",
   "errors.databaseOfflineRetry": "Opnieuw proberen",
+  "errors.databaseBusy": "DiscVault is even druk bezig — probeer het zo opnieuw",
   "movieDetail.debugIdentityTitle": "Identiteit (Debug)",
   "movieDetail.debugIdentityCopy": "Diagnostiek kopiëren",
   "movieDetail.debugIdentityHint": "De veldnamen komen uit het gedeelde synccontract en blijven bewust in het Engels. Alleen zichtbaar zolang Debugmodus aan staat.",

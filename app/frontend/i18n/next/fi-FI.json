@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Hallitaan boksista {title}",
   "errors.databaseOffline": "DiscVault on tilapäisesti offline-tilassa",
   "errors.databaseOfflineRetry": "Yritä uudelleen",
+  "errors.databaseBusy": "DiscVault on juuri nyt varattu — yritä hetken kuluttua uudelleen",
   "movieDetail.debugIdentityTitle": "Identiteetti (Debug)",
   "movieDetail.debugIdentityCopy": "Kopioi diagnostiikka",
   "movieDetail.debugIdentityHint": "Kenttien nimet tulevat jaetusta synkronointisopimuksesta ja pysyvät tarkoituksella englanniksi. Näkyy vain, kun virheenkorjaustila on käytössä.",

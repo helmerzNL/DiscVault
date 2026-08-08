@@ -1127,20 +1127,29 @@ def html_response(html: str):
     return result
 
 
-def render_database_offline_page(locale: str) -> str:
+def render_database_offline_page(locale: str, *, busy: bool = False) -> str:
     """A minimal, translated, dependency-free page for when Postgres is unreachable.
 
     Deliberately has no dependency on ``ui_preview_html``/``collection_dashboard_snapshot`` —
     both require a live database connection, which is exactly what's missing here.
+
+    With ``busy=True`` the same page renders the "busy" headline instead: the
+    database answered but cancelled the query (statement/lock timeout), so the
+    situation resolves in seconds rather than requiring an operator.
     """
-    headline = next_translate(locale, "errors.databaseOffline", "DiscVault is temporarily offline")
+    if busy:
+        headline = next_translate(locale, "errors.databaseBusy", "DiscVault is busy right now — please try again in a moment")
+        refresh_seconds = 5
+    else:
+        headline = next_translate(locale, "errors.databaseOffline", "DiscVault is temporarily offline")
+        refresh_seconds = 20
     retry_label = next_translate(locale, "errors.databaseOfflineRetry", "Try again")
     return f"""<!doctype html>
 <html lang="{html_lib.escape(locale)}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="20">
+<meta http-equiv="refresh" content="{refresh_seconds}">
 <title>{html_lib.escape(headline)}</title>
 <style>
   :root {{ color-scheme: light dark; }}
@@ -21448,24 +21457,38 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.errorhandler(psycopg.OperationalError)
     def handle_database_offline_error(error: psycopg.OperationalError):
-        flask_app.logger.warning("Database connection failed on %s: %s", request.path, error)
+        # QueryCanceled / LockNotAvailable are what this API's own
+        # statement_timeout / lock_timeout (see connect()) raise when Postgres
+        # is alive but a query ran long or lost a lock race — e.g. while a
+        # metadata refresh briefly holds the global sync_state row. Present
+        # that as "busy" with a short retry, not as an outage.
+        busy = isinstance(error, (psycopg.errors.QueryCanceled, psycopg.errors.LockNotAvailable))
+        if busy:
+            flask_app.logger.warning("Database busy (query cancelled) on %s: %s", request.path, error)
+        else:
+            flask_app.logger.warning("Database connection failed on %s: %s", request.path, error)
         locale_codes = [item["locale"] for item in NEXT_I18N_LOCALES]
         best_locale = request.accept_languages.best_match(locale_codes, default=NEXT_I18N_DEFAULT_LOCALE)
         locale = normalize_next_locale(best_locale)
         if request.endpoint in _HTML_SHELL_ENDPOINTS:
-            result = html_response(render_database_offline_page(locale))
+            result = html_response(render_database_offline_page(locale, busy=busy))
         else:
+            message = (
+                next_translate(locale, "errors.databaseBusy", "DiscVault is busy right now — please try again in a moment")
+                if busy
+                else next_translate(locale, "errors.databaseOffline", "Database is temporarily unavailable")
+            )
             result = jsonify(
                 json_ready(
                     {
                         "status": "error",
-                        "error": next_translate(locale, "errors.databaseOffline", "Database is temporarily unavailable"),
+                        "error": message,
                         "path": request.path,
                     }
                 )
             )
         result.status_code = 503
-        result.headers["Retry-After"] = "20"
+        result.headers["Retry-After"] = "5" if busy else "20"
         return result
 
     @flask_app.errorhandler(Exception)
@@ -31860,25 +31883,28 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Movie table is not available", 503)
             if not actor_can_view_movie(conn, actor, movie_uuid):
                 raise NextApiError("Movie not found", 404)
-            with conn.transaction():
-                result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
-                result["personRefresh"] = (
-                    refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope, force=force)
-                    if refresh_people
-                    else movie_metadata_person_refresh_empty(requested=False, dry_run=dry_run, scope=person_refresh_scope)
-                )
-                audit_event(
-                    conn,
-                    event_type="metadata.refresh_applied" if not dry_run else "metadata.refresh_previewed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="movie",
-                    target_id=movie_uuid,
-                    summary="Refreshed movie metadata" if not dry_run else "Previewed movie metadata refresh",
-                    metadata={"dryRun": dry_run, "result": result},
-                )
-                if not dry_run:
-                    notify_unconfigured_metadata_plugins(conn, actor)
+            # No enclosing transaction: refresh_movie_metadata commits the
+            # applied proposal (movie rows + global sync_state lock) before the
+            # receiver-plugin push and the person cascade run their network
+            # I/O. The trailing audit/notification commits on context exit.
+            result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
+            result["personRefresh"] = (
+                refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope, force=force)
+                if refresh_people
+                else movie_metadata_person_refresh_empty(requested=False, dry_run=dry_run, scope=person_refresh_scope)
+            )
+            audit_event(
+                conn,
+                event_type="metadata.refresh_applied" if not dry_run else "metadata.refresh_previewed",
+                category="metadata",
+                actor=actor,
+                target_type="movie",
+                target_id=movie_uuid,
+                summary="Refreshed movie metadata" if not dry_run else "Previewed movie metadata refresh",
+                metadata={"dryRun": dry_run, "result": result},
+            )
+            if not dry_run:
+                notify_unconfigured_metadata_plugins(conn, actor)
         return response({"status": "ok", "metadata": result})
 
     @flask_app.get("/api/next/movies/<movie_id>/metadata/jobs")

@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Upravlja komplet {title}",
   "errors.databaseOffline": "DiscVault je privremeno izvan mreže",
   "errors.databaseOfflineRetry": "Pokušaj ponovno",
+  "errors.databaseBusy": "DiscVault je trenutačno zauzet — pokušajte ponovno za koji trenutak",
   "movieDetail.debugIdentityTitle": "Identitet (Debug)",
   "movieDetail.debugIdentityCopy": "Kopiraj dijagnostiku",
   "movieDetail.debugIdentityHint": "Nazivi polja dolaze iz zajedničkog ugovora o sinkronizaciji i namjerno ostaju na engleskom. Vidljivo samo dok je način za ispravljanje pogrešaka uključen.",

@@ -2694,6 +2694,7 @@
   "movieDetail.estimatedValueLockedBy": "Managed by box-set {title}",
   "errors.databaseOffline": "DiscVault is temporarily offline",
   "errors.databaseOfflineRetry": "Try again",
+  "errors.databaseBusy": "DiscVault is busy right now — please try again in a moment",
   "movieDetail.debugIdentityTitle": "Identity (Debug)",
   "movieDetail.debugIdentityCopy": "Copy diagnostics",
   "movieDetail.debugIdentityHint": "Field names come from the shared sync contract and stay in English on purpose. Only visible while Debug Mode is on.",
