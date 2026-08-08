@@ -172,6 +172,42 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             "bucketPathTemplate": "/v2/bucket/{prefix}",
         }
 
+    def test_sync_state_admits_every_supported_contract(self):
+        """The CHECK on `contract_version` is a fourth place the vocabulary is
+        enumerated, and nothing links it to SUPPORTED_CONTRACTS.
+
+        distribution-5 was parsed, capped, migrated (071) and declared in the
+        plugin manifest while 039 still allowed only up to -4. Every record of
+        the bootstrap was downloaded and written correctly; the single row
+        recording the success was rejected, which rolled all of it back. The
+        sync could never complete and the feed stayed on revision 3391.
+
+        Asserting the constraint against the tuple rather than against a list
+        of names is deliberate: a future distribution-6 fails here, in a second,
+        instead of on a production bootstrap an hour in.
+        """
+        for contract_version in next_movievault_v2.SUPPORTED_CONTRACTS:
+            with self.subTest(contract_version=contract_version):
+                with self.connect() as conn:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            """
+                            INSERT INTO movievault_v2_sync_state (
+                                plugin_id, origin, contract_version, status
+                            )
+                            VALUES (%s, %s, %s, 'current')
+                            ON CONFLICT (plugin_id) DO UPDATE
+                            SET contract_version = EXCLUDED.contract_version
+                            """,
+                            (
+                                next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,
+                                "https://movievault.example",
+                                contract_version,
+                            ),
+                        )
+                    conn.commit()
+        self._clear_state()
+
     def test_full_delta_current_tombstone_and_failed_digest_are_atomic(self):
         fixture = self.fixture()
         full_fixture = self.publisher_ordered_fixture()

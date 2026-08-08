@@ -2605,6 +2605,25 @@ def _mark_error(conn: Any, code: str) -> None:
         )
 
 
+def _record_sync_failure(conn: Any, code: str) -> None:
+    """Persist why a sync failed, without ever becoming the failure itself.
+
+    The caller is already raising. If recording the reason raises too, the
+    original exception is replaced by a bookkeeping error and the diagnosis is
+    lost - which is precisely how a CheckViolation spent an afternoon looking
+    like "current transaction is aborted".
+    """
+    try:
+        conn.rollback()
+        _mark_error(conn, code)
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
 def _insert_lookup(
     cur: Any,
     generation: str,
@@ -3332,14 +3351,30 @@ def run_sync(
                     # chain from here rather than starting over.
                     return result
         except MovieVaultV2Error as exc:
-            conn.rollback()
-            _mark_error(conn, exc.code)
-            conn.commit()
+            _record_sync_failure(conn, exc.code)
+            raise
+        except Exception as exc:
+            # Anything that is not a MovieVaultV2Error used to leave the status
+            # on 'syncing' with no code, because _mark_error was only reachable
+            # from the clause above. Worse, an aborted transaction made the
+            # cleanup below raise its own error on top, so the job recorded
+            # "current transaction is aborted" and the real cause was gone. A
+            # distribution-5 CheckViolation on movievault_v2_sync_state hid
+            # behind exactly that for hours - see migration 073.
+            _record_sync_failure(conn, f"unexpected_error:{type(exc).__name__}")
             raise
         finally:
-            with conn.cursor() as cur:
-                cur.execute("SELECT pg_advisory_unlock(%s)", (SYNC_LOCK_KEY,))
-            conn.commit()
+            # Rolls back first: after a failed statement every command in the
+            # transaction is refused, including this unlock. And it must never
+            # replace the exception on its way out - a bookkeeping failure is
+            # not the diagnosis.
+            try:
+                conn.rollback()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_unlock(%s)", (SYNC_LOCK_KEY,))
+                conn.commit()
+            except Exception:
+                pass
 
 
 def _bounded_setting(
