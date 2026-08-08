@@ -26301,11 +26301,16 @@ def register_routes(flask_app: Flask) -> None:
                     stored = set_movie_identifiers(conn, movie_uuid, entries)
                     audit_event(
                         conn,
-                        actor=actor,
                         event_type="movie.product_identifiers_changed",
-                        entity_type="movie",
-                        entity_id=str(movie_uuid),
-                        payload={"count": len(stored)},
+                        category="admin",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary=f"Changed product identifiers for movie {existing.get('title') or movie_uuid}",
+                        metadata={
+                            "count": len(stored),
+                            "types": sorted({entry["type"] for entry in stored}),
+                        },
                     )
             except Exception as exc:  # noqa: BLE001 - reported, not swallowed
                 # The partial unique index on the scannable types. One scan has
