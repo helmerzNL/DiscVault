@@ -80,6 +80,77 @@ def ui_preview_container_cards(containers: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
+def ui_preview_attribution_cards(attributions: list[dict[str, Any]], icon: str) -> str:
+    """One About card per source that asks to be credited.
+
+    Rendered server-side from the snapshot rather than assembled in the browser,
+    because a credit that appears a moment late, or not at all when a script
+    fails, is a credit that was not displayed.
+
+    The translation rule is the whole point of this function. When the manifest
+    names an i18n key, the card carries `data-next-i18n` and the locale files
+    answer. When it gives literal text, the text is rendered **as written and
+    never translated**: the wording is a licence obligation belonging to the
+    source, and translating a required sentence produces a different sentence
+    that nobody here has cleared.
+    """
+    cards: list[str] = []
+    for entry in attributions or []:
+        statement_key = str(entry.get("statementKey") or "")
+        statement = str(entry.get("statement") or "")
+        if not statement_key and not statement:
+            continue
+        disclaimer_key = str(entry.get("disclaimerKey") or "")
+        disclaimer = str(entry.get("disclaimer") or "")
+        # Only DiscVault's own plugin-asset route. A remote logo would leak a
+        # page view to the source on every visit to the profile page, which is
+        # not something a credit is allowed to cost.
+        logo_url = str(entry.get("logoUrl") or "")
+        if not logo_url.startswith("/api/next/plugins/"):
+            logo_url = ""
+        name = str(entry.get("name") or "")
+        statement_html = (
+            f'<span data-next-i18n="{h(statement_key)}">{h(statement or name)}</span>'
+            if statement_key
+            else f"<span>{h(statement)}</span>"
+        )
+        disclaimer_html = ""
+        if disclaimer_key:
+            disclaimer_html = (
+                f'<p class="profile-about-legal" data-next-i18n="{h(disclaimer_key)}">{h(disclaimer)}</p>'
+            )
+        elif disclaimer:
+            disclaimer_html = f'<p class="profile-about-legal">{h(disclaimer)}</p>'
+        logo_html = (
+            f'<img class="profile-about-source-logo" src="{h(logo_url)}" alt="{h(name)}">'
+            if logo_url
+            else ""
+        )
+        cards.append(
+            """
+                  <section class="profile-dashboard-card profile-about-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">"""
+            + icon
+            + """</span>
+                      <div class="profile-about-card-copy">
+                        """
+            + statement_html
+            + """
+                        """
+            + disclaimer_html
+            + """
+                      </div>
+                      """
+            + logo_html
+            + """
+                    </div>
+                  </section>"""
+        )
+    return "".join(cards)
+
+
 def ui_preview_html(
     snapshot: dict[str, Any] | None = None,
     *,
@@ -151,6 +222,10 @@ def ui_preview_html(
             f'<svg viewBox="0 0 24 24" focusable="false" role="img"><path d="{path}"></path></svg>'
             "</span>"
         )
+
+    attribution_cards = ui_preview_attribution_cards(
+        snapshot.get("attributions") or [], nav_icon("library")
+    )
 
     def profile_tab(
         name: str,
@@ -10534,7 +10609,7 @@ def ui_preview_html(
       font-size: .88rem;
       line-height: 1.5;
     }
-    .profile-about-tmdb-logo {
+    .profile-about-source-logo {
       display: block;
       width: 60px;
       max-width: 100%;
@@ -16374,17 +16449,7 @@ def ui_preview_html(
                       </div>
                     </div>
                   </section>
-                  <section class="profile-dashboard-card profile-about-card">
-                    <div class="profile-dashboard-card-head">
-                      <div class="profile-dashboard-card-title">
-                      <span class="profile-dashboard-card-icon">""" + nav_icon("library") + """</span>
-                      <div class="profile-about-card-copy">
-                        <span data-next-i18n="profile.tmdbDataProvidedBy">Data provided by TMDB</span>
-                        <p class="profile-about-legal" data-next-i18n="profile.tmdbDisclaimer">DiscVault is not endorsed or certified by TMDB.</p>
-                      </div>
-                      <img class="profile-about-tmdb-logo" src="/api/next/assets/tmdb-logo.svg" alt="TMDB">
-                    </div>
-                  </section>
+""" + attribution_cards + """
                   <section class="profile-dashboard-card profile-about-card profile-about-card--debug">
                     <div class="profile-dashboard-card-head">
                       <div class="profile-dashboard-card-title">

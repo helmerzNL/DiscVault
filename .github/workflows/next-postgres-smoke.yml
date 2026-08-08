@@ -92,6 +92,13 @@ jobs:
       - name: Test the TMDB series mapping
         run: python -m unittest tests.test_next_tmdb_series
 
+      # Attribution is a licence obligation: the wording belongs to the source
+      # and is rendered as the source's manifest states it. These tests are the
+      # guard against that being "improved" into composed or translated copy,
+      # which would break a licence while every screen still looked fine.
+      - name: Test per-source attribution
+        run: python -m unittest tests.test_next_source_attribution
+
       - name: Apply Next migrations
         run: python next_database.py migrate
 

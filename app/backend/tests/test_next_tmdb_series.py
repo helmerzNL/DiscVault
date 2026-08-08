@@ -116,6 +116,44 @@ class SeriesDetailsEntrypointTests(unittest.TestCase):
                     {"status": "miss", "provider": "tmdb"},
                 )
 
+    def test_the_identifier_map_is_read_and_other_namespaces_ignored(self):
+        """Every source is offered every identifier and takes the one it speaks.
+
+        A source is the only thing that knows which namespaces it can use, so
+        being handed a TVDB id alongside a TMDB one must be unremarkable rather
+        than confusing.
+        """
+        self.assertEqual(
+            tmdb.series_details(
+                {"seriesIdentifiers": {"tvdb": "121361", "fanart": "abc"}}, {}
+            ),
+            {"status": "miss", "provider": "tmdb"},
+        )
+
+    def test_the_older_top_level_id_still_answers(self):
+        """A DiscVault that has not been updated yet sends only `tmdbTvId`, and a
+        newer plugin dropping it would break exactly the installations that were
+        slowest to update."""
+        captured = {}
+
+        def fake_request(context, tmdb_tv_id):
+            captured["id"] = tmdb_tv_id
+            return {"id": int(tmdb_tv_id), "name": "Example"}
+
+        original = tmdb._series_details_request
+        tmdb._series_details_request = fake_request
+        try:
+            tmdb.series_details({"tmdbTvId": "1399"}, {})
+            self.assertEqual(captured["id"], "1399")
+            captured.clear()
+            # The map wins when both are present -- it is the newer, richer form.
+            tmdb.series_details(
+                {"tmdbTvId": "1", "seriesIdentifiers": {"tmdb_tv": "1399"}}, {}
+            )
+            self.assertEqual(captured["id"], "1399")
+        finally:
+            tmdb._series_details_request = original
+
     def test_a_non_numeric_id_is_a_miss(self):
         """A slug or a title arriving where an id belongs must not be sent to
         TMDB as if it were one."""

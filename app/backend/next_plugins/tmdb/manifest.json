@@ -1,7 +1,7 @@
 {
   "id": "tmdb",
   "name": "TMDb",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": [
@@ -19,6 +19,14 @@
     "images",
     "videos"
   ],
+  "attribution": {
+    "statementKey": "profile.tmdbDataProvidedBy",
+    "statement": "Data provided by TMDB",
+    "disclaimerKey": "profile.tmdbDisclaimer",
+    "disclaimer": "DiscVault is not endorsed or certified by TMDB.",
+    "logo": "tmdb-logo.svg",
+    "url": "https://www.themoviedb.org/"
+  },
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
   "settingsSchema": {

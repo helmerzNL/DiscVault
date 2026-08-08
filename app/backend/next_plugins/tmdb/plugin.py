@@ -459,8 +459,19 @@ def series_details(payload, context=None):
     back to a title search would be trading it for a guess. A series without an
     id is a miss, which is the honest answer: nothing here can establish identity
     that the feed did not.
+
+    The caller offers every identifier the series carries and each source takes
+    the namespace it speaks; this one reads `tmdb_tv` and ignores the rest. The
+    older top-level `tmdbTvId` is still accepted so a DiscVault that has not been
+    updated yet keeps getting answers from this plugin.
     """
-    tmdb_tv_id = str((payload or {}).get("tmdbTvId") or "").strip()
+    body = payload or {}
+    identifiers = body.get("seriesIdentifiers")
+    tmdb_tv_id = ""
+    if isinstance(identifiers, dict):
+        tmdb_tv_id = str(identifiers.get("tmdb_tv") or "").strip()
+    if not tmdb_tv_id:
+        tmdb_tv_id = str(body.get("tmdbTvId") or "").strip()
     if not tmdb_tv_id.isdigit():
         return {"status": "miss", "provider": "tmdb"}
     return _normalize_series(_series_details_request(context or {}, tmdb_tv_id))

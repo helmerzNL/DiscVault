@@ -52,6 +52,7 @@ try:
     from .next_import import clean_text
     from .next_ownership import actor_or_instance_owner_id
     from .next_plugin_runtime import plugin_registry_snapshot
+    from .next_plugin_runtime import plugin_attribution
     from .next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from .next_plugin_runtime import PLUGIN_ID_PATTERN
     from .next_plugin_runtime import plugin_install_dir
@@ -319,6 +320,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import clean_text
     from next_ownership import actor_or_instance_owner_id
     from next_plugin_runtime import plugin_registry_snapshot
+    from next_plugin_runtime import plugin_attribution
     from next_plugin_runtime import DEFAULT_PLUGIN_DIR
     from next_plugin_runtime import PLUGIN_ID_PATTERN
     from next_plugin_runtime import plugin_install_dir
@@ -4986,6 +4988,56 @@ def collection_plugin_preview_entities(conn) -> list[dict[str, Any]]:
         return cur.fetchall()
 
 
+def collection_attribution_entities(conn) -> list[dict[str, Any]]:
+    """The credits the installed sources require, in the order the user ranked them.
+
+    Attribution follows the source, not the feature: a plugin that is installed
+    but switched off is not being used, so its credit is not displayed. That also
+    makes the About page an honest answer to "what is this build actually asking
+    of outside services", rather than a fixed list somebody has to remember to
+    edit.
+
+    Ordered by `order_index`, the same order the metadata pipeline consults them
+    in, so the page reads in the order the sources actually speak.
+    """
+    if not table_exists(conn, "plugins"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, name, manifest
+            FROM plugins
+            WHERE installed = true AND enabled = true
+            ORDER BY order_index, lower(name)
+            """
+        )
+        rows = cur.fetchall()
+    entities: list[dict[str, Any]] = []
+    for row in rows:
+        manifest = row.get("manifest") if isinstance(row.get("manifest"), dict) else {}
+        attribution = plugin_attribution(manifest)
+        if not attribution:
+            continue
+        plugin_id = str(row.get("id") or "")
+        entities.append(
+            {
+                "pluginId": plugin_id,
+                "name": row.get("name") or plugin_id,
+                "statement": attribution["statement"],
+                "statementKey": attribution["statementKey"],
+                "disclaimer": attribution["disclaimer"],
+                "disclaimerKey": attribution["disclaimerKey"],
+                "url": attribution["url"],
+                "logoUrl": (
+                    f"/api/next/plugins/{plugin_id}/attribution-logo"
+                    if attribution["logo"]
+                    else ""
+                ),
+            }
+        )
+    return entities
+
+
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     user_id = user.get("id") if user else None
     preferences = app_effective_preferences(conn, user_id)
@@ -5020,6 +5072,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "locations": location_list_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
+        "attributions": collection_attribution_entities(conn),
         "preferences": preferences,
         "priceDisplay": price_display_context(preferences),
         "instanceSettings": {
@@ -5056,6 +5109,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "locations": [],
         "mediaGroups": [],
         "plugins": [],
+        "attributions": [],
         "preferences": dict(APP_PREFERENCE_DEFAULTS),
         "priceDisplay": price_display_context(dict(APP_PREFERENCE_DEFAULTS)),
         "instanceSettings": {
@@ -25296,6 +25350,54 @@ def register_routes(flask_app: Flask) -> None:
             registry["autoUpdate"] = plugin_auto_update_setting(conn)
             plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
         return response({"status": "ok", "rollback": outcome, "plugin": plugin, "registry": registry})
+
+    @flask_app.get("/api/next/plugins/<plugin_id>/attribution-logo")
+    def plugin_attribution_logo(plugin_id: str):
+        """A source's own logo, served from that source's own directory.
+
+        Not through the shared frontend asset allowlist: that list is a fixed set
+        of DiscVault's own files, and a per-source credit has to work for a
+        plugin nobody has written yet. The file therefore ships inside the
+        plugin, and only a file the plugin's manifest names can be read.
+
+        Three things bound this: the plugin must be installed and enabled (the
+        same condition under which its credit is displayed at all), the manifest
+        must name a bare filename, and the resolved path must still be inside the
+        plugin directory after following symlinks. The last one is the one that
+        matters -- `Path(name).name` alone would still let a symlink inside the
+        plugin point anywhere on the disk.
+        """
+        plugin_id = str(plugin_id or "").strip()
+        if not plugin_id or not PLUGIN_ID_PATTERN.match(plugin_id):
+            raise NextApiError("Plugin id is required", 400)
+        with connect() as conn:
+            if not table_exists(conn, "plugins"):
+                raise NextApiError("Asset not found", 404)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT manifest, source_path
+                    FROM plugins
+                    WHERE id = %s AND installed = true AND enabled = true
+                    """,
+                    (plugin_id,),
+                )
+                row = cur.fetchone()
+        if not row:
+            raise NextApiError("Asset not found", 404)
+        manifest = row.get("manifest") if isinstance(row.get("manifest"), dict) else {}
+        attribution = plugin_attribution(manifest)
+        source_path = str(row.get("source_path") or "")
+        if not attribution or not attribution["logo"] or not source_path:
+            raise NextApiError("Asset not found", 404)
+        plugin_root = Path(source_path).resolve()
+        path = (plugin_root / attribution["logo"]).resolve()
+        if not path.is_relative_to(plugin_root) or not path.is_file():
+            raise NextApiError("Asset not found", 404)
+        return send_file(
+            path,
+            mimetype=mimetypes.guess_type(path.name)[0] or "application/octet-stream",
+        )
 
     @flask_app.get("/api/next/plugins/<plugin_id>/export")
     def export_plugin(plugin_id: str):
