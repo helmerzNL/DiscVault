@@ -1,5 +1,40 @@
 # DiscVault Release Notes
 
+## 26.8.39 - An import keeps every product code, and stops overwriting your data
+
+- **An import now fills a field, it no longer overwrites one.** A value already
+  on a film survives; only a blank one is filled from the file. Until now every
+  column the import wrote was taken from the file, so a Blu-ray.com row retitled
+  a film to "Bohemian Rhapsody 4K" and dated Back to the Future to 2012 — the
+  year of the disc — on films whose title and year were already correct.
+- That is also what made a bad import unrepairable. Rolling an import back only
+  deletes films it **created**; a film that merely got *updated* has nothing
+  left to restore from, and re-importing does not help either.
+- A field a human confirms in the import review still wins, and only that field.
+  Picking a metadata match or typing a manual override is a deliberate edit to
+  that film — declining it would report "applied" while changing nothing. A
+  confirmed title does not license rewriting the format the file happens to
+  carry.
+- Inside the metadata blob the same split applies: film data (director, cast,
+  artwork, personal) is kept, while the provenance keys still record which
+  import last touched the row.
+- An empty string counts as blank, not as a value worth protecting.
+- **Every product code in an imported row is now kept.** A pressing carries
+  several at once — an EAN for Europe beside a UPC for North America, an Amazon
+  ASIN, a catalogue number — and `movies.barcode` holds exactly one, because a
+  scan has to resolve to exactly one film. The rest were read and dropped; they
+  are now stored as typed identifiers (26.8.28's `movie_product_identifiers`),
+  which is also what a Blu-ray.com export's `ASIN` column was losing.
+- The type comes from the digits, not from the column header: Blu-ray.com files
+  a zero-padded UPC-A under "EAN", and DiscVault derives the symbology from the
+  code itself, so trusting the header would store a value under a type its own
+  validator rejects.
+- Identifiers are added, never replaced. A file describes the pressing as one
+  source saw it and knows nothing of the codes the film already carries from a
+  scan or an earlier import. A code another film already holds is skipped rather
+  than failing the row, and a code that does not validate is dropped — a file
+  must not be able to store what a person could not type in the edit surface.
+
 ## 26.8.11 - A Blu-ray.com import writes rows again
 
 - Every row of a Blu-ray.com import failed with `object of type 'NoneType' has

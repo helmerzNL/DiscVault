@@ -26,7 +26,14 @@ SOURCE = {
         # below: it is read as edition data, not as the film's year.
         "releaseDate": ("Release Date", "Edition Release Date"),
         "discCount": ("Blu-ray discs", "DVD discs", "4K discs", "Discs"),
+        # `barcode` resolves a scan and holds one value; the typed aliases below
+        # keep the other codes the same pressing carries. UPC leads here because
+        # a Blu-ray.com row fills it only for North American pressings, where it
+        # is the code printed on the disc a scanner will read.
         "barcode": ("UPC", "EAN", "Barcode"),
+        "ean": ("EAN",),
+        "upc": ("UPC",),
+        "asin": ("ASIN",),
         "format": ("Format", "Media", "Media Type", "Type"),
         "edition": ("Edition", "Packaging", "Release"),
         "country": ("Country", "Country Code", "Locality"),

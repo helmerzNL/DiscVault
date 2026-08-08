@@ -42,6 +42,7 @@ try:
     from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
+    from .next_product_identifiers import add_movie_identifiers
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
@@ -88,6 +89,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
+    from next_product_identifiers import add_movie_identifiers
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
@@ -1302,6 +1304,107 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
     return None
 
 
+# The metadata keys an import writes that describe the FILM. They follow the
+# fill-don't-overwrite rule like any other film field, so a value already stored
+# survives a re-import. Every other key `import_movie_metadata` produces
+# (import_source, source_provider, source_file, source_url) describes the import
+# itself and is deliberately allowed to change: "which import last touched this
+# row" is only a true statement if the newest import may write it.
+IMPORT_METADATA_FILM_KEYS = ("director", "actor", "poster_url", "backdrop_url", "personal")
+
+# Movie columns an import writes, and the review field that can confirm each.
+# `None` means no reviewer decision covers the column, so it is always fill-only.
+# `sort_title` follows `title`: it is derived from it, so protecting one while
+# rewriting the other would leave the film sorted under a name it no longer has.
+IMPORT_MOVIE_COLUMNS: tuple[tuple[str, str | None, bool], ...] = (
+    ("barcode", None, True),
+    ("title", "title", True),
+    ("sort_title", "title", True),
+    ("original_title", None, True),
+    ("year", "year", True),
+    ("release_date", None, False),
+    ("format", "format", True),
+    ("edition", None, True),
+    ("country", None, True),
+    ("language", None, True),
+    ("runtime_minutes", None, False),
+    ("overview", "overview", True),
+    ("rating", None, True),
+)
+
+# Review fields that map onto a metadata key rather than a column.
+IMPORT_REVIEW_METADATA_FIELDS = {"posterUrl": "poster_url", "backdropUrl": "backdrop_url"}
+
+IMPORT_REVIEW_FIELDS = ("title", "year", "format", "overview", "posterUrl", "backdropUrl")
+
+
+def import_product_identifiers(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """The typed product identifiers on an import item, in wire shape.
+
+    Accepts both the list an import plugin emits and the loose per-type keys an
+    older or hand-built payload may carry, so a caller that never heard of
+    `productIdentifiers` still gets its ASIN stored. Validation happens on write.
+    """
+    entries: list[dict[str, Any]] = []
+    raw = item.get("productIdentifiers") or item.get("product_identifiers")
+    if isinstance(raw, list):
+        entries.extend(entry for entry in raw if isinstance(entry, dict))
+    for key, identifier_type in (
+        ("ean", "ean"),
+        ("upc", "upc"),
+        ("isbn", "isbn"),
+        ("asin", "asin"),
+        ("catalogNumber", "catalog_number"),
+        ("catalog_number", "catalog_number"),
+    ):
+        value = clean_text(item.get(key))
+        if value:
+            entries.append({"type": identifier_type, "value": value})
+    return entries
+
+
+def import_review_confirmed_fields(item: dict[str, Any]) -> set[str]:
+    """The fields a human explicitly confirmed in the import review.
+
+    Fill-don't-overwrite protects a film from a *file*. It must not protect it
+    from its owner: picking a metadata match or typing a manual override is a
+    deliberate edit to this film, and silently declining it would report
+    "applied" while changing nothing — a failure that comes back as success.
+
+    Only fields carrying an actual value count. `apply_review_values` skips
+    blank ones, so a key present-but-empty in the match was never applied and
+    must not license an overwrite.
+    """
+    confirmed: set[str] = set()
+    for key in ("importReviewMatch", "importReviewManualOverride"):
+        raw = item.get(key)
+        if not isinstance(raw, dict):
+            continue
+        for field in IMPORT_REVIEW_FIELDS:
+            if clean_text(raw.get(field)):
+                confirmed.add(field)
+    return confirmed
+
+
+def import_movie_conflict_assignments(confirmed_fields: set[str]) -> str:
+    """Build the ON CONFLICT SET list, one rule per column.
+
+    A column the reviewer confirmed reads EXCLUDED-first (the new value wins);
+    every other column reads existing-first, so a value already on the film
+    survives and only a blank one is filled. NULLIF treats '' as blank: a column
+    emptied by an earlier write is not a value worth protecting.
+    """
+    assignments = []
+    for column, review_field, is_text in IMPORT_MOVIE_COLUMNS:
+        if review_field and review_field in confirmed_fields:
+            assignments.append(f"{column}=COALESCE(EXCLUDED.{column}, movies.{column})")
+        elif is_text:
+            assignments.append(f"{column}=COALESCE(NULLIF(movies.{column}, ''), EXCLUDED.{column})")
+        else:
+            assignments.append(f"{column}=COALESCE(movies.{column}, EXCLUDED.{column})")
+    return ",\n                ".join(assignments)
+
+
 def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any]:
     metadata = {
         "import_source": plugin_id,
@@ -1759,9 +1862,15 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
     movie_id = existing_id or stable_uuid(f"movie:{seed}")
     public_id = proposed_public_id if external_id else source_public_id(f"import-{plugin_id}", str(movie_id), fallback=str(movie_id))
     metadata = import_movie_metadata(item, plugin_id)
+    confirmed_fields = import_review_confirmed_fields(item)
+    protected_metadata_keys = [
+        key
+        for key in IMPORT_METADATA_FILM_KEYS
+        if key not in {IMPORT_REVIEW_METADATA_FIELDS[field] for field in confirmed_fields if field in IMPORT_REVIEW_METADATA_FIELDS}
+    ]
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             INSERT INTO movies (
                 id,
                 public_id,
@@ -1783,21 +1892,28 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            -- An import FILLS a field, it does not OVERWRITE one: the
+            -- assignments below read existing-first, so a value already on the
+            -- film survives and only a blank one is filled from the file. The
+            -- exception is a field a human confirmed in the review queue, which
+            -- reads EXCLUDED-first -- see import_movie_conflict_assignments().
+            --
+            -- The old clause was EXCLUDED-first for every column, which let a
+            -- file rewrite curated data. That is how a Blu-ray.com row retitled
+            -- a film to "Bohemian Rhapsody 4K" and dated Back to the Future to
+            -- 2012, the year of the disc: both fields were already correct. It
+            -- is also what made a bad import unrepairable, because the rollback
+            -- only deletes films the import CREATED -- an overwritten field on
+            -- a film that merely got updated has nothing left to restore from.
             ON CONFLICT (id) DO UPDATE SET
-                barcode=COALESCE(EXCLUDED.barcode, movies.barcode),
-                title=COALESCE(EXCLUDED.title, movies.title),
-                sort_title=COALESCE(EXCLUDED.sort_title, movies.sort_title),
-                original_title=COALESCE(EXCLUDED.original_title, movies.original_title),
-                year=COALESCE(EXCLUDED.year, movies.year),
-                release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
-                format=COALESCE(EXCLUDED.format, movies.format),
-                edition=COALESCE(EXCLUDED.edition, movies.edition),
-                country=COALESCE(EXCLUDED.country, movies.country),
-                language=COALESCE(EXCLUDED.language, movies.language),
-                runtime_minutes=COALESCE(EXCLUDED.runtime_minutes, movies.runtime_minutes),
-                overview=COALESCE(EXCLUDED.overview, movies.overview),
-                rating=COALESCE(EXCLUDED.rating, movies.rating),
-                metadata=movies.metadata || EXCLUDED.metadata,
+                {import_movie_conflict_assignments(confirmed_fields)},
+                -- Same rule inside the metadata blob: existing keys win
+                -- (right-hand side of ||), missing ones are filled. The second
+                -- term puts the provenance keys back on top, because those
+                -- describe *this* import rather than the film -- which import
+                -- last touched a row is only true if it is allowed to change.
+                metadata=(EXCLUDED.metadata || COALESCE(movies.metadata, '{{}}'::jsonb))
+                    || (EXCLUDED.metadata - %s::text[]),
                 updated_at=now()
             """,
             (
@@ -1817,6 +1933,7 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 clean_text(item.get("overview") or item.get("plot")) or None,
                 clean_text(item.get("rating")) or None,
                 Jsonb(json_ready(metadata)),
+                protected_metadata_keys,
             ),
         )
         if table_exists(conn, "movie_identifiers"):
@@ -1834,6 +1951,16 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                     """,
                     (movie_id, provider, identifier),
                 )
+    # The product codes the row carried beside the resolving barcode: the EAN a
+    # European pressing lists next to its UPC, an Amazon ASIN, a catalogue
+    # number. `movies.barcode` holds one value and a scan must resolve to one
+    # film, so without this the others are read and dropped.
+    #
+    # Added, never replaced. The file describes the pressing as one source saw
+    # it and knows nothing of the codes this film already carries from a scan or
+    # an earlier import; replacing the set would delete them. Same rule as every
+    # other import field.
+    add_movie_identifiers(conn, movie_id, import_product_identifiers(item))
     return movie_id, existing_id is None
 
 
