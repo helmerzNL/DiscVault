@@ -3165,6 +3165,13 @@ def summarize_metadata_execution(
         elif format_rejected:
             state = "blocked_by_format_policy"
             reason = "provider result did not match the physical release format"
+        elif any(item.get("releaseCandidates") for item in plugin_executions):
+            # Checked before the miss branches on purpose: a candidates answer
+            # arrives with resultStatus "miss" (nothing was confirmed, so the
+            # merge pipeline must not apply it), but reporting it as "no usable
+            # match" hides the one outcome the user can actually settle.
+            state = "release_candidates"
+            reason = "provider identified the film; the pressing is a choice for the user"
         elif any(str(item.get("resultStatus") or "") in {"miss", "not_found", "no_match"} for item in plugin_executions):
             state = "no_match"
             reason = "provider returned no usable match"
@@ -3924,6 +3931,14 @@ def run_metadata_source_pipeline(
                     execution_item["resolverFallback"] = raw_result["resolverFallback"]
                 if "verificationStatus" in raw_result:
                     execution_item["verificationStatus"] = raw_result["verificationStatus"]
+                # The v2 resolver's `candidates` answer: the film was identified
+                # but no single pressing was confirmed, so the plugin reports a
+                # miss (nothing may be merged) while carrying the list. Forwarded
+                # here for the same reason as `resolverFallback` above - dropping
+                # it turns a resolvable choice into a bare "no usable match",
+                # which the person holding the disc can never act on.
+                if "releaseCandidates" in raw_result:
+                    execution_item["releaseCandidates"] = raw_result["releaseCandidates"]
             if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
                 continue
             normalized_results.append(normalized)
@@ -4111,12 +4126,21 @@ def run_metadata_source_pipeline(
         proposal=merge,
     )
     field_decisions = merge.get("fieldDecisions") or []
+    # The first execution that carried a candidate list wins; there is at most
+    # one, because only the movievault_v2 barcode lookup emits it. Lifted to the
+    # top level so a client does not have to dig through executions to learn
+    # that "no usable match" actually means "pick a pressing".
+    release_candidates = next(
+        (item["releaseCandidates"] for item in executions if item.get("releaseCandidates")),
+        None,
+    )
     return {
         "query": query,
         "settings": {"preferredProviderOverwrite": overwrite_enabled},
         "sourceOrder": [plugin["id"] for plugin in plugins],
         "executions": executions,
         "sourceSummary": source_summary,
+        "releaseCandidates": release_candidates,
         "results": normalized_results,
         "previewEnrichment": preview_enrichment,
         "enrichment": {"tmdb": tmdb_enrichment},

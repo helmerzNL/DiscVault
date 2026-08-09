@@ -2043,6 +2043,114 @@ box_set_candidates = _lookup
         )
         self.assertEqual(execution["verificationStatus"], "unreviewed_external")
 
+    @mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False)
+    @mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={})
+    @mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={})
+    @mock.patch("app.backend.next_metadata.metadata_source_plugins")
+    @mock.patch("app.backend.next_metadata.run_plugin_entrypoint")
+    def test_movievault_v2_release_candidates_reach_the_pipeline_result(
+        self,
+        run_entrypoint,
+        source_plugins,
+        _plugin_config,
+        _execution_context,
+        _requires_config,
+        _overwrite,
+    ):
+        source_plugins.return_value = [
+            {
+                "id": "movievault_v2",
+                "name": "MovieVault v2",
+                "categories": ["metadata_source"],
+                "capabilities": ["search_barcode"],
+                "manifest": {"capabilities": ["search_barcode"]},
+                "order_index": 52,
+            },
+        ]
+        candidates = {
+            "film": {
+                "title": "Heat",
+                "year": 1995,
+                "identifiers": {"tmdbMovieId": "949"},
+                "links": {"tmdb": "https://www.themoviedb.org/movie/949"},
+            },
+            "releases": [
+                {"releaseRef": "a", "source": "external", "title": "Heat", "format": "4K UHD"},
+                {"releaseRef": "b", "source": "external", "title": "Heat", "format": "Blu-ray"},
+            ],
+            "verificationStatus": "unreviewed_external",
+        }
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            return {
+                "status": "ok",
+                "state": "available",
+                "elapsedMs": 5,
+                # The resolver identified the film but no single pressing was
+                # confirmed: a miss for the merge pipeline that still carries
+                # the list the user can settle.
+                "result": {
+                    "status": "miss",
+                    "provider": "movievault_v2",
+                    "items": [],
+                    "resolverFallback": {
+                        "attempted": True,
+                        "outcome": "candidates",
+                        "errorCode": None,
+                        "candidateCount": 2,
+                    },
+                    "releaseCandidates": candidates,
+                },
+            }
+
+        run_entrypoint.side_effect = execute
+        result = run_metadata_source_pipeline(
+            object(),
+            query=query_from_payload({"barcode": "4006381333931", "previewMode": True}),
+            current={"metadata": {}},
+            technical_current={},
+        )
+
+        execution = next(
+            item for item in result["executions"] if item["pluginId"] == "movievault_v2"
+        )
+        # Carried on the execution item like the other resolver diagnostics...
+        self.assertEqual(execution["releaseCandidates"], candidates)
+        # ...and lifted to the top level, so a client does not have to learn
+        # that "no usable match" sometimes means "pick a pressing".
+        self.assertEqual(result["releaseCandidates"], candidates)
+        # Nothing was confirmed, so nothing may reach the merge proposal.
+        self.assertEqual(result["proposal"].get("movieUpdates") or {}, {})
+        summary = next(
+            item for item in result["sourceSummary"] if item["pluginId"] == "movievault_v2"
+        )
+        self.assertEqual(summary["state"], "release_candidates")
+
+    def test_execution_summary_reports_release_candidates_before_no_match(self):
+        # A candidates answer arrives with resultStatus "miss"; the summary must
+        # name the choice rather than fold it into "no usable match".
+        plugins = [{"id": "movievault_v2", "name": "MovieVault v2", "order_index": 52}]
+        executions = [
+            {
+                "pluginId": "movievault_v2",
+                "entrypoint": "search_barcode",
+                "status": "ok",
+                "resultStatus": "miss",
+                "releaseCandidates": {
+                    "film": {"title": "Heat"},
+                    "releases": [{"releaseRef": "a", "source": "external", "title": "Heat"}],
+                },
+                "elapsedMs": 12,
+            }
+        ]
+
+        summary = summarize_metadata_execution(
+            plugins=plugins, executions=executions, results=[], proposal={}
+        )
+
+        self.assertEqual(summary[0]["state"], "release_candidates")
+
     def test_preview_title_lookup_can_request_box_set_candidates(self):
         query = query_from_payload({"title": "Back to the Future Trilogy", "detectBoxSets": True, "previewMode": True})
         plan = plugin_execution_plan(

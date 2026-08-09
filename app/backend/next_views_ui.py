@@ -6605,6 +6605,13 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
     }
+    .release-fallback-film-links {
+      font-size: .8rem;
+      white-space: nowrap;
+    }
+    #movieDetailReleaseCandidates:not(:empty) {
+      margin: 0 0 16px;
+    }
     .release-fallback-list {
       display: grid;
       gap: 10px;
@@ -7550,7 +7557,8 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--ok, #2e7d32) 20%, transparent);
       color: var(--ok, #2e7d32);
     }
-    .debug-source-badge.contrib-skipped {
+    .debug-source-badge.contrib-skipped,
+    .debug-source-badge.state-release_candidates {
       background: color-mix(in srgb, var(--warn, #b26a00) 20%, transparent);
       color: var(--warn, #b26a00);
     }
@@ -14974,6 +14982,7 @@ def ui_preview_html(
           </div>
         </section>
         <div class="detail-message movie-detail-status" id="movieDetailMessage"></div>
+        <div id="movieDetailReleaseCandidates"></div>
         <section class="movie-detail-body">
           <div class="detail-card full hidden" id="movieEditPanel">
             <div class="detail-card-head">
@@ -18346,6 +18355,7 @@ def ui_preview_html(
         hit: tNext("movieDetail.debugSourcesStateHit", "used"),
         retained_existing: tNext("movieDetail.debugSourcesStateRetained", "retained existing"),
         no_match: tNext("movieDetail.debugSourcesStateNoMatch", "no match"),
+        release_candidates: tNext("movieDetail.debugSourcesStateReleaseCandidates", "pressing choice"),
         blocked_by_format_policy: tNext("movieDetail.debugSourcesStateBlocked", "blocked by format"),
         needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "needs configuration")
       };
@@ -29784,6 +29794,10 @@ def ui_preview_html(
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
       movieArtworkHiddenKinds.clear();
+      // Another film's pressings must never survive onto this page.
+      movieDetailReleaseCandidates = null;
+      const releaseCandidatesHost = document.getElementById("movieDetailReleaseCandidates");
+      if (releaseCandidatesHost) releaseCandidatesHost.innerHTML = "";
       movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
       activateDetailTab("movieSections", "movieDetailReleasePanel");
@@ -35382,6 +35396,24 @@ def ui_preview_html(
         ""
       );
     }
+    // The film behind a candidate list, linkable. The Add flow's route
+    // flattens the film to bare ids while the metadata pipeline forwards the
+    // resolver's film with its `links` object; both spellings resolve to the
+    // same two URLs here so every picker shows the same header.
+    function releaseCandidateFilmLinksHtml(film) {
+      const source = film && typeof film === "object" ? film : {};
+      const links = source.links && typeof source.links === "object" ? source.links : {};
+      const identifiers = source.identifiers && typeof source.identifiers === "object" ? source.identifiers : {};
+      const tmdbId = identifiers.tmdbMovieId || source.tmdbMovieId || "";
+      const imdbId = identifiers.imdbId || source.imdbId || "";
+      const tmdb = links.tmdb || (tmdbId ? `https://www.themoviedb.org/movie/${encodeURIComponent(tmdbId)}` : "");
+      const imdb = links.imdb || (imdbId ? `https://www.imdb.com/title/${encodeURIComponent(imdbId)}/` : "");
+      const anchors = [];
+      if (tmdb) anchors.push(`<a href="${escapeHtml(tmdb)}" target="_blank" rel="noopener noreferrer">TMDB</a>`);
+      if (imdb) anchors.push(`<a href="${escapeHtml(imdb)}" target="_blank" rel="noopener noreferrer">IMDb</a>`);
+      if (!anchors.length) return "";
+      return `<span class="release-fallback-film-links">${anchors.join(" &middot; ")}</span>`;
+    }
     function releaseFallbackFactList(candidate) {
       const facts = [];
       const push = (value) => { if (value) facts.push(value); };
@@ -35524,7 +35556,7 @@ def ui_preview_html(
       host.innerHTML = `
         <div class="release-fallback-card">
           <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
-          <div><strong>${escapeHtml(filmLine)}</strong></div>
+          <div><strong>${escapeHtml(filmLine)}</strong> ${releaseCandidateFilmLinksHtml(film)}</div>
           <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.pickEditionHelp", "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."))}</div>
           ${fallback.verificationStatus === "unreviewed_external"
             ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
@@ -39933,9 +39965,132 @@ def ui_preview_html(
           await loadAppSnapshot();
         }
         setMovieDetailMessage(successMessage, "good");
+        // The resolver identified the film but could not confirm which
+        // pressing this disc is. That is a choice, not a miss - render the
+        // picker instead of leaving "no usable match" as the last word.
+        setMovieDetailReleaseCandidates((payload.metadata || {}).preview?.releaseCandidates);
         console.log("metadata refresh", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    // ---- Edition picker on the movie detail page ---------------------------
+    //
+    // The refresh counterpart of the Add flow's candidate picker: a disc that
+    // is already on the shelf, whose barcode MovieVault answers with a list of
+    // pressings rather than a confirmed release. Nothing may be merged
+    // automatically (nothing was confirmed), so the choice is offered here and
+    // the chosen summary is written onto the disc through the ordinary movie
+    // edit route - MovieVault has no server-side choice endpoint.
+    let movieDetailReleaseCandidates = null;
+    function setMovieDetailReleaseCandidates(candidates) {
+      const releases = Array.isArray(candidates?.releases) ? candidates.releases.filter((item) => item && typeof item === "object") : [];
+      movieDetailReleaseCandidates = releases.length
+        ? {
+            film: candidates.film && typeof candidates.film === "object" ? candidates.film : {},
+            releases,
+            verificationStatus: String(candidates.verificationStatus || ""),
+            appliedIndex: -1,
+            busy: false
+          }
+        : null;
+      renderMovieDetailReleaseCandidates();
+      if (movieDetailReleaseCandidates && hasPermission("collection.edit_all")) {
+        setMovieDetailMessage(tNext("releaseFallback.pickEdition", "Which pressing is this?"), "warn");
+      }
+    }
+    function movieDetailReleaseCandidateOptionHtml(candidate, index) {
+      const picker = movieDetailReleaseCandidates || {};
+      const applied = Number(picker.appliedIndex) === index;
+      const facts = releaseFallbackFactList(candidate);
+      const audio = audioTracksText(candidate.audioTracks);
+      const subtitles = Array.isArray(candidate.subtitles) && candidate.subtitles.length
+        ? subtitlesText(candidate.subtitles)
+        : (Array.isArray(candidate.subtitleLanguages) ? candidate.subtitleLanguages.map(languageWithCode).filter(Boolean).join(", ") : "");
+      return `
+        <div class="release-fallback-option ${applied ? "selected" : ""}">
+          <div class="release-fallback-facts">
+            ${facts.map((fact) => `<span class="tag">${escapeHtml(fact)}</span>`).join("")
+              || `<span class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.noDistinguishingFacts", "This source published no distinguishing details for this pressing."))}</span>`}
+          </div>
+          ${audio ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.audio", "Audio"))}:</strong> ${escapeHtml(audio)}</div>` : ""}
+          ${subtitles ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.subtitles", "Subtitles"))}:</strong> ${escapeHtml(subtitles)}</div>` : ""}
+          <div class="release-fallback-actions">
+            <button type="button" class="${applied ? "secondary-button" : "primary-button"}" data-movie-release-candidate-choose="${index}" ${picker.busy ? "disabled" : ""}>
+              ${escapeHtml(applied
+                ? tNext("releaseFallback.editionChosen", "Chosen")
+                : tNext("releaseFallback.useEdition", "Use this edition"))}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    function renderMovieDetailReleaseCandidates() {
+      const host = document.getElementById("movieDetailReleaseCandidates");
+      if (!host) return;
+      const picker = movieDetailReleaseCandidates;
+      // Reading the list needs no permission; writing the choice does. Without
+      // the edit permission the picker would render buttons whose only outcome
+      // is a 403, so it does not render at all.
+      if (!picker || !hasPermission("collection.edit_all")) {
+        host.innerHTML = "";
+        return;
+      }
+      const film = picker.film || {};
+      const filmLine = [film.title, film.year ? `(${film.year})` : ""].filter(Boolean).join(" ");
+      host.innerHTML = `
+        <div class="release-fallback-card">
+          <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
+          <div><strong>${escapeHtml(filmLine)}</strong> ${releaseCandidateFilmLinksHtml(film)}</div>
+          <div class="release-fallback-meta">${escapeHtml(tNext("movieDetail.releaseCandidatesHelp", "MovieVault identified the film but not this disc's exact pressing. Pick the one you are holding to fill in its details."))}</div>
+          ${picker.verificationStatus === "unreviewed_external"
+            ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
+            : ""}
+          <div class="release-fallback-list">
+            ${picker.releases.map(movieDetailReleaseCandidateOptionHtml).join("")}
+          </div>
+          <div class="release-fallback-actions">
+            <button type="button" class="secondary-button" data-movie-release-candidate-dismiss="1">${escapeHtml(tNext("movieDetail.releaseCandidatesKeep", "Keep current details"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    async function applyMovieDetailReleaseCandidate(index) {
+      const picker = movieDetailReleaseCandidates;
+      const releases = Array.isArray(picker?.releases) ? picker.releases : [];
+      const position = Number(index);
+      if (!picker || picker.busy || !activeDetailMovieId) return;
+      if (!Number.isInteger(position) || position < 0 || position >= releases.length) return;
+      const film = picker.film || {};
+      const identifiers = film.identifiers && typeof film.identifiers === "object" ? film.identifiers : {};
+      picker.busy = true;
+      renderMovieDetailReleaseCandidates();
+      setMovieDetailMessage(tNext("movieDetail.releaseCandidatesApplying", "Applying this edition to the disc..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            releaseCandidate: releases[position],
+            releaseCandidateFilm: {
+              title: film.title || "",
+              year: film.year || null,
+              tmdbMovieId: identifiers.tmdbMovieId || film.tmdbMovieId || null,
+              imdbId: identifiers.imdbId || film.imdbId || null
+            }
+          })
+        });
+        // A second pick fully reassigns every field the edition governs, so
+        // the list survives the choice - "wrong one, show me the others" must
+        // stay expressible.
+        picker.appliedIndex = position;
+        if (payload.detail) renderMovieDetail(payload.detail);
+        setMovieDetailMessage(tNext("movieDetail.releaseCandidatesApplied", "Edition applied to this disc."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      } finally {
+        picker.busy = false;
+        renderMovieDetailReleaseCandidates();
       }
     }
     async function refreshActiveContainerMetadata(dryRun) {
@@ -45041,6 +45196,21 @@ def ui_preview_html(
         if (dismissButton) {
           event.preventDefault();
           resetReleaseFallback();
+        }
+      });
+      document.getElementById("movieDetailReleaseCandidates")?.addEventListener("click", (event) => {
+        const chooseButton = event.target.closest("[data-movie-release-candidate-choose]");
+        const dismissButton = event.target.closest("[data-movie-release-candidate-dismiss]");
+        if (chooseButton) {
+          event.preventDefault();
+          applyMovieDetailReleaseCandidate(chooseButton.dataset.movieReleaseCandidateChoose);
+          return;
+        }
+        if (dismissButton) {
+          event.preventDefault();
+          movieDetailReleaseCandidates = null;
+          renderMovieDetailReleaseCandidates();
+          setMovieDetailMessage("");
         }
       });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
