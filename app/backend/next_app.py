@@ -7136,6 +7136,62 @@ def emit_location_change(conn, location_id, *, operation: str, entity: dict[str,
     return revision
 
 
+def episodes_available(conn) -> bool:
+    return table_exists(conn, "series_episodes") and table_exists(conn, "movie_episodes")
+
+def season_episode_entities(conn, season_uuid: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """One season's episodes, with what this user has done with them.
+
+    `watchedAt` is per user and not per instance, so it is read with the
+    actor rather than joined once and shared -- a shared shelf would
+    otherwise show one person's viewing to everyone.
+
+    `onDisc` says whether any disc in the collection carries the episode. It
+    is the answer that makes an episode list worth showing at all: a season
+    listed as owned may still be missing its last two episodes.
+    """
+    if not episodes_available(conn):
+        return []
+    actor_id = (actor or {}).get("id")
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT e.id, e.public_id, e.episode_number, e.title, e.overview,
+                   e.air_date, e.runtime_minutes,
+                   EXISTS (
+                       SELECT 1 FROM movie_episodes me
+                       JOIN movies m ON m.id = me.movie_id AND m.deleted_at IS NULL
+                       WHERE me.episode_id = e.id
+                   ) AS on_disc,
+                   (
+                       SELECT max(wh.watched_at)
+                       FROM watch_history wh
+                       WHERE wh.episode_id = e.id
+                             AND wh.user_id IS NOT DISTINCT FROM %s
+                   ) AS watched_at
+            FROM series_episodes e
+            WHERE e.season_id = %s AND e.deleted_at IS NULL
+            ORDER BY e.episode_number
+            """,
+            (actor_id, season_uuid),
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "publicId": row["public_id"],
+            "episodeNumber": row["episode_number"],
+            "title": row["title"],
+            "overview": row["overview"],
+            "airDate": row["air_date"],
+            "runtimeMinutes": row["runtime_minutes"],
+            "onDisc": bool(row["on_disc"]),
+            "watchedAt": row["watched_at"],
+        }
+        for row in rows
+    ]
+
+
 def series_sync_entities(conn) -> list[dict[str, Any]]:
     """The ``series`` array a client bootstraps from.
 
@@ -23600,60 +23656,6 @@ def register_routes(flask_app: Flask) -> None:
             detail = series_detail_entity(conn, series_uuid, actor=actor)
         return response({"status": "ok", "result": result, "detail": detail})
 
-    def episodes_available(conn) -> bool:
-        return table_exists(conn, "series_episodes") and table_exists(conn, "movie_episodes")
-
-    def season_episode_entities(conn, season_uuid: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-        """One season's episodes, with what this user has done with them.
-
-        `watchedAt` is per user and not per instance, so it is read with the
-        actor rather than joined once and shared -- a shared shelf would
-        otherwise show one person's viewing to everyone.
-
-        `onDisc` says whether any disc in the collection carries the episode. It
-        is the answer that makes an episode list worth showing at all: a season
-        listed as owned may still be missing its last two episodes.
-        """
-        if not episodes_available(conn):
-            return []
-        actor_id = (actor or {}).get("id")
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT e.id, e.public_id, e.episode_number, e.title, e.overview,
-                       e.air_date, e.runtime_minutes,
-                       EXISTS (
-                           SELECT 1 FROM movie_episodes me
-                           JOIN movies m ON m.id = me.movie_id AND m.deleted_at IS NULL
-                           WHERE me.episode_id = e.id
-                       ) AS on_disc,
-                       (
-                           SELECT max(wh.watched_at)
-                           FROM watch_history wh
-                           WHERE wh.episode_id = e.id AND wh.user_id = %s
-                       ) AS watched_at
-                FROM series_episodes e
-                WHERE e.season_id = %s AND e.deleted_at IS NULL
-                ORDER BY e.episode_number
-                """,
-                (actor_id, season_uuid),
-            )
-            rows = cur.fetchall()
-        return [
-            {
-                "id": str(row["id"]),
-                "publicId": row["public_id"],
-                "episodeNumber": row["episode_number"],
-                "title": row["title"],
-                "overview": row["overview"],
-                "airDate": row["air_date"],
-                "runtimeMinutes": row["runtime_minutes"],
-                "onDisc": bool(row["on_disc"]),
-                "watchedAt": row["watched_at"],
-            }
-            for row in rows
-        ]
-
     @flask_app.get("/api/next/series/seasons/<season_id>/episodes")
     def list_season_episodes(season_id):
         season_uuid = parse_uuid(season_id, "season id")
@@ -23764,8 +23766,15 @@ def register_routes(flask_app: Flask) -> None:
                     # Every entry for this user, not the latest: the button says
                     # "not watched", and leaving older rows behind would make it
                     # flip back the moment the list is re-read.
+                    # `user_id = NULL` is never true in SQL, so a plain `=` here
+                    # matched nothing whenever the actor carried no id: the button
+                    # reported success and cleared nothing. This matches exactly
+                    # the rows the insert wrote, id or no id.
                     cur.execute(
-                        "DELETE FROM watch_history WHERE user_id = %s AND episode_id = %s",
+                        """
+                        DELETE FROM watch_history
+                        WHERE user_id IS NOT DISTINCT FROM %s AND episode_id = %s
+                        """,
                         (actor.get("id"), episode_uuid),
                     )
                 audit_event(
