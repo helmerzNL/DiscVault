@@ -6740,6 +6740,77 @@ def ui_preview_html(
       opacity: 0.65;
       font-size: 0.9rem;
     }
+    /* Per-disc editor. A disc is a box around a copy of the release-level
+       fields, so it reuses .movie-edit-grid wholesale and only adds the frame
+       and the header that tell one disc from the next. */
+    .movie-edit-disc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .movie-edit-disc-row {
+      border: 1px solid var(--line, rgba(128, 128, 128, 0.35));
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .movie-edit-disc-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .movie-edit-disc-number {
+      font-weight: 600;
+    }
+    .movie-edit-disc-content {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .movie-edit-disc-season {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .movie-edit-disc-episodes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      padding-left: 20px;
+    }
+    .movie-edit-disc-episode {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.9rem;
+    }
+    .movie-edit-disc-count-warning {
+      color: var(--warning, #b8860b);
+    }
+    .movie-detail-discs {
+      margin-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .movie-detail-disc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .movie-detail-disc {
+      border: 1px solid var(--line, rgba(128, 128, 128, 0.35));
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .movie-detail-disc-title {
+      margin: 0 0 8px;
+      font-size: 0.95rem;
+    }
     .movie-edit-grid label > span:first-child {
       display: flex;
       align-items: center;
@@ -15168,6 +15239,13 @@ def ui_preview_html(
                     </div>
                   </div>
                 </div>
+                <div class="detail-subsection" id="movieEditDiscsSection">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
+                  <p class="hint" data-next-i18n="movieDetail.discsHint">Describe each physical disc in the box. The fields above still describe the release as a whole; a disc only narrows them.</p>
+                  <p class="hint movie-edit-disc-count-warning hidden" id="movieEditDiscCountWarning"></p>
+                  <div class="movie-edit-disc-list" id="movieEditDiscRows"></div>
+                  <button type="button" class="ghost-button movie-edit-track-add" id="movieEditDiscAdd" data-next-i18n="movieDetail.discAdd">Add disc</button>
+                </div>
                 <div class="detail-subsection">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
                   <div class="movie-edit-grid">
@@ -15294,6 +15372,14 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
             <div class="detail-fields" id="movieDetailTechnical"></div>
+            <!-- Below the release-level fields rather than instead of them: a
+                 disc narrows what the release says, so both have to be readable
+                 at once. Hidden entirely when nobody has broken the release
+                 down, which is not the same as a single-disc release. -->
+            <div class="movie-detail-discs hidden" id="movieDetailDiscsBlock">
+              <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
+              <div class="movie-detail-disc-list" id="movieDetailDiscs"></div>
+            </div>
           </div>
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
@@ -18116,6 +18202,11 @@ def ui_preview_html(
     const HDR_FORMAT_VALUES = ["hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"];
     const VIDEO_RESOLUTION_VALUES = ["480p", "576p", "720p", "1080i", "1080p", "2160p"];
     const DISC_REGION_VALUES = ["A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"];
+    // The two disc axes, mirroring next_discs.py. Medium and content are asked
+    // separately on purpose: a bonus disc is still a Blu-ray or a DVD, and one
+    // merged list could not say which.
+    const DISC_TYPE_VALUES = ["uhd_bluray", "bluray", "bluray_3d", "dvd", "hd_dvd", "laserdisc", "vcd", "cd_audio", "dvd_audio", "sacd", "umd", "other"];
+    const DISC_ROLE_VALUES = ["feature", "bonus", "feature_and_bonus"];
     // A starter list only. Any code stored on a movie that is not here is
     // injected into its select on the fly, so nothing becomes unselectable.
     const TRACK_LANGUAGE_VALUES = ["en", "nl", "de", "fr", "es", "it", "pt", "pl", "cs", "da", "fi", "no", "sv", "hu", "ro", "tr", "el", "uk", "ru", "ja", "ko", "zh", "hi", "ar", "he", "th", "is", "ca"];
@@ -18172,6 +18263,78 @@ def ui_preview_html(
     const immersiveLabel = (value) => enumLabel("movieAudioImmersive", value);
     const subtitleTypeLabel = (value) => enumLabel("movieSubtitleType", value);
     const discRegionLabel = (value) => (String(value) === "FREE" ? tNext("movieDiscRegion.free", "Region free") : String(value || ""));
+    const discTypeLabel = (value) => enumLabel("movieDiscType", value);
+    const discRoleLabel = (value) => enumLabel("movieDiscRole", value);
+    function discSeasonSummaryText(disc) {
+      // "Season 1, episodes 1-4" rather than a list of ids. Episodes are grouped
+      // under their season because that is how a box lists them on the back, and
+      // consecutive numbers are collapsed to a range for the same reason.
+      const bySeason = new Map();
+      (disc.seasons || []).forEach((season) => bySeason.set(season.id, {season, episodes: []}));
+      (disc.episodes || []).forEach((episode) => {
+        if (!bySeason.has(episode.seasonId)) {
+          bySeason.set(episode.seasonId, {season: null, episodes: []});
+        }
+        bySeason.get(episode.seasonId).episodes.push(episode);
+      });
+      return Array.from(bySeason.values()).map(({season, episodes}) => {
+        const name = season
+          ? (season.title
+            ? `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber} — ${season.title}`
+            : `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber}`)
+          : tNext("movieDetail.seasonNumber", "Season");
+        if (!episodes.length) return name;
+        const numbers = episodes.map((episode) => episode.episodeNumber).sort((a, b) => a - b);
+        const ranges = [];
+        numbers.forEach((number) => {
+          const last = ranges[ranges.length - 1];
+          if (last && number === last[1] + 1) last[1] = number;
+          else ranges.push([number, number]);
+        });
+        const text = ranges.map(([from, to]) => (from === to ? `${from}` : `${from}-${to}`)).join(", ");
+        return `${name} (${tNext("movieDetail.discEpisodes", "episodes")} ${text})`;
+      }).join(" · ");
+    }
+
+    function renderMovieDetailDiscs(discs) {
+      const block = document.getElementById("movieDetailDiscsBlock");
+      const list = document.getElementById("movieDetailDiscs");
+      if (!block || !list) return;
+      const entries = Array.isArray(discs) ? discs : [];
+      block.classList.toggle("hidden", !entries.length);
+      if (!entries.length) {
+        list.innerHTML = "";
+        return;
+      }
+      list.innerHTML = entries.map((disc, index) => {
+        const rows = detailFieldRows([
+          [tNext("movieDetail.videoResolution", "Resolution"), disc.videoResolution],
+          [tNext("movieDetail.hdr", "HDR"), enumListText(disc.hdr, hdrFormatLabel)],
+          [tNext("movieDetail.videoCodecs", "Video codec"), enumListText(disc.videoCodecs, videoCodecLabel)],
+          [tNext("movieDetail.screenRatio", "Screen ratio"), (disc.screenRatios || []).join(", ")],
+          [tNext("movieDetail.audio", "Audio"), audioTracksText(disc.audioTracks)],
+          [tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(disc.subtitles)],
+          [tNext("movieDetail.regions", "Regions"), enumListText(disc.regions, discRegionLabel)],
+          [tNext("movieDetail.discContent", "On this disc"), discSeasonSummaryText(disc)],
+          [tNext("movieDetail.fieldNotes", "Notes"), disc.notes]
+        ]);
+        return `<div class="movie-detail-disc">
+          <h5 class="movie-detail-disc-title">${escapeHtml(discHeadingText(disc, index))}</h5>
+          <div class="detail-fields">${rows}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function discHeadingText(disc, index) {
+      // The free-text type wins over the word "Other", which tells the reader
+      // nothing they did not already know from picking it.
+      const type = disc.discType === "other" && disc.discTypeOther
+        ? disc.discTypeOther
+        : discTypeLabel(disc.discType);
+      const parts = [type, discRoleLabel(disc.discRole), disc.label].filter(Boolean);
+      const number = tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1);
+      return parts.length ? `${number} — ${parts.join(" · ")}` : number;
+    }
 
     function audioTrackLabel(track) {
       if (typeof track === "string") return track;
@@ -28244,8 +28407,13 @@ def ui_preview_html(
     function fillMovieEditSubtitles(value) {
       renderMovieEditTrackRows("movieEditSubtitleRows", value, subtitleRowHtml, "movieDetail.subtitleNone", "No subtitles yet");
     }
-    function collectMovieEditAudioTracks() {
-      return Array.from(document.querySelectorAll("#movieEditAudioTrackRows .movie-edit-track-row")).map((row) => {
+    // Scoped to a container rather than to a fixed id: the same two editors now
+    // appear once for the release and once inside every disc, and a collector
+    // that reaches for `#movieEditAudioTrackRows` would read the release's rows
+    // for all of them.
+    function collectAudioTrackRows(root) {
+      if (!root) return [];
+      return Array.from(root.querySelectorAll(".movie-edit-track-row")).map((row) => {
         const legacy = row.dataset.legacyText || "";
         // Untouched legacy row: re-emit the original string verbatim. This is
         // what makes a save lossless for someone who never opens this editor.
@@ -28262,8 +28430,9 @@ def ui_preview_html(
         return entry;
       }).filter((item) => item !== null && item !== "");
     }
-    function collectMovieEditSubtitles() {
-      return Array.from(document.querySelectorAll("#movieEditSubtitleRows .movie-edit-track-row")).map((row) => {
+    function collectSubtitleRows(root) {
+      if (!root) return [];
+      return Array.from(root.querySelectorAll(".movie-edit-track-row")).map((row) => {
         const entry = {};
         row.querySelectorAll("select[data-track-field]").forEach((select) => {
           entry[select.dataset.trackField] = select.value || "";
@@ -28271,6 +28440,12 @@ def ui_preview_html(
         if (!entry.languageCode) return row.dataset.legacyText || null;
         return {languageCode: entry.languageCode, subtitleType: entry.subtitleType || "full"};
       }).filter((item) => item !== null && item !== "");
+    }
+    function collectMovieEditAudioTracks() {
+      return collectAudioTrackRows(document.getElementById("movieEditAudioTrackRows"));
+    }
+    function collectMovieEditSubtitles() {
+      return collectSubtitleRows(document.getElementById("movieEditSubtitleRows"));
     }
     function setupMovieEditTrackEditors() {
       const wire = (addId, rowsId, rowHtml) => {
@@ -28291,6 +28466,274 @@ def ui_preview_html(
       };
       wire("movieEditAudioTrackAdd", "movieEditAudioTrackRows", audioTrackRowHtml);
       wire("movieEditSubtitleAdd", "movieEditSubtitleRows", subtitleRowHtml);
+    }
+    // ---- Per-disc editor --------------------------------------------------
+    // A release grew a list of the physical discs inside it. The fields below
+    // are the release-level ones narrowed to one disc, so they reuse the same
+    // vocabularies, the same track rows and the same i18n keys -- a disc that
+    // says "Dolby Vision" has to mean what the release means by it.
+    //
+    // Every disc's season and episode ticks are read out of the DOM on save,
+    // exactly like the release-level season list, so nothing has to be kept in
+    // a parallel JS model that can drift from what the user is looking at.
+    const movieEditEpisodeCatalog = new Map();
+
+    function discCheckboxGroupHtml(field, values, current, labeller, legendKey, legendFallback) {
+      const chosen = new Set((current || []).map((item) => String(item)));
+      const boxes = values.map((value) => {
+        const checked = chosen.has(value) ? " checked" : "";
+        return `<label><input type="checkbox" value="${escapeHtml(value)}"${checked}> <span>${escapeHtml(labeller(value) || value)}</span></label>`;
+      }).join("");
+      return `<fieldset class="movie-edit-checkbox-group" data-disc-list="${escapeHtml(field)}">
+        <legend>${escapeHtml(tNext(legendKey, legendFallback))}</legend>${boxes}</fieldset>`;
+    }
+
+    function discSelectHtml(field, values, current, labeller, emptyKey, emptyFallback) {
+      const chosen = String(current ?? "");
+      const options = values.slice();
+      // Same forward-compatibility the track selects have: a stored value this
+      // build does not know is still selectable, so an unrelated save cannot
+      // quietly rewrite it.
+      if (chosen && !options.includes(chosen)) options.push(chosen);
+      const head = `<option value=""${chosen ? "" : " selected"}>${escapeHtml(tNext(emptyKey, emptyFallback))}</option>`;
+      return `<select data-disc-field="${escapeHtml(field)}">${head}${options.map((value) => {
+        const label = labeller ? labeller(value) : value;
+        return `<option value="${escapeHtml(value)}"${value === chosen ? " selected" : ""}>${escapeHtml(label || value)}</option>`;
+      }).join("")}</select>`;
+    }
+
+    function discSeasonPickerHtml(disc) {
+      // Restricted to the seasons the *release* covers, because the schema is:
+      // a disc's seasons are a subset of the release's, enforced by a foreign
+      // key. Offering a season the box does not carry would offer a save that
+      // the database is going to widen behind the user's back.
+      const seriesId = document.getElementById("movieEditSeries")?.value || "";
+      const series = movieEditSeriesCatalog.find((entry) => entry.id === seriesId);
+      const seasons = ((series && series.seasons) || []).filter((season) =>
+        collectMovieEditSeasonIds().includes(season.id)
+      );
+      if (!seasons.length) return "";
+      const chosen = new Set(disc.seasonIds || []);
+      const chosenEpisodes = new Set(disc.episodeIds || []);
+      const rows = seasons.map((season) => {
+        const label = season.title
+          ? `${season.seasonNumber} — ${escapeHtml(season.title)}`
+          : `${escapeHtml(tNext("movieDetail.seasonNumber", "Season"))} ${season.seasonNumber}`;
+        const ticked = chosen.has(season.id) ? " checked" : "";
+        const episodes = movieEditEpisodeCatalog.has(season.id)
+          ? movieEditEpisodeCatalog.get(season.id)
+          : null;
+        const episodeHtml = episodes === null
+          ? `<button type="button" class="ghost-button movie-edit-disc-episodes-load" data-season-id="${escapeHtml(season.id)}">${escapeHtml(tNext("movieDetail.discEpisodesLoad", "Choose episodes"))}</button>`
+          : (episodes.length
+            ? episodes.map((episode) => {
+                const on = chosenEpisodes.has(episode.id) ? " checked" : "";
+                const title = episode.title ? ` ${episode.title}` : "";
+                return `<label class="movie-edit-disc-episode"><input type="checkbox" data-disc-episode value="${escapeHtml(episode.id)}"${on}> <span>${escapeHtml(`${episode.episodeNumber}.${title}`)}</span></label>`;
+              }).join("")
+            : `<p class="hint">${escapeHtml(tNext("movieDetail.discEpisodesNone", "No episodes are stored for this season yet."))}</p>`);
+        return `<div class="movie-edit-disc-season" data-season-id="${escapeHtml(season.id)}">
+          <label class="movie-edit-season"><input type="checkbox" data-disc-season value="${escapeHtml(season.id)}"${ticked}> <span>${label}</span></label>
+          <div class="movie-edit-disc-episodes">${episodeHtml}</div>
+        </div>`;
+      }).join("");
+      return `<div class="movie-edit-disc-content wide">
+        <span>${escapeHtml(tNext("movieDetail.discContent", "On this disc"))}</span>
+        ${rows}
+        <p class="hint">${escapeHtml(tNext("movieDetail.discContentHint", "Ticking an episode also records the season on the release, because a disc in the box holding an episode is the box holding it."))}</p>
+      </div>`;
+    }
+
+    function discRowHtml(disc, index) {
+      const entry = disc || {};
+      const isOther = entry.discType === "other";
+      // Stored discs arrive with a list; a re-render from the live form arrives
+      // with whatever the user typed into the comma-separated field. Both are
+      // valid input to the server, so both have to survive a round trip here.
+      const ratios = Array.isArray(entry.screenRatios)
+        ? entry.screenRatios.join(", ")
+        : String(entry.screenRatios || "");
+      return `<div class="movie-edit-disc-row" data-disc-row data-disc-id="${escapeHtml(entry.id || "")}">
+        <div class="movie-edit-disc-head">
+          <span class="movie-edit-disc-number">${escapeHtml(tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1))}</span>
+          <button type="button" class="movie-edit-track-remove movie-edit-disc-remove" aria-label="${escapeHtml(tNext("movieDetail.discRemove", "Remove disc"))}">&times;</button>
+        </div>
+        <div class="movie-edit-grid">
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.discType", "Disc type"))}</span>
+            ${discSelectHtml("discType", DISC_TYPE_VALUES, entry.discType, discTypeLabel, "movieDiscType.unset", "Not specified")}
+          </label>
+          <label class="movie-edit-disc-other"${isOther ? "" : " hidden"}>
+            <span>${escapeHtml(tNext("movieDetail.discTypeOther", "Other disc type"))}</span>
+            <input data-disc-field="discTypeOther" maxlength="80" autocomplete="off" value="${escapeHtml(entry.discTypeOther || "")}">
+          </label>
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.discRole", "Content"))}</span>
+            ${discSelectHtml("discRole", DISC_ROLE_VALUES, entry.discRole, discRoleLabel, "movieDiscRole.unset", "Not specified")}
+          </label>
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.discLabel", "Label"))}</span>
+            <input data-disc-field="label" maxlength="160" autocomplete="off" value="${escapeHtml(entry.label || "")}">
+          </label>
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.videoResolution", "Resolution"))}</span>
+            ${discSelectHtml("videoResolution", VIDEO_RESOLUTION_VALUES, entry.videoResolution, null, "common.notSet", "Not set")}
+          </label>
+          ${discCheckboxGroupHtml("hdr", HDR_FORMAT_VALUES, entry.hdr, hdrFormatLabel, "movieDetail.hdr", "HDR")}
+          ${discCheckboxGroupHtml("videoCodecs", VIDEO_CODEC_VALUES, entry.videoCodecs, videoCodecLabel, "movieDetail.videoCodecs", "Video codec")}
+          ${discCheckboxGroupHtml("regions", DISC_REGION_VALUES, entry.regions, discRegionLabel, "movieDetail.regions", "Regions")}
+          <label class="wide">
+            <span>${escapeHtml(tNext("movieDetail.screenRatio", "Screen ratio"))}</span>
+            <input data-disc-field="screenRatios" maxlength="160" autocomplete="off" placeholder="${escapeHtml(tNext("movieDetail.commaSeparated", "Comma separated"))}" value="${escapeHtml(ratios)}">
+          </label>
+          <div class="movie-edit-track-editor wide" data-disc-tracks="audioTracks">
+            <span>${escapeHtml(tNext("movieDetail.audio", "Audio"))}</span>
+            <div class="movie-edit-track-rows">${(entry.audioTracks || []).map(audioTrackRowHtml).join("")}</div>
+            <button type="button" class="ghost-button movie-edit-track-add" data-disc-track-add="audioTracks">${escapeHtml(tNext("movieDetail.audioTrackAdd", "Add audio track"))}</button>
+          </div>
+          <div class="movie-edit-track-editor wide" data-disc-tracks="subtitles">
+            <span>${escapeHtml(tNext("movieDetail.subtitles", "Subtitles"))}</span>
+            <div class="movie-edit-track-rows">${(entry.subtitles || []).map(subtitleRowHtml).join("")}</div>
+            <button type="button" class="ghost-button movie-edit-track-add" data-disc-track-add="subtitles">${escapeHtml(tNext("movieDetail.subtitleAdd", "Add subtitle"))}</button>
+          </div>
+          ${discSeasonPickerHtml(entry)}
+          <label class="wide">
+            <span>${escapeHtml(tNext("movieDetail.fieldNotes", "Notes"))}</span>
+            <input data-disc-field="notes" maxlength="2000" autocomplete="off" value="${escapeHtml(entry.notes || "")}">
+          </label>
+        </div>
+      </div>`;
+    }
+
+    function renderMovieEditDiscs(discs) {
+      const container = document.getElementById("movieEditDiscRows");
+      if (!container) return;
+      const list = Array.isArray(discs) ? discs : [];
+      container.innerHTML = list.length
+        ? list.map((disc, index) => discRowHtml(disc, index)).join("")
+        : `<p class="movie-edit-track-empty">${escapeHtml(tNext("movieDetail.discNone", "No discs described yet."))}</p>`;
+      syncMovieEditDiscCountWarning();
+    }
+
+    function renumberMovieEditDiscs() {
+      document.querySelectorAll("#movieEditDiscRows .movie-edit-disc-row").forEach((row, index) => {
+        const number = row.querySelector(".movie-edit-disc-number");
+        if (number) {
+          number.textContent = tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1);
+        }
+      });
+      syncMovieEditDiscCountWarning();
+    }
+
+    function syncMovieEditDiscCountWarning() {
+      // The two fields are deliberately independent -- `disc_count` is the
+      // release-level number MovieVault exchanges, and it is routinely known
+      // before anyone enumerates the discs. So a disagreement is shown to the
+      // person who can settle it rather than silently corrected either way.
+      const warning = document.getElementById("movieEditDiscCountWarning");
+      if (!warning) return;
+      const stated = Number(document.getElementById("movieEditDiscCount")?.value || 0);
+      const described = document.querySelectorAll("#movieEditDiscRows .movie-edit-disc-row").length;
+      const mismatch = stated > 0 && described > 0 && stated !== described;
+      warning.classList.toggle("hidden", !mismatch);
+      if (mismatch) {
+        warning.textContent = tNext(
+          "movieDetail.discCountMismatch",
+          "{described} discs described, but the release says {stated}."
+        ).replace("{described}", described).replace("{stated}", stated);
+      }
+    }
+
+    function collectMovieEditDiscs() {
+      return Array.from(document.querySelectorAll("#movieEditDiscRows .movie-edit-disc-row")).map((row) => {
+        const disc = {};
+        const id = row.dataset.discId || "";
+        if (id) disc.id = id;
+        row.querySelectorAll("[data-disc-field]").forEach((input) => {
+          disc[input.dataset.discField] = input.value || "";
+        });
+        row.querySelectorAll("[data-disc-list]").forEach((group) => {
+          disc[group.dataset.discList] = Array.from(
+            group.querySelectorAll("input[type=checkbox]:checked")
+          ).map((box) => box.value);
+        });
+        disc.audioTracks = collectAudioTrackRows(row.querySelector('[data-disc-tracks="audioTracks"]'));
+        disc.subtitles = collectSubtitleRows(row.querySelector('[data-disc-tracks="subtitles"]'));
+        disc.seasonIds = Array.from(row.querySelectorAll("input[data-disc-season]:checked")).map((box) => box.value);
+        // Only episodes under a ticked season. An episode left checked below a
+        // season the user has since unticked is not a statement they are still
+        // making, and sending it would tick the season straight back on.
+        const tickedSeasons = new Set(disc.seasonIds);
+        disc.episodeIds = Array.from(row.querySelectorAll("input[data-disc-episode]:checked"))
+          .filter((box) => tickedSeasons.has(box.closest("[data-season-id]")?.dataset.seasonId))
+          .map((box) => box.value);
+        // The free-text field is only meaningful with the `other` type, and the
+        // server refuses the pair outright rather than guessing which of the two
+        // the user meant. Dropping it here keeps a stale value left behind by
+        // switching the type back from turning into an error nobody caused.
+        if (disc.discType !== "other") disc.discTypeOther = "";
+        return disc;
+      });
+    }
+
+    async function loadMovieEditDiscEpisodes(seasonId) {
+      if (!seasonId || movieEditEpisodeCatalog.has(seasonId)) return;
+      try {
+        const payload = await authApiJson(`/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes`);
+        movieEditEpisodeCatalog.set(seasonId, payload.episodes || []);
+      } catch (error) {
+        // An empty list rather than nothing: the button has been pressed, and
+        // leaving it there to be pressed again says less than "none stored".
+        movieEditEpisodeCatalog.set(seasonId, []);
+      }
+      // Re-render from the live DOM so nothing the user typed in another disc
+      // is lost to the refresh.
+      renderMovieEditDiscs(collectMovieEditDiscs());
+    }
+
+    function setupMovieEditDiscEditor() {
+      const container = document.getElementById("movieEditDiscRows");
+      const addButton = document.getElementById("movieEditDiscAdd");
+      if (!container || !addButton || addButton.dataset.wired === "1") return;
+      addButton.dataset.wired = "1";
+      addButton.addEventListener("click", () => {
+        const discs = collectMovieEditDiscs();
+        discs.push({});
+        renderMovieEditDiscs(discs);
+      });
+      container.addEventListener("click", (event) => {
+        const removeDisc = event.target.closest(".movie-edit-disc-remove");
+        if (removeDisc) {
+          removeDisc.closest(".movie-edit-disc-row").remove();
+          if (!container.querySelector(".movie-edit-disc-row")) renderMovieEditDiscs([]);
+          else renumberMovieEditDiscs();
+          return;
+        }
+        const removeTrack = event.target.closest(".movie-edit-track-remove");
+        if (removeTrack) {
+          removeTrack.closest(".movie-edit-track-row").remove();
+          return;
+        }
+        const addTrack = event.target.closest("[data-disc-track-add]");
+        if (addTrack) {
+          const rows = addTrack.closest("[data-disc-tracks]").querySelector(".movie-edit-track-rows");
+          const html = addTrack.dataset.discTrackAdd === "subtitles" ? subtitleRowHtml : audioTrackRowHtml;
+          rows.insertAdjacentHTML("beforeend", html({}));
+          return;
+        }
+        const loadEpisodes = event.target.closest(".movie-edit-disc-episodes-load");
+        if (loadEpisodes) {
+          loadMovieEditDiscEpisodes(loadEpisodes.dataset.seasonId);
+        }
+      });
+      container.addEventListener("change", (event) => {
+        const select = event.target.closest('select[data-disc-field="discType"]');
+        if (select) {
+          const other = select.closest(".movie-edit-disc-row").querySelector(".movie-edit-disc-other");
+          if (other) other.hidden = select.value !== "other";
+        }
+      });
+      document.getElementById("movieEditDiscCount")?.addEventListener("input", syncMovieEditDiscCountWarning);
     }
     function fillMovieEditCheckboxGroup(containerId, values) {
       const chosen = new Set((Array.isArray(values) ? values : []).map((item) => String(item)));
@@ -28547,10 +28990,16 @@ def ui_preview_html(
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const seriesDetail = detail.series || null;
+      // The disc rows are rendered again once the series catalog has landed:
+      // a disc's season picker only offers the seasons the release covers, and
+      // those are not known until the catalog is in. Rendering once up front as
+      // well means the technical fields are editable immediately rather than
+      // waiting on a request that a film does not even need.
+      const discs = Array.isArray(detail.discs) ? detail.discs : [];
       loadMovieEditSeries(
         seriesDetail ? seriesDetail.id : "",
         (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
-      );
+      ).then(() => renderMovieEditDiscs(collectMovieEditDiscs())).catch(() => {});
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -28600,6 +29049,8 @@ def ui_preview_html(
       fillMovieEditAudioTracks(specList("audio_tracks"));
       fillMovieEditSubtitles(specList("subtitles"));
       setupMovieEditTrackEditors();
+      renderMovieEditDiscs(discs);
+      setupMovieEditDiscEditor();
       const locationSelect = document.getElementById("movieEditLocationSelect");
       if (locationSelect && document.activeElement !== locationSelect) {
         const currentLocationId = (movie.location && movie.location.id) || movie.location_id || "";
@@ -29712,6 +30163,7 @@ def ui_preview_html(
         ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
+      renderMovieDetailDiscs(detail.discs);
       document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
       bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
@@ -39993,6 +40445,11 @@ def ui_preview_html(
         // Absent keys mean "leave the link alone" server-side, so both are sent
         // together and only while the type is a series.
         ...movieEditSeriesBody(),
+        // Always sent, and always the whole list: this form is the only place a
+        // disc can be described, so what is on screen is the complete statement.
+        // The server treats an absent key as "leave them alone" for the benefit
+        // of clients that have no disc editor at all.
+        discs: collectMovieEditDiscs(),
         edition: formTextValue("movieEditEdition"),
         releaseDate: formTextValue("movieEditReleaseDate"),
         country: formTextValue("movieEditCountry"),

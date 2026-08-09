@@ -20,6 +20,7 @@ repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", 
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
+from app.backend import next_discs
 from app.backend import next_movievault_v2
 
 
@@ -74,6 +75,24 @@ class TechnicalEnumParityTests(unittest.TestCase):
     def test_disc_regions_match(self):
         self.assertEqual(set(js_array("DISC_REGION_VALUES")), next_movievault_v2.DISC_REGIONS)
 
+    def test_disc_types_match(self):
+        """The per-disc medium list. Drift here is worse than for the release-level
+        enums: an unknown disc type is refused outright by ``normalize_disc_type``
+        rather than stored raw, so a value the form can offer but the backend does
+        not know turns an ordinary save into a 400."""
+        self.assertEqual(set(js_array("DISC_TYPE_VALUES")), set(next_discs.DISC_TYPES))
+
+    def test_disc_roles_match(self):
+        self.assertEqual(set(js_array("DISC_ROLE_VALUES")), set(next_discs.DISC_ROLES))
+
+    def test_the_two_disc_axes_have_their_own_option_lists(self):
+        """Medium and content are asked as two selects. Sharing a value between
+        them would let one answer satisfy both questions -- the exact confusion
+        migration 067 split `packaging` to end."""
+        self.assertEqual(
+            set(js_array("DISC_TYPE_VALUES")) & set(js_array("DISC_ROLE_VALUES")), set()
+        )
+
     def test_every_enum_value_has_a_translation_key_in_the_source_locale(self):
         import json
 
@@ -96,6 +115,8 @@ class TechnicalEnumParityTests(unittest.TestCase):
             ("movieVideoCodec", next_movievault_v2.VIDEO_CODECS),
             ("movieHdrFormat", next_movievault_v2.HDR_FORMATS),
             ("movieSubtitleType", next_movievault_v2.SUBTITLE_TYPES),
+            ("movieDiscType", set(next_discs.DISC_TYPES)),
+            ("movieDiscRole", set(next_discs.DISC_ROLES)),
         ]
         for prefix, values in expected:
             for value in sorted(values):
