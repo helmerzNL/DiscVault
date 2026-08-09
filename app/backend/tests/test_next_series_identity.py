@@ -166,65 +166,6 @@ class SeriesIdentityRouteTests(unittest.TestCase):
                 "no series identifier",
             )
 
-    def test_a_hand_linked_series_gains_its_seasons(self):
-        """The gap that made linking by hand only half useful.
-
-        `refresh_series_metadata` filled *existing* season overviews and never
-        created a season, because until now only the feed could name a series and
-        the feed created them. A series identified by hand has no feed behind it,
-        so it sat at zero seasons forever -- and a season is what the coverage
-        row, the episode list and every season overview hang off, so the whole
-        season half of the page stayed empty with nothing reporting a problem.
-        """
-        from app.backend import next_metadata
-
-        with self.connect() as conn:
-            series_id = self._series(conn)
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
-                    VALUES (%s, 'tmdb', 'tmdb_tv', '1399')
-                    """,
-                    (series_id,),
-                )
-            conn.commit()
-
-            def fake_entrypoint(plugin_id, capability, payload, context):
-                return {
-                    "status": "ok",
-                    "result": {
-                        "status": "hit",
-                        "series": {"overview": "A show."},
-                        "seasons": [
-                            {"seasonNumber": 1, "overview": "First."},
-                            # Deliberately bare: a season the source reports but
-                            # writes nothing about must still come into being.
-                            {"seasonNumber": 2},
-                        ],
-                    },
-                }
-
-            original = next_metadata.run_plugin_entrypoint
-            next_metadata.run_plugin_entrypoint = fake_entrypoint
-            try:
-                result = next_metadata.refresh_series_metadata(conn, series_id)
-            finally:
-                next_metadata.run_plugin_entrypoint = original
-            conn.commit()
-
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT season_number, overview FROM series_seasons WHERE series_id = %s ORDER BY season_number",
-                    (series_id,),
-                )
-                rows = cur.fetchall()
-
-        self.assertEqual(result["status"], "ok")
-        self.assertEqual([row["season_number"] for row in rows], [1, 2])
-        self.assertEqual(rows[0]["overview"], "First.")
-        self.assertIsNone(rows[1]["overview"])
-
     def test_the_same_identifier_may_not_name_two_series(self):
         """Two series answering to one id would make `series_id_for_identifier`
         return whichever the planner reached first, so the feed would start

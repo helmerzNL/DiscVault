@@ -89,14 +89,18 @@ class MergeSeriesArtworkTests(unittest.TestCase):
         self.assertEqual(season["source"], "tmdb")
         self.assertEqual(season["posterSource"], "fanart")
 
-    def test_a_season_that_carries_nothing_is_still_reported(self):
-        """It used to be dropped, on the grounds that an empty entry could only
-        produce a write of zero rows. That stopped being true once the refresh may
-        *create* seasons for a series identified by hand: the existence of season
-        3 is itself the answer, whether or not anybody wrote a synopsis for it.
+    def test_a_season_the_source_mentions_but_says_nothing_about_is_reported(self):
+        """Carried, but deliberately not acted on by the writer.
 
-        Dropping it left such a series at zero seasons forever, and with it no
-        coverage row and no episode list -- the season is what those hang off.
+        `refresh_series_metadata` writes an overview only where there is one and
+        creates no season at all -- `test_a_season_the_feed_never_recorded_is_not_created`
+        pins that rule: the plugin knows every season TMDB has, the collection
+        knows the ones a disc covers, and this job describes what is there.
+
+        Reporting the season here anyway keeps the merge honest about what the
+        source said, and leaves what to do with it to the caller. That separation
+        is what let the rule above be re-read rather than re-derived when it was
+        questioned.
         """
         merged = merge_series_details([("tmdb", _result(seasons=[{"seasonNumber": 3}]))])
         self.assertIn(3, merged["seasons"])

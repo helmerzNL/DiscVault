@@ -5843,26 +5843,6 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     updated_series = False
     season_sources: dict[str, str] = {}
     with conn.cursor() as cur:
-        # Create the seasons the source knows about but this collection has no row
-        # for. Until now only the feed did this, which was fine while the feed was
-        # the only thing that could name a series -- but a series identified by
-        # hand has no feed behind it, so its season list stayed empty forever, and
-        # with it every season-shaped thing: the coverage row, the episode list,
-        # and any season overview this very function was about to write.
-        #
-        # `ensure_seasons` is reused rather than reimplemented: it already refuses
-        # to rewrite a season somebody edited, which is the posture this whole
-        # refresh takes.
-        created_seasons = len(
-            ensure_seasons(
-                cur,
-                series_uuid,
-                [
-                    {"season_number": number, "title": season.get("title") or ""}
-                    for number, season in sorted(merged["seasons"].items())
-                ],
-            )
-        )
         if merged["overview"] and not clean_text(row.get("overview")):
             cur.execute(
                 "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
@@ -5907,7 +5887,6 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         "status": "ok",
         "seriesId": str(series_uuid),
         "seriesUpdated": updated_series,
-        "seasonsKnown": created_seasons,
         "seasonsUpdated": updated_seasons,
         "artwork": applied_artwork["series"],
         "seasonArtwork": applied_artwork["seasons"],
