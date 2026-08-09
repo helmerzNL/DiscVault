@@ -98,6 +98,29 @@ jobs:
           tests.test_next_movievault_distribution_v3
           tests.test_next_movievault_distribution_v4
 
+      # The barcode resolver's own contract guards - and the clearest case yet of
+      # the same gap. `test_next_release_details_subtitles.py` was written after
+      # an additive MovieVault field took barcode scanning down, and says in its
+      # own docstring that it "exists so that acceptance is provably in place
+      # before the producer changes". It was never named here, so it never ran,
+      # and five days later `finishes` broke the identical path.
+      - name: Test the release-details resolver contract
+        run: >-
+          python -m unittest
+          tests.test_next_release_details_search
+          tests.test_next_release_details_subtitles
+          tests.test_next_release_details_finishes
+
+      # Translations are part of "done" in this repository, and this suite is
+      # what makes that checkable: it holds all 29 locales to the exact key set
+      # of the en-US source. Also never listed, so a PR could add a key to one
+      # file and leave twenty-eight showing the English fallback.
+      - name: Test the i18n catalog completeness
+        run: >-
+          python -m unittest
+          tests.test_next_i18n
+          tests.test_next_i18n_completeness
+
       # The TMDB series shaping needs no database, so it runs before the
       # migrations with the other pure-Python modules.
       - name: Test the TMDB series mapping
@@ -180,6 +203,28 @@ jobs:
       # assert them.
       - name: Test series episodes
         run: python -m unittest tests.test_next_series_episodes
+
+      # No database in this one, and it is named here for exactly that reason:
+      # this list is hand-written, so a module nobody adds is a module CI never
+      # runs. What it guards is the route by which a series comes into existence
+      # at all -- the planner asking the television namespace, and the two
+      # candidate rebuilds that each silently dropped the fields making a series
+      # a series.
+      - name: Test adding a series from the title search
+        run: python -m unittest tests.test_next_series_add_flow
+
+      # The discs inside a release, for the same reason as episodes above: the
+      # guarantees are foreign keys, not code. A disc cannot carry a season the
+      # release does not cover, and it cannot be named under another release.
+      # The identity assertions belong here too -- a disc is pointed at by its
+      # episode links, so "saving twice keeps the same rows" is a claim only a
+      # real database can settle.
+      - name: Test the discs inside a release
+        run: >-
+          python -m unittest
+          tests.test_next_discs
+          tests.test_next_discs_postgres
+          tests.test_next_discs_ui
 
       # This one has no database at all, but it guards the surface-id and route
       # registration that a new detail page has to join to be reachable.

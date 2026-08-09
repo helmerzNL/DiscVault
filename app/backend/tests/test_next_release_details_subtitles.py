@@ -6,14 +6,20 @@ subtitleType}` while `release-technical-1` carried a bare language list, with th
 resolver's own query collapsing the variant away because the contract allowed
 nothing else.
 
-The half that matters here is the *order*. `_release_details_object` validates
-with a closed key set, so an unknown key does not get ignored - it fails the
-whole response. MovieVault emitting `subtitles` before this reader accepts it
-would return `release_details_response_invalid` for every barcode that falls
-through to the resolver. These tests exist so that acceptance is provably in
-place before the producer changes.
+The half that mattered here was the *order*. `_release_details_object` used to
+validate with a closed key set, so an unknown key was not ignored - it failed
+the whole response, and MovieVault emitting `subtitles` before this reader
+accepted it returned `release_details_response_invalid` for every barcode that
+fell through to the resolver. These tests were written so that acceptance was
+provably in place before the producer changed.
 
-App-Guidance `docs/apps/discvault/movievault-route-parity.md`.
+**That is no longer the rule.** Since 2026-08-09 the reader drops keys it does
+not know instead of refusing the answer - because the ordering convention was
+never enforced by anything and failed a second time, with `finishes`. What these
+tests now pin is that `subtitles` is genuinely *read*, which naming a key still
+decides, and that an unknown one is dropped rather than carried onward.
+
+App-Guidance `docs/apps/discvault/movievault-route-parity.md` §4.
 """
 
 import os
@@ -102,18 +108,33 @@ class ReleaseDetailsSubtitleTests(unittest.TestCase):
             [{"languageCode": "en"}],
             [{"languageCode": "en", "subtitleType": ""}],
             [{"languageCode": "EN", "subtitleType": "full"}],
-            [{"languageCode": "en", "subtitleType": "full", "extra": 1}],
             "not-a-list",
         ):
             with self.subTest(bad=bad):
                 with self.assertRaises(mv2.MovieVaultV2Error):
                     mv2._release_details_release(_release(subtitles=bad))
 
-    def test_an_unknown_key_still_fails_the_whole_response(self):
-        # The behaviour that forces consumers-first. Pinned so nobody "fixes" it
-        # into leniency without reading why it is strict.
-        with self.assertRaises(mv2.MovieVaultV2Error):
-            mv2._release_details_release(_release(somethingNew=[]))
+    def test_an_unknown_key_no_longer_fails_the_whole_response(self):
+        """The consumers-first rule this file was written to enforce is gone.
+
+        It was a convention, not a gate, and it failed twice: `subtitles` on
+        2026-08-04 (which is why this file exists) and `finishes` on
+        2026-08-09, whose barcode MovieVault had resolved correctly. The reader
+        now drops what it does not know, at every level, so the ordering no
+        longer decides whether scanning works.
+
+        Dropping rather than passing through is the part still worth pinning:
+        the unknown value must not reach anything downstream.
+        """
+        result = mv2._release_details_release(_release(somethingNew=["x"]))
+
+        self.assertNotIn("somethingNew", result)
+
+        track = mv2._release_details_subtitle_track(
+            {"languageCode": "en", "subtitleType": "full", "extra": 1}
+        )
+
+        self.assertEqual(track, {"languageCode": "en", "subtitleType": "full"})
 
 
 if __name__ == "__main__":

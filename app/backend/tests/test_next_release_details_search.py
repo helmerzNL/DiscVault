@@ -33,8 +33,18 @@ def candidates_result() -> dict:
             },
         },
         "releases": [
-            {"releaseRef": "a", "source": "external", "title": "Example Film"},
-            {"releaseRef": "b", "source": "external", "title": "Example Film"},
+            {
+                "releaseRef": "a",
+                "source": "external",
+                "title": "Example Film",
+                "finishes": [],
+            },
+            {
+                "releaseRef": "b",
+                "source": "external",
+                "title": "Example Film",
+                "finishes": ["holofoil"],
+            },
         ],
     }
 
@@ -125,6 +135,38 @@ class ReleaseDetailsSearchPayloadTests(unittest.TestCase):
                 self.assertFalse(payload["retryable"])
                 self.assertTrue(payload["answered"])
 
+    def test_a_failure_discvault_owns_is_not_reported_as_the_servers(self):
+        """A payload this client refused is a DiscVault defect.
+
+        These four codes are raised on DiscVault's side of the wire, so falling
+        through to the `server` default sent the next investigation at
+        MovieVault - which is what happened for the `finishes` outage, whose
+        barcode MovieVault had resolved correctly. `answered` stays true because
+        MovieVault did reply; nothing here may be phrased as a miss.
+        """
+        for code in (
+            "release_details_response_invalid",
+            "release_details_request_invalid",
+            "release_details_retry_after_invalid",
+            "release_details_response_too_large",
+        ):
+            with self.subTest(code=code):
+                payload = next_app.release_details_search_payload(
+                    {"status": "failed", "errorCode": code},
+                    entrypoint="resolve",
+                )
+                self.assertEqual(payload["failureKind"], "client")
+                self.assertFalse(payload["retryable"])
+                self.assertTrue(payload["answered"])
+
+    def test_an_unclassified_code_still_falls_back_to_server(self):
+        payload = next_app.release_details_search_payload(
+            {"status": "failed", "errorCode": "something_new"},
+            entrypoint="resolve",
+        )
+
+        self.assertEqual(payload["failureKind"], "server")
+
     def test_a_miss_carries_no_releases_and_no_failure(self):
         payload = next_app.release_details_search_payload(
             {"status": "miss"},
@@ -152,6 +194,7 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
                 "runtimeMinutes": 170,
                 "discRegions": ["B"],
                 "packaging": ["steelbook"],
+                "finishes": ["holofoil"],
                 "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
                 "subtitles": [{"languageCode": "nl", "subtitleType": "full"}],
                 "video": {
@@ -174,6 +217,7 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
                 "releaseDate": "2024-05-01",
                 "runtimeMinutes": 170,
                 "packaging": ["steelbook"],
+                "finishes": ["holofoil"],
                 "discRegions": ["B"],
                 "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
                 "subtitles": [{"languageCode": "nl", "subtitleType": "full"}],
@@ -228,6 +272,31 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
         self.assertEqual(payload["audioTracks"], [])
         self.assertEqual(payload["packaging"], [])
 
+    def test_a_finish_this_repo_does_not_know_is_dropped_rather_than_refused(self):
+        """`finishes` is the one key here the movie edit validates strictly.
+
+        `_movie_edit_case_axes` answers an unknown value with a 422, while the
+        resolver deliberately keeps vocabulary it has not heard of so that one
+        new finish name cannot cost a whole resolve answer. Unfiltered, the two
+        rules would collide on exactly the discs where MovieVault is ahead of
+        DiscVault, and "Use this edition" would fail outright.
+        """
+        payload = next_app.release_candidate_movie_payload(
+            {"title": "Example Film", "finishes": ["holofoil", "mirror_foil"]}
+        )
+
+        self.assertEqual(payload["finishes"], ["holofoil"])
+
+    def test_an_all_unknown_finish_list_becomes_empty_rather_than_absent(self):
+        # Absent means "no opinion" and an empty list clears, so a candidate
+        # that named only finishes DiscVault cannot represent still says that
+        # it knows of none - it does not leave the previous pick's finish on.
+        payload = next_app.release_candidate_movie_payload(
+            {"title": "Example Film", "finishes": ["mirror_foil"]}
+        )
+
+        self.assertEqual(payload["finishes"], [])
+
     def test_a_missing_candidate_contributes_nothing(self):
         self.assertEqual(next_app.release_candidate_movie_payload({}), {})
         self.assertEqual(next_app.release_candidate_movie_payload(None), {})
@@ -256,6 +325,7 @@ class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
         "runtimeMinutes": 148,
         "discRegions": ["FREE"],
         "packaging": ["steelbook"],
+        "finishes": ["holofoil"],
         "video": {
             "resolution": "2160p",
             "codecs": ["hevc"],
@@ -291,6 +361,25 @@ class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
         self.assertEqual(technical["screen_ratios"], ["2.39:1"])
         self.assertEqual(technical["audio_tracks"][0]["codec"], "dolby_truehd")
         self.assertEqual(technical["subtitles"][0]["subtitleType"], "sdh")
+        self.assertEqual(technical["finishes"], ["holofoil"])
+
+    def test_a_finish_does_not_wipe_the_flat_packaging_list(self):
+        """`finishes` and `packaging` are separate axes on the same edit.
+
+        `_movie_edit_case_axes` re-derives the flat `packaging` list from the
+        carrier and outer-packaging axes when either is submitted. A candidate
+        names neither, so both must survive side by side - if that ever changes,
+        a picked edition would quietly lose its packaging.
+        """
+        body = next_app.release_candidate_movie_payload(dict(self.CANDIDATE))
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["packaging"], ["steelbook"])
+        self.assertEqual(technical["finishes"], ["holofoil"])
 
     def test_a_second_pick_reassigns_the_first_picks_tracks(self):
         # The first pick carried audio and subtitles; the second names none.
