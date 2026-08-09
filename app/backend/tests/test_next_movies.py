@@ -169,13 +169,58 @@ class NextMovieEditPolicyTests(unittest.TestCase):
             proposal["technicalUpdates"]["packaging"], ["steelbook", "slipcover"]
         )
 
-    def test_movie_technical_edits_parses_packaging_as_a_list(self):
+    def test_movie_technical_edits_ignores_a_client_sent_packaging_list(self):
+        # The flat list is a derived mirror and read-only for clients
+        # (sync-contract §4.7a). Accepting it wrote an ungoverned value into the
+        # column and left the axes - the source of truth - untouched, so the two
+        # disagreed until the next axis edit recomputed the mirror.
         edits = movie_technical_edits({"packaging": ["steelbook", "slipcover"]})
-        self.assertEqual(edits["packaging"], ["steelbook", "slipcover"])
+        self.assertNotIn("packaging", edits)
 
-    def test_movie_technical_edits_parses_comma_separated_packaging_text(self):
+    def test_movie_technical_edits_ignores_comma_separated_packaging_text(self):
+        # This spelling used to be stored verbatim, TitleCase and all, which is
+        # how values no i18n key could resolve ended up in the column.
         edits = movie_technical_edits({"packaging": "Steelbook, Slipcover"})
-        self.assertEqual(edits["packaging"], ["Steelbook", "Slipcover"])
+        self.assertNotIn("packaging", edits)
+
+    def test_every_axis_rejects_an_unknown_value_as_a_422(self):
+        # All four raised, but two built the exception with the arguments in the
+        # wrong order - `NextApiError(message, status_code, code)` - so `422`
+        # landed in the message slot and the string `"invalid_request"` in the
+        # status slot. Flask refuses a non-integer status, so `outerPackaging`
+        # and `steelbookFormat` answered a bad value with a 500 instead of the
+        # 422 they were reaching for. Asserting the status is what catches it;
+        # asserting only that *something* raised does not.
+        cases = {
+            "carrierType": "cardboard_box",
+            "outerPackaging": ["shrinkwrap"],
+            "finishes": ["glitter"],
+            "steelbookFormat": "g9",
+        }
+        for key, value in cases.items():
+            with self.subTest(field=key):
+                with self.assertRaises(NextApiError) as caught:
+                    movie_technical_edits({key: value})
+                self.assertEqual(caught.exception.status_code, 422, key)
+                self.assertEqual(caught.exception.code, "invalid_request", key)
+                self.assertIn(key, str(caught.exception), key)
+
+    def test_a_packaging_echo_cannot_downgrade_the_axes(self):
+        # The reason the flat list is dropped rather than split back onto the
+        # axes. `futurepak` + `fullslip` mirror down to `steelbook` +
+        # `slipcover`; a client echoing that mirror back unchanged must not
+        # overwrite the finer values it was derived from.
+        edits = movie_technical_edits(
+            {
+                "packaging": ["steelbook", "slipcover"],
+                "carrierType": "futurepak",
+                "outerPackaging": ["fullslip"],
+            }
+        )
+        self.assertNotIn("packaging", edits)
+        self.assertEqual(edits["carrier_type"], "futurepak")
+        self.assertEqual(edits["outer_packaging"], ["fullslip"])
+        self.assertTrue(edits["_derive_packaging"])
 
     def test_movie_edit_receiver_proposal_skips_locked_supplements(self):
         proposal = movie_edit_receiver_proposal(

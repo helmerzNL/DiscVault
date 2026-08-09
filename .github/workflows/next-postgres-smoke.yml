@@ -269,6 +269,18 @@ jobs:
           tests.test_next_technical_profile_sync
           tests.test_next_movie_estimated_value
 
+      # Same gap, same fix. These three guard the packaging axes - the edit
+      # payload, the derived flat mirror, and the PWA form that writes them -
+      # and none of them was invoked here. Two of the movie-detail assertions
+      # had in fact been red since migrations 067/071 replaced the flat
+      # nine-value control with the axes, and nothing reported it.
+      - name: Test the movie edit payload and the packaging axes
+        run: >-
+          python -m unittest
+          tests.test_next_movies
+          tests.test_next_movie_technical_specs_packaging_postgres
+          tests.test_next_movie_detail_ui
+
       - name: Test API and MCP connection grouping
         run: python -m unittest tests.test_next_api_connections
 

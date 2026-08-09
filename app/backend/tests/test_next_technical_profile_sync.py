@@ -81,6 +81,7 @@ class TechnicalSyncEditFilterTests(unittest.TestCase):
                 "aspectRatios": ["2.39:1"],
                 "discRegions": ["A", "B"],
                 "packaging": ["steelbook"],
+                "carrierType": "steelbook",
                 "videoResolution": "2160p",
                 "videoCodecs": ["hevc"],
             }
@@ -88,9 +89,15 @@ class TechnicalSyncEditFilterTests(unittest.TestCase):
         self.assertEqual(edits["hdr"], ["hdr10", "dolby_vision"])
         self.assertEqual(edits["screen_ratios"], ["2.39:1"])
         self.assertEqual(edits["regions"], ["A", "B"])
-        self.assertEqual(edits["packaging"], ["steelbook"])
         self.assertEqual(edits["video_resolution"], "2160p")
         self.assertEqual(edits["video_codecs"], ["hevc"])
+        # `packaging` is the one field that is *not* carried through: it is a
+        # derived mirror the server recomputes from the axes, and a client may
+        # not write it (sync-contract §4.7a). The carrier in the same body is
+        # what drives that recomputation.
+        self.assertNotIn("packaging", edits)
+        self.assertEqual(edits["carrier_type"], "steelbook")
+        self.assertTrue(edits["_derive_packaging"])
 
     def test_an_unknown_codec_survives(self):
         """MovieVault keeps an unrecognised member raw rather than dropping the

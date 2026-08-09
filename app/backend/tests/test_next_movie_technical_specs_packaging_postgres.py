@@ -58,25 +58,85 @@ class MoviePackagingListPostgresTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row["data_type"], "jsonb")
 
-    def test_upsert_movie_technical_edits_persists_a_multi_value_packaging_list(self):
+    def test_upsert_movie_technical_edits_derives_the_flat_list_from_the_axes(self):
         with self.connect() as conn:
             movie_id = self._insert_bare_movie(conn)
-            edits = next_app.movie_technical_edits({"packaging": ["steelbook", "slipcover"]})
+            edits = next_app.movie_technical_edits(
+                {"carrierType": "steelbook", "outerPackaging": ["slipcover"]}
+            )
             with conn.cursor() as cur:
                 next_app.upsert_movie_technical_edits(cur, movie_id, edits)
             conn.commit()
             spec = next_app.movie_technical_spec_entity(conn, movie_id)
+        self.assertEqual(spec["carrier_type"], "steelbook")
+        self.assertEqual(spec["outer_packaging"], ["slipcover"])
         self.assertEqual(spec["packaging"], ["steelbook", "slipcover"])
 
-    def test_upsert_movie_technical_edits_persists_comma_separated_packaging_text(self):
+    def test_the_derived_list_collapses_the_finer_vocabulary(self):
+        # `futurepak` and `fullslip` have no legacy equivalent of their own, so
+        # the mirror answers with the coarse nine while the axes keep the
+        # precise values. Lossy in the derived direction is the design.
         with self.connect() as conn:
             movie_id = self._insert_bare_movie(conn)
-            edits = next_app.movie_technical_edits({"packaging": "Steelbook, Slipcover"})
+            edits = next_app.movie_technical_edits(
+                {"carrierType": "futurepak", "outerPackaging": ["fullslip", "o_card"]}
+            )
             with conn.cursor() as cur:
                 next_app.upsert_movie_technical_edits(cur, movie_id, edits)
             conn.commit()
             spec = next_app.movie_technical_spec_entity(conn, movie_id)
-        self.assertEqual(spec["packaging"], ["Steelbook", "Slipcover"])
+        self.assertEqual(spec["carrier_type"], "futurepak")
+        self.assertEqual(spec["outer_packaging"], ["fullslip", "o_card"])
+        # De-duplicated: both outer values map onto `slipcover`.
+        self.assertEqual(spec["packaging"], ["steelbook", "slipcover"])
+
+    def test_a_client_sent_packaging_list_is_not_persisted(self):
+        # sync-contract §4.7a: the mirror is read-only for clients. The body
+        # carries nothing else, so there is no edit left to apply at all.
+        with self.connect() as conn:
+            movie_id = self._insert_bare_movie(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO movie_technical_specs (movie_id) VALUES (%s)",
+                    (movie_id,),
+                )
+            conn.commit()
+            edits = next_app.movie_technical_edits({"packaging": ["steelbook", "slipcover"]})
+            self.assertEqual(edits, {})
+            with conn.cursor() as cur:
+                next_app.upsert_movie_technical_edits(cur, movie_id, edits)
+            conn.commit()
+            spec = next_app.movie_technical_spec_entity(conn, movie_id)
+        self.assertEqual(spec["packaging"], [])
+        self.assertIsNone(spec["carrier_type"])
+
+    def test_a_packaging_echo_does_not_downgrade_stored_axes(self):
+        # The end-to-end version of the rule: store precise axes, then replay
+        # the mirror a pre-split client would have read back. The axes and the
+        # mirror must both survive untouched.
+        with self.connect() as conn:
+            movie_id = self._insert_bare_movie(conn)
+            with conn.cursor() as cur:
+                next_app.upsert_movie_technical_edits(
+                    cur,
+                    movie_id,
+                    next_app.movie_technical_edits(
+                        {"carrierType": "futurepak", "outerPackaging": ["fullslip"]}
+                    ),
+                )
+            conn.commit()
+
+            with conn.cursor() as cur:
+                next_app.upsert_movie_technical_edits(
+                    cur,
+                    movie_id,
+                    next_app.movie_technical_edits({"packaging": ["steelbook", "slipcover"]}),
+                )
+            conn.commit()
+            spec = next_app.movie_technical_spec_entity(conn, movie_id)
+        self.assertEqual(spec["carrier_type"], "futurepak")
+        self.assertEqual(spec["outer_packaging"], ["fullslip"])
+        self.assertEqual(spec["packaging"], ["steelbook", "slipcover"])
 
     def test_empty_packaging_list_does_not_clear_a_previously_set_value(self):
         """The technical_updates merge path uses a CASE WHEN <> '[]'::jsonb
@@ -86,7 +146,9 @@ class MoviePackagingListPostgresTests(unittest.TestCase):
             movie_id = self._insert_bare_movie(conn)
             with conn.cursor() as cur:
                 next_app.upsert_movie_technical_edits(
-                    cur, movie_id, next_app.movie_technical_edits({"packaging": ["steelbook"]})
+                    cur,
+                    movie_id,
+                    next_app.movie_technical_edits({"carrierType": "steelbook"}),
                 )
             conn.commit()
 

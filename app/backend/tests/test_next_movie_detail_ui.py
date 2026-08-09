@@ -839,33 +839,45 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn('data-artwork-hidden="${asset.hidden ? "true" : "false"}"', self.source)
         self.assertIn(".movie-art-option.is-hidden .art-option-preview", self.source)
 
-    def test_packaging_edit_uses_a_checkbox_group_of_all_nine_enum_values(self):
-        self.assertIn('<fieldset id="movieEditPackaging"', self.source)
-        # The old single free-text input must be gone, not just superseded.
+    def test_packaging_is_edited_as_axes_rather_than_one_flat_list(self):
+        """Migrations 067/071 replaced the flat nine-value group with the axes.
+
+        This test and the one below asserted the old group long after it was
+        gone, and stayed red without anyone noticing because neither this module
+        nor the flat list's other guards are named in the smoke workflow.
+        """
+        # A scalar carrier and a scalar generation; two checkbox groups.
+        self.assertIn('<select id="movieEditCarrierType" name="carrierType">', self.source)
+        self.assertIn(
+            '<select id="movieEditSteelbookFormat" name="steelbookFormat">', self.source
+        )
+        self.assertIn('<fieldset id="movieEditOuterPackaging"', self.source)
+        self.assertIn('<fieldset id="movieEditFinishes"', self.source)
+        # The flat list is derived and read-only for clients, so it must not be
+        # editable at all - neither as the old free-text input nor as a group.
+        self.assertNotIn('<fieldset id="movieEditPackaging"', self.source)
         self.assertNotIn(
             '<input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">',
             self.source,
         )
-        for value in (
-            "keep_case",
-            "amaray",
-            "steelbook",
-            "slipcover",
-            "slipcase",
-            "digibook",
-            "mediabook",
-            "digipak",
-            "box",
-        ):
-            with self.subTest(value=value):
-                self.assertIn(f'<input type="checkbox" value="{value}">', self.source)
 
-    def test_packaging_checkbox_fill_and_submit_read_checked_values(self):
+    def test_the_axis_controls_are_filled_and_submitted(self):
+        self.assertIn('fillMovieEditCaseAxes(specs, metadata, specList)', self.source)
         self.assertIn(
-            'fillMovieEditCheckboxGroup("movieEditPackaging", specList("packaging"));',
+            'fillMovieEditCheckboxGroup("movieEditFinishes", specList("finishes"));',
             self.source,
         )
-        self.assertIn(
+        self.assertIn('fillMovieEditCheckboxGroup(\n        "movieEditOuterPackaging"', self.source)
+        # The submit body carries the four axis keys and no `packaging`.
+        for line in (
+            'carrierType: formTextValue("movieEditCarrierType"),',
+            'steelbookFormat: formTextValue("movieEditSteelbookFormat"),',
+            'outerPackaging: collectMovieEditCheckboxGroup("movieEditOuterPackaging"),',
+            'finishes: collectMovieEditCheckboxGroup("movieEditFinishes"),',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.source)
+        self.assertNotIn(
             'packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),',
             self.source,
         )
