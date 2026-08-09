@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Kaynaklar bunun hangi film olduğunda anlaşamadı, bu yüzden disk tanımlanamadı. Aşağıdan elle ekle.",
   "releaseFallback.needsYear": "Bu başlığı birden fazla film taşıyor. Yılı ekleyip yeniden ara.",
   "releaseFallback.catalogDefect": "MovieVault bu sürüme sahip ama yayımlayamıyor. Yeniden denemek işe yaramaz; diski aşağıdan elle ekle.",
+  "releaseFallback.clientDefect": "MovieVault yanıt verdi ancak DiscVault'un bu sürümü yanıtı okuyamadı. DiscVault'u güncellemek sorunu çözecektir; bu arada diski aşağıdan elle ekleyin.",
   "releaseFallback.stillWorking": "MovieVault bu aramayı hâlâ sürdürüyor. Birazdan yeniden ara - tamamlanan sonuç hazır tutuluyor.",
   "releaseFallback.unreachable": "MovieVault'a ulaşılamadı, bu yüzden bu disk hakkında henüz bir şey bilinmiyor. Bu genellikle geçicidir.",
   "releaseFallback.failed": "MovieVault bu aramayı tamamlayamadı.",

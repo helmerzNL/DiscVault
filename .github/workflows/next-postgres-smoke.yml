@@ -98,6 +98,29 @@ jobs:
           tests.test_next_movievault_distribution_v3
           tests.test_next_movievault_distribution_v4
 
+      # The barcode resolver's own contract guards - and the clearest case yet of
+      # the same gap. `test_next_release_details_subtitles.py` was written after
+      # an additive MovieVault field took barcode scanning down, and says in its
+      # own docstring that it "exists so that acceptance is provably in place
+      # before the producer changes". It was never named here, so it never ran,
+      # and five days later `finishes` broke the identical path.
+      - name: Test the release-details resolver contract
+        run: >-
+          python -m unittest
+          tests.test_next_release_details_search
+          tests.test_next_release_details_subtitles
+          tests.test_next_release_details_finishes
+
+      # Translations are part of "done" in this repository, and this suite is
+      # what makes that checkable: it holds all 29 locales to the exact key set
+      # of the en-US source. Also never listed, so a PR could add a key to one
+      # file and leave twenty-eight showing the English fallback.
+      - name: Test the i18n catalog completeness
+        run: >-
+          python -m unittest
+          tests.test_next_i18n
+          tests.test_next_i18n_completeness
+
       # The TMDB series shaping needs no database, so it runs before the
       # migrations with the other pure-Python modules.
       - name: Test the TMDB series mapping

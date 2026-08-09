@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Kildene var ikke enige om hvilken film dette er, så platen ble ikke identifisert. Legg den til manuelt nedenfor.",
   "releaseFallback.needsYear": "Flere filmer har denne tittelen. Legg til årstallet og søk igjen.",
   "releaseFallback.catalogDefect": "MovieVault har denne utgivelsen, men kan ikke publisere den. Å prøve igjen hjelper ikke; legg til platen manuelt nedenfor.",
+  "releaseFallback.clientDefect": "MovieVault svarte, men denne versjonen av DiscVault kunne ikke lese svaret. En oppdatering av DiscVault bør løse det; legg til platen manuelt nedenfor i mellomtiden.",
   "releaseFallback.stillWorking": "MovieVault jobber fortsatt med oppslaget. Søk igjen om litt - det ferdige resultatet ligger klart.",
   "releaseFallback.unreachable": "MovieVault kunne ikke nås, så ingenting er kjent om denne platen ennå. Dette er som regel midlertidig.",
   "releaseFallback.failed": "MovieVault kunne ikke fullføre oppslaget.",

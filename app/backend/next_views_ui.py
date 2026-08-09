@@ -35581,6 +35581,10 @@ def ui_preview_html(
         push(`${candidate.discCount} ${tNext("releaseFallback.discs", "discs")}`);
       }
       push(enumListText(candidate.packaging, packagingLabel));
+      // Two pressings of one film often differ by nothing else: same format,
+      // same region, same disc count, and one is holofoil while the other is
+      // matte. Reuses `movieFinish.*`, which every locale already carries.
+      push(enumListText(candidate.finishes, finishLabel));
       const video = candidate.video && typeof candidate.video === "object" ? candidate.video : {};
       push(video.resolution);
       push(enumListText(video.codecs, videoCodecLabel));
@@ -35650,6 +35654,16 @@ def ui_preview_html(
         return {
           tone: "bad",
           text: tNext("releaseFallback.catalogDefect", "MovieVault holds this release but cannot publish it. Trying again will not help; add the disc by hand below.")
+        };
+      }
+      // MovieVault answered and DiscVault could not read the answer. Neither
+      // "could not be reached" nor "could not complete this lookup" is true, and
+      // both send the user to retry something that cannot succeed - the disc is
+      // very likely known, by a client that is behind the contract.
+      if (fallback.failureKind === "client") {
+        return {
+          tone: "bad",
+          text: tNext("releaseFallback.clientDefect", "MovieVault answered, but this version of DiscVault could not read the answer. Updating DiscVault should fix it; add the disc by hand below in the meantime.")
         };
       }
       if (fallback.answered === false) {

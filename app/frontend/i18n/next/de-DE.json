@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Die Quellen waren sich nicht einig, welcher Film das ist, die Disc wurde also nicht identifiziert. Füge sie unten von Hand hinzu.",
   "releaseFallback.needsYear": "Mehrere Filme tragen diesen Titel. Ergänze das Jahr und suche erneut.",
   "releaseFallback.catalogDefect": "MovieVault hat diese Veröffentlichung, kann sie aber nicht ausliefern. Ein erneuter Versuch hilft nicht; füge die Disc unten von Hand hinzu.",
+  "releaseFallback.clientDefect": "MovieVault hat geantwortet, aber diese Version von DiscVault konnte die Antwort nicht lesen. Ein Update von DiscVault sollte das beheben; füge die Disc unten so lange von Hand hinzu.",
   "releaseFallback.stillWorking": "MovieVault arbeitet noch an dieser Suche. Suche gleich erneut - das fertige Ergebnis bleibt bereit.",
   "releaseFallback.unreachable": "MovieVault war nicht erreichbar, daher ist über diese Disc noch nichts bekannt. Das ist meist vorübergehend.",
   "releaseFallback.failed": "MovieVault konnte diese Suche nicht abschließen.",

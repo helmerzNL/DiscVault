@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Джерела не зійшлися на тому, який це фільм, тож диск не було ідентифіковано. Додай його вручну нижче.",
   "releaseFallback.needsYear": "Кілька фільмів мають цю назву. Додай рік і пошукай знову.",
   "releaseFallback.catalogDefect": "MovieVault має це видання, але не може його опублікувати. Повторна спроба не допоможе; додай диск вручну нижче.",
+  "releaseFallback.clientDefect": "MovieVault відповів, але ця версія DiscVault не змогла прочитати відповідь. Оновлення DiscVault має це виправити; тим часом додайте диск вручну нижче.",
   "releaseFallback.stillWorking": "MovieVault ще працює над цим пошуком. Пошукай знову за мить - готовий результат залишається напоготові.",
   "releaseFallback.unreachable": "Не вдалося зв'язатися з MovieVault, тож про цей диск поки нічого не відомо. Зазвичай це тимчасово.",
   "releaseFallback.failed": "MovieVault не зміг завершити цей пошук.",

@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Allikad ei jõudnud kokkuleppele, milline film see on, seega plaati ei tuvastatud. Lisa see allpool käsitsi.",
   "releaseFallback.needsYear": "Mitmel filmil on see pealkiri. Lisa aasta ja otsi uuesti.",
   "releaseFallback.catalogDefect": "MovieVaultil on see väljaanne olemas, kuid ta ei saa seda avaldada. Uuesti proovimine ei aita; lisa plaat allpool käsitsi.",
+  "releaseFallback.clientDefect": "MovieVault vastas, kuid see DiscVaulti versioon ei suutnud vastust lugeda. DiscVaulti uuendamine peaks selle lahendama; lisa plaat seni allpool käsitsi.",
   "releaseFallback.stillWorking": "MovieVault töötleb seda otsingut veel. Otsi hetke pärast uuesti - valmis tulemus jääb alles.",
   "releaseFallback.unreachable": "MovieVaultiga ei saadud ühendust, seega selle plaadi kohta pole veel midagi teada. See on tavaliselt ajutine.",
   "releaseFallback.failed": "MovieVault ei saanud seda otsingut lõpetada.",

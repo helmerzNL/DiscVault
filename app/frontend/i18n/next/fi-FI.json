@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Lähteet eivät olleet yksimielisiä siitä, mikä elokuva tämä on, joten levyä ei tunnistettu. Lisää se käsin alta.",
   "releaseFallback.needsYear": "Usealla elokuvalla on tämä nimi. Lisää vuosi ja hae uudelleen.",
   "releaseFallback.catalogDefect": "MovieVaultilla on tämä julkaisu, mutta se ei voi julkaista sitä. Uudelleenyritys ei auta; lisää levy käsin alta.",
+  "releaseFallback.clientDefect": "MovieVault vastasi, mutta tämä DiscVaultin versio ei osannut lukea vastausta. DiscVaultin päivittäminen korjaa tämän todennäköisesti; lisää levy sillä välin käsin alta.",
   "releaseFallback.stillWorking": "MovieVault käsittelee hakua yhä. Hae hetken kuluttua uudelleen - valmis tulos pysyy tallessa.",
   "releaseFallback.unreachable": "MovieVaultiin ei saatu yhteyttä, joten tästä levystä ei tiedetä vielä mitään. Tämä on yleensä tilapäistä.",
   "releaseFallback.failed": "MovieVault ei saanut hakua valmiiksi.",

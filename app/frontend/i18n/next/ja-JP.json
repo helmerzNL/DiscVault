@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "どの作品かについてソースの見解が分かれたため、ディスクを特定できませんでした。下から手動で追加してください。",
   "releaseFallback.needsYear": "同じタイトルの作品が複数あります。年を追加して再検索してください。",
   "releaseFallback.catalogDefect": "MovieVault はこのリリースを保持していますが、公開できません。再試行しても解決しません。下から手動で追加してください。",
+  "releaseFallback.clientDefect": "MovieVault は応答しましたが、このバージョンの DiscVault では応答を読み取れませんでした。DiscVault を更新すれば解決するはずです。それまでは下から手動でディスクを追加してください。",
   "releaseFallback.stillWorking": "MovieVault はまだこの検索を処理中です。少し後で再検索してください - 完了した結果は保持されます。",
   "releaseFallback.unreachable": "MovieVault に接続できなかったため、このディスクについてはまだ何もわかりません。通常は一時的なものです。",
   "releaseFallback.failed": "MovieVault はこの検索を完了できませんでした。",

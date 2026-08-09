@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "출처마다 어떤 영화인지 의견이 달라 디스크를 식별하지 못했습니다. 아래에서 직접 추가하세요.",
   "releaseFallback.needsYear": "같은 제목의 영화가 여럿입니다. 연도를 넣고 다시 검색하세요.",
   "releaseFallback.catalogDefect": "MovieVault가 이 릴리스를 갖고 있지만 게시할 수 없습니다. 다시 시도해도 해결되지 않습니다. 아래에서 직접 추가하세요.",
+  "releaseFallback.clientDefect": "MovieVault는 응답했지만 이 버전의 DiscVault가 응답을 읽지 못했습니다. DiscVault를 업데이트하면 해결됩니다. 그때까지는 아래에서 디스크를 직접 추가하세요.",
   "releaseFallback.stillWorking": "MovieVault가 아직 이 조회를 처리하고 있습니다. 잠시 후 다시 검색하세요 - 완료된 결과는 그대로 보관됩니다.",
   "releaseFallback.unreachable": "MovieVault에 연결하지 못해 이 디스크에 대해 아직 아무것도 알 수 없습니다. 대개 일시적입니다.",
   "releaseFallback.failed": "MovieVault가 이 조회를 끝내지 못했습니다.",

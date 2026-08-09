@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Kilderne var ikke enige om, hvilken film det er, så disken blev ikke identificeret. Tilføj den manuelt nedenfor.",
   "releaseFallback.needsYear": "Flere film har denne titel. Tilføj årstallet, og søg igen.",
   "releaseFallback.catalogDefect": "MovieVault har denne udgivelse, men kan ikke udgive den. Et nyt forsøg hjælper ikke; tilføj disken manuelt nedenfor.",
+  "releaseFallback.clientDefect": "MovieVault svarede, men denne version af DiscVault kunne ikke læse svaret. En opdatering af DiscVault burde løse det; tilføj imens disken manuelt nedenfor.",
   "releaseFallback.stillWorking": "MovieVault arbejder stadig på opslaget. Søg igen om lidt - det færdige resultat står klar.",
   "releaseFallback.unreachable": "MovieVault kunne ikke nås, så der vides endnu intet om denne disk. Det er som regel midlertidigt.",
   "releaseFallback.failed": "MovieVault kunne ikke fuldføre opslaget.",

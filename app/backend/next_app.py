@@ -9316,9 +9316,26 @@ RELEASE_DETAILS_FAILURE_KINDS: dict[str, tuple[str, bool]] = {
     "not_found": ("no_data", False),
     "ambiguous_title": ("needs_year", False),
     "canonical_release_unusable": ("catalog_defect", False),
+    # DiscVault-owned. MovieVault answered; this client refused what it sent, or
+    # refused to send the request at all. Auditing these as `server` - which the
+    # `.get()` default below used to do - points the next investigation at the
+    # wrong half of the coupling, and that is not hypothetical: the `finishes`
+    # outage of 2026-08-09 was logged as a MovieVault failure for a barcode
+    # MovieVault had resolved correctly.
+    #
+    # None is retryable: the same bytes go through the same decoder.
+    "release_details_response_invalid": ("client", False),
+    "release_details_request_invalid": ("client", False),
+    "release_details_retry_after_invalid": ("client", False),
+    "release_details_response_too_large": ("client", False),
 }
 # Failure kinds where MovieVault never actually answered. A client may not say
 # "not found" for any of these.
+#
+# `client` is deliberately absent: MovieVault *did* answer, so claiming it could
+# not be reached would be a false statement about someone else's system. What a
+# client may not do is call it a miss either - the answer was unread, not empty -
+# which is why `client` gets its own message rather than sharing one.
 RELEASE_DETAILS_UNANSWERED_KINDS = {"transport", "unavailable", "pending", "expired"}
 
 
@@ -9355,7 +9372,7 @@ def release_details_summary_from_release(release: dict[str, Any], *, source: str
         "source": source,
         "title": release.get("title") or "",
     }
-    for key in ("edition", "format", "discCount", "packaging", "video", "audioTracks"):
+    for key in ("edition", "format", "discCount", "packaging", "finishes", "video", "audioTracks"):
         if release.get(key):
             summary[key] = release[key]
     if release.get("regions"):
@@ -9451,6 +9468,16 @@ def release_candidate_movie_payload(candidate: Any) -> dict[str, Any]:
     for key in ("packaging", "discRegions", "audioTracks", "subtitles"):
         if isinstance(candidate.get(key), list):
             payload[key] = candidate[key]
+    # `finishes` is the one field here the movie edit validates against a closed
+    # vocabulary: `_movie_edit_case_axes` answers an unknown value with a 422.
+    # The resolver deliberately keeps vocabulary it has not heard of (so one new
+    # finish name cannot cost a whole resolve answer), so the two rules would
+    # collide on exactly the discs where MovieVault is ahead of DiscVault -
+    # "Use this edition" failing outright. Filtered here rather than loosened
+    # there: a 422 is the right answer for a hand-typed edit and the wrong one
+    # for a machine feed, and this mapper is the boundary between them.
+    if isinstance(candidate.get("finishes"), list):
+        payload["finishes"] = normalize_finishes(candidate["finishes"])
     # Only when there are no structured tracks: the tracks are the fact and the
     # flat list is their language view, so sending both hands the merge two
     # spellings of one thing.

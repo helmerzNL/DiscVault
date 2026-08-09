@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Zdroje sa nezhodli na tom, o ktorý film ide, disk teda nebol identifikovaný. Pridaj ho ručne nižšie.",
   "releaseFallback.needsYear": "Tento názov nesie viac filmov. Doplň rok a vyhľadaj znova.",
   "releaseFallback.catalogDefect": "MovieVault toto vydanie má, ale nemôže ho zverejniť. Opakovanie nepomôže; pridaj disk ručne nižšie.",
+  "releaseFallback.clientDefect": "MovieVault odpovedal, ale táto verzia DiscVaultu odpoveď nedokázala prečítať. Aktualizácia DiscVaultu by to mala vyriešiť; zatiaľ pridajte disk ručne nižšie.",
   "releaseFallback.stillWorking": "MovieVault na tomto vyhľadávaní stále pracuje. Vyhľadaj o chvíľu znova - hotový výsledok zostane pripravený.",
   "releaseFallback.unreachable": "MovieVault nebol dostupný, o tomto disku teda zatiaľ nič nevieme. Býva to dočasné.",
   "releaseFallback.failed": "MovieVault toto vyhľadávanie nedokončil.",

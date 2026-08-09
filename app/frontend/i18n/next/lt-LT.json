@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Šaltiniai nesutarė, koks tai filmas, todėl diskas nebuvo identifikuotas. Pridėk jį ranka žemiau.",
   "releaseFallback.needsYear": "Šį pavadinimą turi keli filmai. Nurodyk metus ir ieškok dar kartą.",
   "releaseFallback.catalogDefect": "MovieVault turi šį leidimą, bet negali jo paskelbti. Bandymas iš naujo nepadės; pridėk diską ranka žemiau.",
+  "releaseFallback.clientDefect": "„MovieVault“ atsakė, bet ši „DiscVault“ versija atsakymo perskaityti nesugebėjo. „DiscVault“ atnaujinimas tai turėtų išspręsti; kol kas pridėkite diską rankiniu būdu žemiau.",
   "releaseFallback.stillWorking": "MovieVault dar vykdo šią paiešką. Paieškok dar kartą po akimirkos - baigtas rezultatas išlieka paruoštas.",
   "releaseFallback.unreachable": "Nepavyko susisiekti su MovieVault, todėl apie šį diską dar nieko nežinoma. Paprastai tai laikina.",
   "releaseFallback.failed": "MovieVault negalėjo užbaigti šios paieškos.",

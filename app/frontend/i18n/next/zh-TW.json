@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "各來源對這是哪部影片看法不一，因此未能辨識這張光碟。請在下方手動新增。",
   "releaseFallback.needsYear": "有多部影片同名。請補上年份後重新搜尋。",
   "releaseFallback.catalogDefect": "MovieVault 有這個發行版，但無法發布。重試也沒有用；請在下方手動新增這張光碟。",
+  "releaseFallback.clientDefect": "MovieVault 已回應，但目前版本的 DiscVault 無法讀取該回應。更新 DiscVault 應可解決；在此之前請於下方手動新增光碟。",
   "releaseFallback.stillWorking": "MovieVault 仍在處理這次查詢。請稍後重新搜尋 - 完成的結果會保留。",
   "releaseFallback.unreachable": "無法連線 MovieVault，因此暫時無法得知這張光碟的資訊。這通常是暫時的。",
   "releaseFallback.failed": "MovieVault 未能完成這次查詢。",
