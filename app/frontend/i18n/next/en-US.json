@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonus material",
   "movieDiscRole.featureAndBonus": "Feature and bonus",
   "importCenter.candidateSeries": "Series",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "The details you had already entered became Disc 1. Correct them if they belong on another disc."
 }

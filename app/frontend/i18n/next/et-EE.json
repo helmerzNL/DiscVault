@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Boonusmaterjal",
   "movieDiscRole.featureAndBonus": "Põhifilm ja boonused",
   "importCenter.candidateSeries": "Sari",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Juba sisestatud andmed said plaadiks 1. Parandage need, kui need kuuluvad teisele plaadile."
 }

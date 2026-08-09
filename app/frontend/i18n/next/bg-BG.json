@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Бонус материали",
   "movieDiscRole.featureAndBonus": "Филм и бонуси",
   "importCenter.candidateSeries": "Сериал",
-  "importCenter.candidateFilm": "Филм"
+  "importCenter.candidateFilm": "Филм",
+  "movieDetail.discsSeededHint": "Данните, които вече бяхте въвели, станаха диск 1. Коригирайте ги, ако се отнасят за друг диск."
 }

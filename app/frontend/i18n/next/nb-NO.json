@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusmateriale",
   "movieDiscRole.featureAndBonus": "Hovedfilm og bonus",
   "importCenter.candidateSeries": "Serie",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Opplysningene du allerede hadde fylt inn er blitt plate 1. Rett dem hvis de hører til en annen plate."
 }

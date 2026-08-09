@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Materiale bonus",
   "movieDiscRole.featureAndBonus": "Film și bonusuri",
   "importCenter.candidateSeries": "Serial",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Datele pe care le introduseseși deja au devenit discul 1. Corectează-le dacă aparțin altui disc."
 }

@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Dodatni materijali",
   "movieDiscRole.featureAndBonus": "Film i dodaci",
   "importCenter.candidateSeries": "Serija",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Podaci koje ste već unijeli postali su disk 1. Ispravite ih ako pripadaju drugom disku."
 }

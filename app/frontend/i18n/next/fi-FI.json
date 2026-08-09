@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusmateriaali",
   "movieDiscRole.featureAndBonus": "Pääelokuva ja bonukset",
   "importCenter.candidateSeries": "Sarja",
-  "importCenter.candidateFilm": "Elokuva"
+  "importCenter.candidateFilm": "Elokuva",
+  "movieDetail.discsSeededHint": "Jo täyttämäsi tiedot siirtyivät levylle 1. Korjaa ne, jos ne kuuluvat toiselle levylle."
 }

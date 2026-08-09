@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Materiały dodatkowe",
   "movieDiscRole.featureAndBonus": "Film i dodatki",
   "importCenter.candidateSeries": "Serial",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Dane, które już wprowadzono, stały się płytą 1. Popraw je, jeśli należą do innej płyty."
 }

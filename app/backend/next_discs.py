@@ -298,10 +298,7 @@ def disc_is_empty(disc: dict[str, Any]) -> bool:
     """Whether a normalized disc says anything at all.
 
     A row that names no type, no role, no label, no spec and no episode is not a
-    disc — it is a form row somebody opened and left alone. Dropping it on save
-    is what keeps "Add disc" from being a destructive click, and it is the only
-    entry the write path discards silently, because there is nothing in it to
-    lose.
+    disc — it is a form row somebody opened and left alone.
     """
     if disc.get("id") is not None:
         # An existing disc is never dropped for being empty: it was saved
@@ -313,6 +310,27 @@ def disc_is_empty(disc: dict[str, Any]) -> bool:
         if value:
             return False
     return True
+
+
+def drop_blank_discs(discs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Discard a disc list that turns out to say nothing, and only then.
+
+    A list of nothing but blank rows is somebody who opened the editor and left
+    it alone, and storing it would flip a release from "nobody has broken this
+    down" to "broken down into one unknown disc" — a different claim, made by
+    accident. That list becomes empty.
+
+    A *mixed* list keeps every entry, blanks included, and that is the part
+    worth stating. Once the editor seeds Disc 1 from the release, clicking "Add
+    disc" produces a described Disc 1 beside a blank Disc 2, and the blank one
+    is not an abandoned row — it is the whole point of the click. Dropping it
+    would delete the disc the user had just said exists, and quietly, because a
+    release that saved one disc back looks exactly like one that only ever had
+    one.
+    """
+    if all(disc_is_empty(disc) for disc in discs):
+        return []
+    return list(discs)
 
 
 def disc_signature(disc: dict[str, Any]) -> str:

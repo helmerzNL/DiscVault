@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusový materiál",
   "movieDiscRole.featureAndBonus": "Film a bonusy",
   "importCenter.candidateSeries": "Seriál",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Údaje, které jste už zadali, se staly diskem 1. Upravte je, pokud patří k jinému disku."
 }

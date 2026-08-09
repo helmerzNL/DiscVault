@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "特典映像",
   "movieDiscRole.featureAndBonus": "本編と特典",
   "importCenter.candidateSeries": "シリーズ",
-  "importCenter.candidateFilm": "映画"
+  "importCenter.candidateFilm": "映画",
+  "movieDetail.discsSeededHint": "すでに入力していた内容はディスク 1 になりました。別のディスクの内容であれば修正してください。"
 }

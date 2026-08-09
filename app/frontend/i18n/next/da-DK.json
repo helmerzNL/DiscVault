@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusmateriale",
   "movieDiscRole.featureAndBonus": "Hovedfilm og bonus",
   "importCenter.candidateSeries": "Serie",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "De oplysninger, du allerede havde udfyldt, er blevet disk 1. Ret dem, hvis de hører til en anden disk."
 }
