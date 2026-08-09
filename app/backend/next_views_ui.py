@@ -15830,6 +15830,7 @@ def ui_preview_html(
         <section class="movie-detail-body">
           <nav class="detail-submenu series-detail-submenu" aria-label="Series sections" data-next-i18n-aria="seriesDetail.sections">
             <button type="button" class="active" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailDiscsPanel" data-next-i18n="seriesDetail.discs">Discs</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailSeasonsPanel" data-next-i18n="movieDetail.seasons">Seasons</button>
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
@@ -15850,6 +15851,19 @@ def ui_preview_html(
                 </div>
               </div>
               <div class="container-member-grid" id="seriesDetailDiscs"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailSeasonsPanel">
+            <div class="detail-card full">
+              <div class="detail-card-head">
+                <div>
+                  <h3 data-next-i18n="movieDetail.seasons">Seasons</h3>
+                  <p data-next-i18n="seriesDetail.seasonsHelp">Every season the series has, and whether a disc in your collection covers it.</p>
+                </div>
+                <button type="button" class="secondary-button" id="seriesSeasonPickerButton" data-next-i18n="seriesDetail.chooseSeasons">Choose seasons</button>
+              </div>
+              <div class="detail-fields" id="seriesDetailSeasons"></div>
+              <div id="seriesSeasonPicker"></div>
             </div>
           </div>
           <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailOverviewPanel">
@@ -15890,17 +15904,6 @@ def ui_preview_html(
                     <button type="button" class="secondary-button" id="seriesEditCancelButton" data-next-i18n="common.cancel">Cancel</button>
                   </div>
                 </form>
-              </div>
-              <div class="detail-card full">
-                <div class="detail-card-head">
-                  <div>
-                    <h3 data-next-i18n="movieDetail.seasons">Seasons</h3>
-                    <p data-next-i18n="seriesDetail.seasonsHelp">Every season the series has, and whether a disc in your collection covers it.</p>
-                  </div>
-                  <button type="button" class="secondary-button" id="seriesSeasonPickerButton" data-next-i18n="seriesDetail.chooseSeasons">Choose seasons</button>
-                </div>
-                <div class="detail-fields" id="seriesDetailSeasons"></div>
-                <div id="seriesSeasonPicker"></div>
               </div>
             </div>
           </div>
@@ -30950,10 +30953,22 @@ def ui_preview_html(
         ].filter(Boolean);
         return {season, label, meta: parts.join(" / ")};
       });
+      // Said once, under the list, and after the shape split above so both the
+      // plain rows and the card list carry it. Absence explains nothing: without
+      // this the missing episode button is indistinguishable from a series that
+      // has no episodes, which is the same collapse of distinct outcomes this
+      // page has had to be fixed for three times already.
+      //
+      // It names the reason rather than only the switch. Opening a season costs
+      // one request per season at the source; that is what the switch is for,
+      // and a gate whose reason is unstated reads as an arbitrary obstacle.
+      const episodesHint = collectorsModeEnabled()
+        ? ""
+        : `<p class="import-source-meta">${escapeHtml(tNext("seriesDetail.episodesCollectorsHint", "Turn on Collectors mode to open a season and see its episodes. They are fetched one request per season, so the switch decides who pays for it."))}</p>`;
       if (!anyPoster) {
-        return detailFieldRows(rows.map((row) => [row.label, row.meta]));
+        return detailFieldRows(rows.map((row) => [row.label, row.meta])) + episodesHint;
       }
-      return `<div class="series-season-list">${rows.map((row) => seriesSeasonRowHtml(row)).join("")}</div>`;
+      return `<div class="series-season-list">${rows.map((row) => seriesSeasonRowHtml(row)).join("")}</div>${episodesHint}`;
     }
     function seriesSeasonRowHtml(row) {
       // The episode affordance appears only with Collectors mode on. Fetching an

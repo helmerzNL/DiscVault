@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Önce en az bir sezon işaretleyin.",
   "seriesDetail.seasonsAdding": "Sezonlar ekleniyor...",
   "seriesDetail.seasonsAdded": "{count} sezon eklendi.",
-  "seriesDetail.seasonsPartlyAdded": "{added} eklendi, {failed} eklenemedi: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} eklendi, {failed} eklenemedi: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Bir sezonu açıp bölümlerini görmek için Koleksiyoncu modunu açın. Sezon başına bir istekle getirilirler, bu yüzden bunun bedelini kimin ödeyeceğine bu anahtar karar verir."
 }

@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Marque pelo menos uma temporada.",
   "seriesDetail.seasonsAdding": "A adicionar temporadas...",
   "seriesDetail.seasonsAdded": "{count} temporadas adicionadas.",
-  "seriesDetail.seasonsPartlyAdded": "{added} adicionadas, {failed} não: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} adicionadas, {failed} não: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Ative o modo colecionador para abrir uma temporada e ver os seus episódios. São obtidos com um pedido por temporada, por isso o interruptor decide quem o paga."
 }

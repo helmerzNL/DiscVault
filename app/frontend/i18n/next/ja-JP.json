@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "少なくとも1つのシーズンにチェックを入れてください。",
   "seriesDetail.seasonsAdding": "シーズンを追加中...",
   "seriesDetail.seasonsAdded": "{count}件のシーズンを追加しました。",
-  "seriesDetail.seasonsPartlyAdded": "{added}件追加、{failed}件失敗: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added}件追加、{failed}件失敗: {errors}",
+  "seriesDetail.episodesCollectorsHint": "シーズンを開いてエピソードを表示するには、コレクターモードをオンにしてください。エピソードはシーズンごとに1リクエストで取得されるため、この設定が費用を負担する人を決めます。"
 }

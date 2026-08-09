@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "請先勾選至少一季。",
   "seriesDetail.seasonsAdding": "正在新增季...",
   "seriesDetail.seasonsAdded": "已新增 {count} 季。",
-  "seriesDetail.seasonsPartlyAdded": "已新增 {added} 季，{failed} 季失敗：{errors}"
+  "seriesDetail.seasonsPartlyAdded": "已新增 {added} 季，{failed} 季失敗：{errors}",
+  "seriesDetail.episodesCollectorsHint": "開啟收藏家模式即可展開某一季並檢視其集數。集數以每季一次請求取得，因此這個開關決定由誰承擔這項開銷。"
 }

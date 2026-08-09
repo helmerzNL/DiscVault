@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Cochez d’abord au moins une saison.",
   "seriesDetail.seasonsAdding": "Ajout des saisons...",
   "seriesDetail.seasonsAdded": "{count} saisons ajoutées.",
-  "seriesDetail.seasonsPartlyAdded": "{added} ajoutées, {failed} en échec : {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} ajoutées, {failed} en échec : {errors}",
+  "seriesDetail.episodesCollectorsHint": "Activez le mode collectionneur pour ouvrir une saison et voir ses épisodes. Ils sont récupérés à raison d’une requête par saison, c’est donc l’interrupteur qui décide qui la paie."
 }

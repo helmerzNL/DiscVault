@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Rastita ensin vähintään yksi kausi.",
   "seriesDetail.seasonsAdding": "Lisätään kausia...",
   "seriesDetail.seasonsAdded": "{count} kautta lisätty.",
-  "seriesDetail.seasonsPartlyAdded": "{added} lisätty, {failed} ei: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} lisätty, {failed} ei: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Ota keräilytila käyttöön avataksesi kauden ja nähdäksesi sen jaksot. Ne haetaan yhdellä pyynnöllä kautta kohden, joten kytkin ratkaisee, kuka siitä maksaa."
 }

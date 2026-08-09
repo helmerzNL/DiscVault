@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Sæt flueben ved mindst én sæson.",
   "seriesDetail.seasonsAdding": "Tilføjer sæsoner...",
   "seriesDetail.seasonsAdded": "{count} sæsoner tilføjet.",
-  "seriesDetail.seasonsPartlyAdded": "{added} tilføjet, {failed} ikke: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} tilføjet, {failed} ikke: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Slå samlertilstand til for at åbne en sæson og se dens episoder. De hentes med én forespørgsel per sæson, så kontakten afgør, hvem der betaler for den."
 }

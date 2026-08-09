@@ -11,6 +11,7 @@ import and no DOM to drive here.
 """
 
 import os
+import re
 import unittest
 
 
@@ -149,11 +150,24 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         # navigation each go through their own copy.
         self.assertEqual(self.source.count('route.view === "series"'), 3)
 
-    def test_the_six_tabs_use_the_shared_submenu_mechanism(self):
+    def test_every_tab_uses_the_shared_submenu_mechanism(self):
         """No new JavaScript for tab switching. A page that rolled its own would
-        also have to reimplement restoring the active tab after a re-render."""
-        self.assertEqual(self.source.count('data-detail-tab="seriesDetail"'), 6)
-        self.assertEqual(self.source.count('data-detail-panel-group="seriesDetail"'), 6)
+        also have to reimplement restoring the active tab after a re-render.
+
+        Counted as tabs-equal-panels rather than against a fixed number. The
+        fixed six was a proxy for the real rule and it broke the moment a
+        seventh tab was justified -- while the thing worth protecting, that no
+        tab is left without a panel and no panel without a tab, was never
+        actually asserted. A button pointing at a panel id that does not exist
+        switches to a blank page in silence.
+        """
+        tabs = self.source.count('data-detail-tab="seriesDetail"')
+        panels = self.source.count('data-detail-panel-group="seriesDetail"')
+        self.assertGreater(tabs, 0)
+        self.assertEqual(tabs, panels)
+        targets = set(re.findall(r'data-detail-panel="(seriesDetail\w+)"', self.source))
+        ids = set(re.findall(r'data-detail-panel-group="seriesDetail" id="(seriesDetail\w+)"', self.source))
+        self.assertEqual(targets, ids)
         self.assertIn('activateDetailTab("seriesDetail", document.getElementById(activePanelId)', self.source)
 
     def test_a_three_way_view_control_is_normalised_three_ways(self):

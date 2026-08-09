@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Pažymėkite bent vieną sezoną.",
   "seriesDetail.seasonsAdding": "Pridedami sezonai...",
   "seriesDetail.seasonsAdded": "Pridėta {count} sezonų.",
-  "seriesDetail.seasonsPartlyAdded": "{added} pridėta, {failed} ne: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} pridėta, {failed} ne: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Įjunkite kolekcininko režimą, kad atvertumėte sezoną ir pamatytumėte jo serijas. Jos gaunamos vienu užklausimu vienam sezonui, todėl jungiklis nusprendžia, kas už tai moka."
 }

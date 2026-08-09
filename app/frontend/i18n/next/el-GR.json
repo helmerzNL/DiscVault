@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Τσέκαρε τουλάχιστον μία σεζόν.",
   "seriesDetail.seasonsAdding": "Προσθήκη σεζόν...",
   "seriesDetail.seasonsAdded": "Προστέθηκαν {count} σεζόν.",
-  "seriesDetail.seasonsPartlyAdded": "{added} προστέθηκαν, {failed} όχι: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} προστέθηκαν, {failed} όχι: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Ενεργοποίησε τη λειτουργία συλλέκτη για να ανοίξεις μια σεζόν και να δεις τα επεισόδιά της. Ανακτώνται με ένα αίτημα ανά σεζόν, οπότε ο διακόπτης αποφασίζει ποιος το πληρώνει."
 }

@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "시즌을 하나 이상 선택하세요.",
   "seriesDetail.seasonsAdding": "시즌 추가 중...",
   "seriesDetail.seasonsAdded": "{count}개 시즌이 추가되었습니다.",
-  "seriesDetail.seasonsPartlyAdded": "{added}개 추가, {failed}개 실패: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added}개 추가, {failed}개 실패: {errors}",
+  "seriesDetail.episodesCollectorsHint": "시즌을 열어 에피소드를 보려면 컬렉터 모드를 켜세요. 에피소드는 시즌당 한 번의 요청으로 가져오므로, 이 설정이 그 비용을 누가 부담할지 결정합니다."
 }
