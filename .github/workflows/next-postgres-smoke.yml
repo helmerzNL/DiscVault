@@ -181,6 +181,19 @@ jobs:
       - name: Test series episodes
         run: python -m unittest tests.test_next_series_episodes
 
+      # The discs inside a release, for the same reason as episodes above: the
+      # guarantees are foreign keys, not code. A disc cannot carry a season the
+      # release does not cover, and it cannot be named under another release.
+      # The identity assertions belong here too -- a disc is pointed at by its
+      # episode links, so "saving twice keeps the same rows" is a claim only a
+      # real database can settle.
+      - name: Test the discs inside a release
+        run: >-
+          python -m unittest
+          tests.test_next_discs
+          tests.test_next_discs_postgres
+          tests.test_next_discs_ui
+
       # This one has no database at all, but it guards the surface-id and route
       # registration that a new detail page has to join to be reachable.
       - name: Test the app surface router

@@ -237,6 +237,11 @@ try:
     from .next_series import normalize_season_ids
     from .next_series import season_payload
     from .next_series import series_payload
+    from .next_discs import DISC_COLUMNS
+    from .next_discs import DISC_ROLES
+    from .next_discs import DISC_TYPES
+    from .next_discs import disc_is_empty
+    from .next_discs import discs_payload
     from .next_people import person_identifier_entities
     from .next_people import person_tmdb_identifier
     from .next_people import person_localization_entities
@@ -509,6 +514,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_series import normalize_season_ids
     from next_series import season_payload
     from next_series import series_payload
+    from next_discs import DISC_COLUMNS
+    from next_discs import DISC_ROLES
+    from next_discs import DISC_TYPES
+    from next_discs import disc_is_empty
+    from next_discs import discs_payload
     from next_people import person_identifier_entities
     from next_people import person_tmdb_identifier
     from next_people import person_localization_entities
@@ -4597,6 +4607,150 @@ def attach_movie_seasons(conn, movies: list[dict[str, Any]]) -> list[dict[str, A
     for movie in movies:
         movie["seasons"] = by_movie.get(str(movie.get("id")), [])
     return movies
+
+
+#: The wire spelling of every ``movie_discs`` column that travels, keyed by the
+#: column name. camelCase on the wire and snake_case in the table, the same
+#: split every other entity here uses, and declared once so the reader and the
+#: writer cannot drift apart.
+MOVIE_DISC_WIRE_KEYS: dict[str, str] = {
+    "disc_type": "discType",
+    "disc_role": "discRole",
+    "disc_type_other": "discTypeOther",
+    "label": "label",
+    "video_resolution": "videoResolution",
+    "video_codecs": "videoCodecs",
+    "hdr": "hdr",
+    "screen_ratios": "screenRatios",
+    "audio_tracks": "audioTracks",
+    "subtitles": "subtitles",
+    "regions": "regions",
+    "notes": "notes",
+}
+
+
+def _movie_disc_wire(row: dict[str, Any]) -> dict[str, Any]:
+    disc = {
+        "id": str(row["id"]),
+        "publicId": row["public_id"],
+        "sortOrder": row["sort_order"],
+    }
+    for column, key in MOVIE_DISC_WIRE_KEYS.items():
+        value = row.get(column)
+        disc[key] = list(value) if isinstance(value, list) else value
+    return disc
+
+
+def attach_movie_discs(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the discs inside each release (movie["discs"]).
+
+    On the movie itself, for the reason ``attach_movie_seasons`` states directly
+    above: a sync change stores the movie entity verbatim as its payload, so a
+    membership array beside it would only ever reach a fresh install.
+
+    ``seasonIds`` and ``episodeIds`` travel as bare id lists rather than as
+    resolved season and episode objects. A client that renders a disc already
+    holds the series -- it arrives in the same bootstrap -- and repeating the
+    titles once per disc would restate a long-running show's structure for every
+    disc in the box.
+    """
+    if not movies:
+        return movies
+    if not table_exists(conn, "movie_discs"):
+        for movie in movies:
+            movie["discs"] = []
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    by_movie: dict[str, list[dict[str, Any]]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT d.*,
+                       COALESCE(s.season_ids, ARRAY[]::uuid[])   AS season_ids,
+                       COALESCE(e.episode_ids, ARRAY[]::uuid[])  AS episode_ids
+                FROM movie_discs d
+                LEFT JOIN LATERAL (
+                    SELECT array_agg(ds.season_id ORDER BY ds.sort_order) AS season_ids
+                    FROM movie_disc_seasons ds WHERE ds.disc_id = d.id
+                ) s ON true
+                LEFT JOIN LATERAL (
+                    SELECT array_agg(de.episode_id ORDER BY de.sort_order) AS episode_ids
+                    FROM movie_disc_episodes de WHERE de.disc_id = d.id
+                ) e ON true
+                WHERE d.movie_id = ANY(%s)
+                ORDER BY d.movie_id, d.sort_order, d.created_at
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                disc = _movie_disc_wire(row)
+                disc["seasonIds"] = [str(value) for value in row["season_ids"]]
+                disc["episodeIds"] = [str(value) for value in row["episode_ids"]]
+                by_movie.setdefault(str(row["movie_id"]), []).append(disc)
+    for movie in movies:
+        movie["discs"] = by_movie.get(str(movie.get("id")), [])
+    return movies
+
+
+def movie_disc_entities(conn, movie_id: UUID) -> list[dict[str, Any]]:
+    """The discs of one release, with their seasons and episodes resolved.
+
+    The detail screen's version of ``attach_movie_discs``. It costs the extra
+    joins because it is one release rather than a page of them, and because this
+    is the surface that has to render "Disc 2 -- Season 1, episodes 5-8" without
+    the caller reassembling it from three id lists.
+    """
+    if not table_exists(conn, "movie_discs"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT d.*,
+                   COALESCE(s.seasons, '[]'::jsonb)  AS seasons,
+                   COALESCE(e.episodes, '[]'::jsonb) AS episodes
+            FROM movie_discs d
+            LEFT JOIN LATERAL (
+                SELECT jsonb_agg(jsonb_build_object(
+                           'id', ss.id,
+                           'seasonNumber', ss.season_number,
+                           'title', ss.title
+                       ) ORDER BY ss.season_number) AS seasons
+                FROM movie_disc_seasons ds
+                JOIN series_seasons ss ON ss.id = ds.season_id
+                WHERE ds.disc_id = d.id
+            ) s ON true
+            LEFT JOIN LATERAL (
+                SELECT jsonb_agg(jsonb_build_object(
+                           'id', se.id,
+                           'seasonId', se.season_id,
+                           'episodeNumber', se.episode_number,
+                           'title', se.title
+                       ) ORDER BY se.season_id, se.episode_number) AS episodes
+                FROM movie_disc_episodes de
+                JOIN series_episodes se ON se.id = de.episode_id
+                WHERE de.disc_id = d.id
+            ) e ON true
+            WHERE d.movie_id = %s
+            ORDER BY d.sort_order, d.created_at
+            """,
+            (movie_id,),
+        )
+        rows = cur.fetchall()
+    discs: list[dict[str, Any]] = []
+    for row in rows:
+        disc = _movie_disc_wire(row)
+        disc["seasons"] = [
+            {**season, "id": str(season["id"])} for season in (row["seasons"] or [])
+        ]
+        disc["episodes"] = [
+            {**episode, "id": str(episode["id"]), "seasonId": str(episode["seasonId"])}
+            for episode in (row["episodes"] or [])
+        ]
+        disc["seasonIds"] = [season["id"] for season in disc["seasons"]]
+        disc["episodeIds"] = [episode["id"] for episode in disc["episodes"]]
+        discs.append(disc)
+    return discs
 
 
 def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -10219,7 +10373,12 @@ def _movie_edit_tracks(raw: Any, normalizer, *, label: str) -> list[Any]:
     try:
         return normalizer(raw)
     except ValueError as exc:
-        raise NextApiError(422, "invalid_request", f"{label}: {exc}") from exc
+        # Argument order matters here: NextApiError is (message, status, code).
+        # All three raises in this file had the first two swapped, which put the
+        # int 422 in the message slot and the string "invalid_request" in the
+        # status slot -- so a malformed audio track produced a 500 from Flask
+        # rejecting the status rather than the 422 it was reaching for.
+        raise NextApiError(f"{label}: {exc}", 422, "invalid_request") from exc
 
 
 def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
@@ -10248,7 +10407,7 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
         cleaned = clean_text(raw)
         carrier = normalize_carrier(cleaned)
         if cleaned and carrier is None:
-            raise NextApiError(422, "invalid_request", f"carrierType: unknown value {cleaned!r}")
+            raise NextApiError(f"carrierType: unknown value {cleaned!r}", 422, "invalid_request")
         edits["carrier_type"] = carrier
         touched = True
 
@@ -10286,7 +10445,7 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
             item for item in submitted if clean_text(item) and not normalize_finishes([item])
         ]
         if unknown:
-            raise NextApiError(422, "invalid_request", f"finishes: unknown value {unknown[0]!r}")
+            raise NextApiError(f"finishes: unknown value {unknown[0]!r}", 422, "invalid_request")
         edits["finishes"] = finishes
 
     # A steelbook generation on a non-metal carrier is meaningless; drop it
@@ -10425,7 +10584,14 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
         # still stored would fail this UPDATE itself -- an ordinary edit turning
         # into a constraint violation. Shedding the link first makes "this is a
         # film after all" an ordinary edit again.
-        cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+        #
+        # Episodes go with them, and go first: they cite the series through the
+        # same composite key, and a release that is no longer a series cannot
+        # carry episodes of one. The per-disc links cascade off both, so the
+        # discs themselves survive the change of type with their technical
+        # description intact -- only their television content goes.
+        prune_movie_episodes(cur, movie_uuid, [])
+        prune_movie_seasons(cur, movie_uuid, [])
         cur.execute("UPDATE movies SET series_id = NULL WHERE id = %s", (movie_uuid,))
     cur.execute(
         """
@@ -10484,6 +10650,14 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
         cur,
         movie_uuid,
         payload.get("series_assignment"),
+        media_type=payload["media_type"],
+    )
+    # After the series assignment, never before: a disc's seasons are a subset
+    # of the release's, and the release's are settled one line up.
+    apply_movie_discs(
+        cur,
+        movie_uuid,
+        payload.get("discs"),
         media_type=payload["media_type"],
     )
 
@@ -10730,16 +10904,321 @@ def apply_movie_series_assignment(
                 )
 
     # Ordered before the movies update so the composite key never sees a disc
-    # whose series_id no longer matches rows that still reference it.
-    cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+    # whose series_id no longer matches rows that still reference it. Episodes
+    # cite the series through the same composite and so go on the same side of
+    # it; before migration 075 nothing wrote them, which is why the original
+    # only had to think about seasons.
+    prune_movie_episodes(cur, movie_uuid, season_ids if series_id is not None else [])
+    prune_movie_seasons(cur, movie_uuid, season_ids)
     cur.execute("UPDATE movies SET series_id = %s WHERE id = %s", (series_id, movie_uuid))
+    upsert_movie_seasons(cur, movie_uuid, series_id, season_ids)
+
+
+def prune_movie_seasons(cur, movie_uuid: UUID, keep_ids: list[UUID]) -> None:
+    """Drop the season links this release no longer claims, and only those.
+
+    Both writers used to delete every row and re-insert the same set, which read
+    identically from the outside until migration 075 hung ``movie_disc_seasons``
+    off these rows with an ON DELETE CASCADE. Re-stating an unchanged season list
+    would then take every per-disc link down with it, and re-inserting the parent
+    afterwards does not bring the children back. A season that is on both sides
+    of an edit has to survive it *as the same row*.
+    """
+    if keep_ids:
+        cur.execute(
+            "DELETE FROM movie_seasons WHERE movie_id = %s AND NOT (season_id = ANY(%s))",
+            (movie_uuid, list(keep_ids)),
+        )
+    else:
+        cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+
+
+def prune_movie_episodes(cur, movie_uuid: UUID, keep_season_ids: list[UUID]) -> None:
+    """Drop episode links whose season is leaving the release.
+
+    ``movie_seasons``' own cascade cannot do this: an episode row cites the
+    season directly rather than through the season link, so dropping season 3
+    from the box would otherwise leave its episodes behind, still claiming to be
+    in a box that no longer covers them.
+    """
+    if keep_season_ids:
+        cur.execute(
+            "DELETE FROM movie_episodes WHERE movie_id = %s AND NOT (season_id = ANY(%s))",
+            (movie_uuid, list(keep_season_ids)),
+        )
+    else:
+        cur.execute("DELETE FROM movie_episodes WHERE movie_id = %s", (movie_uuid,))
+
+
+def upsert_movie_seasons(
+    cur, movie_uuid: UUID, series_id: UUID | None, season_ids: list[UUID]
+) -> None:
+    """Write the season links, refreshing the order of the ones already there."""
     for index, season_id in enumerate(season_ids):
         cur.execute(
             """
             INSERT INTO movie_seasons (movie_id, season_id, series_id, sort_order)
             VALUES (%s, %s, %s, %s)
+            ON CONFLICT (movie_id, season_id)
+            DO UPDATE SET sort_order = EXCLUDED.sort_order
             """,
             (movie_uuid, season_id, series_id, index),
+        )
+
+
+def apply_movie_discs(
+    cur,
+    movie_uuid: UUID,
+    discs: list[dict[str, Any]] | None,
+    *,
+    media_type: str,
+) -> None:
+    """Write the discs of a release, keeping the ids of the ones that stay.
+
+    Diffed by id rather than replaced wholesale, which is the one place this
+    departs from how ``movie_seasons`` and the audio track list are written. A
+    disc has an identity those do not: ``movie_disc_episodes`` points at it, so
+    a delete-and-reinsert would silently empty every disc's episode list on each
+    save even though nothing about the discs changed. An entry carrying an id is
+    the same disc; an entry without one is a new disc; a stored disc nobody named
+    is gone.
+
+    ``None`` means the caller said nothing about discs and the stored ones are
+    left alone -- the presence-keyed rule the rest of the edit payload follows,
+    and the reason a client that predates this feature cannot delete a disc list
+    it does not know exists.
+    """
+    if discs is None:
+        return
+    discs = [disc for disc in discs if not disc_is_empty(disc)]
+
+    cur.execute("SELECT id FROM movie_discs WHERE movie_id = %s", (movie_uuid,))
+    stored = {row["id"] for row in cur.fetchall()}
+    named = {disc["id"] for disc in discs if disc["id"] is not None}
+    unknown = named - stored
+    if unknown:
+        # A stale id is named rather than treated as a new disc: quietly minting
+        # a second disc because the client held an id this release never had is
+        # how a duplicate appears with nothing to explain it.
+        raise NextApiError(
+            "These discs do not belong to this release: "
+            + ", ".join(sorted(str(value) for value in unknown)),
+            400,
+        )
+    obsolete = stored - named
+    if obsolete:
+        # The two link tables cascade off this.
+        cur.execute(
+            "DELETE FROM movie_discs WHERE movie_id = %s AND id = ANY(%s)",
+            (movie_uuid, list(obsolete)),
+        )
+
+    for index, disc in enumerate(discs):
+        disc_id = _upsert_movie_disc(cur, movie_uuid, disc, sort_order=index)
+        _apply_movie_disc_contents(
+            cur, movie_uuid, disc_id, disc, media_type=media_type
+        )
+
+    # An episode the discs no longer claim is not in the box any more. Nothing
+    # else writes movie_episodes -- the disc list is its only source, which is
+    # why this can own the cleanup outright -- so a row no disc supports is a
+    # leftover, and leaving it there keeps `onDisc` true for an episode nobody
+    # has. Seasons are deliberately *not* cleaned up the same way: the release
+    # states its own season list in the same form, so a season can outlive every
+    # disc that named it and still be a true statement about the box.
+    cur.execute(
+        """
+        DELETE FROM movie_episodes me
+        WHERE me.movie_id = %s
+          AND NOT EXISTS (
+              SELECT 1 FROM movie_disc_episodes de
+              WHERE de.movie_id = me.movie_id AND de.episode_id = me.episode_id
+          )
+        """,
+        (movie_uuid,),
+    )
+
+    # `disc_count` is filled from the list only when nobody has answered it.
+    # Deriving it unconditionally would overwrite a number the user, or
+    # MovieVault, stated deliberately -- and it is routinely stated before the
+    # discs are enumerated, so a half-entered list would silently correct a
+    # correct value downwards. A disagreement is surfaced in the edit form
+    # instead, where the person who can settle it is looking.
+    if discs:
+        cur.execute(
+            "UPDATE movies SET disc_count = %s WHERE id = %s AND disc_count IS NULL",
+            (len(discs), movie_uuid),
+        )
+
+
+def _upsert_movie_disc(cur, movie_uuid: UUID, disc: dict[str, Any], *, sort_order: int) -> UUID:
+    values = [
+        Jsonb(json_ready(disc[column])) if isinstance(disc[column], list) else disc[column]
+        for column in DISC_COLUMNS
+    ]
+    if disc["id"] is not None:
+        cur.execute(
+            f"""
+            UPDATE movie_discs
+            SET {', '.join(f'{column}=%s' for column in DISC_COLUMNS)},
+                sort_order=%s,
+                updated_at=now()
+            WHERE id=%s AND movie_id=%s
+            """,
+            (*values, sort_order, disc["id"], movie_uuid),
+        )
+        return disc["id"]
+    disc_uuid = uuid.uuid4()
+    cur.execute(
+        f"""
+        INSERT INTO movie_discs (
+            id, public_id, movie_id, sort_order, {', '.join(DISC_COLUMNS)}
+        )
+        VALUES (%s, %s, %s, %s, {', '.join(['%s'] * len(DISC_COLUMNS))})
+        """,
+        (disc_uuid, f"next-disc-{disc_uuid.hex[:12]}", movie_uuid, sort_order, *values),
+    )
+    return disc_uuid
+
+
+def _apply_movie_disc_contents(
+    cur,
+    movie_uuid: UUID,
+    disc_id: UUID,
+    disc: dict[str, Any],
+    *,
+    media_type: str,
+) -> None:
+    """Attach the seasons and episodes this disc carries.
+
+    A disc naming a season is also a statement that the release covers it -- a
+    disc inside the box holding season 1 *is* the box holding season 1 -- so the
+    release-level link is ensured rather than demanded. Refusing instead would
+    make the order of two fields in one form submission matter, and would put a
+    validation error in front of somebody stating something true.
+
+    Episodes work the same way one level down, and this is what finally writes
+    ``movie_episodes``: migration 074 created it and left it unwritten because
+    the release *was* the disc in that model, so "episodes 5-8" had no level to
+    be said at.
+    """
+    cur.execute("DELETE FROM movie_disc_seasons WHERE disc_id = %s", (disc_id,))
+    cur.execute("DELETE FROM movie_disc_episodes WHERE disc_id = %s", (disc_id,))
+    season_ids = disc["season_ids"]
+    episode_ids = disc["episode_ids"]
+    if not season_ids and not episode_ids:
+        return
+    if media_type != MEDIA_TYPE_SHOW:
+        raise NextApiError(
+            "Only a disc of a TV series can carry seasons or episodes", 400
+        )
+
+    cur.execute("SELECT series_id FROM movies WHERE id = %s", (movie_uuid,))
+    row = cur.fetchone()
+    series_id = row.get("series_id") if row else None
+    if series_id is None:
+        raise NextApiError(
+            "Link the release to a series before naming seasons on its discs", 400
+        )
+
+    # An episode drags its own season in with it. The alternative -- refusing an
+    # episode whose season the disc did not also tick -- would reject the most
+    # natural way to fill this in: pick the episodes, never think about seasons.
+    resolved = _movie_disc_episode_rows(cur, episode_ids, series_id)
+    wanted_seasons = list(season_ids)
+    for entry in resolved:
+        if entry["season_id"] not in wanted_seasons:
+            wanted_seasons.append(entry["season_id"])
+
+    _ensure_movie_seasons(cur, movie_uuid, series_id, wanted_seasons)
+    for index, season_id in enumerate(season_ids):
+        cur.execute(
+            """
+            INSERT INTO movie_disc_seasons (disc_id, movie_id, season_id, sort_order)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (disc_id, season_id) DO NOTHING
+            """,
+            (disc_id, movie_uuid, season_id, index),
+        )
+    for index, entry in enumerate(resolved):
+        cur.execute(
+            """
+            INSERT INTO movie_episodes (movie_id, episode_id, season_id, series_id, sort_order)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (movie_id, episode_id) DO NOTHING
+            """,
+            (movie_uuid, entry["id"], entry["season_id"], series_id, index),
+        )
+        cur.execute(
+            """
+            INSERT INTO movie_disc_episodes (disc_id, movie_id, episode_id, sort_order)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (disc_id, episode_id) DO NOTHING
+            """,
+            (disc_id, movie_uuid, entry["id"], index),
+        )
+
+
+def _movie_disc_episode_rows(cur, episode_ids: list[UUID], series_id: UUID) -> list[dict[str, Any]]:
+    """Resolve episode ids to (id, season_id), refusing any outside this series.
+
+    The composite foreign keys would refuse them too, as a constraint violation
+    with a Postgres message. Naming them is more use, and it is the same posture
+    ``apply_movie_series_assignment`` takes for a season that is not the series'.
+    """
+    if not episode_ids:
+        return []
+    cur.execute(
+        """
+        SELECT id, season_id FROM series_episodes
+        WHERE id = ANY(%s) AND series_id = %s AND deleted_at IS NULL
+        """,
+        (list(episode_ids), series_id),
+    )
+    found = {row["id"]: row["season_id"] for row in cur.fetchall()}
+    missing = [str(value) for value in episode_ids if value not in found]
+    if missing:
+        raise NextApiError(
+            "These episodes do not belong to that series: " + ", ".join(missing), 400
+        )
+    # Ordered as the caller listed them: "episodes 5-8" is the curator's order,
+    # and a set that leads with a pilot means it.
+    return [{"id": value, "season_id": found[value]} for value in episode_ids]
+
+
+def _ensure_movie_seasons(
+    cur, movie_uuid: UUID, series_id: UUID, season_ids: list[UUID]
+) -> None:
+    """Make sure the release covers every season its discs name."""
+    if not season_ids:
+        return
+    cur.execute(
+        """
+        SELECT id FROM series_seasons
+        WHERE id = ANY(%s) AND series_id = %s AND deleted_at IS NULL
+        """,
+        (list(season_ids), series_id),
+    )
+    found = {row["id"] for row in cur.fetchall()}
+    missing = [str(value) for value in season_ids if value not in found]
+    if missing:
+        raise NextApiError(
+            "These seasons do not belong to that series: " + ", ".join(missing), 400
+        )
+    cur.execute(
+        "SELECT coalesce(max(sort_order), -1) AS top FROM movie_seasons WHERE movie_id = %s",
+        (movie_uuid,),
+    )
+    row = cur.fetchone()
+    top = (row["top"] if row else -1) or -1
+    for offset, season_id in enumerate(season_ids):
+        cur.execute(
+            """
+            INSERT INTO movie_seasons (movie_id, season_id, series_id, sort_order)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (movie_id, season_id) DO NOTHING
+            """,
+            (movie_uuid, season_id, series_id, top + 1 + offset),
         )
 
 
@@ -10825,6 +11304,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "format": pick_text("format"),
         "media_type": movie_media_type_value(body, existing),
         "series_assignment": movie_series_assignment(body),
+        "discs": discs_payload(body),
         "edition": pick_text("edition"),
         "country": pick_text("country"),
         "language": pick_text("language"),
@@ -11054,6 +11534,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         # its payload, so anything missing here is missing from the delta too.
         attach_movie_technical_specs(conn, [row])
         attach_movie_seasons(conn, [row])
+        attach_movie_discs(conn, [row])
     return row
 
 
@@ -14262,6 +14743,11 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         # None means "not linked"; a linked disc with an empty seasons list means
         # the complete series or unspecified. The UI has to tell those apart.
         "series": movie_series_payload(conn, movie_id),
+        # The physical discs inside this release, seasons and episodes resolved.
+        # An empty list means nobody has broken the release down yet, which is
+        # not the same as a single-disc release -- `technicalSpecs` above keeps
+        # answering for both.
+        "discs": movie_disc_entities(conn, movie_id),
         "mediaGroups": movie_media_group_entities(conn, movie_id),
         "mediaAssets": entity_media_asset_entities(
             conn, "movie", movie_id, include_hidden=True
@@ -17932,8 +18418,11 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_seasons(
-            conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+        return attach_movie_discs(
+            conn,
+            attach_movie_seasons(
+                conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+            ),
         )
 
 
