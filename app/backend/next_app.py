@@ -2336,6 +2336,14 @@ def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str,
             metadata_updates.get("overview"),
         ),
         "identifiers": identifiers,
+        # A television candidate says two extra things, and both have to survive
+        # the trip from the picker to the import. `mediaType` is what keeps the
+        # disc from being filed as a film; `series` is the block
+        # `provider_series_payload` already understands, so the series row and
+        # its `tmdb_tv` identifier are created by code that exists rather than by
+        # a second, parallel linking path.
+        "mediaType": normalize_media_type(candidate.get("mediaType") or candidate.get("media_type")) or "",
+        "series": candidate.get("series") if isinstance(candidate.get("series"), dict) else None,
     }
 
 
@@ -2372,6 +2380,12 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
         movie_updates["format"] = clean_text(candidate.get("format"))
     if clean_text(candidate.get("overview")):
         movie_updates["overview"] = clean_text(candidate.get("overview"))
+    # Only when the candidate stated one. An unstated type must stay unstated:
+    # the import falls back to `infer_media_type_from_title` for exactly that
+    # case, and writing MOVIE here would look like an answer and silence it.
+    stated_media_type = normalize_media_type(candidate.get("mediaType") or candidate.get("media_type"))
+    if stated_media_type:
+        movie_updates["media_type"] = stated_media_type
 
     metadata_updates: dict[str, Any] = {}
     media_updates: dict[str, dict[str, Any]] = {}
@@ -2456,6 +2470,10 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
         "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {},
+        # None rather than {} when the candidate is a film, mirroring
+        # `merge_metadata_results`: absent means "nothing was stated", which
+        # `apply_movie_series_link` must never read as "unlink".
+        "series": candidate.get("series") if isinstance(candidate.get("series"), dict) else None,
         "provenance": provenance,
         "skipped": [],
     }
@@ -2473,6 +2491,12 @@ def merge_selected_import_movie_candidate(
         existing = merged.get(key) if isinstance(merged.get(key), dict) else {}
         incoming = selected.get(key) if isinstance(selected.get(key), dict) else {}
         merged[key] = {**existing, **incoming}
+    # The person's pick outranks whatever the sources agreed on, but only when
+    # they picked a series: a film candidate states nothing about series
+    # identity, and clearing the key would unlink a disc the feed had already
+    # placed correctly.
+    if isinstance(selected.get("series"), dict):
+        merged["series"] = selected["series"]
     merged["provenance"] = [
         *(merged.get("provenance") if isinstance(merged.get("provenance"), list) else []),
         *(selected.get("provenance") if isinstance(selected.get("provenance"), list) else []),

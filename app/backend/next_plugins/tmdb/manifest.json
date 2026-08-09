@@ -1,7 +1,7 @@
 {
   "id": "tmdb",
   "name": "TMDb",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": [

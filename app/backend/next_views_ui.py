@@ -14550,8 +14550,8 @@ def ui_preview_html(
               <span class="profile-dashboard-symbol">""" + nav_icon("import") + """</span>
               <div class="profile-dashboard-copy">
                 <span class="eyebrow" data-next-i18n="importCenter.addEyebrow">Quick add</span>
-                <h4 data-next-i18n="importCenter.lookupTitle">Add movie</h4>
-                <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
+                <h4 data-next-i18n="importCenter.lookupTitle">Add title</h4>
+                <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding it.</p>
               </div>
             </header>
             <nav class="detail-submenu profile-dashboard-tabs import-section-tabs import-method-tabs" role="tablist" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
@@ -14589,7 +14589,7 @@ def ui_preview_html(
                     <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
                     <div>
                       <h4 data-next-i18n="importCenter.manualTitleCard">Manual search</h4>
-                      <p data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film by title.</p>
+                      <p data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film or series by title.</p>
                     </div>
                   </div>
                 </div>
@@ -14600,7 +14600,7 @@ def ui_preview_html(
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualTitle">Title</span>
-                    <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -14680,7 +14680,7 @@ def ui_preview_html(
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderName">Title</span>
-                    <input id="boxSetBuilderTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="boxSetBuilderTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -14714,7 +14714,7 @@ def ui_preview_html(
                   <div class="import-source-meta import-scan-preview" id="boxSetBuilderMemberPreview" hidden></div>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderMemberTitle">Title (fallback)</span>
-                    <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -15602,7 +15602,7 @@ def ui_preview_html(
                   <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
                   <label for="containerScanAddTitle">
                     <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
-                    <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label for="containerScanAddYear">
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -33030,7 +33030,7 @@ def ui_preview_html(
                 ${(detectedBoxSetAudit.memberPreview || []).slice(0, 4).map((member) => `<span class="tag blue">${escapeHtml(member.title || member.name || "-")}${member.year ? ` (${escapeHtml(member.year)})` : ""}</span>`).join("")}
               </div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
-              ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual movie match before import."))}</div>` : ""}
+              ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual match before import."))}</div>` : ""}
               ${row.recommendedMatch ? `<div class="import-selected-match import-recommended-match">${escapeHtml(tNext("importCenter.recommendedMatch", "Recommended match"))}: ${escapeHtml(row.recommendedMatch.title || "")} ${escapeHtml(row.recommendedMatch.year || "")}</div>` : ""}
               ${selectedMatch ? `<div class="import-selected-match">${escapeHtml(tNext("importCenter.selectedMatch", "Selected"))}: ${escapeHtml(selectedMatch.title || "")} ${escapeHtml(selectedMatch.year || "")}</div>` : ""}
               <div class="import-review-tools">
@@ -33645,7 +33645,7 @@ def ui_preview_html(
             <div class="import-counts">
               ${pluginId ? `<span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml(pluginDisplayName(pluginId, pluginId))}</span>` : ""}
               ${entrypoint ? `<span class="tag">${escapeHtml(tNext("importCenter.entrypoint", "Entrypoint"))} ${escapeHtml(entrypoint)}</span>` : ""}
-              ${movieId ? `<span class="tag">${escapeHtml(tNext("importCenter.movie", "Movie"))} ${escapeHtml(String(movieId).slice(0, 8))}</span>` : ""}
+              ${movieId ? `<span class="tag">${escapeHtml(tNext("importCenter.movie", "Title"))} ${escapeHtml(String(movieId).slice(0, 8))}</span>` : ""}
               ${payload.dryRun !== undefined ? `<span class="tag ${payload.dryRun ? "" : "good"}">${escapeHtml(tNext("importCenter.dryRun", "Dry run"))} ${escapeHtml(String(payload.dryRun))}</span>` : ""}
             </div>
             <div class="import-counts">${importCountChips(counters || {}, 5)}</div>
@@ -34454,6 +34454,13 @@ def ui_preview_html(
       const posterUrl = lookupCandidateImage(result, candidate, "poster");
       const backdropUrl = lookupCandidateImage(result, candidate, "backdrop");
       const barcode = String(candidate.barcode || candidate.externalBarcode || candidate.external_barcode || candidate.ean || candidate.upc || document.getElementById("importBarcodeInput")?.value || "").trim();
+      // What makes a series a series. Both were being dropped here, which is why
+      // a television result -- once one could be returned at all -- still arrived
+      // as a MOVIE with no series behind it: the card was right and the payload
+      // was not.
+      const series = candidate.series && typeof candidate.series === "object" ? candidate.series : null;
+      const mediaType = String(candidate.mediaType || candidate.media_type || movieUpdates.media_type || (series ? "SHOW" : "")).trim().toUpperCase();
+      const seriesRef = String(series?.tmdbTvId || series?.tmdb_tv_id || (String(candidate.identifierType || "") === "tmdb_tv" ? candidate.identifier : "") || "").trim();
       const keyParts = [
         provider,
         title.toLowerCase(),
@@ -34461,6 +34468,10 @@ def ui_preview_html(
         format.toLowerCase(),
         identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "",
         identifiers.imdb ? `imdb:${identifiers.imdb}` : "",
+        // A film and a series of the same name and year carry no `tmdb` id in
+        // common -- the series id lives in the television namespace -- so
+        // without this their keys collide and picking one selects the other.
+        seriesRef ? `tmdbtv:${seriesRef}` : "",
         sourceRef,
         posterUrl,
         resultIndex,
@@ -34468,6 +34479,8 @@ def ui_preview_html(
       ];
       return {
         candidateKey: keyParts.join("|"),
+        mediaType,
+        series,
         provider,
         pluginId: provider,
         sourceLabel,
@@ -34505,6 +34518,7 @@ def ui_preview_html(
             normalized.format.toLowerCase(),
             normalized.identifiers.tmdb,
             normalized.identifiers.imdb,
+            normalized.series?.tmdbTvId || "",
             normalized.sourceRef,
             normalized.posterUrl
           ].join("|");
@@ -34812,10 +34826,10 @@ def ui_preview_html(
       const container = boxSet.container || boxSet || {};
       const members = boxSet.members || boxSet.memberMovies || [];
       const stateLabel = payload.state === "already_exists"
-        ? (container.id ? tNext("importCenter.boxSetExists", "Box-set already exists.") : tNext("importCenter.movieExists", "Movie already exists."))
+        ? (container.id ? tNext("importCenter.boxSetExists", "Box-set already exists.") : tNext("importCenter.movieExists", "This title is already in your collection."))
         : payload.state === "box_set_created"
           ? tNext("importCenter.boxSetAdded", "Box-set added.")
-          : tNext("importCenter.movieAdded", "Movie added.");
+          : tNext("importCenter.movieAdded", "Title added.");
       const primaryTitle = container.title || movie.title || movie.original_title || tNext("importCenter.importResult", "Import result");
       const metadataJobs = payload.metadataRefreshQueued || payload.queuedMetadataRefreshJobs || (payload.metadataJobs || []).length || 0;
       return `
@@ -34859,7 +34873,7 @@ def ui_preview_html(
       const tmdbGuidance = tmdbNeedsConfiguration ? `
         <div class="preview-empty warn import-tmdb-guidance" role="status">
           <strong>${escapeHtml(tNext("importCenter.tmdbKeyRequiredTitle", "Add a free TMDb API key for full metadata"))}</strong>
-          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this movie, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
+          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this title, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
           <div class="button-row compact">
             <a class="secondary-button" href="${escapeHtml(tmdbEnrichment.requestKeyUrl || "https://www.themoviedb.org/settings/api")}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("importCenter.requestTmdbKey", "Request free TMDb key"))}</a>
             ${canUseAppAdmin() ? `<button type="button" class="secondary-button" data-import-configure-tmdb="1">${escapeHtml(tNext("importCenter.configureTmdbKey", "Configure TMDb key"))}</button>` : ""}
@@ -35009,6 +35023,7 @@ def ui_preview_html(
             <div class="import-result-body">
               <div class="import-result-kicker">
                 ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
+                ${item.candidateKey ? `<span class="tag">${escapeHtml(item.mediaType === "SHOW" ? tNext("importCenter.candidateSeries", "Series") : tNext("importCenter.candidateFilm", "Film"))}</span>` : ""}
                 ${item.state ? `<span class="tag ${item.state === "applied" ? "good" : ""}">${escapeHtml(item.state)}</span>` : ""}
                 ${selected ? `<span class="tag good">${escapeHtml(tNext("importCenter.selectedMatch", "Selected match"))}</span>` : ""}
               </div>
@@ -35203,7 +35218,7 @@ def ui_preview_html(
               <span class="tag" title="${escapeHtml(tNext("importCenter.sourcesUsedHelp", "Number of metadata sources that returned a matching title."))}">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String(movieResultCards.length || (proposedTitle ? 1 : 0)))}</span>
             </div>
             <h3 class="import-result-title">${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</h3>
-            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected movie details before adding it to your library."))}</div>
+            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected details before adding this title to your library."))}</div>
             <div class="import-counts">
               ${proposedYear ? `<span class="tag">${escapeHtml(tNext("importCenter.previewYear", "Year"))} ${escapeHtml(proposedYear)}</span>` : ""}
               ${proposedFormat ? `<span class="tag">${escapeHtml(tNext("importCenter.previewFormat", "Format"))} ${escapeHtml(proposedFormat)}</span>` : ""}
@@ -35253,7 +35268,7 @@ def ui_preview_html(
         ? tNext("importCenter.useSelectedMatch", "Use selected match")
         : selectedBoxSetForAction
           ? tNext("importCenter.addBoxSet", "Add box-set")
-          : tNext("importCenter.addMovie", "Add movie");
+          : tNext("importCenter.addMovie", "Add title");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
           ${hasMovieCandidate && !allBatchAdded ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
@@ -35870,7 +35885,7 @@ def ui_preview_html(
           } else {
             const outcome = releaseFallbackOutcomeMessage();
             const notRecognized = outcome.text
-              || tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
+              || tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this entry manually.");
             setImportLookupActionMessage(notRecognized, outcome.tone || "warn");
             setImportCenterMessage(notRecognized, outcome.tone || "warn");
           }
@@ -35921,12 +35936,12 @@ def ui_preview_html(
       setImportCenterMessage(
         wantsBoxSet
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}...`
-          : tNext("importCenter.addingMovie", "Adding movie...")
+          : tNext("importCenter.addingMovie", "Adding title...")
       );
       setImportLookupActionMessage(
         wantsBoxSet
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}: ${tNext("importCenter.resolvingSelection", "resolving selection...")}`
-          : tNext("importCenter.addingMovie", "Adding movie...")
+          : tNext("importCenter.addingMovie", "Adding title...")
       );
       if (button) {
         // Immediate click feedback: spinner + busy state. This stays visible
@@ -36026,10 +36041,10 @@ def ui_preview_html(
             ? "importCenter.boxSetAdded"
           : "importCenter.movieAdded";
         const messageFallback = payload.state === "already_exists"
-          ? (payload.boxSet ? "Box-set already exists." : "Movie already exists.")
+          ? (payload.boxSet ? "Box-set already exists." : "This title is already in your collection.")
           : payload.state === "box_set_created"
             ? "Box-set added."
-            : "Movie added.";
+            : "Title added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
         // The save completed, so the list it came from is done with.
