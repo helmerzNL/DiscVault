@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Ricerca nelle fonti...",
   "seriesDetail.identityNoMatches": "Nessuna fonte ha riconosciuto quel titolo.",
   "seriesDetail.identitySourceError": "Una fonte non ha potuto rispondere: {error}",
+  "seriesDetail.episodes": "Episodi",
+  "seriesDetail.noEpisodes": "Nessun episodio noto per questa stagione.",
+  "seriesDetail.episodeOnDisc": "Su un disco",
+  "seriesDetail.episodeNotOnDisc": "Non su un disco",
+  "seriesDetail.episodeWatched": "Visto",
+  "seriesDetail.markEpisodeWatched": "Segna come visto",
   "seriesDetail.identitySaving": "Collegamento della serie e recupero dei dati...",
   "collection.seasonNumber": "Stagione {number}"
 }

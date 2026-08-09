@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Ieskoma saltiniuose...",
   "seriesDetail.identityNoMatches": "Joks saltinis neatpazino sio pavadinimo.",
   "seriesDetail.identitySourceError": "Saltinis negalejo atsakyti: {error}",
+  "seriesDetail.episodes": "Epizodai",
+  "seriesDetail.noEpisodes": "Sio sezono epizodu dar nezinoma.",
+  "seriesDetail.episodeOnDisc": "Diske",
+  "seriesDetail.episodeNotOnDisc": "Ne diske",
+  "seriesDetail.episodeWatched": "Perziureta",
+  "seriesDetail.markEpisodeWatched": "Pazymeti kaip perziureta",
   "seriesDetail.identitySaving": "Susiejamas serialas ir gaunami duomenys...",
   "collection.seasonNumber": "Sezonas {number}"
 }

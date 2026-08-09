@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Quellen werden durchsucht...",
   "seriesDetail.identityNoMatches": "Keine Quelle kannte diesen Titel.",
   "seriesDetail.identitySourceError": "Eine Quelle konnte nicht antworten: {error}",
+  "seriesDetail.episodes": "Folgen",
+  "seriesDetail.noEpisodes": "Fur diese Staffel sind noch keine Folgen bekannt.",
+  "seriesDetail.episodeOnDisc": "Auf einer Disc",
+  "seriesDetail.episodeNotOnDisc": "Nicht auf einer Disc",
+  "seriesDetail.episodeWatched": "Gesehen",
+  "seriesDetail.markEpisodeWatched": "Als gesehen markieren",
   "seriesDetail.identitySaving": "Serie wird verknupft und Daten geholt...",
   "collection.seasonNumber": "Staffel {number}"
 }

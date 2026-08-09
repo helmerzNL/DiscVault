@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Prehladavanie zdrojov...",
   "seriesDetail.identityNoMatches": "Ziadny zdroj nazov nerozpoznal.",
   "seriesDetail.identitySourceError": "Zdroj nemohol odpovedat: {error}",
+  "seriesDetail.episodes": "Epizody",
+  "seriesDetail.noEpisodes": "Pre tuto seriu zatial nie su zname ziadne epizody.",
+  "seriesDetail.episodeOnDisc": "Na disku",
+  "seriesDetail.episodeNotOnDisc": "Nie je na disku",
+  "seriesDetail.episodeWatched": "Videne",
+  "seriesDetail.markEpisodeWatched": "Oznacit ako videne",
   "seriesDetail.identitySaving": "Prepajanie serialu a nacitanie udajov...",
   "collection.seasonNumber": "Séria {number}"
 }

@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "소스 검색 중...",
   "seriesDetail.identityNoMatches": "해당 제목을 인식한 소스가 없습니다.",
   "seriesDetail.identitySourceError": "소스가 응답하지 못했습니다: {error}",
+  "seriesDetail.episodes": "에피소드",
+  "seriesDetail.noEpisodes": "이 시즌의 에피소드가 아직 없습니다.",
+  "seriesDetail.episodeOnDisc": "디스크에 있음",
+  "seriesDetail.episodeNotOnDisc": "디스크에 없음",
+  "seriesDetail.episodeWatched": "시청함",
+  "seriesDetail.markEpisodeWatched": "시청함으로 표시",
   "seriesDetail.identitySaving": "시리즈를 연결하고 정보를 가져오는 중...",
   "collection.seasonNumber": "시즌 {number}"
 }

@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Se cauta in surse...",
   "seriesDetail.identityNoMatches": "Nicio sursa nu a recunoscut acel titlu.",
   "seriesDetail.identitySourceError": "O sursa nu a putut raspunde: {error}",
+  "seriesDetail.episodes": "Episoade",
+  "seriesDetail.noEpisodes": "Inca nu sunt cunoscute episoade pentru acest sezon.",
+  "seriesDetail.episodeOnDisc": "Pe un disc",
+  "seriesDetail.episodeNotOnDisc": "Nu este pe un disc",
+  "seriesDetail.episodeWatched": "Vizionat",
+  "seriesDetail.markEpisodeWatched": "Marcheaza ca vizionat",
   "seriesDetail.identitySaving": "Se leaga serialul si se preiau datele...",
   "collection.seasonNumber": "Sezonul {number}"
 }

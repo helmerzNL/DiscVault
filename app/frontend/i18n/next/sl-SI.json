@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Iskanje po virih...",
   "seriesDetail.identityNoMatches": "Noben vir ni prepoznal tega naslova.",
   "seriesDetail.identitySourceError": "Vir ni mogel odgovoriti: {error}",
+  "seriesDetail.episodes": "Epizode",
+  "seriesDetail.noEpisodes": "Za to sezono se ni znanih epizod.",
+  "seriesDetail.episodeOnDisc": "Na disku",
+  "seriesDetail.episodeNotOnDisc": "Ni na disku",
+  "seriesDetail.episodeWatched": "Ogledano",
+  "seriesDetail.markEpisodeWatched": "Oznaci kot ogledano",
   "seriesDetail.identitySaving": "Povezovanje serije in pridobivanje podatkov...",
   "collection.seasonNumber": "Sezona {number}"
 }

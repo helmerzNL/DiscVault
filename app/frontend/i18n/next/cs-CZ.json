@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Prohledavani zdroju...",
   "seriesDetail.identityNoMatches": "Zadny zdroj nazev nerozpoznal.",
   "seriesDetail.identitySourceError": "Zdroj nemohl odpovedet: {error}",
+  "seriesDetail.episodes": "Epizody",
+  "seriesDetail.noEpisodes": "Pro tuto radu zatim nejsou zname zadne epizody.",
+  "seriesDetail.episodeOnDisc": "Na disku",
+  "seriesDetail.episodeNotOnDisc": "Neni na disku",
+  "seriesDetail.episodeWatched": "Zhlednuto",
+  "seriesDetail.markEpisodeWatched": "Oznacit jako zhlednute",
   "seriesDetail.identitySaving": "Propojovani serialu a nacitani dat...",
   "collection.seasonNumber": "Řada {number}"
 }
