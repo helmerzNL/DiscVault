@@ -121,6 +121,16 @@ jobs:
           tests.test_next_i18n
           tests.test_next_i18n_completeness
 
+      # The allowlist that decides whether a declared capability can run at all.
+      # It disagreed with both bundled manifests for the whole life of the series
+      # feature -- six capabilities implemented, declared, and unreachable -- and
+      # no test could have caught it, because every series test replaces either
+      # the plugin function or run_plugin_entrypoint itself. Runs early: if these
+      # two fail, every series assertion below is testing something the
+      # application cannot reach.
+      - name: Test that declared capabilities are runnable
+        run: python -m unittest tests.test_next_plugin_entrypoint_coverage
+
       # The TMDB series shaping needs no database, so it runs before the
       # migrations with the other pure-Python modules.
       - name: Test the TMDB series mapping

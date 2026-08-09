@@ -72,6 +72,16 @@ PLUGIN_ENTRYPOINTS = (
     "search_barcode",
     "lookup_external_id",
     "movie_details",
+    # Television. Absent until now, which made every series source call return
+    # `entrypoint_unavailable` -- the whole series chain (refresh, identity
+    # search, the season offer, episodes) was calling functions the runtime
+    # refused to reach, on both bundled sources. The plugins had the code and
+    # the manifests declared the capability; this list is what decides whether
+    # a name may run, and nothing compared the two. See
+    # `test_next_plugin_entrypoint_coverage.py`.
+    "series_details",
+    "search_series",
+    "season_episodes",
     "box_set_candidates",
     "people_for_movie",
     "person_details",

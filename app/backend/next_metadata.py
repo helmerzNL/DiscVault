@@ -5600,8 +5600,20 @@ def consult_plugins(
             continue
         result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
         if execution.get("status") != "ok" or (require_hit and result.get("status") != "hit"):
+            # `state` before the result status, and never a bare "miss" for an
+            # execution that failed. Four runtime states -- `not_found`,
+            # `manifest_only`, `entrypoint_unavailable`, and a load-time
+            # `runtime_error` -- carry no `error` field at all, so the old chain
+            # fell through to the literal word "miss" and reported a
+            # configuration fault in the vocabulary of "this source has never
+            # heard of your series". That sends a reader to check their spelling
+            # instead of their setup, and it hid an unreachable entrypoint on
+            # every series call for the whole of this feature's life.
+            reason = clean_text(execution.get("error"))
+            if not reason and execution.get("status") != "ok":
+                reason = clean_text(execution.get("state")) or "unavailable"
             errors.append(
-                {"pluginId": plugin_id, "error": execution.get("error") or result.get("status") or "miss"}
+                {"pluginId": plugin_id, "error": reason or result.get("status") or "miss"}
             )
             continue
         results.append((plugin_id, result))
