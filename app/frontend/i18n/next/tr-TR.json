@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Kaynaklar araniyor...",
   "seriesDetail.identityNoMatches": "Hicbir kaynak bu basligi tanimadi.",
   "seriesDetail.identitySourceError": "Bir kaynak yanit veremedi: {error}",
+  "seriesDetail.episodes": "Bolumler",
+  "seriesDetail.noEpisodes": "Bu sezon icin henuz bilinen bolum yok.",
+  "seriesDetail.episodeOnDisc": "Bir diskte",
+  "seriesDetail.episodeNotOnDisc": "Bir diskte degil",
+  "seriesDetail.episodeWatched": "Izlendi",
+  "seriesDetail.markEpisodeWatched": "Izlendi olarak isaretle",
   "seriesDetail.identitySaving": "Dizi baglaniyor ve veriler aliniyor...",
   "collection.seasonNumber": "{number}. sezon"
 }

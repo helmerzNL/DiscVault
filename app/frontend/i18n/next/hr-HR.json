@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Pretrazivanje izvora...",
   "seriesDetail.identityNoMatches": "Nijedan izvor nije prepoznao taj naslov.",
   "seriesDetail.identitySourceError": "Izvor nije mogao odgovoriti: {error}",
+  "seriesDetail.episodes": "Epizode",
+  "seriesDetail.noEpisodes": "Za ovu sezonu jos nisu poznate epizode.",
+  "seriesDetail.episodeOnDisc": "Na disku",
+  "seriesDetail.episodeNotOnDisc": "Nije na disku",
+  "seriesDetail.episodeWatched": "Odgledano",
+  "seriesDetail.markEpisodeWatched": "Oznaci kao odgledano",
   "seriesDetail.identitySaving": "Povezivanje serije i dohvacanje podataka...",
   "collection.seasonNumber": "Sezona {number}"
 }

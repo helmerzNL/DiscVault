@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Soker i kallor...",
   "seriesDetail.identityNoMatches": "Ingen kalla kande igen titeln.",
   "seriesDetail.identitySourceError": "En kalla kunde inte svara: {error}",
+  "seriesDetail.episodes": "Avsnitt",
+  "seriesDetail.noEpisodes": "Inga avsnitt kanda for den har sasongen an.",
+  "seriesDetail.episodeOnDisc": "Pa en skiva",
+  "seriesDetail.episodeNotOnDisc": "Inte pa en skiva",
+  "seriesDetail.episodeWatched": "Sedd",
+  "seriesDetail.markEpisodeWatched": "Markera som sedd",
   "seriesDetail.identitySaving": "Lankar serien och hamtar data...",
   "collection.seasonNumber": "Säsong {number}"
 }

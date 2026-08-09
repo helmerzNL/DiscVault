@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Forrasok keresese...",
   "seriesDetail.identityNoMatches": "Egyetlen forras sem ismerte fel a cimet.",
   "seriesDetail.identitySourceError": "Egy forras nem tudott valaszolni: {error}",
+  "seriesDetail.episodes": "Epizodok",
+  "seriesDetail.noEpisodes": "Ehhez az evadhoz meg nem ismertek epizodok.",
+  "seriesDetail.episodeOnDisc": "Lemezen",
+  "seriesDetail.episodeNotOnDisc": "Nincs lemezen",
+  "seriesDetail.episodeWatched": "Megnezve",
+  "seriesDetail.markEpisodeWatched": "Megjelolem megnezettkent",
   "seriesDetail.identitySaving": "Sorozat osszekapcsolasa es adatok lekerese...",
   "collection.seasonNumber": "{number}. évad"
 }

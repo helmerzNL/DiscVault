@@ -5575,6 +5575,163 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
     }
 
 
+SEASON_EPISODES_CAPABILITY = "season_episodes"
+
+EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20}
+
+
+def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
+    """Fill one season's episode list from whichever sources can supply it.
+
+    One season at a time, and on demand. `/tv/{id}/season/{n}` costs a request
+    per season, which is the reason the series refresh deliberately does not
+    reach for it: a ten-season show would turn one call into eleven for every
+    user, most of whom never look at an episode list.
+
+    Asking per season moves that cost onto the person who opened the season --
+    which is also why the surface sits behind Collectors mode. The expensive
+    thing is paid for by whoever wanted it.
+
+    Never overwrites, for the same reason `ensure_seasons` does not: an episode
+    title may have been corrected by hand, and a re-fetch is not a reason to
+    undo that. Only missing episodes are inserted and only empty fields are
+    filled, which also makes this safe to re-run.
+    """
+    season_uuid = UUID(str(season_id))
+    if not table_exists(conn, "series_episodes") or not table_exists(conn, "series_seasons"):
+        return {"status": "unavailable"}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id AS season_id, s.season_number, s.series_id,
+                   sr.title, sr.start_year, sr.end_year
+            FROM series_seasons s
+            JOIN series sr ON sr.id = s.series_id
+            WHERE s.id = %s AND s.deleted_at IS NULL AND sr.deleted_at IS NULL
+            """,
+            (season_uuid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"status": "missing"}
+
+    series_uuid = row["series_id"]
+    identifiers = series_identifier_map(conn, series_uuid)
+    if not identifiers:
+        # The same dead end the series refresh reports, and for the same reason.
+        # Naming it identically is what lets one explanation cover both.
+        return {"status": "skipped", "reason": "no series identifier"}
+
+    plugins = [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if SEASON_EPISODES_CAPABILITY in plugin_capabilities(plugin)
+    ]
+    if not plugins:
+        return {"status": "skipped", "reason": "no episode source"}
+
+    payload = {
+        "seriesIdentifiers": dict(identifiers),
+        "tmdbTvId": identifiers.get(SERIES_IDENTIFIER_TYPE, ""),
+        "seasonNumber": row["season_number"],
+        "title": clean_text(row.get("title")),
+    }
+    episodes: dict[int, dict[str, Any]] = {}
+    sources: dict[str, str] = {}
+    errors: list[dict[str, str]] = []
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        if not plugin_id:
+            continue
+        context = plugin_config_from_db(conn, plugin_id)
+        try:
+            execution = run_plugin_entrypoint(plugin_id, SEASON_EPISODES_CAPABILITY, payload, context)
+        except Exception as exc:  # pragma: no cover - a source is not the job
+            errors.append({"pluginId": plugin_id, "error": str(exc)})
+            logger.warning("episode source %s failed for %s", plugin_id, season_uuid, exc_info=True)
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        if execution.get("status") != "ok" or result.get("status") != "hit":
+            errors.append({"pluginId": plugin_id, "error": execution.get("error") or result.get("status") or "miss"})
+            continue
+        for episode in result.get("episodes") or []:
+            if not isinstance(episode, dict):
+                continue
+            number = episode.get("episodeNumber")
+            if not isinstance(number, int) or isinstance(number, bool) or number < 0:
+                continue
+            # First source wins per episode, same rule as the series merge.
+            if number in episodes:
+                continue
+            episodes[number] = episode
+            sources[str(number)] = plugin_id
+
+    if not episodes:
+        return {"status": "miss", "errors": errors}
+
+    inserted = 0
+    updated = 0
+    with conn.cursor() as cur:
+        for number, episode in sorted(episodes.items()):
+            episode_uuid = uuid.uuid4()
+            cur.execute(
+                """
+                INSERT INTO series_episodes (
+                    id, public_id, series_id, season_id, episode_number,
+                    title, overview, air_date, runtime_minutes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    episode_uuid,
+                    f"next-episode-{episode_uuid.hex[:12]}",
+                    series_uuid,
+                    season_uuid,
+                    number,
+                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
+                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
+                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                ),
+            )
+            if cur.rowcount:
+                inserted += 1
+                continue
+            # The row already existed. Fill only what is empty -- the check and
+            # the write are one statement, so a second worker cannot land between
+            # them, and a title somebody corrected is left alone.
+            cur.execute(
+                """
+                UPDATE series_episodes
+                SET title = COALESCE(NULLIF(title, ''), %s),
+                    overview = COALESCE(NULLIF(overview, ''), %s),
+                    air_date = COALESCE(NULLIF(air_date, ''), %s),
+                    runtime_minutes = COALESCE(runtime_minutes, %s),
+                    updated_at = now()
+                WHERE season_id = %s AND episode_number = %s AND deleted_at IS NULL
+                """,
+                (
+                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
+                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
+                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                    season_uuid,
+                    number,
+                ),
+            )
+            updated += cur.rowcount or 0
+
+    return {
+        "status": "ok",
+        "seasonId": str(season_uuid),
+        "episodesInserted": inserted,
+        "episodesUpdated": updated,
+        "sources": {"consulted": [str(plugin.get("id")) for plugin in plugins], "episodes": sources},
+        "errors": errors,
+    }
+
+
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     """Fill a series' description from whichever sources can describe it.
 

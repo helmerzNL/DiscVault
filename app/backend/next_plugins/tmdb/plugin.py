@@ -556,6 +556,67 @@ def series_details(payload, context=None):
     return _normalize_series(_series_details_request(context or {}, tmdb_tv_id))
 
 
+def season_episodes(payload, context=None):
+    """The episode list for one season.
+
+    This is the request `_normalize_series` argues against making by default, and
+    the argument still holds: `/tv/{id}/season/{n}` costs one call **per season**,
+    so a ten-season show is ten calls rather than the one that fetches the series.
+
+    What changed is who pays. Episodes are fetched per season, on demand, from a
+    surface that only appears with Collectors mode on -- so the cost falls on
+    somebody who asked for episode detail rather than on every series refresh.
+    That is the "deliberate later decision with a reason attached" the docstring
+    over there asked for.
+
+    Identity is not established here. The caller already holds the series' TMDB
+    id and states which season number it wants; nothing in this function searches
+    or guesses.
+    """
+    body = payload or {}
+    identifiers = body.get("seriesIdentifiers")
+    tmdb_tv_id = ""
+    if isinstance(identifiers, dict):
+        tmdb_tv_id = str(identifiers.get("tmdb_tv") or "").strip()
+    if not tmdb_tv_id:
+        tmdb_tv_id = str(body.get("tmdbTvId") or "").strip()
+    season_number = body.get("seasonNumber")
+    if not tmdb_tv_id.isdigit() or not isinstance(season_number, int) or isinstance(season_number, bool):
+        return {"status": "miss", "provider": "tmdb"}
+    if season_number < 0:
+        return {"status": "miss", "provider": "tmdb"}
+
+    data = _request(
+        context or {},
+        f"/tv/{tmdb_tv_id}/season/{season_number}",
+        language=_language(context),
+    )
+    episodes = []
+    for item in data.get("episodes") or []:
+        if not isinstance(item, dict):
+            continue
+        number = item.get("episode_number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        episodes.append(
+            {
+                "episodeNumber": number,
+                "title": item.get("name") or "",
+                "overview": item.get("overview") or "",
+                "airDate": item.get("air_date") or "",
+                "runtimeMinutes": item.get("runtime"),
+                "stillUrl": _image(item.get("still_path")) if item.get("still_path") else "",
+            }
+        )
+    return {
+        "status": "hit" if episodes else "miss",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "seasonNumber": season_number,
+        "episodes": episodes,
+    }
+
+
 def _import_wikidata_awards():
     try:
         import wikidata_awards  # type: ignore

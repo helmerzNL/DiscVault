@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Przeszukiwanie zrodel...",
   "seriesDetail.identityNoMatches": "Zadne zrodlo nie rozpoznalo tego tytulu.",
   "seriesDetail.identitySourceError": "Zrodlo nie moglo odpowiedziec: {error}",
+  "seriesDetail.episodes": "Odcinki",
+  "seriesDetail.noEpisodes": "Brak znanych odcinkow tego sezonu.",
+  "seriesDetail.episodeOnDisc": "Na plycie",
+  "seriesDetail.episodeNotOnDisc": "Nie na plycie",
+  "seriesDetail.episodeWatched": "Obejrzane",
+  "seriesDetail.markEpisodeWatched": "Oznacz jako obejrzane",
   "seriesDetail.identitySaving": "Laczenie serialu i pobieranie danych...",
   "collection.seasonNumber": "Sezon {number}"
 }

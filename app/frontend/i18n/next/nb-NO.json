@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Soker i kilder...",
   "seriesDetail.identityNoMatches": "Ingen kilde kjente igjen tittelen.",
   "seriesDetail.identitySourceError": "En kilde kunne ikke svare: {error}",
+  "seriesDetail.episodes": "Episoder",
+  "seriesDetail.noEpisodes": "Ingen episoder kjent for denne sesongen enna.",
+  "seriesDetail.episodeOnDisc": "Pa en plate",
+  "seriesDetail.episodeNotOnDisc": "Ikke pa en plate",
+  "seriesDetail.episodeWatched": "Sett",
+  "seriesDetail.markEpisodeWatched": "Marker som sett",
   "seriesDetail.identitySaving": "Kobler serien og henter data...",
   "collection.seasonNumber": "Sesong {number}"
 }

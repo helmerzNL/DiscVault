@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "ソースを検索中...",
   "seriesDetail.identityNoMatches": "どのソースもそのタイトルを認識しませんでした。",
   "seriesDetail.identitySourceError": "ソースが応答できませんでした: {error}",
+  "seriesDetail.episodes": "エピソード",
+  "seriesDetail.noEpisodes": "このシーズンのエピソードはまだ不明です。",
+  "seriesDetail.episodeOnDisc": "ディスクにあり",
+  "seriesDetail.episodeNotOnDisc": "ディスクになし",
+  "seriesDetail.episodeWatched": "視聴済み",
+  "seriesDetail.markEpisodeWatched": "視聴済みにする",
   "seriesDetail.identitySaving": "シリーズを紐付けて情報を取得中...",
   "collection.seasonNumber": "シーズン {number}"
 }

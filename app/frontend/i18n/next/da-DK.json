@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Soger i kilder...",
   "seriesDetail.identityNoMatches": "Ingen kilde genkendte titlen.",
   "seriesDetail.identitySourceError": "En kilde kunne ikke svare: {error}",
+  "seriesDetail.episodes": "Afsnit",
+  "seriesDetail.noEpisodes": "Ingen afsnit kendt for denne sason endnu.",
+  "seriesDetail.episodeOnDisc": "Pa en disk",
+  "seriesDetail.episodeNotOnDisc": "Ikke pa en disk",
+  "seriesDetail.episodeWatched": "Set",
+  "seriesDetail.markEpisodeWatched": "Marker som set",
   "seriesDetail.identitySaving": "Forbinder serien og henter data...",
   "collection.seasonNumber": "Sæson {number}"
 }

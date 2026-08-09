@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Tarsene v iztochnitsite...",
   "seriesDetail.identityNoMatches": "Nikoy iztochnik ne razpozna tova zaglavie.",
   "seriesDetail.identitySourceError": "Iztochnik ne mozha da otgovori: {error}",
+  "seriesDetail.episodes": "Epizodi",
+  "seriesDetail.noEpisodes": "Vse oshte nyama izvestni epizodi za tozi sezon.",
+  "seriesDetail.episodeOnDisc": "Na disk",
+  "seriesDetail.episodeNotOnDisc": "Ne e na disk",
+  "seriesDetail.episodeWatched": "Gledano",
+  "seriesDetail.markEpisodeWatched": "Otbelezhi kato gledano",
   "seriesDetail.identitySaving": "Svarzvane na seriala i izteglyane na dannite...",
   "collection.seasonNumber": "Сезон {number}"
 }

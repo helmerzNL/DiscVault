@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Searching sources...",
   "seriesDetail.identityNoMatches": "No source recognised that title.",
   "seriesDetail.identitySourceError": "A source could not answer: {error}",
+  "seriesDetail.episodes": "Episodes",
+  "seriesDetail.noEpisodes": "No episodes known for this season yet.",
+  "seriesDetail.episodeOnDisc": "On a disc",
+  "seriesDetail.episodeNotOnDisc": "Not on a disc",
+  "seriesDetail.episodeWatched": "Watched",
+  "seriesDetail.markEpisodeWatched": "Mark watched",
   "seriesDetail.identitySaving": "Linking series and fetching details...",
   "collection.seasonNumber": "Season {number}"
 }

@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Allikate otsimine...",
   "seriesDetail.identityNoMatches": "Ukski allikas ei tundnud seda pealkirja.",
   "seriesDetail.identitySourceError": "Allikas ei saanud vastata: {error}",
+  "seriesDetail.episodes": "Osad",
+  "seriesDetail.noEpisodes": "Selle hooaja osi pole veel teada.",
+  "seriesDetail.episodeOnDisc": "Kettal",
+  "seriesDetail.episodeNotOnDisc": "Ei ole kettal",
+  "seriesDetail.episodeWatched": "Vaadatud",
+  "seriesDetail.markEpisodeWatched": "Margi vaadatuks",
   "seriesDetail.identitySaving": "Sarja sidumine ja andmete laadimine...",
   "collection.seasonNumber": "Hooaeg {number}"
 }

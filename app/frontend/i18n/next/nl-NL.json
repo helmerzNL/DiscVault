@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Bronnen doorzoeken...",
   "seriesDetail.identityNoMatches": "Geen bron herkende die titel.",
   "seriesDetail.identitySourceError": "Een bron kon niet antwoorden: {error}",
+  "seriesDetail.episodes": "Afleveringen",
+  "seriesDetail.noEpisodes": "Nog geen afleveringen bekend voor dit seizoen.",
+  "seriesDetail.episodeOnDisc": "Op een schijf",
+  "seriesDetail.episodeNotOnDisc": "Niet op een schijf",
+  "seriesDetail.episodeWatched": "Bekeken",
+  "seriesDetail.markEpisodeWatched": "Markeer als bekeken",
   "seriesDetail.identitySaving": "Serie koppelen en gegevens ophalen...",
   "collection.seasonNumber": "Seizoen {number}"
 }

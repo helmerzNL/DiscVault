@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Haetaan lahteista...",
   "seriesDetail.identityNoMatches": "Mikaan lahde ei tunnistanut nimea.",
   "seriesDetail.identitySourceError": "Lahde ei voinut vastata: {error}",
+  "seriesDetail.episodes": "Jaksot",
+  "seriesDetail.noEpisodes": "Talta kaudelta ei tunneta viela jaksoja.",
+  "seriesDetail.episodeOnDisc": "Levylla",
+  "seriesDetail.episodeNotOnDisc": "Ei levylla",
+  "seriesDetail.episodeWatched": "Katsottu",
+  "seriesDetail.markEpisodeWatched": "Merkitse katsotuksi",
   "seriesDetail.identitySaving": "Yhdistetaan sarja ja haetaan tiedot...",
   "collection.seasonNumber": "Kausi {number}"
 }

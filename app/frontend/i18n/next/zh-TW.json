@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "正在搜尋來源...",
   "seriesDetail.identityNoMatches": "沒有來源辨識出該標題。",
   "seriesDetail.identitySourceError": "來源無法回應：{error}",
+  "seriesDetail.episodes": "集數",
+  "seriesDetail.noEpisodes": "尚無此季的集數資訊。",
+  "seriesDetail.episodeOnDisc": "在光碟上",
+  "seriesDetail.episodeNotOnDisc": "不在光碟上",
+  "seriesDetail.episodeWatched": "已觀看",
+  "seriesDetail.markEpisodeWatched": "標記為已觀看",
   "seriesDetail.identitySaving": "正在連結影集並取得資料...",
   "collection.seasonNumber": "第 {number} 季"
 }

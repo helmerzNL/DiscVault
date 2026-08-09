@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Anazitisi stis piges...",
   "seriesDetail.identityNoMatches": "Kamia pigi den anagnorise auton ton titlo.",
   "seriesDetail.identitySourceError": "Mia pigi den borese na apantisei: {error}",
+  "seriesDetail.episodes": "Epeisodia",
+  "seriesDetail.noEpisodes": "Den einai gnosta akoma epeisodia gia autin ti sezon.",
+  "seriesDetail.episodeOnDisc": "Se disko",
+  "seriesDetail.episodeNotOnDisc": "Den einai se disko",
+  "seriesDetail.episodeWatched": "Eidothike",
+  "seriesDetail.markEpisodeWatched": "Simeiosi os eidothike",
   "seriesDetail.identitySaving": "Syndesi seiras kai lipsi dedomenon...",
   "collection.seasonNumber": "Σεζόν {number}"
 }

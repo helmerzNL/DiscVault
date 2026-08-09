@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "Poshuk u dzherelakh...",
   "seriesDetail.identityNoMatches": "Zhodne dzherelo ne rozpiznalo tsyu nazvu.",
   "seriesDetail.identitySourceError": "Dzherelo ne zmohlo vidpovisty: {error}",
+  "seriesDetail.episodes": "Epizody",
+  "seriesDetail.noEpisodes": "Dlya tsoho sezonu shche nemaye vidomykh epizodiv.",
+  "seriesDetail.episodeOnDisc": "Na dysku",
+  "seriesDetail.episodeNotOnDisc": "Ne na dysku",
+  "seriesDetail.episodeWatched": "Perehlyanuto",
+  "seriesDetail.markEpisodeWatched": "Poznachyty yak perehlyanute",
   "seriesDetail.identitySaving": "Zvyazuvannya serialu ta otrymannya danykh...",
   "collection.seasonNumber": "Сезон {number}"
 }

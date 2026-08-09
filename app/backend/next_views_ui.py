@@ -7944,6 +7944,46 @@ def ui_preview_html(
       color: var(--muted);
       font-size: 12px;
     }
+    .series-season-row {
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+    }
+    .series-episode-list {
+      display: grid;
+      gap: 4px;
+      margin: 2px 0 10px 58px;
+    }
+    .series-episode-list.hidden {
+      display: none;
+    }
+    .series-episode-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--line-strong);
+    }
+    /* An episode the collection does not carry is the reason to show this list at
+       all, so it is marked rather than hidden. */
+    .series-episode-row.is-missing {
+      border-style: dashed;
+      opacity: 0.72;
+    }
+    .series-episode-number {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .series-episode-text {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+    }
+    .series-episode-text span {
+      color: var(--muted);
+      font-size: 12px;
+    }
     .container-member-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -30343,7 +30383,10 @@ def ui_preview_html(
       // has always been. Not a uniform grid of placeholders: a series where only
       // half the seasons resolved would then read as half-broken rather than
       // half-illustrated.
-      const anyPoster = seasons.some((season) => season.posterUrl);
+      // Also when Collectors mode is on: the episode toggle needs a row to live
+      // in, and falling back to the plain text rows would make episodes reachable
+      // only for series whose artwork happened to resolve.
+      const anyPoster = seasons.some((season) => season.posterUrl) || collectorsModeEnabled();
       const rows = seasons.map((season) => {
         const label = season.title
           ? `${season.seasonNumber} - ${season.title}`
@@ -30359,7 +30402,16 @@ def ui_preview_html(
       if (!anyPoster) {
         return detailFieldRows(rows.map((row) => [row.label, row.meta]));
       }
-      return `<div class="series-season-list">${rows.map((row) => `
+      return `<div class="series-season-list">${rows.map((row) => seriesSeasonRowHtml(row)).join("")}</div>`;
+    }
+    function seriesSeasonRowHtml(row) {
+      // The episode affordance appears only with Collectors mode on. Fetching an
+      // episode list costs one request per season at the source, so the switch is
+      // not decoration -- it is who agreed to pay for it.
+      const episodes = collectorsModeEnabled()
+        ? `<button type="button" class="secondary-button series-season-episodes-toggle" data-season-episodes="${escapeHtml(row.season.id || "")}">${escapeHtml(tNext("seriesDetail.episodes", "Episodes"))}</button>`
+        : "";
+      return `
         <div class="series-season-row">
           <div class="series-season-thumb">${row.season.posterUrl
             ? `<img src="${escapeHtml(row.season.posterUrl)}" alt="${escapeHtml(row.label)}" loading="lazy">`
@@ -30368,8 +30420,89 @@ def ui_preview_html(
             <strong>${escapeHtml(row.label)}</strong>
             <span>${escapeHtml(row.meta)}</span>
           </div>
+          ${episodes}
         </div>
-      `).join("")}</div>`;
+        <div class="series-episode-list hidden" data-season-episode-list="${escapeHtml(row.season.id || "")}"></div>`;
+    }
+    function seriesEpisodeRowsHtml(episodes) {
+      if (!episodes.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noEpisodes", "No episodes known for this season yet."))}</div>`;
+      }
+      return episodes.map((episode) => {
+        const parts = [
+          episode.airDate || "",
+          episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : "",
+          episode.onDisc
+            ? tNext("seriesDetail.episodeOnDisc", "On a disc")
+            : tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"),
+        ].filter(Boolean);
+        const watched = Boolean(episode.watchedAt);
+        return `
+          <div class="series-episode-row${episode.onDisc ? "" : " is-missing"}">
+            <span class="series-episode-number">${escapeHtml(String(episode.episodeNumber))}</span>
+            <div class="series-episode-text">
+              <strong>${escapeHtml(episode.title || tNext("common.untitled", "Untitled"))}</strong>
+              <span>${escapeHtml(parts.join(" / "))}</span>
+            </div>
+            <button type="button" class="secondary-button${watched ? " active" : ""}"
+                    data-episode-watched="${escapeHtml(episode.id)}"
+                    data-watched="${watched ? "1" : "0"}"
+                    aria-pressed="${watched ? "true" : "false"}">${escapeHtml(
+                      watched ? tNext("seriesDetail.episodeWatched", "Watched") : tNext("seriesDetail.markEpisodeWatched", "Mark watched")
+                    )}</button>
+          </div>`;
+      }).join("");
+    }
+    async function toggleSeasonEpisodes(seasonId) {
+      const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);
+      if (!node) return;
+      if (!node.classList.contains("hidden")) {
+        node.classList.add("hidden");
+        return;
+      }
+      node.classList.remove("hidden");
+      node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("common.loading", "Loading..."))}</div>`;
+      try {
+        let payload = await authApiJson(`/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes`);
+        if (!(payload.episodes || []).length && hasPermission("metadata.refresh_one")) {
+          // Nothing stored yet, so fetch once rather than showing an empty list
+          // the reader would have to know to refresh. Re-opening a populated
+          // season costs no request at all.
+          payload = await authApiJson(
+            `/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes/refresh`,
+            {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})}
+          );
+          const result = payload.result || {};
+          if (!(payload.episodes || []).length && result.status !== "ok") {
+            node.innerHTML = `<div class="preview-empty">${escapeHtml(seriesRefreshExplanation(result))}</div>`;
+            return;
+          }
+        }
+        node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+      } catch (error) {
+        node.innerHTML = `<div class="preview-empty bad">${escapeHtml(error.message || String(error))}</div>`;
+      }
+    }
+    async function toggleEpisodeWatched(button) {
+      const episodeId = button.dataset.episodeWatched;
+      const watched = button.dataset.watched === "1";
+      if (!episodeId || !hasPermission("watchlist.manage")) return;
+      const node = button.closest("[data-season-episode-list]")
+        || button.parentElement?.closest("[data-season-episode-list]");
+      button.disabled = true;
+      try {
+        const payload = await authApiJson(
+          `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watched`,
+          watched
+            ? {method: "DELETE"}
+            : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})}
+        );
+        if (node) node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      } finally {
+        button.disabled = false;
+      }
     }
     function renderSeriesDetail(detail) {
       activeSeriesPayload = detail || {};
@@ -45526,6 +45659,21 @@ def ui_preview_html(
       });
       // Delegated: the candidate cards are rebuilt on every search, so a listener
       // bound per card would have to be rebound with them.
+      // Delegated on the panel: season rows and episode rows are both rebuilt on
+      // every render, so per-row listeners would have to be rebound with them.
+      document.getElementById("seriesDetailSeasons")?.addEventListener("click", (event) => {
+        const seasonToggle = event.target.closest("[data-season-episodes]");
+        if (seasonToggle) {
+          event.preventDefault();
+          toggleSeasonEpisodes(seasonToggle.dataset.seasonEpisodes);
+          return;
+        }
+        const watchedButton = event.target.closest("[data-episode-watched]");
+        if (watchedButton) {
+          event.preventDefault();
+          toggleEpisodeWatched(watchedButton);
+        }
+      });
       document.getElementById("seriesIdentityCandidates")?.addEventListener("click", (event) => {
         const pick = event.target.closest("[data-series-identity-pick]");
         if (!pick) return;

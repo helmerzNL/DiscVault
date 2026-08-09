@@ -100,6 +100,7 @@ try:
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import refresh_series_metadata
+    from .next_metadata import refresh_season_episodes
     from .next_metadata import search_series_candidates
     from .next_metadata import (
         normalize_audio_tracks,
@@ -371,6 +372,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_metadata import refresh_series_metadata
+    from next_metadata import refresh_season_episodes
     from next_metadata import search_series_candidates
     from next_metadata import (
         normalize_audio_tracks,
@@ -23597,6 +23599,186 @@ def register_routes(flask_app: Flask) -> None:
                 )
             detail = series_detail_entity(conn, series_uuid, actor=actor)
         return response({"status": "ok", "result": result, "detail": detail})
+
+    def episodes_available(conn) -> bool:
+        return table_exists(conn, "series_episodes") and table_exists(conn, "movie_episodes")
+
+    def season_episode_entities(conn, season_uuid: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+        """One season's episodes, with what this user has done with them.
+
+        `watchedAt` is per user and not per instance, so it is read with the
+        actor rather than joined once and shared -- a shared shelf would
+        otherwise show one person's viewing to everyone.
+
+        `onDisc` says whether any disc in the collection carries the episode. It
+        is the answer that makes an episode list worth showing at all: a season
+        listed as owned may still be missing its last two episodes.
+        """
+        if not episodes_available(conn):
+            return []
+        actor_id = (actor or {}).get("id")
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT e.id, e.public_id, e.episode_number, e.title, e.overview,
+                       e.air_date, e.runtime_minutes,
+                       EXISTS (
+                           SELECT 1 FROM movie_episodes me
+                           JOIN movies m ON m.id = me.movie_id AND m.deleted_at IS NULL
+                           WHERE me.episode_id = e.id
+                       ) AS on_disc,
+                       (
+                           SELECT max(wh.watched_at)
+                           FROM watch_history wh
+                           WHERE wh.episode_id = e.id AND wh.user_id = %s
+                       ) AS watched_at
+                FROM series_episodes e
+                WHERE e.season_id = %s AND e.deleted_at IS NULL
+                ORDER BY e.episode_number
+                """,
+                (actor_id, season_uuid),
+            )
+            rows = cur.fetchall()
+        return [
+            {
+                "id": str(row["id"]),
+                "publicId": row["public_id"],
+                "episodeNumber": row["episode_number"],
+                "title": row["title"],
+                "overview": row["overview"],
+                "airDate": row["air_date"],
+                "runtimeMinutes": row["runtime_minutes"],
+                "onDisc": bool(row["on_disc"]),
+                "watchedAt": row["watched_at"],
+            }
+            for row in rows
+        ]
+
+    @flask_app.get("/api/next/series/seasons/<season_id>/episodes")
+    def list_season_episodes(season_id):
+        season_uuid = parse_uuid(season_id, "season id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.view")
+            if not episodes_available(conn):
+                raise NextApiError("Episode tables are not available", 503)
+            return response(
+                {"status": "ok", "episodes": season_episode_entities(conn, season_uuid, actor=actor)}
+            )
+
+    @flask_app.post("/api/next/series/seasons/<season_id>/episodes/refresh")
+    def refresh_season_episodes_route(season_id):
+        season_uuid = parse_uuid(season_id, "season id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not episodes_available(conn):
+                raise NextApiError("Episode tables are not available", 503)
+            with conn.transaction():
+                # In the request rather than through the queue, like the series
+                # refresh: the caller is watching, and the work is one request to
+                # one source for one season.
+                result = refresh_season_episodes(conn, season_uuid)
+                audit_event(
+                    conn,
+                    event_type="metadata.season_episodes_refreshed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="series_season",
+                    target_id=season_uuid,
+                    summary="Refreshed season episodes",
+                    metadata=result,
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "result": result, "episodes": episodes})
+
+    @flask_app.post("/api/next/series/episodes/<episode_id>/watched")
+    def mark_episode_watched(episode_id):
+        episode_uuid = parse_uuid(episode_id, "episode id")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Watched request body must be an object", 400)
+        watched_at = clean_text(body.get("watchedAt", body.get("watched_at"))) or (
+            datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        )
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not episodes_available(conn) or not table_exists(conn, "watch_history"):
+                raise NextApiError("Episode tables are not available", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, season_id FROM series_episodes WHERE id = %s AND deleted_at IS NULL",
+                    (episode_uuid,),
+                )
+                episode = cur.fetchone()
+            if not episode:
+                raise NextApiError("Episode not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # `movie_id` stays NULL: an episode watch is about the
+                    # episode, and naming one of possibly several discs that
+                    # carry it would be inventing a fact.
+                    cur.execute(
+                        """
+                        INSERT INTO watch_history (user_id, episode_id, watched_at, snapshot)
+                        VALUES (%s, %s, %s, %s)
+                        RETURNING id
+                        """,
+                        (actor.get("id"), episode_uuid, watched_at, Jsonb({})),
+                    )
+                    entry = cur.fetchone()
+                audit_event(
+                    conn,
+                    event_type="watch_history.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_episode",
+                    target_id=episode_uuid,
+                    summary="Marked episode as watched",
+                    metadata={"watchedAt": watched_at},
+                )
+            episodes = season_episode_entities(conn, episode["season_id"], actor=actor)
+        return response(
+            {
+                "status": "ok",
+                "entry": {"id": str(entry["id"]), "watchedAt": watched_at} if entry else None,
+                "episodes": episodes,
+            }
+        )
+
+    @flask_app.delete("/api/next/series/episodes/<episode_id>/watched")
+    def clear_episode_watched(episode_id):
+        episode_uuid = parse_uuid(episode_id, "episode id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not episodes_available(conn) or not table_exists(conn, "watch_history"):
+                raise NextApiError("Episode tables are not available", 503)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT season_id FROM series_episodes WHERE id = %s AND deleted_at IS NULL",
+                    (episode_uuid,),
+                )
+                episode = cur.fetchone()
+            if not episode:
+                raise NextApiError("Episode not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # Every entry for this user, not the latest: the button says
+                    # "not watched", and leaving older rows behind would make it
+                    # flip back the moment the list is re-read.
+                    cur.execute(
+                        "DELETE FROM watch_history WHERE user_id = %s AND episode_id = %s",
+                        (actor.get("id"), episode_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="watch_history.removed",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_episode",
+                    target_id=episode_uuid,
+                    summary="Cleared episode watched state",
+                )
+            episodes = season_episode_entities(conn, episode["season_id"], actor=actor)
+        return response({"status": "ok", "episodes": episodes})
 
     @flask_app.post("/api/next/series/<series_id>/media/primary")
     def series_media_primary(series_id):

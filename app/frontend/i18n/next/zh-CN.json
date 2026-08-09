@@ -2884,6 +2884,12 @@
   "seriesDetail.identitySearching": "正在搜索来源...",
   "seriesDetail.identityNoMatches": "没有来源识别出该标题。",
   "seriesDetail.identitySourceError": "来源无法响应：{error}",
+  "seriesDetail.episodes": "剧集",
+  "seriesDetail.noEpisodes": "尚无此季的剧集信息。",
+  "seriesDetail.episodeOnDisc": "在碟片上",
+  "seriesDetail.episodeNotOnDisc": "不在碟片上",
+  "seriesDetail.episodeWatched": "已观看",
+  "seriesDetail.markEpisodeWatched": "标记为已观看",
   "seriesDetail.identitySaving": "正在关联剧集并获取数据...",
   "collection.seasonNumber": "第 {number} 季"
 }
