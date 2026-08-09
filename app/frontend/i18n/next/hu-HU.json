@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "A források nem értettek egyet abban, melyik film ez, ezért a lemez nem lett azonosítva. Add hozzá kézzel alább.",
   "releaseFallback.needsYear": "Több filmnek is ez a címe. Add meg az évet, és keress újra.",
   "releaseFallback.catalogDefect": "A MovieVaultnak megvan ez a kiadás, de nem tudja közzétenni. Az újrapróbálkozás nem segít; add hozzá a lemezt kézzel alább.",
+  "releaseFallback.clientDefect": "A MovieVault válaszolt, de a DiscVault ezen verziója nem tudta értelmezni a választ. A DiscVault frissítése valószínűleg megoldja; addig add hozzá a lemezt kézzel alább.",
   "releaseFallback.stillWorking": "A MovieVault még dolgozik a keresésen. Keress újra egy pillanat múlva - a kész eredmény készenlétben marad.",
   "releaseFallback.unreachable": "A MovieVault nem volt elérhető, ezért erről a lemezről még semmit sem tudunk. Ez általában átmeneti.",
   "releaseFallback.failed": "A MovieVault nem tudta befejezni ezt a keresést.",

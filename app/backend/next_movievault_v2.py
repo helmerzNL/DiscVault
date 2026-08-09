@@ -1352,18 +1352,59 @@ def _request(
     return status, content, headers
 
 
+# Unknown release-details keys already logged, as (label, key). Only bounded by
+# MovieVault's own vocabulary, so it cannot grow without a producer change - the
+# point is that a per-scan warning does not become a per-scan log flood.
+_RELEASE_DETAILS_UNKNOWN_KEYS_SEEN: set[tuple[str, str]] = set()
+
+
 def _release_details_object(
     value: Any,
     *,
     required: set[str],
     optional: set[str],
+    label: str = "object",
 ) -> dict[str, Any]:
+    """Read one object out of a release-details answer.
+
+    A missing *required* key is still fatal - it means the object does not
+    describe what this branch claims it describes. An **unknown** key is not:
+    it is logged once and dropped, and the caller gets a copy without it.
+
+    This used to reject the whole response, which inverted the safe direction
+    of change: a purely additive field on MovieVault's side took barcode
+    scanning down on discvault.eu until this repo caught up. It happened with
+    `subtitles` (2026-08-04) and again with `finishes` (2026-08-09), and the
+    remedy recorded after the first one - ship the consumer first - is an
+    ordering convention that nothing enforces. See App-Guidance
+    `docs/apps/discvault/movievault-route-parity.md` §4.
+
+    Dropping rather than passing through is the load-bearing half: every parser
+    in this family builds its result key by key from names it declared, so an
+    ignored key can never reach the database, the picker, or a contribution
+    sent back to MovieVault.
+
+    The bulk sync feed keeps its exact-key reader (`_exact_keys`) on purpose.
+    There a surprise key means the record is not what it claims, and the
+    synchronization can be repeated; a resolve answer cannot.
+    """
     if not isinstance(value, dict):
         raise MovieVaultV2Error("release_details_response_invalid")
     keys = set(value)
-    if not required.issubset(keys) or keys - required - optional:
+    if not required.issubset(keys):
         raise MovieVaultV2Error("release_details_response_invalid")
-    return value
+    unknown = keys - required - optional
+    if not unknown:
+        return value
+    fresh = sorted(key for key in unknown if (label, key) not in _RELEASE_DETAILS_UNKNOWN_KEYS_SEEN)
+    if fresh:
+        _RELEASE_DETAILS_UNKNOWN_KEYS_SEEN.update((label, key) for key in fresh)
+        logger.warning(
+            "movievault_v2: ignoring unknown release-details %s key(s) %s",
+            label,
+            fresh,
+        )
+    return {key: item for key, item in value.items() if key not in unknown}
 
 
 def _release_details_text(
@@ -1412,6 +1453,7 @@ def _release_details_barcode(value: Any, *, scopes: set[str]) -> dict[str, str]:
         value,
         required={"type", "value", "scope"},
         optional=set(),
+        label="barcode",
     )
     barcode = _release_details_barcode_value(
         item["value"],
@@ -1428,6 +1470,7 @@ def _release_details_alias(value: Any) -> dict[str, Any]:
         value,
         required={"title", "kind"},
         optional={"languageCode", "countryCode"},
+        label="alternate title",
     )
     if item["kind"] not in {"alternate", "localized", "packaging", "retailer"}:
         raise MovieVaultV2Error("release_details_response_invalid")
@@ -1475,6 +1518,7 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
         value,
         required=set(),
         optional={"tmdbMovieId", "imdbId"},
+        label="film identifiers",
     )
     result: dict[str, str] = {}
     if item.get("tmdbMovieId") is not None:
@@ -1497,12 +1541,19 @@ def _release_details_film(value: Any) -> dict[str, Any]:
         value,
         required={"title", "identifiers", "links"},
         optional={"year"},
+        label="film",
     )
     identifiers = _release_details_identifiers(item["identifiers"])
+    # A link DiscVault did not derive itself is never rendered, so the two known
+    # links must agree exactly with the identifiers beside them. An *unknown*
+    # link is a different matter: the resolver chain already runs a Wikidata
+    # step, and comparing the whole dict would turn the day it publishes a third
+    # link into an outage. Checked per key, and only the two are kept.
     links = _release_details_object(
         item["links"],
         required=set(),
         optional={"tmdb", "imdb"},
+        label="film links",
     )
     expected_links = {
         "tmdb": (
@@ -1516,8 +1567,10 @@ def _release_details_film(value: Any) -> dict[str, Any]:
             else None
         ),
     }
-    if links != {key: value for key, value in expected_links.items() if value is not None}:
-        raise MovieVaultV2Error("release_details_response_invalid")
+    for key, expected in expected_links.items():
+        if links.get(key) != expected:
+            raise MovieVaultV2Error("release_details_response_invalid")
+    links = {key: value for key, value in expected_links.items() if value is not None}
     result: dict[str, Any] = {
         "title": _release_details_text(item["title"], minimum=1, maximum=500),
         "identifiers": identifiers,
@@ -1587,10 +1640,19 @@ def _release_details_video(value: Any) -> dict[str, Any]:
         value,
         required=set(),
         optional={"resolution", "codecs", "hdrFormats", "aspectRatios"},
+        label="video profile",
     )
     result: dict[str, Any] = {}
+    # `_video_resolution` and `_aspect_ratios` are shared with the sync feed and
+    # raise its `record_invalid`. That code is not in the resolver's failure-kind
+    # table, so it audits a shape DiscVault refused as MovieVault's failure -
+    # the same misattribution this whole path is being fixed for. Re-raise under
+    # the release-details code, as the poster and box-set readers already do.
     if item.get("resolution") is not None:
-        result["resolution"] = _video_resolution(item["resolution"], release_id="<resolver>")
+        try:
+            result["resolution"] = _video_resolution(item["resolution"], release_id="<resolver>")
+        except MovieVaultV2Error as exc:
+            raise MovieVaultV2Error("release_details_response_invalid") from exc
     if "codecs" in item:
         result["codecs"] = _release_details_enum_list(
             item["codecs"],
@@ -1610,7 +1672,10 @@ def _release_details_video(value: Any) -> dict[str, Any]:
         # "4:3" and "1.375:1" - all real, common ratios - and did so by discarding
         # the whole resolve response. ASPECT_RATIO_PATTERN matches what MovieVault
         # actually permits, and an odd value is now logged and kept.
-        result["aspectRatios"] = _aspect_ratios(item["aspectRatios"], release_id="<resolver>")
+        try:
+            result["aspectRatios"] = _aspect_ratios(item["aspectRatios"], release_id="<resolver>")
+        except MovieVaultV2Error as exc:
+            raise MovieVaultV2Error("release_details_response_invalid") from exc
     return result
 
 
@@ -1626,6 +1691,7 @@ def _release_details_subtitle_track(value: Any) -> dict[str, Any]:
         value,
         required={"languageCode", "subtitleType"},
         optional=set(),
+        label="subtitle track",
     )
     subtitle_type = item["subtitleType"]
     if not isinstance(subtitle_type, str) or not subtitle_type or len(subtitle_type) > 24:
@@ -1640,40 +1706,75 @@ def _release_details_subtitle_track(value: Any) -> dict[str, Any]:
     }
 
 
+def _release_details_open_enum(
+    value: Any,
+    *,
+    allowed: set[str],
+    maximum: int,
+    label: str,
+) -> str:
+    """One enum scalar from the resolver: shape strict, vocabulary open.
+
+    A value of the right type and within its bound is kept verbatim; only its
+    membership of the allow-list is advisory, and an unrecognized one is logged.
+    This is the posture `_release_details_enum_list` and
+    `_release_details_subtitle_track` already argue for, and the reason is the
+    same: losing a whole resolve answer over a codec name we have not heard of
+    is worse than carrying the name through. Downstream is ready for it -
+    `next_metadata.normalize_audio_track_entry` validates track *keys*, not
+    their vocabulary.
+
+    Not for values that select a code path (`status`, `verificationStatus`,
+    `source`, `moderation.status`, a barcode's `type`/`scope`). There an
+    unrecognized value has no safe default, so those stay closed.
+    """
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    if value not in allowed:
+        logger.warning(
+            "movievault_v2: unrecognized release-details %s value %r - storing raw value",
+            label,
+            value,
+        )
+    return value
+
+
 def _release_details_audio_track(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
         required={"languageCode", "codec"},
         optional={"channels", "immersiveFormat"},
+        label="audio track",
     )
-    if item["codec"] not in {
-        "pcm",
-        "dolby_digital",
-        "dolby_digital_plus",
-        "dolby_truehd",
-        "dts",
-        "dts_hd_hr",
-        "dts_hd_ma",
-        "mpeg_audio",
-        "aac",
-    }:
-        raise MovieVaultV2Error("release_details_response_invalid")
     result: dict[str, Any] = {
         "languageCode": _release_details_text(
             item["languageCode"],
             maximum=35,
             pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
         ),
-        "codec": item["codec"],
+        # The bounds mirror what `normalize_audio_track_entry` truncates to, so
+        # a kept-raw value surprises nothing further down.
+        "codec": _release_details_open_enum(
+            item["codec"],
+            allowed=AUDIO_TRACK_CODECS,
+            maximum=64,
+            label="audio codec",
+        ),
     }
     if item.get("channels") is not None:
-        if item["channels"] not in {"1.0", "2.0", "5.1", "6.1", "7.1"}:
-            raise MovieVaultV2Error("release_details_response_invalid")
-        result["channels"] = item["channels"]
+        result["channels"] = _release_details_open_enum(
+            item["channels"],
+            allowed=AUDIO_TRACK_CHANNELS,
+            maximum=16,
+            label="audio channels",
+        )
     if item.get("immersiveFormat") is not None:
-        if item["immersiveFormat"] not in {"dolby_atmos", "dts_x", "auro_3d"}:
-            raise MovieVaultV2Error("release_details_response_invalid")
-        result["immersiveFormat"] = item["immersiveFormat"]
+        result["immersiveFormat"] = _release_details_open_enum(
+            item["immersiveFormat"],
+            allowed=AUDIO_TRACK_IMMERSIVE_FORMATS,
+            maximum=64,
+            label="immersive format",
+        )
     return result
 
 
@@ -1691,14 +1792,15 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             "video",
             "audioTracks",
             "subtitleLanguages",
-            # Structured subtitles, the same shape distribution-4 uses. Accepted
-            # before MovieVault emits it, and that order is not optional: this
-            # reader rejects the *whole* response on an unknown key, so a purely
-            # additive field on the producer side takes barcode resolution down
-            # until this list knows about it. See App-Guidance
-            # `docs/apps/discvault/movievault-route-parity.md` §4.
+            # Structured subtitles, the same shape distribution-4 uses.
             "subtitles",
+            # Surface treatment, the distribution-5 axis. Naming a key here no
+            # longer decides whether the response survives - `_release_details_object`
+            # drops what it does not know - it decides whether the field is
+            # *read*. See App-Guidance `docs/apps/discvault/movievault-route-parity.md` §4.
+            "finishes",
         },
+        label="release",
     )
     barcodes_value = item["barcodes"]
     if not isinstance(barcodes_value, list) or not 1 <= len(barcodes_value) <= 25:
@@ -1737,6 +1839,13 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             maximum=MAX_PACKAGING,
             allowed=PACKAGING_VALUES,
             label="packaging",
+        )
+    if "finishes" in item:
+        result["finishes"] = _release_details_enum_list(
+            item["finishes"],
+            maximum=MAX_FINISHES,
+            allowed=FINISH_VALUES,
+            label="finishes",
         )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
@@ -1793,11 +1902,13 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             "distributor",
             "barcodes",
             "packaging",
+            "finishes",
             "video",
             "audioTracks",
             "subtitles",
             "subtitleLanguages",
         },
+        label="release summary",
     )
     if item["source"] not in {"canonical", "external"}:
         raise MovieVaultV2Error("release_details_response_invalid")
@@ -1863,6 +1974,18 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             allowed=PACKAGING_VALUES,
             label="packaging",
         )
+    # The field that broke this path on 2026-08-09: MovieVault emits it on every
+    # candidate, this list did not name it, and the closed key set turned that
+    # into `release_details_response_invalid` for the whole answer. It is also a
+    # real distinguishing fact between two pressings of one film, which is the
+    # picker's entire job - so it is read, not merely tolerated.
+    if "finishes" in item:
+        result["finishes"] = _release_details_enum_list(
+            item["finishes"],
+            maximum=MAX_FINISHES,
+            allowed=FINISH_VALUES,
+            label="finishes",
+        )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
     if "audioTracks" in item:
@@ -1899,6 +2022,7 @@ def _release_details_member(value: Any) -> dict[str, Any]:
             "discFormat",
             "identifiers",
         },
+        label="box set member",
     )
     result: dict[str, Any] = {
         "position": _release_details_integer(item["position"], minimum=1, maximum=30),
@@ -1938,6 +2062,7 @@ def _release_details_box_set(value: Any) -> dict[str, Any]:
         value,
         required={"state", "title", "members"},
         optional={"alternateTitles", "format", "barcodes"},
+        label="box set",
     )
     if item["state"] not in {"explicit", "candidate"}:
         raise MovieVaultV2Error("release_details_response_invalid")
@@ -2068,15 +2193,24 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             "retryAfterSeconds",
             "errorCode",
         },
+        label="response",
     )
     if item["contractVersion"] != RELEASE_DETAILS_CONTRACT:
         raise MovieVaultV2Error("release_details_response_invalid")
     status = item["status"]
+    # `release` and `releases` answer the same question in two incompatible
+    # ways - one confirmed pressing, or a choice between several - and `status`
+    # says which was asked. Carrying both is a contradiction, not an additive
+    # field, so this stays a refusal even though unknown keys no longer are. It
+    # used to be enforced only by the per-status key sets below.
+    if "release" in item and "releases" in item:
+        raise MovieVaultV2Error("release_details_response_invalid")
     if status == "pending":
         _release_details_object(
             item,
             required={"contractVersion", "status", "resolutionId", "retryAfterSeconds"},
             optional=set(),
+            label="pending response",
         )
         try:
             resolution_id = str(uuid.UUID(str(item["resolutionId"])))
@@ -2106,7 +2240,12 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required=required,
             optional={"boxSet", "poster", "boxSetPoster"},
+            label="hit response",
         )
+        # A confirmed hit carrying a candidate list is the mirror of the
+        # contradiction guarded above.
+        if "releases" in item:
+            raise MovieVaultV2Error("release_details_response_invalid")
         expected_verification = (
             "canonical" if status == "canonical_hit" else "unreviewed_external"
         )
@@ -2136,6 +2275,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
                 item["moderation"],
                 required={"candidateId", "status"},
                 optional=set(),
+                label="moderation",
             )
             if (
                 re.fullmatch(r"^discovery_[A-Za-z0-9_-]{12,64}$", str(moderation["candidateId"]))
@@ -2157,6 +2297,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required={"contractVersion", "status", "film", "releases"},
             optional={"verificationStatus"},
+            label="candidates response",
         )
         releases_value = item["releases"]
         if not isinstance(releases_value, list) or not 1 <= len(releases_value) <= 50:
@@ -2179,6 +2320,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required={"contractVersion", "status"},
             optional=set(),
+            label=f"{status} response",
         )
         return {"contractVersion": RELEASE_DETAILS_CONTRACT, "status": status}
     if status == "failed":
@@ -2186,6 +2328,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required={"contractVersion", "status", "errorCode"},
             optional=set(),
+            label="failed response",
         )
         return {
             "contractVersion": RELEASE_DETAILS_CONTRACT,

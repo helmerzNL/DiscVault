@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Źródła nie zgodziły się co do tego, jaki to film, więc płyty nie rozpoznano. Dodaj ją ręcznie poniżej.",
   "releaseFallback.needsYear": "Ten tytuł nosi kilka filmów. Podaj rok i wyszukaj ponownie.",
   "releaseFallback.catalogDefect": "MovieVault ma to wydanie, ale nie może go opublikować. Ponowna próba nie pomoże; dodaj płytę ręcznie poniżej.",
+  "releaseFallback.clientDefect": "MovieVault odpowiedział, ale ta wersja DiscVault nie potrafiła odczytać odpowiedzi. Aktualizacja DiscVault powinna to naprawić; w międzyczasie dodaj płytę ręcznie poniżej.",
   "releaseFallback.stillWorking": "MovieVault wciąż pracuje nad tym wyszukiwaniem. Wyszukaj ponownie za chwilę - gotowy wynik zostanie zachowany.",
   "releaseFallback.unreachable": "Nie udało się połączyć z MovieVault, więc o tej płycie nic jeszcze nie wiadomo. Zwykle jest to chwilowe.",
   "releaseFallback.failed": "MovieVault nie mógł ukończyć tego wyszukiwania.",

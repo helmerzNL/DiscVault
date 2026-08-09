@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Källorna var inte överens om vilken film det är, så skivan identifierades inte. Lägg till den för hand nedan.",
   "releaseFallback.needsYear": "Flera filmer delar den här titeln. Lägg till årtalet och sök igen.",
   "releaseFallback.catalogDefect": "MovieVault har utgåvan men kan inte publicera den. Att försöka igen hjälper inte; lägg till skivan för hand nedan.",
+  "releaseFallback.clientDefect": "MovieVault svarade, men den här versionen av DiscVault kunde inte läsa svaret. En uppdatering av DiscVault bör lösa det; lägg under tiden till skivan manuellt nedan.",
   "releaseFallback.stillWorking": "MovieVault arbetar fortfarande med uppslagningen. Sök igen om en stund - det färdiga resultatet ligger kvar.",
   "releaseFallback.unreachable": "MovieVault gick inte att nå, så inget är känt om skivan ännu. Det är oftast tillfälligt.",
   "releaseFallback.failed": "MovieVault kunde inte slutföra uppslagningen.",

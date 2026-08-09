@@ -112,6 +112,7 @@ def release_details_hit(*, external: bool = False) -> dict:
             "discCount": 2,
             "regions": ["B"],
             "packaging": ["steelbook"],
+            "finishes": ["holofoil"],
             "video": {
                 "resolution": "2160p",
                 "codecs": ["hevc"],
@@ -156,6 +157,7 @@ def release_details_candidates(*, count: int = 2) -> dict:
                 "discRegions": ["B"],
                 "discCount": index + 1,
                 "packaging": ["steelbook"] if index else [],
+                "finishes": ["holofoil"] if index else [],
                 "video": {
                     "resolution": "2160p",
                     "codecs": ["hevc"],
@@ -601,15 +603,22 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         ):
             next_movievault_v2.validate_release_details_response(payload)
 
-    def test_release_details_rejects_provider_owned_or_unknown_fields(self):
+    def test_release_details_ignores_provider_owned_or_unknown_fields(self):
+        """A field this reader does not know is dropped, not fatal.
+
+        It used to reject the whole response, which meant a purely additive
+        field on MovieVault's side took barcode scanning down until this repo
+        caught up - twice, with `subtitles` and then `finishes`. The provider
+        prose still never reaches anything: it is filtered out here, so no
+        caller can read a key the parser did not declare.
+        """
         payload = release_details_hit(external=True)
         payload["release"]["description"] = "provider-owned prose"
 
-        with self.assertRaisesRegex(
-            next_movievault_v2.MovieVaultV2Error,
-            "^release_details_response_invalid$",
-        ):
-            next_movievault_v2.validate_release_details_response(payload)
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "external_hit")
+        self.assertNotIn("description", result["release"])
 
     def test_release_details_accepts_strict_ordered_box_set(self):
         payload = release_details_hit(external=True)
@@ -696,6 +705,106 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("subtitleLanguages", first)
+        # Two pressings of one film may differ by the finish alone, so it is
+        # read rather than merely tolerated.
+        self.assertEqual(first["finishes"], [])
+        self.assertEqual(result["releases"][1]["finishes"], ["holofoil"])
+
+    def test_release_details_ignores_an_unknown_future_key(self):
+        """An additive producer field must not cost the whole answer.
+
+        This is the failure that took barcode scanning down twice - `subtitles`
+        on 2026-08-04 and `finishes` on 2026-08-09 - because the reader
+        validated with a closed key set. Checked at every nesting level, since
+        that is where the next one will appear.
+        """
+        payload = release_details_candidates()
+        payload["glitter"] = True
+        payload["releases"][0]["sparkleLevel"] = 3
+        payload["releases"][0]["video"]["frameRate"] = "24p"
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(len(result["releases"]), 2)
+        self.assertNotIn("glitter", result)
+        self.assertNotIn("sparkleLevel", result["releases"][0])
+        self.assertNotIn("frameRate", result["releases"][0]["video"])
+
+    def test_release_details_keeps_an_unknown_finish_value(self):
+        payload = release_details_candidates()
+        payload["releases"][0]["finishes"] = ["mirror_foil"]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["releases"][0]["finishes"], ["mirror_foil"])
+
+    def test_release_details_keeps_an_unknown_audio_codec_and_channel_layout(self):
+        """Vocabulary is open, shape is not.
+
+        A codec name this repo has not heard of describes a track that is
+        otherwise perfectly readable; refusing it used to discard every field of
+        every lookup until the allow-list caught up.
+        """
+        payload = release_details_candidates()
+        payload["releases"][0]["audioTracks"] = [
+            {"languageCode": "en", "codec": "dts_hd_x", "channels": "9.1.6"}
+        ]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["releases"][0]["audioTracks"],
+            [{"languageCode": "en", "codec": "dts_hd_x", "channels": "9.1.6"}],
+        )
+
+    def test_release_details_still_refuses_an_unreadable_audio_track_shape(self):
+        for track in (
+            {"languageCode": "en", "codec": ""},
+            {"languageCode": "en", "codec": 5},
+            {"languageCode": "en", "codec": "dts", "channels": "x" * 32},
+        ):
+            with self.subTest(track=track):
+                payload = release_details_candidates()
+                payload["releases"][0]["audioTracks"] = [track]
+
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error,
+                    "^release_details_response_invalid$",
+                ):
+                    next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_ignores_an_unknown_film_link(self):
+        """The resolver already runs a Wikidata step.
+
+        The two links DiscVault knows must still match the identifiers beside
+        them - a link is never taken on trust - but comparing the whole `links`
+        object made the day MovieVault publishes a third one an outage.
+        """
+        payload = release_details_candidates()
+        payload["film"]["links"]["wikidata"] = "https://www.wikidata.org/wiki/Q104123"
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["film"]["links"],
+            {"tmdb": "https://www.themoviedb.org/movie/123"},
+        )
+
+    def test_release_details_rejects_a_hit_carrying_a_candidate_list(self):
+        """`release` and `releases` answer the same question incompatibly.
+
+        Unknown keys are ignored now, but this pair is a contradiction rather
+        than an addition, so it stays a refusal on both sides.
+        """
+        payload = release_details_hit()
+        payload["releases"] = release_details_candidates()["releases"]
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
 
     def test_release_details_candidates_require_a_film_and_a_release(self):
         for mutate in (

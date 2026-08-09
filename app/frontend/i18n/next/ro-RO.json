@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "Sursele nu au fost de acord ce film este acesta, deci discul nu a fost identificat. Adaugă-l manual mai jos.",
   "releaseFallback.needsYear": "Mai multe filme au acest titlu. Adaugă anul și caută din nou.",
   "releaseFallback.catalogDefect": "MovieVault are această ediție, dar nu o poate publica. Reîncercarea nu ajută; adaugă discul manual mai jos.",
+  "releaseFallback.clientDefect": "MovieVault a răspuns, dar această versiune de DiscVault nu a putut citi răspunsul. Actualizarea DiscVault ar trebui să rezolve problema; între timp, adaugă discul manual mai jos.",
   "releaseFallback.stillWorking": "MovieVault încă lucrează la această căutare. Caută din nou peste puțin timp - rezultatul finalizat rămâne pregătit.",
   "releaseFallback.unreachable": "MovieVault nu a putut fi contactat, deci despre acest disc nu se știe încă nimic. De obicei este temporar.",
   "releaseFallback.failed": "MovieVault nu a putut finaliza această căutare.",

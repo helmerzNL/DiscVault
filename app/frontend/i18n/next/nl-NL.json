@@ -2770,6 +2770,7 @@
   "releaseFallback.ambiguous": "De bronnen waren het niet eens over welke film dit is, dus de schijf is niet geïdentificeerd. Voeg hem hieronder handmatig toe.",
   "releaseFallback.needsYear": "Meerdere films delen deze titel. Vul het jaar in en zoek opnieuw.",
   "releaseFallback.catalogDefect": "MovieVault heeft deze uitgave wel, maar kan hem niet publiceren. Opnieuw proberen helpt niet; voeg de schijf hieronder handmatig toe.",
+  "releaseFallback.clientDefect": "MovieVault gaf antwoord, maar deze versie van DiscVault kon dat antwoord niet lezen. DiscVault bijwerken lost dit waarschijnlijk op; voeg de schijf hieronder zolang handmatig toe.",
   "releaseFallback.stillWorking": "MovieVault werkt nog aan deze zoekopdracht. Zoek zo meteen opnieuw - het afgeronde resultaat blijft klaarstaan.",
   "releaseFallback.unreachable": "MovieVault was niet bereikbaar, dus over deze schijf is nog niets bekend. Dit is meestal tijdelijk.",
   "releaseFallback.failed": "MovieVault kon deze zoekopdracht niet afronden.",
