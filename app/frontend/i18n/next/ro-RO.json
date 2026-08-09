@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Se actualizează metadatele serialului...",
   "seriesDetail.metadataRefreshed": "Metadatele serialului au fost actualizate.",
   "seriesDetail.metadataNoAnswer": "Nicio sursă nu a avut ceva de adăugat.",
-  "seriesDetail.metadataNoIdentifier": "Acest serial nu are un identificator de sursa, asa ca nicio sursa nu a putut fi interogata. Vine odata cu datele discului de la MovieVault.",
+  "seriesDetail.metadataNoIdentifier": "Fara identificator, deci nicio sursa nu a putut fi interogata. Cautati acest serial la Metadate pentru a-l lega dumneavoastra, sau asteptati ca MovieVault sa furnizeze unul cu datele discului.",
   "seriesDetail.metadataNoSource": "Niciun plugin activat nu poate descrie un serial. Activati unul in Profil - Pluginuri.",
   "seriesDetail.metadataUnavailable": "Aceasta instalare nu poate stoca inca date despre seriale.",
-  "seriesDetail.identityHelp": "Fara identificator nicio sursa nu poate fi interogata despre acest serial, deci ramane fara rezumat si imagini.",
+  "seriesDetail.identityHelp": "Fara identificator nicio sursa nu poate fi interogata despre acest serial, deci ramane fara rezumat si imagini. Cautati mai jos pentru a-l lega.",
   "seriesDetail.identitySearch": "Cauta",
   "seriesDetail.identitySearchPlaceholder": "Cauta dupa titlu",
   "seriesDetail.identityUse": "Foloseste acesta",
   "seriesDetail.identitySearching": "Se cauta in surse...",
   "seriesDetail.identityNoMatches": "Nicio sursa nu a recunoscut acel titlu.",
+  "seriesDetail.identitySourceError": "O sursa nu a putut raspunde: {error}",
   "seriesDetail.identitySaving": "Se leaga serialul si se preiau datele...",
   "collection.seasonNumber": "Sezonul {number}"
 }

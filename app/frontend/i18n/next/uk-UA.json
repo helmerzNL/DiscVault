@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Оновлення метаданих серіалу...",
   "seriesDetail.metadataRefreshed": "Метадані серіалу оновлено.",
   "seriesDetail.metadataNoAnswer": "Жодне джерело не мало що додати.",
-  "seriesDetail.metadataNoIdentifier": "Tsey serial ne maye identyfikatora dzherela, tomu zhodne dzherelo ne bulo opytano. Vin nadkhodyt razom z danymy dysku z MovieVault.",
+  "seriesDetail.metadataNoIdentifier": "Nemaye identyfikatora, tomu zhodne dzherelo ne bulo opytano. Znaydit tsey serial u rozdili Metadani, shchob zvyazaty yoho samostiyno, abo zachekayte, poky MovieVault nadishle yoho z danymy dysku.",
   "seriesDetail.metadataNoSource": "Zhoden uvimknenyy plahin ne mozhe opysaty serial. Uvimknit odyn u Profil - Plahiny.",
   "seriesDetail.metadataUnavailable": "Tsya instalyatsiya shche ne mozhe zberihaty dani serialiv.",
-  "seriesDetail.identityHelp": "Bez identyfikatora zhodne dzherelo ne mozhna opytaty pro tsey serial, tomu vin zalyshayetsya bez opysu ta zobrazhen.",
+  "seriesDetail.identityHelp": "Bez identyfikatora zhodne dzherelo ne mozhna opytaty pro tsey serial, tomu vin zalyshayetsya bez opysu ta zobrazhen. Znaydit nyzhche, shchob yoho zvyazaty.",
   "seriesDetail.identitySearch": "Poshuk",
   "seriesDetail.identitySearchPlaceholder": "Poshuk za nazvoyu",
   "seriesDetail.identityUse": "Vykorystaty tsey",
   "seriesDetail.identitySearching": "Poshuk u dzherelakh...",
   "seriesDetail.identityNoMatches": "Zhodne dzherelo ne rozpiznalo tsyu nazvu.",
+  "seriesDetail.identitySourceError": "Dzherelo ne zmohlo vidpovisty: {error}",
   "seriesDetail.identitySaving": "Zvyazuvannya serialu ta otrymannya danykh...",
   "collection.seasonNumber": "Сезон {number}"
 }

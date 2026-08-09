@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Aktualizácia metadát seriálu...",
   "seriesDetail.metadataRefreshed": "Metadáta seriálu aktualizované.",
   "seriesDetail.metadataNoAnswer": "Žiadny zdroj nemal čo dodať.",
-  "seriesDetail.metadataNoIdentifier": "Tento serial nema identifikator zdroja, takze nebolo mozne opytat sa ziadneho zdroja. Prichadza s udajmi disku z MovieVault.",
+  "seriesDetail.metadataNoIdentifier": "Ziadny identifikator, takze nebolo mozne opytat sa ziadneho zdroja. Vyhladajte serial v zalozke Metadata a prepojte ho sami, alebo pockajte, kym ho MovieVault dodá s udajmi disku.",
   "seriesDetail.metadataNoSource": "Ziadny povoleny plugin nedokaze opisat serial. Povolte nejaky v Profil - Pluginy.",
   "seriesDetail.metadataUnavailable": "Tato instalacia zatial nedokaze ukladat udaje serialov.",
-  "seriesDetail.identityHelp": "Bez identifikatora sa nemozno opytat ziadneho zdroja na tento serial, takze zostane bez popisu a obrazkov.",
+  "seriesDetail.identityHelp": "Bez identifikatora sa nemozno opytat ziadneho zdroja na tento serial, takze zostane bez popisu a obrazkov. Vyhladajte nizsie a prepojte ho.",
   "seriesDetail.identitySearch": "Hladat",
   "seriesDetail.identitySearchPlaceholder": "Hladat podla nazvu",
   "seriesDetail.identityUse": "Pouzit tento",
   "seriesDetail.identitySearching": "Prehladavanie zdrojov...",
   "seriesDetail.identityNoMatches": "Ziadny zdroj nazov nerozpoznal.",
+  "seriesDetail.identitySourceError": "Zdroj nemohol odpovedat: {error}",
   "seriesDetail.identitySaving": "Prepajanie serialu a nacitanie udajov...",
   "collection.seasonNumber": "Séria {number}"
 }

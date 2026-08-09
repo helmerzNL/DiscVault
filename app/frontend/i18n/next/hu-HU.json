@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Sorozat metaadatainak frissítése...",
   "seriesDetail.metadataRefreshed": "A sorozat metaadatai frissítve.",
   "seriesDetail.metadataNoAnswer": "Egyik forrásnak sem volt mit hozzátennie.",
-  "seriesDetail.metadataNoIdentifier": "Ennek a sorozatnak nincs forrasazonositoja, ezert egyetlen forrast sem lehetett lekerdezni. A lemezadatokkal erkezik a MovieVaultbol.",
+  "seriesDetail.metadataNoIdentifier": "Nincs azonosito, ezert egyetlen forrast sem lehetett lekerdezni. Keresse meg a sorozatot a Metaadatok fulon, hogy maga kapcsolja ossze, vagy varjon, amig a MovieVault kuld egyet a lemezadatokkal.",
   "seriesDetail.metadataNoSource": "Egyetlen engedelyezett bovitmeny sem tud sorozatot leirni. Engedelyezzen egyet a Profil - Bovitmenyek alatt.",
   "seriesDetail.metadataUnavailable": "Ez a telepites meg nem tud sorozatadatokat tarolni.",
-  "seriesDetail.identityHelp": "Azonosito nelkul egyetlen forrast sem lehet lekerdezni errol a sorozatrol, igy leiras es kepek nelkul marad.",
+  "seriesDetail.identityHelp": "Azonosito nelkul egyetlen forrast sem lehet lekerdezni errol a sorozatrol, igy leiras es kepek nelkul marad. Keressen ra lent az osszekapcsolashoz.",
   "seriesDetail.identitySearch": "Kereses",
   "seriesDetail.identitySearchPlaceholder": "Kereses cim alapjan",
   "seriesDetail.identityUse": "Ezt hasznalom",
   "seriesDetail.identitySearching": "Forrasok keresese...",
   "seriesDetail.identityNoMatches": "Egyetlen forras sem ismerte fel a cimet.",
+  "seriesDetail.identitySourceError": "Egy forras nem tudott valaszolni: {error}",
   "seriesDetail.identitySaving": "Sorozat osszekapcsolasa es adatok lekerese...",
   "collection.seasonNumber": "{number}. évad"
 }

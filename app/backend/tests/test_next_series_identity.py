@@ -244,5 +244,43 @@ class SeriesIdentityRouteTests(unittest.TestCase):
         )
 
 
+class FailedSourcesAreNotEmptyOnesTests(unittest.TestCase):
+    """The UI must not report a broken source as a source that found nothing.
+
+    `search_series_candidates` has always collected `errors`; nothing showed
+    them. So a rejected request -- a missing API key is the usual reason -- came
+    out as "No source recognised that title", which sends the reader off to check
+    their spelling instead of their credentials. It is the same collapse the
+    refresh message was fixed for one layer up, repeated one layer down.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def test_the_search_distinguishes_a_failure_from_a_miss(self):
+        self.assertIn("function sourceErrorText(result)", self.source)
+        start = self.source.index("async function searchSeriesIdentity(")
+        body = self.source[start:self.source.index("\n    async function ", start + 1)]
+        # The failure branch must come *before* the generic no-matches sentence,
+        # or it can never be reached.
+        self.assertLess(body.index("sourceErrorText(result)"), body.index("identityNoMatches"))
+
+    def test_the_refresh_message_makes_the_same_distinction(self):
+        start = self.source.index("function seriesRefreshExplanation(result)")
+        body = self.source[start:self.source.index("\n    async function ", start + 1)]
+        self.assertIn('sourceErrorText(result) || tNext("seriesDetail.metadataNoAnswer"', body)
+
+    def test_the_backend_still_reports_the_errors_it_collects(self):
+        from app.backend import next_metadata
+
+        import inspect
+
+        body = inspect.getsource(next_metadata.search_series_candidates)
+        self.assertIn('"errors": errors', body)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

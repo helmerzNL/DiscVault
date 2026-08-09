@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "シリーズのメタデータを更新中...",
   "seriesDetail.metadataRefreshed": "シリーズのメタデータを更新しました。",
   "seriesDetail.metadataNoAnswer": "追加できる情報を持つソースはありませんでした。",
-  "seriesDetail.metadataNoIdentifier": "このシリーズにはソース識別子がないため、どのソースにも問い合わせできませんでした。識別子は MovieVault のディスクデータとともに届きます。",
+  "seriesDetail.metadataNoIdentifier": "識別子がないため、どのソースにも問い合わせできませんでした。メタデータのタブでこのシリーズを検索して自分で紐付けるか、MovieVault がディスクデータとともに送ってくるのを待ってください。",
   "seriesDetail.metadataNoSource": "有効なプラグインでシリーズを説明できるものがありません。プロフィール - プラグインで有効にしてください。",
   "seriesDetail.metadataUnavailable": "このインストールではまだシリーズデータを保存できません。",
-  "seriesDetail.identityHelp": "識別子がないとこのシリーズについてどのソースにも問い合わせできず、あらすじも画像もないままになります。",
+  "seriesDetail.identityHelp": "識別子がないとこのシリーズについてどのソースにも問い合わせできず、あらすじも画像もないままになります。下で検索して紐付けてください。",
   "seriesDetail.identitySearch": "検索",
   "seriesDetail.identitySearchPlaceholder": "タイトルで検索",
   "seriesDetail.identityUse": "これを使う",
   "seriesDetail.identitySearching": "ソースを検索中...",
   "seriesDetail.identityNoMatches": "どのソースもそのタイトルを認識しませんでした。",
+  "seriesDetail.identitySourceError": "ソースが応答できませんでした: {error}",
   "seriesDetail.identitySaving": "シリーズを紐付けて情報を取得中...",
   "collection.seasonNumber": "シーズン {number}"
 }

@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Dizi meta verileri yenileniyor...",
   "seriesDetail.metadataRefreshed": "Dizi meta verileri yenilendi.",
   "seriesDetail.metadataNoAnswer": "Hiçbir kaynağın ekleyecek bir şeyi yoktu.",
-  "seriesDetail.metadataNoIdentifier": "Bu dizinin kaynak tanimlayicisi yok, bu yuzden hicbir kaynaga sorulamadi. MovieVault'tan gelen disk verileriyle birlikte gelir.",
+  "seriesDetail.metadataNoIdentifier": "Tanimlayici yok, bu yuzden hicbir kaynaga sorulamadi. Kendiniz baglamak icin bu diziyi Ustveri bolumunde aratin veya MovieVault'un disk verileriyle birlikte bir tane gondermesini bekleyin.",
   "seriesDetail.metadataNoSource": "Etkin hicbir eklenti bir diziyi tanimlayamaz. Profil - Eklentiler altinda bir tane etkinlestirin.",
   "seriesDetail.metadataUnavailable": "Bu kurulum henuz dizi verisi saklayamiyor.",
-  "seriesDetail.identityHelp": "Tanimlayici olmadan bu dizi hakkinda hicbir kaynaga sorulamaz, bu yuzden ozet ve gorsel olmadan kalir.",
+  "seriesDetail.identityHelp": "Tanimlayici olmadan bu dizi hakkinda hicbir kaynaga sorulamaz, bu yuzden ozet ve gorsel olmadan kalir. Baglamak icin asagida aratin.",
   "seriesDetail.identitySearch": "Ara",
   "seriesDetail.identitySearchPlaceholder": "Basliga gore ara",
   "seriesDetail.identityUse": "Bunu kullan",
   "seriesDetail.identitySearching": "Kaynaklar araniyor...",
   "seriesDetail.identityNoMatches": "Hicbir kaynak bu basligi tanimadi.",
+  "seriesDetail.identitySourceError": "Bir kaynak yanit veremedi: {error}",
   "seriesDetail.identitySaving": "Dizi baglaniyor ve veriler aliniyor...",
   "collection.seasonNumber": "{number}. sezon"
 }
