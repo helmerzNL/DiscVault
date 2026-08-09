@@ -383,6 +383,30 @@ def search_series(payload, context=None):
                 "year": str(item.get("first_air_date") or "")[:4],
                 "overview": item.get("overview") or "",
                 "posterUrl": _image(item.get("poster_path")),
+                # Two fields that only matter when this answer drives the Add
+                # screen rather than the identity picker.
+                #
+                # `mediaType` lands as the disc's `media_type` through the field
+                # alias map, so a television disc added from here is a SHOW rather
+                # than a MOVIE that nothing will ever recognise as television.
+                "mediaType": "SHOW",
+                # And `series` is the shape `provider_series_payload` already
+                # accepts -- the same contract the MovieVault feed uses to hang a
+                # disc under a series. Answering in it means the linking, the
+                # series row and its `tmdb_tv` identifier all happen through code
+                # that exists, and the series is enrichable from the moment it is
+                # created rather than after somebody links it by hand.
+                #
+                # `seasons` is deliberately empty: TMDB knows every season the show
+                # has and none of them is a statement about what is on *this* disc.
+                # Which seasons a box carries is the owner's to say, which is what
+                # `test_a_season_the_feed_never_recorded_is_not_created` protects.
+                "series": {
+                    "tmdbTvId": str(identifier),
+                    "providerId": "tmdb",
+                    "title": item.get("name") or "",
+                    "seasons": [],
+                },
             }
         )
     return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}

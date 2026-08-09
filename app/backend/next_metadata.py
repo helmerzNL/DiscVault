@@ -1115,6 +1115,20 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             }
             if "search_title" in capabilities:
                 add("search_title", title_payload)
+            # And the television namespace, when the source has one. Without this
+            # a title search could only ever return films -- `search_title` is
+            # `/search/movie` at TMDB -- so a television disc added here arrived
+            # as a MOVIE with no series and no identifier, which is precisely the
+            # state that makes a series unenrichable.
+            #
+            # `add` is already a no-op for a capability the source does not
+            # declare, so a movie-only plugin gains no empty step.
+            #
+            # This does not reopen 7b. That rule forbids a *source* identifying a
+            # series by title on its own initiative; here a person typed the title
+            # and picks from what comes back, exactly as they do in the identity
+            # picker on the series page.
+            add("search_series", title_payload)
             add("movie_details", title_payload)
             if query.get("detectBoxSets"):
                 add("box_set_candidates", title_payload)
