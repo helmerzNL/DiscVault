@@ -30584,6 +30584,12 @@ def ui_preview_html(
           setSeriesDetailMessage("");
         } else if (result.reason === "no series search source") {
           setSeriesDetailMessage(tNext("seriesDetail.metadataNoSource", "No enabled plugin can describe a series. Enable one under Profile - Plugins."), "info");
+        } else if (sourceErrorText(result)) {
+          // A source that *failed* is not a source that found nothing. Saying
+          // "no source recognised that title" when the request was rejected --
+          // a missing API key is the usual reason -- sends the reader off to
+          // check their spelling instead of their credentials.
+          setSeriesDetailMessage(sourceErrorText(result), "bad");
         } else {
           setSeriesDetailMessage(tNext("seriesDetail.identityNoMatches", "No source recognised that title."), "info");
         }
@@ -30622,6 +30628,19 @@ def ui_preview_html(
         setSeriesDetailMessage(error.message || String(error), "bad");
       }
     }
+    function sourceErrorText(result) {
+      // The backend has always collected these; nothing ever showed them, so a
+      // broken source was indistinguishable from an uninteresting one.
+      const errors = (result || {}).errors || [];
+      if (!errors.length) return "";
+      const detail = errors
+        .map((entry) => [entry.pluginId, entry.error].filter(Boolean).join(": "))
+        .filter(Boolean)
+        .join(" / ");
+      if (!detail) return "";
+      return tNext("seriesDetail.identitySourceError", "A source could not answer: {error}")
+        .replace("{error}", detail);
+    }
     function seriesRefreshExplanation(result) {
       // `skipped` carries the reason the backend already knows; the others are
       // states rather than reasons. Nothing is composed here beyond the mapping,
@@ -30642,7 +30661,9 @@ def ui_preview_html(
       if (result.status === "unavailable") {
         return tNext("seriesDetail.metadataUnavailable", "This installation cannot store series data yet.");
       }
-      return tNext("seriesDetail.metadataNoAnswer", "No source had anything to add.");
+      // Same rule as the identity search: a miss that is really a stack of failed
+      // requests should say so rather than imply the sources were asked and shrugged.
+      return sourceErrorText(result) || tNext("seriesDetail.metadataNoAnswer", "No source had anything to add.");
     }
     async function refreshActiveSeriesMetadata() {
       if (!activeSeriesId) return;

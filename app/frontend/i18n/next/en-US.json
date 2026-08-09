@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Refreshing series metadata...",
   "seriesDetail.metadataRefreshed": "Series metadata refreshed.",
   "seriesDetail.metadataNoAnswer": "No source had anything to add.",
-  "seriesDetail.metadataNoIdentifier": "This series has no source identifier, so no source could be asked. It arrives with the disc data from MovieVault.",
+  "seriesDetail.metadataNoIdentifier": "No identifier, so no source could be asked. Search for this series under Metadata to link it yourself, or wait for MovieVault to supply one with the disc data.",
   "seriesDetail.metadataNoSource": "No enabled plugin can describe a series. Enable one under Profile - Plugins.",
   "seriesDetail.metadataUnavailable": "This installation cannot store series data yet.",
-  "seriesDetail.identityHelp": "Without an identifier no source can be asked about this series, so it stays without a synopsis or artwork.",
+  "seriesDetail.identityHelp": "Without an identifier no source can be asked about this series, so it stays without a synopsis or artwork. Search below to link it.",
   "seriesDetail.identitySearch": "Search",
   "seriesDetail.identitySearchPlaceholder": "Search by title",
   "seriesDetail.identityUse": "Use this one",
   "seriesDetail.identitySearching": "Searching sources...",
   "seriesDetail.identityNoMatches": "No source recognised that title.",
+  "seriesDetail.identitySourceError": "A source could not answer: {error}",
   "seriesDetail.identitySaving": "Linking series and fetching details...",
   "collection.seasonNumber": "Season {number}"
 }

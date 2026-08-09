@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Opdaterer seriemetadata...",
   "seriesDetail.metadataRefreshed": "Seriemetadata opdateret.",
   "seriesDetail.metadataNoAnswer": "Ingen kilde havde noget at tilføje.",
-  "seriesDetail.metadataNoIdentifier": "Denne serie har ingen kildeidentifikator, sa ingen kilde kunne sporges. Den folger med diskdata fra MovieVault.",
+  "seriesDetail.metadataNoIdentifier": "Ingen identifikator, sa ingen kilde kunne sporges. Sog efter serien under Metadata for selv at forbinde den, eller vent til MovieVault leverer en med diskdata.",
   "seriesDetail.metadataNoSource": "Ingen aktiveret plugin kan beskrive en serie. Aktiver et under Profil - Plugins.",
   "seriesDetail.metadataUnavailable": "Denne installation kan endnu ikke gemme seriedata.",
-  "seriesDetail.identityHelp": "Uden identifikator kan ingen kilde sporges om denne serie, sa den forbliver uden handling og billeder.",
+  "seriesDetail.identityHelp": "Uden identifikator kan ingen kilde sporges om denne serie, sa den forbliver uden handling og billeder. Sog nedenfor for at forbinde den.",
   "seriesDetail.identitySearch": "Sog",
   "seriesDetail.identitySearchPlaceholder": "Sog pa titel",
   "seriesDetail.identityUse": "Brug denne",
   "seriesDetail.identitySearching": "Soger i kilder...",
   "seriesDetail.identityNoMatches": "Ingen kilde genkendte titlen.",
+  "seriesDetail.identitySourceError": "En kilde kunne ikke svare: {error}",
   "seriesDetail.identitySaving": "Forbinder serien og henter data...",
   "collection.seasonNumber": "Sæson {number}"
 }

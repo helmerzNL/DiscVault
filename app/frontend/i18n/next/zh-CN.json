@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "正在刷新剧集元数据...",
   "seriesDetail.metadataRefreshed": "剧集元数据已刷新。",
   "seriesDetail.metadataNoAnswer": "没有来源可补充内容。",
-  "seriesDetail.metadataNoIdentifier": "此剧集没有来源标识符，因此无法向任何来源查询。该标识符随 MovieVault 的碟片数据一同到达。",
+  "seriesDetail.metadataNoIdentifier": "没有标识符，因此无法向任何来源查询。可在“元数据”中搜索此剧集自行关联，或等待 MovieVault 随碟片数据提供一个。",
   "seriesDetail.metadataNoSource": "没有已启用的插件可以描述剧集。请在“个人资料 - 插件”中启用一个。",
   "seriesDetail.metadataUnavailable": "此安装尚无法存储剧集数据。",
-  "seriesDetail.identityHelp": "没有标识符就无法向任何来源查询此剧集，因此它将没有简介和图片。",
+  "seriesDetail.identityHelp": "没有标识符就无法向任何来源查询此剧集，因此它将没有简介和图片。在下方搜索以进行关联。",
   "seriesDetail.identitySearch": "搜索",
   "seriesDetail.identitySearchPlaceholder": "按标题搜索",
   "seriesDetail.identityUse": "使用这个",
   "seriesDetail.identitySearching": "正在搜索来源...",
   "seriesDetail.identityNoMatches": "没有来源识别出该标题。",
+  "seriesDetail.identitySourceError": "来源无法响应：{error}",
   "seriesDetail.identitySaving": "正在关联剧集并获取数据...",
   "collection.seasonNumber": "第 {number} 季"
 }

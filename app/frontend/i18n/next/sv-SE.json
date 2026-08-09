@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Uppdaterar seriemetadata...",
   "seriesDetail.metadataRefreshed": "Seriemetadata uppdaterad.",
   "seriesDetail.metadataNoAnswer": "Ingen källa hade något att tillägga.",
-  "seriesDetail.metadataNoIdentifier": "Den har serien saknar kallidentifierare, sa ingen kalla kunde tillfragas. Den kommer med skivdata fran MovieVault.",
+  "seriesDetail.metadataNoIdentifier": "Ingen identifierare, sa ingen kalla kunde tillfragas. Sok efter serien under Metadata for att lanka den sjalv, eller vanta tills MovieVault levererar en med skivdata.",
   "seriesDetail.metadataNoSource": "Inget aktiverat tillagg kan beskriva en serie. Aktivera ett under Profil - Tillagg.",
   "seriesDetail.metadataUnavailable": "Den har installationen kan annu inte lagra seriedata.",
-  "seriesDetail.identityHelp": "Utan identifierare kan ingen kalla tillfragas om den har serien, sa den forblir utan handling och bilder.",
+  "seriesDetail.identityHelp": "Utan identifierare kan ingen kalla tillfragas om den har serien, sa den forblir utan handling och bilder. Sok nedan for att lanka den.",
   "seriesDetail.identitySearch": "Sok",
   "seriesDetail.identitySearchPlaceholder": "Sok pa titel",
   "seriesDetail.identityUse": "Anvand den har",
   "seriesDetail.identitySearching": "Soker i kallor...",
   "seriesDetail.identityNoMatches": "Ingen kalla kande igen titeln.",
+  "seriesDetail.identitySourceError": "En kalla kunde inte svara: {error}",
   "seriesDetail.identitySaving": "Lankar serien och hamtar data...",
   "collection.seasonNumber": "Säsong {number}"
 }

@@ -2874,15 +2874,16 @@
   "seriesDetail.refreshingMetadata": "Osveževanje metapodatkov serije...",
   "seriesDetail.metadataRefreshed": "Metapodatki serije osveženi.",
   "seriesDetail.metadataNoAnswer": "Noben vir ni imel česa dodati.",
-  "seriesDetail.metadataNoIdentifier": "Ta serija nima identifikatorja vira, zato ni bilo mogoce vprasati nobenega vira. Pride s podatki o disku iz MovieVaulta.",
+  "seriesDetail.metadataNoIdentifier": "Ni identifikatorja, zato ni bilo mogoce vprasati nobenega vira. Poiscite serijo pod Metapodatki in jo povezite sami, ali pocakajte, da ga MovieVault poslje s podatki o disku.",
   "seriesDetail.metadataNoSource": "Noben omogocen vticnik ne more opisati serije. Omogocite enega v Profil - Vticniki.",
   "seriesDetail.metadataUnavailable": "Ta namestitev se ne more shranjevati podatkov o serijah.",
-  "seriesDetail.identityHelp": "Brez identifikatorja ni mogoce vprasati nobenega vira o tej seriji, zato ostane brez povzetka in slik.",
+  "seriesDetail.identityHelp": "Brez identifikatorja ni mogoce vprasati nobenega vira o tej seriji, zato ostane brez povzetka in slik. Poiscite spodaj, da jo povezete.",
   "seriesDetail.identitySearch": "Isci",
   "seriesDetail.identitySearchPlaceholder": "Isci po naslovu",
   "seriesDetail.identityUse": "Uporabi to",
   "seriesDetail.identitySearching": "Iskanje po virih...",
   "seriesDetail.identityNoMatches": "Noben vir ni prepoznal tega naslova.",
+  "seriesDetail.identitySourceError": "Vir ni mogel odgovoriti: {error}",
   "seriesDetail.identitySaving": "Povezovanje serije in pridobivanje podatkov...",
   "collection.seasonNumber": "Sezona {number}"
 }
