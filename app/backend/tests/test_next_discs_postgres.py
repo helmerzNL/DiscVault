@@ -264,6 +264,26 @@ class MovieDiscTests(unittest.TestCase):
             self._write(conn, movie_id, {"discs": []})
             self.assertEqual(next_app.movie_disc_entities(conn, movie_id), [])
 
+    def test_the_disc_you_just_added_survives_a_save_you_did_not_fill_in(self):
+        """What the edit form produces the moment someone breaks a release down:
+        Disc 1 carrying the release's details, Disc 2 named but not yet
+        described. Both have to land — the click that produced Disc 2 *is* the
+        statement that it exists."""
+        with self.connect() as conn:
+            movie_id = self._film(conn)
+            discs = self._write(
+                conn,
+                movie_id,
+                {"discs": [{"discType": "dvd", "videoResolution": "576p"}, {}]},
+            )
+            self.assertEqual(len(discs), 2)
+            self.assertEqual([d["discType"] for d in discs], ["dvd", None])
+
+    def test_a_list_of_nothing_but_blank_rows_stores_none_of_them(self):
+        with self.connect() as conn:
+            movie_id = self._film(conn)
+            self.assertEqual(self._write(conn, movie_id, {"discs": [{}, {}]}), [])
+
     def test_a_disc_id_from_another_release_is_refused(self):
         """Treating a stale id as a new disc is how a duplicate appears with
         nothing to explain it."""

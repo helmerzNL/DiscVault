@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Ek içerik",
   "movieDiscRole.featureAndBonus": "Ana film ve ek içerik",
   "importCenter.candidateSeries": "Dizi",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Daha önce girdiğiniz bilgiler Disk 1 oldu. Başka bir diske aitse düzeltin."
 }

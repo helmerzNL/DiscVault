@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusmaterial",
   "movieDiscRole.featureAndBonus": "Huvudfilm och bonus",
   "importCenter.candidateSeries": "Serie",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Uppgifterna du redan hade fyllt i har blivit skiva 1. Ändra dem om de hör till en annan skiva."
 }

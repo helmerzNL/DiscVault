@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Contenuti extra",
   "movieDiscRole.featureAndBonus": "Film ed extra",
   "importCenter.candidateSeries": "Serie",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "I dati che avevi già inserito sono diventati il disco 1. Correggili se appartengono a un altro disco."
 }

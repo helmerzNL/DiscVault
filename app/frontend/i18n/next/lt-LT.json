@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Papildoma medžiaga",
   "movieDiscRole.featureAndBonus": "Filmas ir papildoma medžiaga",
   "importCenter.candidateSeries": "Serialas",
-  "importCenter.candidateFilm": "Filmas"
+  "importCenter.candidateFilm": "Filmas",
+  "movieDetail.discsSeededHint": "Jau įvesti duomenys tapo 1 disku. Pataisykite juos, jei jie priklauso kitam diskui."
 }

@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusa materiāli",
   "movieDiscRole.featureAndBonus": "Filma un bonusi",
   "importCenter.candidateSeries": "Seriāls",
-  "importCenter.candidateFilm": "Filma"
+  "importCenter.candidateFilm": "Filma",
+  "movieDetail.discsSeededHint": "Jau ievadītie dati kļuva par 1. disku. Izlabojiet tos, ja tie attiecas uz citu disku."
 }

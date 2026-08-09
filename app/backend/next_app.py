@@ -241,6 +241,7 @@ try:
     from .next_discs import DISC_ROLES
     from .next_discs import DISC_TYPES
     from .next_discs import disc_is_empty
+    from .next_discs import drop_blank_discs
     from .next_discs import discs_payload
     from .next_people import person_identifier_entities
     from .next_people import person_tmdb_identifier
@@ -518,6 +519,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_discs import DISC_ROLES
     from next_discs import DISC_TYPES
     from next_discs import disc_is_empty
+    from next_discs import drop_blank_discs
     from next_discs import discs_payload
     from next_people import person_identifier_entities
     from next_people import person_tmdb_identifier
@@ -11041,7 +11043,7 @@ def apply_movie_discs(
     """
     if discs is None:
         return
-    discs = [disc for disc in discs if not disc_is_empty(disc)]
+    discs = drop_blank_discs(discs)
 
     cur.execute("SELECT id FROM movie_discs WHERE movie_id = %s", (movie_uuid,))
     stored = {row["id"] for row in cur.fetchall()}

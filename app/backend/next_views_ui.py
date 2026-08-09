@@ -15243,6 +15243,10 @@ def ui_preview_html(
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
                   <p class="hint" data-next-i18n="movieDetail.discsHint">Describe each physical disc in the box. The fields above still describe the release as a whole; a disc only narrows them.</p>
                   <p class="hint movie-edit-disc-count-warning hidden" id="movieEditDiscCountWarning"></p>
+                  <!-- Shown only after the first Add disc promoted the release's
+                       own details into Disc 1. Without it, a form that suddenly
+                       holds two filled rows reads as though it invented them. -->
+                  <p class="hint hidden" id="movieEditDiscsSeededHint" data-next-i18n="movieDetail.discsSeededHint">The details you had already entered became Disc 1. Correct them if they belong on another disc.</p>
                   <div class="movie-edit-disc-list" id="movieEditDiscRows"></div>
                   <button type="button" class="ghost-button movie-edit-track-add" id="movieEditDiscAdd" data-next-i18n="movieDetail.discAdd">Add disc</button>
                 </div>
@@ -28157,6 +28161,26 @@ def ui_preview_html(
       {value: "4K UHD", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
     ];
+    // Which discs a format implies, in order, for pre-filling the disc editor
+    // the first time someone breaks a release down. Keyed by the same seven
+    // strings the select above offers, valued as DISC_TYPE_VALUES members;
+    // test_next_technical_enum_parity keeps both halves honest.
+    //
+    // `4K UHD + Blu-ray` yields two entries because that is what the format
+    // says: it is the one value in this list that already names two discs, so
+    // splitting it is reading the record rather than guessing at it. A format
+    // outside this map -- a custom value a user typed, which
+    // renderMovieEditFormatOptions deliberately keeps selectable -- seeds no
+    // type at all.
+    const MOVIE_FORMAT_DISC_TYPES = {
+      "4K UHD + Blu-ray": ["uhd_bluray", "bluray"],
+      "4K UHD": ["uhd_bluray"],
+      "Blu-ray": ["bluray"],
+      "DVD": ["dvd"],
+      "HD DVD": ["hd_dvd"],
+      "LaserDisc": ["laserdisc"],
+      "VCD/SVCD": ["vcd"]
+    };
     // The 19 canonical TMDB movie genre keys. English reference labels are
     // only a fallback for genreLabel() before the active locale's
     // genre.<key> i18n catalog entry resolves; genres are otherwise always
@@ -28612,6 +28636,11 @@ def ui_preview_html(
       container.innerHTML = list.length
         ? list.map((disc, index) => discRowHtml(disc, index)).join("")
         : `<p class="movie-edit-track-empty">${escapeHtml(tNext("movieDetail.discNone", "No discs described yet."))}</p>`;
+      // The notice belongs to the act of promoting, not to the state that
+      // results from it, so every render clears it and only the Add-disc click
+      // that seeded puts it back. Otherwise it would still be sitting there
+      // three releases later, explaining nothing.
+      document.getElementById("movieEditDiscsSeededHint")?.classList.add("hidden");
       syncMovieEditDiscCountWarning();
     }
 
@@ -28676,6 +28705,65 @@ def ui_preview_html(
       });
     }
 
+    // ---- Promoting the release's own details to Disc 1 ---------------------
+    // While a release had one disc, the release-level fields *were* that disc's
+    // description. So the first time someone says there is a second disc, the
+    // honest reading of what is already recorded is "this is disc 1" -- and
+    // making them retype it into the new row would be asking them to say the
+    // same thing twice.
+    //
+    // The release-level fields are copied, not moved. Everything that reads the
+    // flat row -- the collection filters, MovieVault contributions,
+    // import/export, the MCP server, the mobile clients -- knows nothing about
+    // discs, and clearing it would make a multi-disc release invisible to all of
+    // them at once. Copying also makes the whole thing reversible: delete the
+    // discs again and nothing was lost.
+    //
+    // And it is a *form* that gets filled, not a record that gets written. The
+    // user sees Disc 1 arrive populated and can correct it before saving, which
+    // is the line between suggesting and claiming.
+    function collectMovieEditCheckboxGroup(containerId) {
+      return Array.from(
+        document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)
+      ).map((box) => box.value);
+    }
+
+    function movieEditReleaseSeedDisc() {
+      // Read from the live form rather than from the detail payload, so edits
+      // made in this sitting but not yet saved land on Disc 1 too. Reading the
+      // stored values would silently drop them.
+      return {
+        videoResolution: document.getElementById("movieEditVideoResolution")?.value || "",
+        screenRatios: document.getElementById("movieEditScreenRatio")?.value || "",
+        hdr: collectMovieEditCheckboxGroup("movieEditHdr"),
+        videoCodecs: collectMovieEditCheckboxGroup("movieEditVideoCodecs"),
+        regions: collectMovieEditCheckboxGroup("movieEditRegions"),
+        audioTracks: collectMovieEditAudioTracks(),
+        subtitles: collectMovieEditSubtitles(),
+        // A one-disc television release covering seasons 1-2 meant *that disc*
+        // held both, so Disc 1 starts with both and the curator moves across
+        // what belongs on Disc 2. Episodes have no release-level statement of
+        // their own to promote -- the disc list is their only writer.
+        seasonIds: collectMovieEditSeasonIds()
+        // label, notes and discRole are deliberately absent. Nothing at release
+        // level means either of the first two, and the role of a lone disc was
+        // never recorded anywhere -- filling in "feature" would put a claim in
+        // the field that nobody made.
+      };
+    }
+
+    function movieEditSeededDiscs() {
+      const format = normalizedMovieFormatValue(
+        document.getElementById("movieEditFormat")?.value || ""
+      );
+      const types = MOVIE_FORMAT_DISC_TYPES[format] || [];
+      const first = movieEditReleaseSeedDisc();
+      first.discType = types[0] || "";
+      // The added disc gets a type only when the format already named a second
+      // one, which today means the 4K UHD + Blu-ray combo.
+      return [first, {discType: types[1] || ""}];
+    }
+
     async function loadMovieEditDiscEpisodes(seasonId) {
       if (!seasonId || movieEditEpisodeCatalog.has(seasonId)) return;
       try {
@@ -28698,8 +28786,17 @@ def ui_preview_html(
       addButton.dataset.wired = "1";
       addButton.addEventListener("click", () => {
         const discs = collectMovieEditDiscs();
-        discs.push({});
-        renderMovieEditDiscs(discs);
+        if (discs.length) {
+          // Already broken down: the existing data is attributed, so this is
+          // just one more disc.
+          discs.push({});
+          renderMovieEditDiscs(discs);
+          return;
+        }
+        // The transition from "one disc, described at release level" to "more
+        // than one" -- the only moment the promotion makes sense.
+        renderMovieEditDiscs(movieEditSeededDiscs());
+        document.getElementById("movieEditDiscsSeededHint")?.classList.remove("hidden");
       });
       container.addEventListener("click", (event) => {
         const removeDisc = event.target.closest(".movie-edit-disc-remove");

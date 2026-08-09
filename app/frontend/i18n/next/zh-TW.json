@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "幕後花絮",
   "movieDiscRole.featureAndBonus": "正片與花絮",
   "importCenter.candidateSeries": "影集",
-  "importCenter.candidateFilm": "電影"
+  "importCenter.candidateFilm": "電影",
+  "movieDetail.discsSeededHint": "你已填寫的資訊已成為第 1 片。若它屬於另一片光碟，請修改。"
 }

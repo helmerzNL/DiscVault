@@ -117,6 +117,113 @@ class DiscEditorSurfaceTests(unittest.TestCase):
         )
 
 
+class DiscSeedingTests(unittest.TestCase):
+    """Adding the first disc promotes the release's own details to Disc 1.
+
+    While a release had one disc, the release-level fields *were* that disc's
+    description, so the second disc appearing makes "this is disc 1" the honest
+    reading of what is already there. The assertions worth pinning are the ones
+    that would fail silently: seeding at the wrong moment, seeding from the
+    wrong source, and seeding a field nobody answered.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            cls.source = handle.read()
+        cls.handler = cls.source[
+            cls.source.index("function setupMovieEditDiscEditor") : cls.source.index(
+                "function fillMovieEditCheckboxGroup"
+            )
+        ]
+        cls.seed = cls.source[
+            cls.source.index("function movieEditReleaseSeedDisc") : cls.source.index(
+                "async function loadMovieEditDiscEpisodes"
+            )
+        ]
+        # Assertions about what the seed does *not* read have to look at code
+        # rather than at prose: the comment above it explains that it avoids the
+        # detail payload, and a naive substring search finds that sentence.
+        cls.seed_code = "\n".join(
+            line for line in cls.seed.splitlines() if not line.strip().startswith("//")
+        )
+
+    def test_seeding_happens_only_on_the_first_disc(self):
+        """A release that already has discs has its data attributed, so a second
+        Add is just one more empty row. Seeding again would duplicate Disc 1."""
+        self.assertIn("if (discs.length) {", self.handler)
+        self.assertIn("discs.push({});", self.handler)
+        self.assertIn("renderMovieEditDiscs(movieEditSeededDiscs())", self.handler)
+
+    def test_the_seed_reads_the_live_form_not_the_stored_payload(self):
+        """Edits made in this sitting but not yet saved have to land on Disc 1
+        too — reading `detail` would drop exactly the changes the user is
+        looking at."""
+        self.assertIn('document.getElementById("movieEditVideoResolution")', self.seed)
+        self.assertIn("collectMovieEditAudioTracks()", self.seed)
+        self.assertIn("collectMovieEditSubtitles()", self.seed)
+        self.assertIn("collectMovieEditSeasonIds()", self.seed)
+        self.assertNotIn("detail", self.seed_code)
+
+    def test_the_seed_reuses_the_release_level_collectors(self):
+        """Not a second implementation of the same read. A per-disc audio track
+        has to be the same object as a release-level one, and the way to
+        guarantee that is to call the same function."""
+        for name in (
+            "collectMovieEditCheckboxGroup",
+            "collectMovieEditAudioTracks",
+            "collectMovieEditSubtitles",
+        ):
+            with self.subTest(name=name):
+                self.assertIn(name, self.seed)
+
+    def test_label_notes_and_role_are_not_invented(self):
+        """Nothing at release level means a disc's label or notes, and the role
+        of a lone disc was never recorded — filling in "feature" would put a
+        claim in the field that nobody made."""
+        for field in ("label:", "notes:", "discRole:"):
+            with self.subTest(field=field):
+                self.assertNotIn(field, self.seed_code)
+
+    def test_the_added_disc_is_typed_only_when_the_format_named_two(self):
+        seeded = self.source[
+            self.source.index("function movieEditSeededDiscs") : self.source.index(
+                "async function loadMovieEditDiscEpisodes"
+            )
+        ]
+        self.assertIn("MOVIE_FORMAT_DISC_TYPES[format]", seeded)
+        self.assertIn('first.discType = types[0] || ""', seeded)
+        self.assertIn('{discType: types[1] || ""}', seeded)
+        # Through the normalizer, so a stored spelling the select folds onto one
+        # of the seven is looked up as that one rather than missing the map.
+        self.assertIn("normalizedMovieFormatValue(", seeded)
+
+    def test_the_notice_belongs_to_the_act_and_not_to_the_state(self):
+        """Every render clears it and only the seeding click puts it back —
+        otherwise it sits there three releases later explaining nothing."""
+        self.assertIn('id="movieEditDiscsSeededHint"', self.source)
+        render = self.source[
+            self.source.index("function renderMovieEditDiscs") : self.source.index(
+                "function renumberMovieEditDiscs"
+            )
+        ]
+        self.assertIn('movieEditDiscsSeededHint")?.classList.add("hidden")', render)
+        self.assertIn('movieEditDiscsSeededHint")?.classList.remove("hidden")', self.handler)
+
+    def test_the_release_level_fields_are_not_cleared(self):
+        """Copied, not moved. The collection filters, MovieVault contributions,
+        import/export and the MCP server all read the flat row and know nothing
+        about discs; clearing it would blank a multi-disc release for every one
+        of them at once."""
+        for cleared in (
+            'movieEditVideoResolution").value = ""',
+            'movieEditScreenRatio").value = ""',
+        ):
+            with self.subTest(cleared=cleared):
+                self.assertNotIn(cleared, self.handler)
+        self.assertNotIn("fillMovieEditAudioTracks([])", self.handler)
+
+
 class DiscTranslationTests(unittest.TestCase):
     """Every string the disc editor shows has a key, in every locale.
 
@@ -144,6 +251,7 @@ class DiscTranslationTests(unittest.TestCase):
         "movieDetail.discCountMismatch",
         "movieDiscType.unset",
         "movieDiscRole.unset",
+        "movieDetail.discsSeededHint",
     )
 
     def test_every_disc_key_is_translated_in_every_locale(self):

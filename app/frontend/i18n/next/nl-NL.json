@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Bonusmateriaal",
   "movieDiscRole.featureAndBonus": "Hoofdfilm en bonus",
   "importCenter.candidateSeries": "Serie",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "De gegevens die je al had ingevuld zijn schijf 1 geworden. Pas ze aan als ze bij een ander schijfje horen."
 }

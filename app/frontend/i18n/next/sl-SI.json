@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Dodatno gradivo",
   "movieDiscRole.featureAndBonus": "Film in dodatki",
   "importCenter.candidateSeries": "Serija",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "Podatki, ki ste jih že vnesli, so postali disk 1. Popravite jih, če sodijo na drug disk."
 }

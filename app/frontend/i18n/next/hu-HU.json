@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Extrák",
   "movieDiscRole.featureAndBonus": "Főfilm és extrák",
   "importCenter.candidateSeries": "Sorozat",
-  "importCenter.candidateFilm": "Film"
+  "importCenter.candidateFilm": "Film",
+  "movieDetail.discsSeededHint": "A már megadott adatok az 1. lemezre kerültek. Módosítsa őket, ha másik lemezhez tartoznak."
 }

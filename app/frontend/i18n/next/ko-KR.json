@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "부가 영상",
   "movieDiscRole.featureAndBonus": "본편과 부가 영상",
   "importCenter.candidateSeries": "시리즈",
-  "importCenter.candidateFilm": "영화"
+  "importCenter.candidateFilm": "영화",
+  "movieDetail.discsSeededHint": "이미 입력한 내용이 디스크 1이 되었습니다. 다른 디스크의 내용이라면 수정하세요."
 }

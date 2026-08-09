@@ -2927,5 +2927,6 @@
   "movieDiscRole.bonus": "Πρόσθετο υλικό",
   "movieDiscRole.featureAndBonus": "Ταινία και πρόσθετα",
   "importCenter.candidateSeries": "Σειρά",
-  "importCenter.candidateFilm": "Ταινία"
+  "importCenter.candidateFilm": "Ταινία",
+  "movieDetail.discsSeededHint": "Τα στοιχεία που είχατε ήδη καταχωρίσει έγιναν ο δίσκος 1. Διορθώστε τα αν αφορούν άλλον δίσκο."
 }

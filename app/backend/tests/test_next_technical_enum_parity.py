@@ -36,6 +36,28 @@ def js_array(name: str) -> list[str]:
     return ast.literal_eval(match.group(1))
 
 
+def js_object(name: str) -> dict:
+    """Read a flat JS object literal whose values are string arrays.
+
+    The same trick `js_array` uses: the browser cannot import Python, so the
+    only way to keep the two copies honest is to parse the one that lives in
+    the page. Deliberately narrow — a `{...}` whose values are anything but
+    string arrays is not something this should silently accept.
+    """
+    match = re.search(rf"const {re.escape(name)} = (\{{[^}}]*\}});", UI_SOURCE)
+    if match is None:
+        raise AssertionError(f"{name} is not declared in next_views_ui.py")
+    return ast.literal_eval(match.group(1))
+
+
+def js_format_options() -> list[str]:
+    """The `value:` strings of MOVIE_FORMAT_OPTIONS, in declaration order."""
+    match = re.search(r"const MOVIE_FORMAT_OPTIONS = \[(.*?)\];", UI_SOURCE, re.S)
+    if match is None:
+        raise AssertionError("MOVIE_FORMAT_OPTIONS is not declared in next_views_ui.py")
+    return re.findall(r'value:\s*"([^"]+)"', match.group(1))
+
+
 class TechnicalEnumParityTests(unittest.TestCase):
     def test_audio_codecs_match(self):
         self.assertEqual(
@@ -84,6 +106,33 @@ class TechnicalEnumParityTests(unittest.TestCase):
 
     def test_disc_roles_match(self):
         self.assertEqual(set(js_array("DISC_ROLE_VALUES")), set(next_discs.DISC_ROLES))
+
+    def test_the_format_seed_map_only_names_disc_types_the_backend_accepts(self):
+        """`MOVIE_FORMAT_DISC_TYPES` pre-fills the disc editor from the release's
+        format. A value here that `normalize_disc_type` does not know is not
+        stored raw — it is refused — so the drift would turn the Add disc button
+        into a 400 on save, having already filled the form in."""
+        seeded = {value for values in js_object("MOVIE_FORMAT_DISC_TYPES").values()
+                  for value in values}
+        self.assertTrue(seeded)
+        self.assertEqual(seeded - set(next_discs.DISC_TYPES), set())
+
+    def test_the_format_seed_map_is_keyed_on_formats_that_can_be_selected(self):
+        """A key nobody can produce is dead code. `normalizedMovieFormatValue`
+        folds every stored spelling onto one of these seven, so the map has to
+        speak the same seven."""
+        self.assertEqual(
+            set(js_object("MOVIE_FORMAT_DISC_TYPES")) - set(js_format_options()), set()
+        )
+
+    def test_the_combo_format_seeds_both_of_its_discs(self):
+        """The one format that already names two discs. Splitting it is reading
+        the record rather than guessing — and it is the case where retyping the
+        second disc's medium by hand would be most obviously silly."""
+        self.assertEqual(
+            js_object("MOVIE_FORMAT_DISC_TYPES")["4K UHD + Blu-ray"],
+            ["uhd_bluray", "bluray"],
+        )
 
     def test_the_two_disc_axes_have_their_own_option_lists(self):
         """Medium and content are asked as two selects. Sharing a value between

@@ -116,9 +116,26 @@ class DiscEntryTests(unittest.TestCase):
             )
         self.assertIn(disc_id, str(caught.exception))
 
-    def test_an_untouched_new_row_says_nothing_and_is_dropped(self):
-        """What keeps "Add disc" from being a click you have to undo."""
+    def test_an_untouched_new_row_says_nothing(self):
         self.assertTrue(next_discs.disc_is_empty(next_discs.disc_payload({}, index=0)))
+
+    def test_a_list_of_nothing_but_blanks_is_discarded(self):
+        """Somebody opened the editor and left it alone. Storing that would flip
+        a release from "nobody has broken this down" to "broken down into one
+        unknown disc" — a different claim, made by accident."""
+        blanks = [next_discs.disc_payload({}, index=i) for i in range(2)]
+        self.assertEqual(next_discs.drop_blank_discs(blanks), [])
+
+    def test_a_blank_disc_beside_a_described_one_is_kept(self):
+        """The case the seeding editor produces on every non-combo format: Disc 1
+        carries the release's details, Disc 2 is the one the user has just said
+        exists and not yet described. Dropping it would delete that disc, and
+        silently — a release that saves one disc back looks exactly like one that
+        only ever had one."""
+        discs = next_discs.discs_payload({"discs": [{"discType": "dvd"}, {}]})
+        kept = next_discs.drop_blank_discs(discs)
+        self.assertEqual(len(kept), 2)
+        self.assertEqual([d["disc_type"] for d in kept], ["dvd", None])
 
     def test_an_existing_disc_emptied_on_purpose_is_not_dropped(self):
         """Blanking every field of a saved disc is an edit, not an abandonment --
