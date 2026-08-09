@@ -216,7 +216,10 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
                 "language": "en",
                 "releaseDate": "2024-05-01",
                 "runtimeMinutes": 170,
-                "packaging": ["steelbook"],
+                # The flat list is split onto the axes here; the mapper never
+                # emits `packaging`, which the movie edit refuses from a caller.
+                "carrierType": "steelbook",
+                "outerPackaging": [],
                 "finishes": ["holofoil"],
                 "discRegions": ["B"],
                 "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
@@ -270,7 +273,11 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["audioTracks"], [])
-        self.assertEqual(payload["packaging"], [])
+        # The empty flat list splits into an empty carrier and an empty outer
+        # list - both of which clear, rather than being omitted as "no opinion".
+        self.assertEqual(payload["carrierType"], "")
+        self.assertEqual(payload["outerPackaging"], [])
+        self.assertNotIn("packaging", payload)
 
     def test_a_finish_this_repo_does_not_know_is_dropped_rather_than_refused(self):
         """`finishes` is the one key here the movie edit validates strictly.
@@ -354,7 +361,12 @@ class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
         self.assertEqual(str(payload["release_date"]), "2024-05-01")
         technical = payload["technical_edits"]
         self.assertEqual(technical["regions"], ["FREE"])
-        self.assertEqual(technical["packaging"], ["steelbook"])
+        # MovieVault's flat list is split onto the axes at the mapper. The flat
+        # column is derived from them at write time, so it is not an edit key.
+        self.assertEqual(technical["carrier_type"], "steelbook")
+        self.assertEqual(technical["outer_packaging"], [])
+        self.assertNotIn("packaging", technical)
+        self.assertTrue(technical["_derive_packaging"])
         self.assertEqual(technical["video_resolution"], "2160p")
         self.assertEqual(technical["video_codecs"], ["hevc"])
         self.assertEqual(technical["hdr"], ["dolby_vision"])
@@ -363,13 +375,12 @@ class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
         self.assertEqual(technical["subtitles"][0]["subtitleType"], "sdh")
         self.assertEqual(technical["finishes"], ["holofoil"])
 
-    def test_a_finish_does_not_wipe_the_flat_packaging_list(self):
-        """`finishes` and `packaging` are separate axes on the same edit.
+    def test_a_finish_does_not_wipe_the_picked_packaging(self):
+        """`finishes` and the case axes are separate axes on the same edit.
 
-        `_movie_edit_case_axes` re-derives the flat `packaging` list from the
-        carrier and outer-packaging axes when either is submitted. A candidate
-        names neither, so both must survive side by side - if that ever changes,
-        a picked edition would quietly lose its packaging.
+        A candidate carrying both must land both: the finish is an orthogonal
+        tag set and must not displace the carrier the same pick supplied. If
+        that ever changes, a picked edition quietly loses its packaging.
         """
         body = next_app.release_candidate_movie_payload(dict(self.CANDIDATE))
 
@@ -378,8 +389,44 @@ class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
         )
 
         technical = payload["technical_edits"]
-        self.assertEqual(technical["packaging"], ["steelbook"])
+        self.assertEqual(technical["carrier_type"], "steelbook")
         self.assertEqual(technical["finishes"], ["holofoil"])
+
+    def test_the_finer_vocabulary_survives_a_pick(self):
+        """A distribution-5 candidate names terms the flat nine cannot express.
+
+        Passing the list through used to discard them - only the six legacy
+        carrier aliases were recognised anywhere - so `futurepak` and `fullslip`
+        reached the column as raw text and never reached the axes at all.
+        """
+        candidate = dict(self.CANDIDATE, packaging=["futurepak", "fullslip"])
+        body = next_app.release_candidate_movie_payload(candidate)
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["carrier_type"], "futurepak")
+        self.assertEqual(technical["outer_packaging"], ["fullslip"])
+
+    def test_an_unknown_packaging_term_is_dropped_rather_than_rejected(self):
+        """Lenient from the feed, strict from a client (§4.7a).
+
+        The resolver keeps vocabulary it has not heard of so one new term cannot
+        cost a whole resolve answer. That value must not then reach the strict
+        validation and turn "Use this edition" into a 422.
+        """
+        candidate = dict(self.CANDIDATE, packaging=["steelbook", "shrinkwrapped"])
+        body = next_app.release_candidate_movie_payload(candidate)
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["carrier_type"], "steelbook")
+        self.assertEqual(technical["outer_packaging"], [])
 
     def test_a_second_pick_reassigns_the_first_picks_tracks(self):
         # The first pick carried audio and subtitles; the second names none.
@@ -396,7 +443,10 @@ class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
         technical = payload["technical_edits"]
         self.assertEqual(technical["audio_tracks"], [])
         self.assertEqual(technical["subtitles"], [])
-        self.assertEqual(technical["packaging"], [])
+        # The carrier is a scalar, so its clear is a None rather than a []. The
+        # mirror follows from the cleared axes at write time.
+        self.assertIsNone(technical["carrier_type"])
+        self.assertEqual(technical["outer_packaging"], [])
 
 
 if __name__ == "__main__":

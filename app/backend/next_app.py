@@ -324,6 +324,7 @@ try:
     from .next_packaging import normalize_finishes
     from .next_packaging import normalize_outer_packaging
     from .next_packaging import normalize_steelbook_format
+    from .next_packaging import split_packaging
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_database import discover_migrations
     from next_import import CLIENT_SYNC_SETTING_KEYS
@@ -602,6 +603,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_packaging import normalize_finishes
     from next_packaging import normalize_outer_packaging
     from next_packaging import normalize_steelbook_format
+    from next_packaging import split_packaging
 
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
@@ -9647,9 +9649,32 @@ def release_candidate_movie_payload(candidate: Any) -> dict[str, Any]:
     runtime = candidate.get("runtimeMinutes")
     if isinstance(runtime, int) and not isinstance(runtime, bool) and runtime > 0:
         payload["runtimeMinutes"] = runtime
-    for key in ("packaging", "discRegions", "audioTracks", "subtitles"):
+    for key in ("discRegions", "audioTracks", "subtitles"):
         if isinstance(candidate.get(key), list):
             payload[key] = candidate[key]
+    # MovieVault still describes the case as one flat list, so it is split onto
+    # the axes here rather than passed through. This mapper is the boundary
+    # between a machine feed and a hand-typed edit - the same boundary the
+    # `finishes` filter below sits on - and `movie_technical_edits` refuses a
+    # flat `packaging` from a client, because the axes are the stored truth and
+    # the flat column is derived from them (sync-contract §4.7a).
+    #
+    # Passing it through was also losing the pick. The flat column was written
+    # while `carrier_type` and `outer_packaging` stayed empty, so the detail
+    # page - which reads the axes - showed no case type, and the first axis edit
+    # afterwards recomputed the mirror from those empty axes and erased what the
+    # edition had supplied.
+    #
+    # `split_packaging` only ever yields vocabulary members, so the strict
+    # validation downstream cannot 422 on a value the feed invented: unknown
+    # terms are dropped here, exactly as the resolver's own leniency intends.
+    if isinstance(candidate.get("packaging"), list):
+        carrier, outer = split_packaging(candidate["packaging"])
+        # Assign rather than fill-if-empty, like every other field this mapper
+        # emits: a second pick naming no packaging has to clear the first
+        # pick's, and an empty string is how the carrier scalar is cleared.
+        payload["carrierType"] = carrier or ""
+        payload["outerPackaging"] = outer
     # `finishes` is the one field here the movie edit validates against a closed
     # vocabulary: `_movie_edit_case_axes` answers an unknown value with a 422.
     # The resolver deliberately keeps vocabulary it has not heard of (so one new
@@ -10454,8 +10479,7 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
 
     `packaging` stays written as a derived mirror so consumers predating the
     split - backup/restore, import, the MCP server - keep seeing the flat list.
-    An explicit `packaging` in the same body loses to the axes: they are the
-    source of truth now.
+    A client never writes that mirror itself; see the note at the bottom.
     """
     carrier_keys = ("carrierType", "carrier_type")
     outer_keys = ("outerPackaging", "outer_packaging")
@@ -10479,7 +10503,7 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
         fmt = normalize_steelbook_format(cleaned)
         if cleaned and fmt is None:
             raise NextApiError(
-                422, "invalid_request", f"steelbookFormat: unknown value {cleaned!r}"
+                f"steelbookFormat: unknown value {cleaned!r}", 422, "invalid_request"
             )
         edits["steelbook_format"] = fmt
 
@@ -10494,7 +10518,7 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
         ]
         if unknown:
             raise NextApiError(
-                422, "invalid_request", f"outerPackaging: unknown value {unknown[0]!r}"
+                f"outerPackaging: unknown value {unknown[0]!r}", 422, "invalid_request"
             )
         edits["outer_packaging"] = outer
         touched = True
@@ -10516,13 +10540,32 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
         if edits.get("steelbook_format"):
             edits["steelbook_format"] = None
 
+    # The flat list is a derived mirror, and read-only for clients: the server
+    # recomputes it from the axes on every write (sync-contract §4.7a). So a
+    # client-sent `packaging` is dropped here whether or not this body also
+    # carries an axis.
+    #
+    # Dropping rather than splitting it back onto the axes is the deliberate
+    # half. The legacy nine are a lossy summary - `fullslip`, `o_card` and
+    # `lenticular_slip` all collapse to `slipcover`, `futurepak` to
+    # `steelbook`, `hardbox` and `one_click` to `box` - so honouring the flat
+    # list would let a client that predates the split *downgrade* precise axes
+    # by echoing back the mirror it just read, without editing anything. Lossy
+    # in the derived direction is fine; lossy in the stored direction is not.
+    #
+    # Ignoring is also the non-destructive choice: it can lose an edit that was
+    # never expressible on the axes, but it can never erase a stored value.
+    # Splitting can. The feed keeps its own, lenient path into the axes
+    # (`split_legacy_packaging` in next_metadata / next_movievault_v2) - that
+    # asymmetry between a feed we do not control and an API we do is the point.
+    edits.pop("packaging", None)
+
     # Flag rather than derive here. A body may carry only one of the two axes,
     # and rebuilding the flat list from half the pair would silently drop the
     # other half. upsert_movie_technical_edits can read the stored row, so it
     # derives from the merged result instead.
     if touched:
         edits["_derive_packaging"] = True
-        edits.pop("packaging", None)
 
 
 def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
@@ -10531,8 +10574,9 @@ def movie_technical_edits(body: dict[str, Any]) -> dict[str, Any]:
     if any(key in body for key in hdr_keys):
         raw = next(body[key] for key in hdr_keys if key in body)
         edits["hdr"] = _movie_edit_csv_list(raw)
-    if "packaging" in body:
-        edits["packaging"] = _movie_edit_csv_list(body.get("packaging"))
+    # No `packaging` branch on purpose: the flat list is derived from the axes
+    # and a client may not write it (sync-contract §4.7a). `_movie_edit_case_axes`
+    # drops the key and recomputes the mirror.
     _movie_edit_case_axes(body, edits)
     region_keys = ("regions", "discRegions", "disc_regions")
     if any(key in body for key in region_keys):
