@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "본편과 부가 영상",
   "importCenter.candidateSeries": "시리즈",
   "importCenter.candidateFilm": "영화",
-  "movieDetail.discsSeededHint": "이미 입력한 내용이 디스크 1이 되었습니다. 다른 디스크의 내용이라면 수정하세요."
+  "movieDetail.discsSeededHint": "이미 입력한 내용이 디스크 1이 되었습니다. 다른 디스크의 내용이라면 수정하세요.",
+  "seriesDetail.chooseSeasons": "시즌 선택",
+  "seriesDetail.seasonsLoading": "이 시리즈에 어떤 시즌이 있는지 소스에 확인 중...",
+  "seriesDetail.seasonsNoneOffered": "이 시리즈의 시즌을 제공하는 소스가 없습니다.",
+  "seriesDetail.seasonsPickHelp": "디스크로 보유한 시즌을 선택하세요. 선택한 시즌만 추가됩니다.",
+  "seriesDetail.seasonsAdd": "선택한 시즌 추가",
+  "seriesDetail.seasonsNoneChosen": "시즌을 하나 이상 선택하세요.",
+  "seriesDetail.seasonsAdding": "시즌 추가 중...",
+  "seriesDetail.seasonsAdded": "{count}개 시즌이 추가되었습니다.",
+  "seriesDetail.seasonsPartlyAdded": "{added}개 추가, {failed}개 실패: {errors}"
 }

@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Feature and bonus",
   "importCenter.candidateSeries": "Series",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "The details you had already entered became Disc 1. Correct them if they belong on another disc."
+  "movieDetail.discsSeededHint": "The details you had already entered became Disc 1. Correct them if they belong on another disc.",
+  "seriesDetail.chooseSeasons": "Choose seasons",
+  "seriesDetail.seasonsLoading": "Asking sources which seasons this series has...",
+  "seriesDetail.seasonsNoneOffered": "No source lists any seasons for this series.",
+  "seriesDetail.seasonsPickHelp": "Tick the seasons you own on disc. Only the ones you tick are added.",
+  "seriesDetail.seasonsAdd": "Add selected seasons",
+  "seriesDetail.seasonsNoneChosen": "Tick at least one season first.",
+  "seriesDetail.seasonsAdding": "Adding seasons...",
+  "seriesDetail.seasonsAdded": "{count} seasons added.",
+  "seriesDetail.seasonsPartlyAdded": "{added} added, {failed} could not be: {errors}"
 }

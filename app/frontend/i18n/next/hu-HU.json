@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Főfilm és extrák",
   "importCenter.candidateSeries": "Sorozat",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "A már megadott adatok az 1. lemezre kerültek. Módosítsa őket, ha másik lemezhez tartoznak."
+  "movieDetail.discsSeededHint": "A már megadott adatok az 1. lemezre kerültek. Módosítsa őket, ha másik lemezhez tartoznak.",
+  "seriesDetail.chooseSeasons": "Évadok kiválasztása",
+  "seriesDetail.seasonsLoading": "Források lekérdezése a sorozat évadairól...",
+  "seriesDetail.seasonsNoneOffered": "Egyetlen forrás sem sorol fel évadokat ehhez a sorozathoz.",
+  "seriesDetail.seasonsPickHelp": "Jelöld be a lemezen meglévő évadokat. Csak a bejelöltek kerülnek hozzáadásra.",
+  "seriesDetail.seasonsAdd": "Kiválasztott évadok hozzáadása",
+  "seriesDetail.seasonsNoneChosen": "Jelölj be legalább egy évadot.",
+  "seriesDetail.seasonsAdding": "Évadok hozzáadása...",
+  "seriesDetail.seasonsAdded": "{count} évad hozzáadva.",
+  "seriesDetail.seasonsPartlyAdded": "{added} hozzáadva, {failed} nem: {errors}"
 }

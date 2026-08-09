@@ -213,6 +213,14 @@ jobs:
       - name: Test adding a series from the title search
         run: python -m unittest tests.test_next_series_add_flow
 
+      # Where a hand-created series gets its seasons. The PostgreSQL half is the
+      # part that matters: that the offer writes nothing, and that a season
+      # already in the collection comes back marked rather than filtered out --
+      # both are claims about rows, and the second is what keeps a complete
+      # series from looking like an empty answer.
+      - name: Test the season offer
+        run: python -m unittest tests.test_next_series_seasons_available
+
       # The discs inside a release, for the same reason as episodes above: the
       # guarantees are foreign keys, not code. A disc cannot carry a season the
       # release does not cover, and it cannot be named under another release.

@@ -5435,31 +5435,17 @@ def search_series_candidates(conn, title: str, *, year: str = "") -> dict[str, A
     if not plugins:
         return {"status": "skipped", "reason": "no series search source", "candidates": []}
 
-    payload = {"title": title, "year": clean_text(year) or ""}
     candidates: list[dict[str, Any]] = []
-    errors: list[dict[str, str]] = []
-    for plugin in plugins:
-        plugin_id = str(plugin.get("id") or "")
-        if not plugin_id:
-            continue
-        # `plugin_execution_context`, not the raw config. The config carries
-        # `secretsRef` -- the *names* of the secrets -- while the context is what
-        # resolves them into `secrets`, which is where a plugin reads its API key.
-        # Passing the config straight through handed TMDB an empty key, so every
-        # series call failed with "TMDb API key is not configured" on an
-        # installation whose key was correctly set. The movie path never had this
-        # because it went through the context builder from the start.
-        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
-        try:
-            execution = run_plugin_entrypoint(plugin_id, SERIES_SEARCH_CAPABILITY, payload, context)
-        except Exception as exc:  # pragma: no cover - a source is not the job
-            errors.append({"pluginId": plugin_id, "error": str(exc)})
-            logger.warning("series search source %s failed", plugin_id, exc_info=True)
-            continue
-        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if execution.get("status") != "ok":
-            errors.append({"pluginId": plugin_id, "error": execution.get("error") or "error"})
-            continue
+    # `require_hit=False`: a search that answers `miss` has genuinely found
+    # nothing, which is an answer. Only a detail lookup's `miss` is a failure.
+    results, errors = consult_plugins(
+        conn,
+        plugins,
+        SERIES_SEARCH_CAPABILITY,
+        {"title": title, "year": clean_text(year) or ""},
+        require_hit=False,
+    )
+    for plugin_id, result in results:
         for item in result.get("items") or []:
             if not isinstance(item, dict):
                 continue
@@ -5563,6 +5549,83 @@ def series_lookup_payload(row: dict[str, Any], identifiers: dict[str, str]) -> d
     }
 
 
+def consult_plugins(
+    conn,
+    plugins: list[dict[str, Any]],
+    entrypoint: str,
+    payload: dict[str, Any],
+    *,
+    require_hit: bool = True,
+) -> tuple[list[tuple[str, dict[str, Any]]], list[dict[str, str]]]:
+    """Run one entrypoint across a set of sources and collect what came back.
+
+    **The one place a series-side plugin context is built.** That is the whole
+    reason this exists. The loop was written out four times, each copy carrying
+    the same warning comment above it, and one copy had it wrong: it passed
+    `plugin_config_from_db`'s output straight through as the context. The config
+    carries `secretsRef` -- the *names* of the secrets -- while
+    `plugin_execution_context` is what resolves them into `secrets`, which is
+    where a plugin reads its API key. So every series lookup on a correctly
+    configured installation failed with "TMDb API key is not configured", the
+    error went into a list nothing displayed, and the page reported that no
+    source had anything to add. The movie path was fine throughout because it
+    used the context builder from the start, and that asymmetry is exactly what
+    made it look like a series problem rather than a wiring one.
+
+    A comment repeated above four copies did not prevent that, and would not
+    prevent the fifth. One function can.
+
+    `require_hit` is the only real difference between the callers. A detail
+    lookup that answers `miss` has nothing to contribute and is reported as a
+    failure; a *search* that answers `miss` has legitimately found nothing and
+    its empty item list is a valid answer, not an error.
+
+    Errors are collected, never raised. One source being unreachable must not
+    cost the answers the others already gave -- and every caller has a reason to
+    tell "no source could answer" apart from "no source has anything", which is
+    a distinction it can only draw if it is handed the failures.
+    """
+    results: list[tuple[str, dict[str, Any]]] = []
+    errors: list[dict[str, str]] = []
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        if not plugin_id:
+            continue
+        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
+        try:
+            execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
+        except Exception as exc:  # pragma: no cover - defensive, a source is not the job
+            errors.append({"pluginId": plugin_id, "error": str(exc)})
+            logger.warning("source %s failed on %s", plugin_id, entrypoint, exc_info=True)
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        if execution.get("status") != "ok" or (require_hit and result.get("status") != "hit"):
+            errors.append(
+                {"pluginId": plugin_id, "error": execution.get("error") or result.get("status") or "miss"}
+            )
+            continue
+        results.append((plugin_id, result))
+    return results, errors
+
+
+def consult_series_sources(
+    conn, row: dict[str, Any], identifiers: dict[str, str]
+) -> tuple[list[tuple[str, dict[str, Any]]], list[dict[str, str]]]:
+    """Ask every enabled series source to describe one series, in the user's order.
+
+    The series-shaped wrapper over `consult_plugins`: it owns the payload, which
+    is the part its two callers must agree on. The refresh writes what comes
+    back, the season offer only shows it, and neither may ask a different
+    question than the other.
+    """
+    return consult_plugins(
+        conn,
+        series_detail_source_plugins(conn),
+        SERIES_DETAILS_CAPABILITY,
+        series_lookup_payload(row, identifiers),
+    )
+
+
 def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
     """Combine what several sources said into one answer, first source wins.
 
@@ -5621,6 +5684,24 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
             if poster and "posterUrl" not in entry:
                 entry["posterUrl"] = poster[0]
                 entry["posterSource"] = plugin_id
+            # The label fields, on the same first-source-wins terms as the rest.
+            # They were dropped while the only consumer was the refresh, which
+            # writes overviews and nothing else. The season picker is a second
+            # consumer with a different need: "Season 3" alone is not enough to
+            # choose from, and a title, a year and an episode count are what make
+            # picking the right box an act of recognition rather than counting.
+            for field in ("title", "year"):
+                value = clean_text(season.get(field))
+                if value and field not in entry:
+                    entry[field] = value
+            episode_count = season.get("episodeCount")
+            if (
+                isinstance(episode_count, int)
+                and not isinstance(episode_count, bool)
+                and episode_count >= 0
+                and "episodeCount" not in entry
+            ):
+                entry["episodeCount"] = episode_count
     # Every season the source reported, including one that offered neither text
     # nor a poster. When text was all this merged, an empty entry was dropped
     # because it could only produce a write of zero rows. That stopped being true
@@ -5697,29 +5778,8 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
     }
     episodes: dict[int, dict[str, Any]] = {}
     sources: dict[str, str] = {}
-    errors: list[dict[str, str]] = []
-    for plugin in plugins:
-        plugin_id = str(plugin.get("id") or "")
-        if not plugin_id:
-            continue
-        # `plugin_execution_context`, not the raw config. The config carries
-        # `secretsRef` -- the *names* of the secrets -- while the context is what
-        # resolves them into `secrets`, which is where a plugin reads its API key.
-        # Passing the config straight through handed TMDB an empty key, so every
-        # series call failed with "TMDb API key is not configured" on an
-        # installation whose key was correctly set. The movie path never had this
-        # because it went through the context builder from the start.
-        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
-        try:
-            execution = run_plugin_entrypoint(plugin_id, SEASON_EPISODES_CAPABILITY, payload, context)
-        except Exception as exc:  # pragma: no cover - a source is not the job
-            errors.append({"pluginId": plugin_id, "error": str(exc)})
-            logger.warning("episode source %s failed for %s", plugin_id, season_uuid, exc_info=True)
-            continue
-        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if execution.get("status") != "ok" or result.get("status") != "hit":
-            errors.append({"pluginId": plugin_id, "error": execution.get("error") or result.get("status") or "miss"})
-            continue
+    results, errors = consult_plugins(conn, plugins, SEASON_EPISODES_CAPABILITY, payload)
+    for plugin_id, result in results:
         for episode in result.get("episodes") or []:
             if not isinstance(episode, dict):
                 continue
@@ -5846,39 +5906,10 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     if not identifiers:
         return {"status": "skipped", "reason": "no series identifier"}
 
-    plugins = series_detail_source_plugins(conn)
-    if not plugins:
+    if not series_detail_source_plugins(conn):
         return {"status": "skipped", "reason": "no series source"}
 
-    payload = series_lookup_payload(row, identifiers)
-    results: list[tuple[str, dict[str, Any]]] = []
-    errors: list[dict[str, str]] = []
-    for plugin in plugins:
-        plugin_id = str(plugin.get("id") or "")
-        if not plugin_id:
-            continue
-        # `plugin_execution_context`, not the raw config. The config carries
-        # `secretsRef` -- the *names* of the secrets -- while the context is what
-        # resolves them into `secrets`, which is where a plugin reads its API key.
-        # Passing the config straight through handed TMDB an empty key, so every
-        # series call failed with "TMDb API key is not configured" on an
-        # installation whose key was correctly set. The movie path never had this
-        # because it went through the context builder from the start.
-        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
-        try:
-            execution = run_plugin_entrypoint(plugin_id, SERIES_DETAILS_CAPABILITY, payload, context)
-        except Exception as exc:  # pragma: no cover - defensive, a source is not the job
-            # One source raising must not cost the answers the others already
-            # gave. The job is retried anyway, and the disc this series belongs
-            # to is unaffected either way.
-            errors.append({"pluginId": plugin_id, "error": str(exc)})
-            logger.warning("series source %s failed for %s", plugin_id, series_uuid, exc_info=True)
-            continue
-        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
-        if execution.get("status") != "ok" or result.get("status") != "hit":
-            errors.append({"pluginId": plugin_id, "error": execution.get("error") or result.get("status") or "miss"})
-            continue
-        results.append((plugin_id, result))
+    results, errors = consult_series_sources(conn, row, identifiers)
 
     if not results:
         # Deliberately not raised. The series keeps the title it already has, and
@@ -5943,6 +5974,88 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
             "seasons": season_sources,
             "artwork": {kind: entry["source"] for kind, entry in merged["artwork"].items()},
         },
+        "errors": errors,
+    }
+
+
+def available_series_seasons(conn, series_id: UUID | str) -> dict[str, Any]:
+    """Which seasons the sources know about, and which of them already exist here.
+
+    An offer, and nothing else -- the same separation `search_series_candidates`
+    keeps for identity. Searching writes nothing and choosing is a separate act,
+    because a route that both proposed and stored would make a source's guess
+    indistinguishable from the owner's claim the moment somebody clicked.
+
+    That separation is load-bearing here rather than merely tidy.
+    `test_a_season_the_feed_never_recorded_is_not_created` fixes the rule that
+    enrichment does not create seasons nobody owns: the source knows every season
+    the show has, the collection knows the ones a disc covers, and those are
+    different facts. This function serves the first so a person can assert the
+    second; it must never do both.
+
+    `exists` rather than filtering the row out. A season already in the
+    collection stays visible, so the list reads as the whole show with your part
+    of it marked -- a filtered list would silently answer a different question
+    ("what is missing") and make a complete series look like an empty result.
+    """
+    series_uuid = UUID(str(series_id))
+    if not table_exists(conn, "series") or not table_exists(conn, "series_seasons"):
+        return {"status": "unavailable", "seasons": []}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, overview, start_year, end_year
+            FROM series
+            WHERE id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"status": "missing", "seasons": []}
+    identifiers = series_identifier_map(conn, series_uuid)
+    if not identifiers:
+        # The same dead end the identity picker exists to escape, reported in the
+        # same words so the page can send the reader there instead of leaving
+        # them to conclude the show has no seasons.
+        return {"status": "skipped", "reason": "no series identifier", "seasons": []}
+    if not series_detail_source_plugins(conn):
+        return {"status": "skipped", "reason": "no series source", "seasons": []}
+
+    results, errors = consult_series_sources(conn, row, identifiers)
+    if not results:
+        return {"status": "miss", "seasons": [], "errors": errors}
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT season_number FROM series_seasons
+            WHERE series_id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        existing = {row["season_number"] for row in cur.fetchall()}
+
+    merged = merge_series_details(results)
+    seasons = []
+    for number, season in sorted(merged["seasons"].items()):
+        seasons.append(
+            {
+                "seasonNumber": number,
+                "title": clean_text(season.get("title")) or "",
+                "year": clean_text(season.get("year")) or "",
+                "overview": clean_text(season.get("overview")) or "",
+                "episodeCount": season.get("episodeCount"),
+                "posterUrl": clean_text(season.get("posterUrl")) or "",
+                "source": season.get("source") or season.get("posterSource") or "",
+                "exists": number in existing,
+            }
+        )
+    return {
+        "status": "ok" if seasons else "miss",
+        "seriesId": str(series_uuid),
+        "seasons": seasons,
+        "sources": {"consulted": [plugin_id for plugin_id, _ in results]},
         "errors": errors,
     }
 

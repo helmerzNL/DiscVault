@@ -101,6 +101,7 @@ try:
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import refresh_series_metadata
     from .next_metadata import refresh_season_episodes
+    from .next_metadata import available_series_seasons
     from .next_metadata import search_series_candidates
     from .next_metadata import (
         normalize_audio_tracks,
@@ -379,6 +380,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import refresh_movie_metadata
     from next_metadata import refresh_series_metadata
     from next_metadata import refresh_season_episodes
+    from next_metadata import available_series_seasons
     from next_metadata import search_series_candidates
     from next_metadata import (
         normalize_audio_tracks,
@@ -24119,6 +24121,32 @@ def register_routes(flask_app: Flask) -> None:
             query = clean_text(request.args.get("q")) or series.get("title") or ""
             result = search_series_candidates(conn, query, year=clean_text(request.args.get("year")) or "")
         return response({"status": "ok", "query": query, "result": result})
+
+    @flask_app.get("/api/next/series/<series_id>/seasons/available")
+    def available_series_seasons_route(series_id):
+        """What the sources say the show has, so a person can say what they own.
+
+        A sibling of the identity search above, and deliberately shaped like it:
+        this reads and offers, `POST .../seasons` stores. Collapsing the two into
+        one "import the seasons" call is the version that breaks the rule
+        `test_a_season_the_feed_never_recorded_is_not_created` protects -- the
+        collection would then claim every season the source knows, and a shelf
+        holding series 1 and 2 would report eight.
+
+        Permission is `containers.edit`, matching the create route this feeds
+        rather than the read routes it resembles. Nothing here writes, but every
+        row it returns is an invitation to write, and offering that to someone
+        who could not act on it is a menu of disabled buttons.
+        """
+        series_uuid = parse_uuid(series_id, "series id")
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            if series_entity(conn, series_uuid, with_seasons=False) is None:
+                raise NextApiError("Series not found", 404)
+            result = available_series_seasons(conn, series_uuid)
+        return response({"status": "ok", "result": result})
 
     @flask_app.put("/api/next/series/<series_id>/identifiers")
     def set_series_identity(series_id):

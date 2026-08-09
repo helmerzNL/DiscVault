@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Ταινία και πρόσθετα",
   "importCenter.candidateSeries": "Σειρά",
   "importCenter.candidateFilm": "Ταινία",
-  "movieDetail.discsSeededHint": "Τα στοιχεία που είχατε ήδη καταχωρίσει έγιναν ο δίσκος 1. Διορθώστε τα αν αφορούν άλλον δίσκο."
+  "movieDetail.discsSeededHint": "Τα στοιχεία που είχατε ήδη καταχωρίσει έγιναν ο δίσκος 1. Διορθώστε τα αν αφορούν άλλον δίσκο.",
+  "seriesDetail.chooseSeasons": "Επιλογή σεζόν",
+  "seriesDetail.seasonsLoading": "Ερώτηση στις πηγές ποιες σεζόν έχει αυτή η σειρά...",
+  "seriesDetail.seasonsNoneOffered": "Καμία πηγή δεν αναφέρει σεζόν για αυτή τη σειρά.",
+  "seriesDetail.seasonsPickHelp": "Τσέκαρε τις σεζόν που έχεις σε δίσκο. Προστίθενται μόνο όσες τσεκάρεις.",
+  "seriesDetail.seasonsAdd": "Προσθήκη επιλεγμένων σεζόν",
+  "seriesDetail.seasonsNoneChosen": "Τσέκαρε τουλάχιστον μία σεζόν.",
+  "seriesDetail.seasonsAdding": "Προσθήκη σεζόν...",
+  "seriesDetail.seasonsAdded": "Προστέθηκαν {count} σεζόν.",
+  "seriesDetail.seasonsPartlyAdded": "{added} προστέθηκαν, {failed} όχι: {errors}"
 }

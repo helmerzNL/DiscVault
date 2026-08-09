@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Hovedfilm og bonus",
   "importCenter.candidateSeries": "Serie",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "De oplysninger, du allerede havde udfyldt, er blevet disk 1. Ret dem, hvis de hører til en anden disk."
+  "movieDetail.discsSeededHint": "De oplysninger, du allerede havde udfyldt, er blevet disk 1. Ret dem, hvis de hører til en anden disk.",
+  "seriesDetail.chooseSeasons": "Vælg sæsoner",
+  "seriesDetail.seasonsLoading": "Spørger kilderne hvilke sæsoner denne serie har...",
+  "seriesDetail.seasonsNoneOffered": "Ingen kilde angiver sæsoner for denne serie.",
+  "seriesDetail.seasonsPickHelp": "Sæt flueben ved de sæsoner, du har på disk. Kun de afkrydsede tilføjes.",
+  "seriesDetail.seasonsAdd": "Tilføj valgte sæsoner",
+  "seriesDetail.seasonsNoneChosen": "Sæt flueben ved mindst én sæson.",
+  "seriesDetail.seasonsAdding": "Tilføjer sæsoner...",
+  "seriesDetail.seasonsAdded": "{count} sæsoner tilføjet.",
+  "seriesDetail.seasonsPartlyAdded": "{added} tilføjet, {failed} ikke: {errors}"
 }

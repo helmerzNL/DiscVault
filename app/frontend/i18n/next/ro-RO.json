@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Film și bonusuri",
   "importCenter.candidateSeries": "Serial",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Datele pe care le introduseseși deja au devenit discul 1. Corectează-le dacă aparțin altui disc."
+  "movieDetail.discsSeededHint": "Datele pe care le introduseseși deja au devenit discul 1. Corectează-le dacă aparțin altui disc.",
+  "seriesDetail.chooseSeasons": "Alege sezoanele",
+  "seriesDetail.seasonsLoading": "Se întreabă sursele ce sezoane are acest serial...",
+  "seriesDetail.seasonsNoneOffered": "Nicio sursă nu listează sezoane pentru acest serial.",
+  "seriesDetail.seasonsPickHelp": "Bifează sezoanele pe care le ai pe disc. Se adaugă doar cele bifate.",
+  "seriesDetail.seasonsAdd": "Adaugă sezoanele selectate",
+  "seriesDetail.seasonsNoneChosen": "Bifează cel puțin un sezon.",
+  "seriesDetail.seasonsAdding": "Se adaugă sezoanele...",
+  "seriesDetail.seasonsAdded": "{count} sezoane adăugate.",
+  "seriesDetail.seasonsPartlyAdded": "{added} adăugate, {failed} nu: {errors}"
 }

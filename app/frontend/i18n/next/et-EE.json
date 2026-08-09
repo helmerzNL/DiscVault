@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Põhifilm ja boonused",
   "importCenter.candidateSeries": "Sari",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Juba sisestatud andmed said plaadiks 1. Parandage need, kui need kuuluvad teisele plaadile."
+  "movieDetail.discsSeededHint": "Juba sisestatud andmed said plaadiks 1. Parandage need, kui need kuuluvad teisele plaadile.",
+  "seriesDetail.chooseSeasons": "Vali hooajad",
+  "seriesDetail.seasonsLoading": "Küsitakse allikatelt, millised hooajad sellel sarjal on...",
+  "seriesDetail.seasonsNoneOffered": "Ükski allikas ei loetle selle sarja hooaegu.",
+  "seriesDetail.seasonsPickHelp": "Märgi hooajad, mis sul plaadil on. Lisatakse ainult märgitud.",
+  "seriesDetail.seasonsAdd": "Lisa valitud hooajad",
+  "seriesDetail.seasonsNoneChosen": "Märgi vähemalt üks hooaeg.",
+  "seriesDetail.seasonsAdding": "Hooaegade lisamine...",
+  "seriesDetail.seasonsAdded": "Lisatud {count} hooaega.",
+  "seriesDetail.seasonsPartlyAdded": "{added} lisatud, {failed} mitte: {errors}"
 }
