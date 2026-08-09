@@ -17,6 +17,7 @@ import hashlib
 import ipaddress
 import io
 import json as json_lib
+import logging
 import mimetypes
 import os
 import re
@@ -605,6 +606,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_packaging import normalize_steelbook_format
     from next_packaging import split_packaging
 
+
+# Module-level rather than `current_app.logger`: the payload helpers below are pure
+# functions that also run outside a request context (tests, the worker), and reaching
+# for `current_app` there raises instead of logging.
+logger = logging.getLogger(__name__)
 
 MIGRATION_JOB_TYPE = "migration.import_sqlite"
 MIGRATION_LEGACY_AUTH_CHALLENGE_KEY = "migration:legacy-auth"
@@ -10558,6 +10564,26 @@ def _movie_edit_case_axes(body: dict[str, Any], edits: dict[str, Any]) -> None:
     # Splitting can. The feed keeps its own, lenient path into the axes
     # (`split_legacy_packaging` in next_metadata / next_movievault_v2) - that
     # asymmetry between a feed we do not control and an API we do is the point.
+    #
+    # Logged rather than dropped in silence. A client that still speaks the flat list
+    # gets a 200 and no complaint while its edit goes nowhere, which is the same shape
+    # of invisible failure as ignoring an unknown key -- and that one cost this
+    # contract a release (sync-contract §4.7a). The Android app is exactly such a
+    # client today: it knows none of the axes and still pushes `packaging`.
+    if "packaging" in body:
+        submitted = _movie_edit_csv_list(body.get("packaging"))
+        logger.warning(
+            "packaging: ignoring a client-sent flat list %s - it is derived from the "
+            "case axes and read-only for clients (sync-contract 4.7a). The client "
+            "should send carrierType/outerPackaging instead. Axes in this body: %s",
+            submitted or "empty",
+            sorted(
+                key
+                for key in ("carrier_type", "outer_packaging", "finishes", "steelbook_format")
+                if key in edits
+            )
+            or "none",
+        )
     edits.pop("packaging", None)
 
     # Flag rather than derive here. A body may carry only one of the two axes,
