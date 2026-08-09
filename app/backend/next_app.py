@@ -4552,6 +4552,51 @@ def collection_movie_preview_entities(
         )
 
 
+def attach_movie_seasons(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach which seasons each disc covers (movie["seasons"]).
+
+    On the movie rather than in a bootstrap-only array, and that is the whole
+    point: the delta stores a movie entity verbatim as its payload, so a
+    membership array beside it would only ever update on a fresh install. That
+    is exactly the drift `release_title` and `location_id` each demonstrated
+    once.
+
+    `sortOrder` travels because it is the curator's order rather than the
+    numeric one -- a set may present specials first or lead with the season it is
+    marketed on -- and dropping it silently renumbers the box.
+    """
+    if not movies:
+        return movies
+    if not table_exists(conn, "movie_seasons"):
+        for movie in movies:
+            movie["seasons"] = []
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    by_movie: dict[str, list[dict[str, Any]]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT movie_id, season_id, series_id, sort_order
+                FROM movie_seasons
+                WHERE movie_id = ANY(%s)
+                ORDER BY movie_id, sort_order
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                by_movie.setdefault(str(row["movie_id"]), []).append(
+                    {
+                        "seasonId": str(row["season_id"]),
+                        "seriesId": str(row["series_id"]),
+                        "sortOrder": row["sort_order"],
+                    }
+                )
+    for movie in movies:
+        movie["seasons"] = by_movie.get(str(movie.get("id")), [])
+    return movies
+
+
 def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Attach canonical genre keys (movie["genres"]) from movie_genres.
 
@@ -7087,6 +7132,151 @@ def emit_location_change(conn, location_id, *, operation: str, entity: dict[str,
         payload=payload,
     )
     return revision
+
+
+def series_sync_entities(conn) -> list[dict[str, Any]]:
+    """The ``series`` array a client bootstraps from.
+
+    A series is not owned by a user and carries nothing private -- it is a
+    grouping, and its rows say only what a show is called and which seasons
+    exist. So unlike movies this needs no visibility filter: whether a *disc*
+    under it is visible is decided by the disc, exactly as it is today in the
+    Library.
+
+    Deliberately without artwork. A series' poster lives in `entity_media` and
+    reaches a client through the media path the movie posters already use;
+    duplicating a URL here would give clients two places to disagree about which
+    image is current.
+    """
+    if not series_tables_available(conn):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, public_id, client_id, title, sort_title, original_title,
+                   start_year, end_year, overview, created_at, updated_at
+            FROM series
+            WHERE deleted_at IS NULL
+            ORDER BY lower(COALESCE(sort_title, title))
+            """
+        )
+        rows = cur.fetchall()
+    return [_series_sync_row(row) for row in rows]
+
+
+def _series_sync_row(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "id": str(row["id"]),
+        "publicId": row["public_id"],
+        "clientId": row.get("client_id"),
+        "title": row["title"],
+        "sortTitle": row["sort_title"],
+        "originalTitle": row["original_title"],
+        "startYear": row["start_year"],
+        "endYear": row["end_year"],
+        "overview": row["overview"],
+        "createdAt": row["created_at"],
+        "updatedAt": row["updated_at"],
+    }
+
+
+def series_season_sync_entities(conn) -> list[dict[str, Any]]:
+    """Every season row, keyed to its series.
+
+    A separate array rather than a nested list on each series: the delta carries
+    one entity at a time, and a season changing would otherwise have to
+    republish its whole series. It is the same shape decision `containerMembership`
+    already made.
+    """
+    if not series_tables_available(conn):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, public_id, series_id, season_number, title, year,
+                   overview, episode_count, created_at, updated_at
+            FROM series_seasons
+            WHERE deleted_at IS NULL
+            ORDER BY series_id, season_number
+            """
+        )
+        rows = cur.fetchall()
+    return [
+        {
+            "id": str(row["id"]),
+            "publicId": row["public_id"],
+            "seriesId": str(row["series_id"]),
+            "seasonNumber": row["season_number"],
+            "title": row["title"],
+            "year": row["year"],
+            "overview": row["overview"],
+            "episodeCount": row["episode_count"],
+            "createdAt": row["created_at"],
+            "updatedAt": row["updated_at"],
+        }
+        for row in rows
+    ]
+
+
+def single_series_sync_entity(conn, series_id) -> dict[str, Any] | None:
+    if not series_tables_available(conn):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, public_id, client_id, title, sort_title, original_title,
+                   start_year, end_year, overview, created_at, updated_at
+            FROM series
+            WHERE id = %s AND deleted_at IS NULL
+            """,
+            (series_id,),
+        )
+        row = cur.fetchone()
+    return _series_sync_row(row) if row else None
+
+
+def emit_series_change(conn, series_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
+    """Emit a ``series`` upsert/delete delta.
+
+    Shaped exactly like `emit_container_change` and `emit_location_change`, so a
+    client applies all three the same way. Without this a series would only ever
+    reach a client through a bootstrap, which is the drift `release_title` and
+    `location_id` both demonstrated: the path a developer exercises by hand is
+    the delta, so a bootstrap-only field looks fine until somebody reinstalls.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(series_id)}
+    if operation != "delete":
+        if entity is None:
+            entity = single_series_sync_entity(conn, series_id)
+        if entity is not None:
+            payload["entity"] = entity
+            payload["seasons"] = series_season_sync_entities_for(conn, series_id)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="series",
+        entity_id=str(series_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
+def series_season_sync_entities_for(conn, series_id) -> list[dict[str, Any]]:
+    """A single series' seasons, in the bootstrap array's shape.
+
+    Carried inside the series delta rather than emitted per season: a season has
+    no meaning apart from its series, and a client that received one without the
+    other would have to hold it aside until the series arrived.
+    """
+    return [
+        season
+        for season in series_season_sync_entities(conn)
+        if season["seriesId"] == str(series_id)
+    ]
 
 
 def emit_movie_change(conn, movie_id, *, operation: str = "upsert") -> int:
@@ -10756,6 +10946,12 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "estimated_value_currency",
     "location",
     "location_id",
+    # Published, not accepted. A client may see which series a disc belongs to;
+    # it may not reassign one over the wire, because doing so means naming a
+    # series that must already exist on the server and §7b keeps establishing a
+    # series' identity a deliberate act. The parity test allows this direction --
+    # what it forbids is the reverse, a field taken on push and never sent back.
+    "series_id",
     "metadata",
     "created_at",
     "updated_at",
@@ -10799,6 +10995,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         # Also reaches the delta: a sync change stores this entity verbatim as
         # its payload, so anything missing here is missing from the delta too.
         attach_movie_technical_specs(conn, [row])
+        attach_movie_seasons(conn, [row])
     return row
 
 
@@ -17656,7 +17853,9 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+        return attach_movie_seasons(
+            conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+        )
 
 
 def all_movie_credit_entities(
@@ -23009,6 +23208,12 @@ def register_routes(flask_app: Flask) -> None:
                     summary=f"Created series {payload['title']}",
                     metadata={"publicId": public_id, "title": payload["title"]},
                 )
+                # Every series mutation reaches a client through the delta as well
+                # as the bootstrap. A bootstrap-only entity is the drift
+                # `release_title` and `location_id` both demonstrated: the delta is
+                # the path anyone testing by hand exercises, so the gap only shows
+                # up on a fresh install.
+                emit_series_change(conn, series_uuid, operation="upsert")
             return response({"status": "ok", "series": series_entity(conn, series_uuid)}, 201)
 
     @flask_app.patch("/api/next/series/<series_id>")
@@ -23057,6 +23262,12 @@ def register_routes(flask_app: Flask) -> None:
                     target_id=series_uuid,
                     summary="Updated series",
                 )
+                # Every series mutation reaches a client through the delta as well
+                # as the bootstrap. A bootstrap-only entity is the drift
+                # `release_title` and `location_id` both demonstrated: the delta is
+                # the path anyone testing by hand exercises, so the gap only shows
+                # up on a fresh install.
+                emit_series_change(conn, series_uuid, operation="upsert")
             return response({"status": "ok", "series": series_entity(conn, series_uuid)})
 
     @flask_app.delete("/api/next/series/<series_id>")
@@ -23081,6 +23292,13 @@ def register_routes(flask_app: Flask) -> None:
                         """,
                         (series_uuid,),
                     )
+                    # Collected before the update, because afterwards nothing
+                    # remembers which discs were affected.
+                    cur.execute(
+                        "SELECT id FROM movies WHERE series_id = %s",
+                        (series_uuid,),
+                    )
+                    orphaned_movie_ids = [row["id"] for row in cur.fetchall()]
                     cur.execute(
                         "UPDATE movies SET series_id = NULL WHERE series_id = %s",
                         (series_uuid,),
@@ -23098,6 +23316,12 @@ def register_routes(flask_app: Flask) -> None:
                     target_id=series_uuid,
                     summary="Deleted series",
                 )
+                # A delete, and the discs that were under it. Their `series_id`
+                # was just cleared, so a client holding the old value would keep
+                # showing them under a series the server no longer has.
+                emit_series_change(conn, series_uuid, operation="delete")
+                for movie_id in orphaned_movie_ids:
+                    emit_movie_change(conn, movie_id, operation="upsert")
             return response({"status": "ok", "seriesId": str(series_uuid)})
 
     @flask_app.post("/api/next/series/<series_id>/seasons")
@@ -23155,6 +23379,12 @@ def register_routes(flask_app: Flask) -> None:
                     target_id=series_uuid,
                     summary=f"Added season {payload['season_number']}",
                 )
+                # Every series mutation reaches a client through the delta as well
+                # as the bootstrap. A bootstrap-only entity is the drift
+                # `release_title` and `location_id` both demonstrated: the delta is
+                # the path anyone testing by hand exercises, so the gap only shows
+                # up on a fresh install.
+                emit_series_change(conn, series_uuid, operation="upsert")
             return response({"status": "ok", "series": series_entity(conn, series_uuid)}, 201)
 
     @flask_app.delete("/api/next/series/<series_id>/seasons/<season_id>")
@@ -23193,6 +23423,12 @@ def register_routes(flask_app: Flask) -> None:
                     target_id=series_uuid,
                     summary="Deleted season",
                 )
+                # Every series mutation reaches a client through the delta as well
+                # as the bootstrap. A bootstrap-only entity is the drift
+                # `release_title` and `location_id` both demonstrated: the delta is
+                # the path anyone testing by hand exercises, so the gap only shows
+                # up on a fresh install.
+                emit_series_change(conn, series_uuid, operation="upsert")
             return response({"status": "ok", "series": series_entity(conn, series_uuid)})
 
     # A sibling of GET /api/next/series/<id> rather than a reshaping of it. That
@@ -23338,6 +23574,12 @@ def register_routes(flask_app: Flask) -> None:
                         "providerId": provider_id,
                     },
                 )
+                # Every series mutation reaches a client through the delta as well
+                # as the bootstrap. A bootstrap-only entity is the drift
+                # `release_title` and `location_id` both demonstrated: the delta is
+                # the path anyone testing by hand exercises, so the gap only shows
+                # up on a fresh install.
+                emit_series_change(conn, series_uuid, operation="upsert")
             # Refreshed in the same request. The identifier exists to be used, and
             # a separate "now press refresh" step is a way to leave a series that
             # was just identified still looking empty.
@@ -33502,6 +33744,12 @@ def register_routes(flask_app: Flask) -> None:
                 # points at, so truncating it would hand clients exactly the
                 # unresolvable ids sync-contract §4c exists to remove.
                 "locations": location_sync_entities(conn),
+                # The series line. Which seasons sit on a given disc is *not*
+                # here: it rides on the movie entity, so the delta carries it
+                # too. A membership array beside these would only ever refresh
+                # on a bootstrap.
+                "series": series_sync_entities(conn),
+                "seriesSeasons": series_season_sync_entities(conn),
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
