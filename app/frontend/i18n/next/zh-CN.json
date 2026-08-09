@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "正片与花絮",
   "importCenter.candidateSeries": "剧集",
   "importCenter.candidateFilm": "电影",
-  "movieDetail.discsSeededHint": "你已填写的信息已成为第 1 碟。若它属于另一张碟片，请修改。"
+  "movieDetail.discsSeededHint": "你已填写的信息已成为第 1 碟。若它属于另一张碟片，请修改。",
+  "seriesDetail.chooseSeasons": "选择季",
+  "seriesDetail.seasonsLoading": "正在向来源询问该剧集有哪些季...",
+  "seriesDetail.seasonsNoneOffered": "没有来源列出该剧集的季。",
+  "seriesDetail.seasonsPickHelp": "勾选您拥有光盘的季。仅添加勾选的季。",
+  "seriesDetail.seasonsAdd": "添加所选的季",
+  "seriesDetail.seasonsNoneChosen": "请先勾选至少一季。",
+  "seriesDetail.seasonsAdding": "正在添加季...",
+  "seriesDetail.seasonsAdded": "已添加 {count} 季。",
+  "seriesDetail.seasonsPartlyAdded": "已添加 {added} 季，{failed} 季失败：{errors}"
 }

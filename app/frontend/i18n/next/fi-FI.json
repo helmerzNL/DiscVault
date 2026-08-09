@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Pääelokuva ja bonukset",
   "importCenter.candidateSeries": "Sarja",
   "importCenter.candidateFilm": "Elokuva",
-  "movieDetail.discsSeededHint": "Jo täyttämäsi tiedot siirtyivät levylle 1. Korjaa ne, jos ne kuuluvat toiselle levylle."
+  "movieDetail.discsSeededHint": "Jo täyttämäsi tiedot siirtyivät levylle 1. Korjaa ne, jos ne kuuluvat toiselle levylle.",
+  "seriesDetail.chooseSeasons": "Valitse kaudet",
+  "seriesDetail.seasonsLoading": "Kysytään lähteiltä, mitä kausia tällä sarjalla on...",
+  "seriesDetail.seasonsNoneOffered": "Mikään lähde ei listaa kausia tälle sarjalle.",
+  "seriesDetail.seasonsPickHelp": "Rastita kaudet, jotka omistat levyllä. Vain rastitetut lisätään.",
+  "seriesDetail.seasonsAdd": "Lisää valitut kaudet",
+  "seriesDetail.seasonsNoneChosen": "Rastita ensin vähintään yksi kausi.",
+  "seriesDetail.seasonsAdding": "Lisätään kausia...",
+  "seriesDetail.seasonsAdded": "{count} kautta lisätty.",
+  "seriesDetail.seasonsPartlyAdded": "{added} lisätty, {failed} ei: {errors}"
 }

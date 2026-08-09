@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Film a bonusy",
   "importCenter.candidateSeries": "Seriál",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Údaje, ktoré ste už zadali, sa stali diskom 1. Upravte ich, ak patria k inému disku."
+  "movieDetail.discsSeededHint": "Údaje, ktoré ste už zadali, sa stali diskom 1. Upravte ich, ak patria k inému disku.",
+  "seriesDetail.chooseSeasons": "Vybrať sezóny",
+  "seriesDetail.seasonsLoading": "Dotaz na zdroje, aké sezóny tento seriál má...",
+  "seriesDetail.seasonsNoneOffered": "Žiadny zdroj neuvádza sezóny tohto seriálu.",
+  "seriesDetail.seasonsPickHelp": "Zaškrtnite sezóny, ktoré máte na disku. Pridajú sa len zaškrtnuté.",
+  "seriesDetail.seasonsAdd": "Pridať vybrané sezóny",
+  "seriesDetail.seasonsNoneChosen": "Zaškrtnite aspoň jednu sezónu.",
+  "seriesDetail.seasonsAdding": "Pridávanie sezón...",
+  "seriesDetail.seasonsAdded": "Pridaných {count} sezón.",
+  "seriesDetail.seasonsPartlyAdded": "{added} pridaných, {failed} nie: {errors}"
 }

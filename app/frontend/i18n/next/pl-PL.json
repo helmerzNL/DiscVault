@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Film i dodatki",
   "importCenter.candidateSeries": "Serial",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Dane, które już wprowadzono, stały się płytą 1. Popraw je, jeśli należą do innej płyty."
+  "movieDetail.discsSeededHint": "Dane, które już wprowadzono, stały się płytą 1. Popraw je, jeśli należą do innej płyty.",
+  "seriesDetail.chooseSeasons": "Wybierz sezony",
+  "seriesDetail.seasonsLoading": "Pytanie źródeł o sezony tego serialu...",
+  "seriesDetail.seasonsNoneOffered": "Żadne źródło nie podaje sezonów tego serialu.",
+  "seriesDetail.seasonsPickHelp": "Zaznacz sezony, które masz na płycie. Dodawane są tylko zaznaczone.",
+  "seriesDetail.seasonsAdd": "Dodaj wybrane sezony",
+  "seriesDetail.seasonsNoneChosen": "Zaznacz najpierw co najmniej jeden sezon.",
+  "seriesDetail.seasonsAdding": "Dodawanie sezonów...",
+  "seriesDetail.seasonsAdded": "Dodano {count} sezonów.",
+  "seriesDetail.seasonsPartlyAdded": "{added} dodano, {failed} nie: {errors}"
 }

@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Hovedfilm og bonus",
   "importCenter.candidateSeries": "Serie",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Opplysningene du allerede hadde fylt inn er blitt plate 1. Rett dem hvis de hører til en annen plate."
+  "movieDetail.discsSeededHint": "Opplysningene du allerede hadde fylt inn er blitt plate 1. Rett dem hvis de hører til en annen plate.",
+  "seriesDetail.chooseSeasons": "Velg sesonger",
+  "seriesDetail.seasonsLoading": "Spør kildene hvilke sesonger denne serien har...",
+  "seriesDetail.seasonsNoneOffered": "Ingen kilde oppgir sesonger for denne serien.",
+  "seriesDetail.seasonsPickHelp": "Kryss av for sesongene du har på plate. Bare de avkryssede legges til.",
+  "seriesDetail.seasonsAdd": "Legg til valgte sesonger",
+  "seriesDetail.seasonsNoneChosen": "Kryss av for minst én sesong.",
+  "seriesDetail.seasonsAdding": "Legger til sesonger...",
+  "seriesDetail.seasonsAdded": "{count} sesonger lagt til.",
+  "seriesDetail.seasonsPartlyAdded": "{added} lagt til, {failed} ikke: {errors}"
 }

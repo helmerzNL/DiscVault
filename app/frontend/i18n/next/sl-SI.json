@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Film in dodatki",
   "importCenter.candidateSeries": "Serija",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Podatki, ki ste jih že vnesli, so postali disk 1. Popravite jih, če sodijo na drug disk."
+  "movieDetail.discsSeededHint": "Podatki, ki ste jih že vnesli, so postali disk 1. Popravite jih, če sodijo na drug disk.",
+  "seriesDetail.chooseSeasons": "Izberi sezone",
+  "seriesDetail.seasonsLoading": "Poizvedba pri virih, katere sezone ima ta serija...",
+  "seriesDetail.seasonsNoneOffered": "Noben vir ne navaja sezon za to serijo.",
+  "seriesDetail.seasonsPickHelp": "Označite sezone, ki jih imate na disku. Dodane bodo samo označene.",
+  "seriesDetail.seasonsAdd": "Dodaj izbrane sezone",
+  "seriesDetail.seasonsNoneChosen": "Označite vsaj eno sezono.",
+  "seriesDetail.seasonsAdding": "Dodajanje sezon...",
+  "seriesDetail.seasonsAdded": "Dodanih {count} sezon.",
+  "seriesDetail.seasonsPartlyAdded": "{added} dodanih, {failed} ne: {errors}"
 }

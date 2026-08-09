@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Hauptfilm und Bonus",
   "importCenter.candidateSeries": "Serie",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Die bereits eingetragenen Angaben sind zu Disc 1 geworden. Passen Sie sie an, wenn sie zu einer anderen Disc gehören."
+  "movieDetail.discsSeededHint": "Die bereits eingetragenen Angaben sind zu Disc 1 geworden. Passen Sie sie an, wenn sie zu einer anderen Disc gehören.",
+  "seriesDetail.chooseSeasons": "Staffeln auswählen",
+  "seriesDetail.seasonsLoading": "Quellen werden nach den Staffeln dieser Serie gefragt...",
+  "seriesDetail.seasonsNoneOffered": "Keine Quelle nennt Staffeln für diese Serie.",
+  "seriesDetail.seasonsPickHelp": "Kreuze die Staffeln an, die du auf Disc hast. Nur Angekreuztes wird hinzugefügt.",
+  "seriesDetail.seasonsAdd": "Ausgewählte Staffeln hinzufügen",
+  "seriesDetail.seasonsNoneChosen": "Kreuze zuerst mindestens eine Staffel an.",
+  "seriesDetail.seasonsAdding": "Staffeln werden hinzugefügt...",
+  "seriesDetail.seasonsAdded": "{count} Staffeln hinzugefügt.",
+  "seriesDetail.seasonsPartlyAdded": "{added} hinzugefügt, {failed} nicht: {errors}"
 }

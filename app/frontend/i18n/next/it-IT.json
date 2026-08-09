@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Film ed extra",
   "importCenter.candidateSeries": "Serie",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "I dati che avevi già inserito sono diventati il disco 1. Correggili se appartengono a un altro disco."
+  "movieDetail.discsSeededHint": "I dati che avevi già inserito sono diventati il disco 1. Correggili se appartengono a un altro disco.",
+  "seriesDetail.chooseSeasons": "Scegli le stagioni",
+  "seriesDetail.seasonsLoading": "Richiesta alle fonti delle stagioni di questa serie...",
+  "seriesDetail.seasonsNoneOffered": "Nessuna fonte elenca stagioni per questa serie.",
+  "seriesDetail.seasonsPickHelp": "Spunta le stagioni che possiedi su disco. Vengono aggiunte solo quelle spuntate.",
+  "seriesDetail.seasonsAdd": "Aggiungi le stagioni selezionate",
+  "seriesDetail.seasonsNoneChosen": "Spunta almeno una stagione.",
+  "seriesDetail.seasonsAdding": "Aggiunta stagioni...",
+  "seriesDetail.seasonsAdded": "{count} stagioni aggiunte.",
+  "seriesDetail.seasonsPartlyAdded": "{added} aggiunte, {failed} no: {errors}"
 }

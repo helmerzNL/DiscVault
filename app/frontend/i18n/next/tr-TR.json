@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Ana film ve ek içerik",
   "importCenter.candidateSeries": "Dizi",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Daha önce girdiğiniz bilgiler Disk 1 oldu. Başka bir diske aitse düzeltin."
+  "movieDetail.discsSeededHint": "Daha önce girdiğiniz bilgiler Disk 1 oldu. Başka bir diske aitse düzeltin.",
+  "seriesDetail.chooseSeasons": "Sezonları seç",
+  "seriesDetail.seasonsLoading": "Kaynaklara bu dizinin hangi sezonları olduğu soruluyor...",
+  "seriesDetail.seasonsNoneOffered": "Hiçbir kaynak bu dizi için sezon listelemiyor.",
+  "seriesDetail.seasonsPickHelp": "Diskte sahip olduğunuz sezonları işaretleyin. Yalnızca işaretledikleriniz eklenir.",
+  "seriesDetail.seasonsAdd": "Seçili sezonları ekle",
+  "seriesDetail.seasonsNoneChosen": "Önce en az bir sezon işaretleyin.",
+  "seriesDetail.seasonsAdding": "Sezonlar ekleniyor...",
+  "seriesDetail.seasonsAdded": "{count} sezon eklendi.",
+  "seriesDetail.seasonsPartlyAdded": "{added} eklendi, {failed} eklenemedi: {errors}"
 }

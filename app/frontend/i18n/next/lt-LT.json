@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Filmas ir papildoma medžiaga",
   "importCenter.candidateSeries": "Serialas",
   "importCenter.candidateFilm": "Filmas",
-  "movieDetail.discsSeededHint": "Jau įvesti duomenys tapo 1 disku. Pataisykite juos, jei jie priklauso kitam diskui."
+  "movieDetail.discsSeededHint": "Jau įvesti duomenys tapo 1 disku. Pataisykite juos, jei jie priklauso kitam diskui.",
+  "seriesDetail.chooseSeasons": "Pasirinkti sezonus",
+  "seriesDetail.seasonsLoading": "Klausiama šaltinių, kokius sezonus turi šis serialas...",
+  "seriesDetail.seasonsNoneOffered": "Nė vienas šaltinis nenurodo šio serialo sezonų.",
+  "seriesDetail.seasonsPickHelp": "Pažymėkite sezonus, kuriuos turite diske. Pridedami tik pažymėti.",
+  "seriesDetail.seasonsAdd": "Pridėti pasirinktus sezonus",
+  "seriesDetail.seasonsNoneChosen": "Pažymėkite bent vieną sezoną.",
+  "seriesDetail.seasonsAdding": "Pridedami sezonai...",
+  "seriesDetail.seasonsAdded": "Pridėta {count} sezonų.",
+  "seriesDetail.seasonsPartlyAdded": "{added} pridėta, {failed} ne: {errors}"
 }

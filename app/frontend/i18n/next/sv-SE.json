@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Huvudfilm och bonus",
   "importCenter.candidateSeries": "Serie",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "Uppgifterna du redan hade fyllt i har blivit skiva 1. Ändra dem om de hör till en annan skiva."
+  "movieDetail.discsSeededHint": "Uppgifterna du redan hade fyllt i har blivit skiva 1. Ändra dem om de hör till en annan skiva.",
+  "seriesDetail.chooseSeasons": "Välj säsonger",
+  "seriesDetail.seasonsLoading": "Frågar källorna vilka säsonger den här serien har...",
+  "seriesDetail.seasonsNoneOffered": "Ingen källa anger säsonger för den här serien.",
+  "seriesDetail.seasonsPickHelp": "Kryssa i de säsonger du har på skiva. Bara de ikryssade läggs till.",
+  "seriesDetail.seasonsAdd": "Lägg till valda säsonger",
+  "seriesDetail.seasonsNoneChosen": "Kryssa i minst en säsong.",
+  "seriesDetail.seasonsAdding": "Lägger till säsonger...",
+  "seriesDetail.seasonsAdded": "{count} säsonger tillagda.",
+  "seriesDetail.seasonsPartlyAdded": "{added} tillagda, {failed} inte: {errors}"
 }

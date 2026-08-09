@@ -113,7 +113,7 @@ class MergeSeriesArtworkTests(unittest.TestCase):
 
 
 class PluginContextTests(unittest.TestCase):
-    """Every series path must build its plugin context the way the movie path does.
+    """A series-side plugin context is built in exactly one place.
 
     `plugin_config_from_db` returns `settings` and `secretsRef` -- the *names* of
     the secrets. `plugin_execution_context` is what turns those names into
@@ -126,7 +126,20 @@ class PluginContextTests(unittest.TestCase):
     add. Movies enriched perfectly throughout, because that path used the context
     builder from the start -- which is exactly what made it look like a series
     problem rather than a wiring one.
+
+    This test used to assert the builder appeared in each of three function
+    bodies, which is a weaker thing to ask: it holds three copies to the same
+    rule instead of removing the second and third. A comment repeated above four
+    hand-written loops did not stop one of them being wrong, and would not have
+    stopped a fifth. Counting is the assertion that does.
     """
+
+    def _source(self):
+        import inspect
+
+        from app.backend import next_metadata
+
+        return inspect.getsource(next_metadata)
 
     def _body(self, name):
         import inspect
@@ -135,17 +148,32 @@ class PluginContextTests(unittest.TestCase):
 
         return inspect.getsource(getattr(next_metadata, name))
 
-    def test_every_series_source_call_resolves_secrets(self):
+    def test_the_context_is_built_in_exactly_one_place(self):
+        self.assertEqual(
+            self._source().count("plugin_execution_context(conn, plugin, plugin_config_from_db"),
+            1,
+        )
+        self.assertIn("plugin_execution_context(", self._body("consult_plugins"))
+
+    def test_every_series_source_call_goes_through_it(self):
         for name in (
-            "refresh_series_metadata",
+            "consult_series_sources",
             "search_series_candidates",
             "refresh_season_episodes",
         ):
             with self.subTest(function=name):
                 body = self._body(name)
-                self.assertIn("plugin_execution_context(", body)
+                self.assertIn("consult_plugins(", body)
                 # The raw config must never be the context itself.
                 self.assertNotIn("context = plugin_config_from_db(conn, plugin_id)", body)
+
+    def test_the_refresh_and_the_offer_ask_the_same_question(self):
+        """`available_series_seasons` shows what `refresh_series_metadata` would
+        write. If they built their own payloads the picker could offer a season
+        the refresh then never describes."""
+        for name in ("refresh_series_metadata", "available_series_seasons"):
+            with self.subTest(function=name):
+                self.assertIn("consult_series_sources(", self._body(name))
 
 
 class ArtworkEntityMapTests(unittest.TestCase):

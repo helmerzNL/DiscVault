@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "本編と特典",
   "importCenter.candidateSeries": "シリーズ",
   "importCenter.candidateFilm": "映画",
-  "movieDetail.discsSeededHint": "すでに入力していた内容はディスク 1 になりました。別のディスクの内容であれば修正してください。"
+  "movieDetail.discsSeededHint": "すでに入力していた内容はディスク 1 になりました。別のディスクの内容であれば修正してください。",
+  "seriesDetail.chooseSeasons": "シーズンを選択",
+  "seriesDetail.seasonsLoading": "このシリーズのシーズンをソースに問い合わせています...",
+  "seriesDetail.seasonsNoneOffered": "このシリーズのシーズンを挙げているソースがありません。",
+  "seriesDetail.seasonsPickHelp": "ディスクで所有しているシーズンにチェックを入れてください。チェックしたものだけが追加されます。",
+  "seriesDetail.seasonsAdd": "選択したシーズンを追加",
+  "seriesDetail.seasonsNoneChosen": "少なくとも1つのシーズンにチェックを入れてください。",
+  "seriesDetail.seasonsAdding": "シーズンを追加中...",
+  "seriesDetail.seasonsAdded": "{count}件のシーズンを追加しました。",
+  "seriesDetail.seasonsPartlyAdded": "{added}件追加、{failed}件失敗: {errors}"
 }

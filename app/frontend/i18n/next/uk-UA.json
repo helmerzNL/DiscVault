@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Фільм і бонуси",
   "importCenter.candidateSeries": "Серіал",
   "importCenter.candidateFilm": "Фільм",
-  "movieDetail.discsSeededHint": "Дані, які ви вже ввели, стали диском 1. Виправте їх, якщо вони стосуються іншого диска."
+  "movieDetail.discsSeededHint": "Дані, які ви вже ввели, стали диском 1. Виправте їх, якщо вони стосуються іншого диска.",
+  "seriesDetail.chooseSeasons": "Вибрати сезони",
+  "seriesDetail.seasonsLoading": "Запит до джерел, які сезони має цей серіал...",
+  "seriesDetail.seasonsNoneOffered": "Жодне джерело не вказує сезонів для цього серіалу.",
+  "seriesDetail.seasonsPickHelp": "Позначте сезони, які маєте на диску. Додаються лише позначені.",
+  "seriesDetail.seasonsAdd": "Додати вибрані сезони",
+  "seriesDetail.seasonsNoneChosen": "Позначте щонайменше один сезон.",
+  "seriesDetail.seasonsAdding": "Додавання сезонів...",
+  "seriesDetail.seasonsAdded": "Додано {count} сезонів.",
+  "seriesDetail.seasonsPartlyAdded": "{added} додано, {failed} ні: {errors}"
 }

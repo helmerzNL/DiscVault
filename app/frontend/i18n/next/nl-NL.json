@@ -2928,5 +2928,14 @@
   "movieDiscRole.featureAndBonus": "Hoofdfilm en bonus",
   "importCenter.candidateSeries": "Serie",
   "importCenter.candidateFilm": "Film",
-  "movieDetail.discsSeededHint": "De gegevens die je al had ingevuld zijn schijf 1 geworden. Pas ze aan als ze bij een ander schijfje horen."
+  "movieDetail.discsSeededHint": "De gegevens die je al had ingevuld zijn schijf 1 geworden. Pas ze aan als ze bij een ander schijfje horen.",
+  "seriesDetail.chooseSeasons": "Seizoenen kiezen",
+  "seriesDetail.seasonsLoading": "Bronnen vragen welke seizoenen deze serie heeft...",
+  "seriesDetail.seasonsNoneOffered": "Geen enkele bron noemt seizoenen voor deze serie.",
+  "seriesDetail.seasonsPickHelp": "Vink de seizoenen aan die je op schijf hebt. Alleen wat je aanvinkt wordt toegevoegd.",
+  "seriesDetail.seasonsAdd": "Geselecteerde seizoenen toevoegen",
+  "seriesDetail.seasonsNoneChosen": "Vink eerst minstens één seizoen aan.",
+  "seriesDetail.seasonsAdding": "Seizoenen toevoegen...",
+  "seriesDetail.seasonsAdded": "{count} seizoenen toegevoegd.",
+  "seriesDetail.seasonsPartlyAdded": "{added} toegevoegd, {failed} niet: {errors}"
 }

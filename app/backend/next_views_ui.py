@@ -15897,8 +15897,10 @@ def ui_preview_html(
                     <h3 data-next-i18n="movieDetail.seasons">Seasons</h3>
                     <p data-next-i18n="seriesDetail.seasonsHelp">Every season the series has, and whether a disc in your collection covers it.</p>
                   </div>
+                  <button type="button" class="secondary-button" id="seriesSeasonPickerButton" data-next-i18n="seriesDetail.chooseSeasons">Choose seasons</button>
                 </div>
                 <div class="detail-fields" id="seriesDetailSeasons"></div>
+                <div id="seriesSeasonPicker"></div>
               </div>
             </div>
           </div>
@@ -31168,6 +31170,7 @@ def ui_preview_html(
       // A candidate list belongs to the query that produced it. Carrying one into
       // another series is how somebody links the wrong show without noticing.
       seriesIdentityCandidates = [];
+      seriesSeasonOffer = [];
       showSeriesDetailLoading(seriesId);
       showSeriesDetailPage();
       if (pushUrl && appMode) {
@@ -31308,6 +31311,136 @@ def ui_preview_html(
         );
       } catch (error) {
         setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    let seriesSeasonOffer = [];
+    async function openSeriesSeasonPicker() {
+      // Deliberately a separate act from showing the list. `refresh_series_metadata`
+      // must not create seasons nobody owns -- the source knows every season the
+      // show has, the collection knows the ones a disc covers -- so the only way
+      // a season can come into existence here is somebody ticking it.
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const node = document.getElementById("seriesSeasonPicker");
+      if (!node) return;
+      setSeriesDetailMessage(tNext("seriesDetail.seasonsLoading", "Asking sources which seasons this series has..."));
+      try {
+        const payload = await authApiJson(
+          `/api/next/series/${encodeURIComponent(activeSeriesId)}/seasons/available`
+        );
+        const result = payload.result || {};
+        seriesSeasonOffer = result.seasons || [];
+        renderSeriesSeasonPicker();
+        if (seriesSeasonOffer.length) {
+          setSeriesDetailMessage("");
+        } else if (result.reason === "no series identifier") {
+          // The same dead end the identity picker exists to escape, and the same
+          // sentence, so the reader is sent there rather than concluding the show
+          // has no seasons.
+          setSeriesDetailMessage(seriesRefreshExplanation(result), "info");
+        } else if (result.reason === "no series source") {
+          setSeriesDetailMessage(seriesRefreshExplanation(result), "info");
+        } else if (sourceErrorText(result)) {
+          setSeriesDetailMessage(sourceErrorText(result), "bad");
+        } else {
+          setSeriesDetailMessage(tNext("seriesDetail.seasonsNoneOffered", "No source lists any seasons for this series."), "info");
+        }
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function renderSeriesSeasonPicker() {
+      const node = document.getElementById("seriesSeasonPicker");
+      if (!node) return;
+      if (!seriesSeasonOffer.length) {
+        node.innerHTML = "";
+        return;
+      }
+      const rows = seriesSeasonOffer.map((season, index) => {
+        const label = season.title
+          ? `${season.seasonNumber} - ${season.title}`
+          : tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
+        const meta = [
+          season.year || "",
+          season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
+        ].filter(Boolean).join(" / ");
+        // A season already in the collection stays visible and stays ticked, but
+        // cannot be unticked here: removing one is the delete route, and a
+        // checkbox that silently means two different things is how somebody
+        // deletes a season while believing they are choosing one.
+        return `
+          <label class="movie-edit-season">
+            <input type="checkbox" data-series-season-offer="${escapeHtml(String(index))}"${season.exists ? " checked disabled" : ""}>
+            <span>${escapeHtml(label)}${meta ? ` <em>${escapeHtml(meta)}</em>` : ""}</span>
+          </label>
+        `;
+      }).join("");
+      node.innerHTML = `
+        <div class="series-season-picker">
+          <p class="import-source-meta">${escapeHtml(tNext("seriesDetail.seasonsPickHelp", "Tick the seasons you own on disc. Only the ones you tick are added."))}</p>
+          ${rows}
+          <button type="button" class="primary-button" id="seriesSeasonPickerSave" data-next-i18n="seriesDetail.seasonsAdd">Add selected seasons</button>
+        </div>
+      `;
+    }
+    async function saveSeriesSeasonSelection() {
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const node = document.getElementById("seriesSeasonPicker");
+      const chosen = Array.from(node?.querySelectorAll("input[data-series-season-offer]:checked") || [])
+        .filter((box) => !box.disabled)
+        .map((box) => seriesSeasonOffer[Number(box.dataset.seriesSeasonOffer)])
+        .filter(Boolean);
+      if (!chosen.length) {
+        setSeriesDetailMessage(tNext("seriesDetail.seasonsNoneChosen", "Tick at least one season first."), "info");
+        return;
+      }
+      setSeriesDetailMessage(tNext("seriesDetail.seasonsAdding", "Adding seasons..."));
+      let added = 0;
+      const failed = [];
+      for (const season of chosen) {
+        try {
+          await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/seasons`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              seasonNumber: season.seasonNumber,
+              title: season.title || "",
+              year: season.year || "",
+              overview: season.overview || "",
+              episodeCount: season.episodeCount
+            })
+          });
+          added += 1;
+        } catch (error) {
+          // One season failing must not hide the ones that landed, and must not
+          // be reported as if nothing happened. The route already answers 409 for
+          // a season that exists, so a second click is harmless rather than a
+          // duplicate.
+          failed.push(`${season.seasonNumber}: ${error.message || String(error)}`);
+        }
+      }
+      seriesSeasonOffer = [];
+      renderSeriesSeasonPicker();
+      try {
+        const detail = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/detail`);
+        renderSeriesDetail(detail.detail || {});
+      } catch (error) {
+        // The seasons were created either way; failing to repaint is not a
+        // reason to report that they were not.
+      }
+      await loadAppSnapshot();
+      if (failed.length) {
+        setSeriesDetailMessage(
+          tNext("seriesDetail.seasonsPartlyAdded", "{added} added, {failed} could not be: {errors}")
+            .replace("{added}", added)
+            .replace("{failed}", failed.length)
+            .replace("{errors}", failed.join(" / ")),
+          added ? "info" : "bad"
+        );
+      } else {
+        setSeriesDetailMessage(
+          tNext("seriesDetail.seasonsAdded", "{count} seasons added.").replace("{count}", added),
+          "good"
+        );
       }
     }
     function sourceErrorText(result) {
@@ -46233,6 +46366,12 @@ def ui_preview_html(
       document.getElementById("seriesMetadataRefreshButton")?.addEventListener("click", () => refreshActiveSeriesMetadata());
       document.getElementById("seriesDeleteButton")?.addEventListener("click", () => deleteActiveSeries());
       document.getElementById("seriesIdentitySearchButton")?.addEventListener("click", () => searchSeriesIdentity());
+      document.getElementById("seriesSeasonPickerButton")?.addEventListener("click", () => openSeriesSeasonPicker());
+      // Delegated: the save button is rendered by the picker, so it does not
+      // exist when the page is wired.
+      document.getElementById("seriesSeasonPicker")?.addEventListener("click", (event) => {
+        if (event.target?.closest("#seriesSeasonPickerSave")) saveSeriesSeasonSelection();
+      });
       document.getElementById("seriesIdentitySearchInput")?.addEventListener("keydown", (event) => {
         if (event.key !== "Enter") return;
         // The input sits inside no form, so Enter would otherwise do nothing --
