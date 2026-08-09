@@ -183,28 +183,40 @@ def _disc_tracks(entry: dict[str, Any], column: str, alias: str, normalizer) -> 
         raise NextApiError(f"{alias}: {exc}", 422, "invalid_request") from exc
 
 
-def _disc_uuid_list(entry: dict[str, Any], column: str, alias: str) -> list[UUID]:
-    """Season or episode ids on a disc, de-duplicated and order-preserving.
+def _disc_uuid_list(entry: dict[str, Any], column: str, alias: str) -> list[UUID | str]:
+    """Season or episode references on a disc, de-duplicated and order-preserving.
 
     An empty list is an answer — "this disc names no season" — and is returned
     as an empty list rather than folded into None, the same distinction
     ``normalize_season_ids`` draws one level up.
+
+    A reference is either a server uuid or a ``public_id``. Both travel on the
+    sync wire — season and episode entities carry both keys — and a client is
+    entitled to hold whichever it stored (sync-contract §4.9). A uuid is parsed
+    here; anything else is kept as opaque text for the write path to resolve
+    against ``public_id``, where an unresolvable value is refused *by name*
+    rather than guessed at.
     """
     raw = next((entry[key] for key in (column, alias) if key in entry), None)
     if raw is None:
         return []
     if isinstance(raw, (str, bytes)) or not hasattr(raw, "__iter__"):
         raise NextApiError(f"{alias} must be a list", 400)
-    seen: set[UUID] = set()
-    result: list[UUID] = []
+    seen: set[UUID | str] = set()
+    result: list[UUID | str] = []
     for item in raw:
         text = clean_text(item)
         if text is None:
             continue
+        parsed: UUID | str
         try:
             parsed = UUID(text)
         except (TypeError, ValueError):
-            raise NextApiError(f"{alias} contains an invalid id: {text}", 400) from None
+            if len(text) > 120:
+                raise NextApiError(
+                    f"{alias} contains an invalid id: {text[:40]}…", 400
+                ) from None
+            parsed = text
         if parsed in seen:
             continue
         seen.add(parsed)

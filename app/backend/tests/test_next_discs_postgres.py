@@ -555,5 +555,207 @@ class MovieDiscTests(unittest.TestCase):
             self.assertEqual([d["label"] for d in entity["discs"]], ["Only"])
 
 
+@unittest.skipUnless(
+    DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
+)
+class MovieDiscSyncWireTests(unittest.TestCase):
+    """Discs over the sync wire, end to end against the real apply path.
+
+    Sync-contract §4.9. What has to hold: a mutation can create discs, the
+    minted ids come back in the upsert response so the client can adopt them, a
+    later mutation without the key leaves the discs alone, and a season may be
+    referenced by its public_id -- the identifier a sync client is as likely to
+    hold as the uuid, since the wire carries both.
+    """
+
+    def connect(self):
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
+
+    def tearDown(self):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM movie_episodes WHERE movie_id IN "
+                    "(SELECT id FROM movies WHERE public_id LIKE %s)",
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute(
+                    "DELETE FROM movie_seasons WHERE movie_id IN "
+                    "(SELECT id FROM movies WHERE public_id LIKE %s)",
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute(
+                    "DELETE FROM sync_changes WHERE entity_id IN "
+                    "(SELECT id::text FROM movies WHERE public_id LIKE %s)",
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute(
+                    "DELETE FROM client_id_mappings WHERE entity_id IN "
+                    "(SELECT id FROM movies WHERE public_id LIKE %s)",
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute("DELETE FROM movies WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+                cur.execute(
+                    "DELETE FROM series_seasons WHERE public_id LIKE %s", (f"{PREFIX}-%",)
+                )
+                cur.execute("DELETE FROM series WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+            conn.commit()
+
+    def _push(self, conn, payload, *, entity_id=None, mutation_id):
+        mutation = {
+            "clientMutationId": mutation_id,
+            "clientEntityId": f"{PREFIX}-client-{mutation_id}",
+            "payload": payload,
+        }
+        if entity_id is not None:
+            mutation["entityId"] = str(entity_id)
+        result = next_app.apply_movie_upsert(
+            conn,
+            client_id=f"{PREFIX}-device",
+            idem_key=f"{PREFIX}-{mutation_id}",
+            mutation=mutation,
+        )
+        conn.commit()
+        return result
+
+    def test_a_mutation_creates_discs_and_the_response_carries_their_ids(self):
+        with self.connect() as conn:
+            result = self._push(
+                conn,
+                {
+                    "title": "Wire Box",
+                    "discs": [
+                        {"discType": "uhd_bluray", "discRole": "feature",
+                         "hdr": ["dolby_vision"]},
+                        {"discType": "bluray", "discRole": "bonus"},
+                    ],
+                },
+                mutation_id="create-1",
+            )
+            self.assertEqual(result["status"], "applied")
+            discs = result["entity"]["discs"]
+            self.assertEqual([d["discType"] for d in discs], ["uhd_bluray", "bluray"])
+            # The minted ids are in the response entity: that is how a client
+            # that pushed id-less discs adopts them, exactly as it adopts the
+            # movie's own entityId.
+            self.assertTrue(all(d["id"] for d in discs))
+            # Marker so tearDown finds the row.
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET public_id = %s WHERE id = %s",
+                    (f"{PREFIX}-{result['entityId']}", result["entityId"]),
+                )
+            conn.commit()
+
+    def test_a_mutation_without_the_key_leaves_the_discs_alone(self):
+        """The compatibility half of §4.9: an iOS or Android build that predates
+        discs pushes movie edits with no `discs` key, and must not delete a
+        disc list it cannot see."""
+        with self.connect() as conn:
+            created = self._push(
+                conn,
+                {"title": "Wire Box", "discs": [{"discType": "dvd"}]},
+                mutation_id="create-2",
+            )
+            entity_id = created["entityId"]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET public_id = %s WHERE id = %s",
+                    (f"{PREFIX}-{entity_id}", entity_id),
+                )
+            conn.commit()
+            updated = self._push(
+                conn,
+                {"title": "Wire Box renamed"},
+                entity_id=entity_id,
+                mutation_id="update-2",
+            )
+            self.assertEqual(len(updated["entity"]["discs"]), 1)
+            self.assertEqual(updated["entity"]["title"], "Wire Box renamed")
+
+    def test_an_explicit_empty_list_clears_them_over_sync_too(self):
+        with self.connect() as conn:
+            created = self._push(
+                conn,
+                {"title": "Wire Box", "discs": [{"discType": "dvd"}]},
+                mutation_id="create-3",
+            )
+            entity_id = created["entityId"]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET public_id = %s WHERE id = %s",
+                    (f"{PREFIX}-{entity_id}", entity_id),
+                )
+            conn.commit()
+            updated = self._push(
+                conn,
+                {"title": "Wire Box", "discs": []},
+                entity_id=entity_id,
+                mutation_id="update-3",
+            )
+            self.assertEqual(updated["entity"]["discs"], [])
+
+    def _linked_show(self, conn, *, suffix):
+        """A SHOW release already linked to a series, the server-side way.
+
+        Deliberately not via a mutation: the series link itself is server-owned
+        and read-only on the wire in this contract version (changelog 1.15), so
+        the state a syncing client really is in when it pushes a disc with
+        seasons is "the link already exists" -- made in the PWA, or by
+        enrichment. The disc mutation must work from there, and only from there.
+        """
+        series_id, season_id, movie_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        season_public = f"{PREFIX}-season-{season_id.hex[:8]}"
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO series (id, public_id, title) VALUES (%s,%s,'Wire Show')",
+                (series_id, f"{PREFIX}-{series_id}"),
+            )
+            cur.execute(
+                "INSERT INTO series_seasons (id, public_id, series_id, season_number)"
+                " VALUES (%s,%s,%s,1)",
+                (season_id, season_public, series_id),
+            )
+            cur.execute(
+                "INSERT INTO movies (id, public_id, title, sort_title, media_type, series_id)"
+                " VALUES (%s,%s,'Wire Show S1','Wire Show S1','SHOW',%s)",
+                (movie_id, f"{PREFIX}-{suffix}-{movie_id}", series_id),
+            )
+        conn.commit()
+        return movie_id, season_id, season_public
+
+    def test_a_season_may_be_referenced_by_its_public_id(self):
+        """The wire publishes both `id` and `publicId` for a season; a client is
+        entitled to hold either, so the write path resolves both spellings onto
+        the same row."""
+        with self.connect() as conn:
+            movie_id, season_id, season_public = self._linked_show(conn, suffix="pub")
+            updated = self._push(
+                conn,
+                {"title": "Wire Show S1",
+                 "discs": [{"discType": "bluray", "seasonIds": [season_public]}]},
+                entity_id=movie_id,
+                mutation_id="update-4",
+            )
+            self.assertEqual(
+                updated["entity"]["discs"][0]["seasonIds"], [str(season_id)]
+            )
+
+    def test_an_unknown_reference_is_named_rather_than_skipped(self):
+        with self.connect() as conn:
+            movie_id, _, _ = self._linked_show(conn, suffix="unknown")
+            with self.assertRaises(NextApiError) as caught:
+                self._push(
+                    conn,
+                    {"title": "Wire Show S1",
+                     "discs": [{"discType": "bluray",
+                                "seasonIds": ["next-season-does-not-exist"]}]},
+                    entity_id=movie_id,
+                    mutation_id="update-5",
+                )
+            conn.rollback()
+            self.assertIn("next-season-does-not-exist", str(caught.exception))
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

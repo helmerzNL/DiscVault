@@ -10185,6 +10185,13 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
         # uses encodeIfPresent, so a client that never touched a field sends no
         # key at all.
         "technical_edits": movie_technical_sync_edits(payload),
+        # The discs inside the release, presence-keyed like `technical_edits`:
+        # an absent key is "no opinion" and leaves the stored discs alone, which
+        # is what lets a client that predates the field keep saving movies
+        # without deleting a disc list it cannot see (sync-contract §4.9). An
+        # explicit empty list clears. The same validator the edit API uses, so a
+        # disc means one thing however it arrives.
+        "discs": discs_payload(payload),
     }
 
 
@@ -11174,6 +11181,14 @@ def _apply_movie_disc_contents(
             "Link the release to a series before naming seasons on its discs", 400
         )
 
+    # A sync client may reference a season or episode by its public_id rather
+    # than its uuid -- the wire carries both, and the contract lets it hold
+    # either (§4.9). Resolved before validation so everything downstream deals
+    # in uuids only; an unresolvable reference is refused by name in the same
+    # breath as one from the wrong series.
+    season_ids = _resolve_disc_refs(cur, season_ids, "series_seasons", "seasonIds")
+    episode_ids = _resolve_disc_refs(cur, episode_ids, "series_episodes", "episodeIds")
+
     # An episode drags its own season in with it. The alternative -- refusing an
     # episode whose season the disc did not also tick -- would reject the most
     # natural way to fill this in: pick the episodes, never think about seasons.
@@ -11210,6 +11225,41 @@ def _apply_movie_disc_contents(
             """,
             (disc_id, movie_uuid, entry["id"], index),
         )
+
+
+def _resolve_disc_refs(
+    cur, refs: list[Any], table: str, alias: str
+) -> list[UUID]:
+    """Turn a mixed uuid/public_id reference list into uuids, order preserved.
+
+    ``next_discs`` keeps a non-uuid reference as opaque text precisely so this
+    can look it up by ``public_id`` -- the identifier a sync client is as likely
+    to hold as the uuid, since the wire carries both. An unresolvable value is
+    named rather than skipped: silently storing fewer links than the client sent
+    is the failure mode every other reference on this wire refuses.
+    """
+    text_refs = [value for value in refs if isinstance(value, str)]
+    if not text_refs:
+        return list(refs)
+    if table not in {"series_seasons", "series_episodes"}:  # pragma: no cover
+        raise ValueError(f"unexpected reference table {table!r}")
+    cur.execute(
+        f"SELECT id, public_id FROM {table} WHERE public_id = ANY(%s) AND deleted_at IS NULL",
+        (text_refs,),
+    )
+    by_public_id = {row["public_id"]: row["id"] for row in cur.fetchall()}
+    missing = [value for value in text_refs if value not in by_public_id]
+    if missing:
+        raise NextApiError(
+            f"{alias} contains unknown references: " + ", ".join(missing), 400
+        )
+    resolved: list[UUID] = []
+    for value in refs:
+        mapped = by_public_id[value] if isinstance(value, str) else value
+        # Both spellings of one row collapse onto the uuid, keeping first place.
+        if mapped not in resolved:
+            resolved.append(mapped)
+    return resolved
 
 
 def _movie_disc_episode_rows(cur, episode_ids: list[UUID], series_id: UUID) -> list[dict[str, Any]]:
@@ -19563,6 +19613,20 @@ def apply_movie_upsert(
     with conn.cursor() as cur:
         upsert_movie_technical_edits(cur, entity_id, fields.get("technical_edits") or {})
         apply_movie_location_assignment(cur, entity_id, fields.get("location_assignment") or {})
+        # The discs, through the same writer the edit API uses -- one validator,
+        # one diff-by-id, one blank-list rule (sync-contract §4.9). Validated
+        # against the *stored* media type rather than the payload's: a client
+        # may push discs without restating the type, and "no opinion" on the
+        # type must not read as "this is a film" when the row says SHOW.
+        if fields.get("discs") is not None:
+            cur.execute("SELECT media_type FROM movies WHERE id = %s", (entity_id,))
+            stored = cur.fetchone()
+            apply_movie_discs(
+                cur,
+                entity_id,
+                fields["discs"],
+                media_type=(stored or {}).get("media_type") or MEDIA_TYPE_MOVIE,
+            )
 
     # Persist the TMDB identifier so trede 3 (tmdb+format+edition) can match on a
     # later sync. Idempotent: the composite PK makes re-writes a no-op.

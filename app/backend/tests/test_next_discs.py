@@ -220,10 +220,20 @@ class DiscContentLinkTests(unittest.TestCase):
         self.assertEqual(disc["season_ids"], [])
         self.assertEqual(disc["episode_ids"], [])
 
-    def test_a_bad_season_id_is_named(self):
-        with self.assertRaises(NextApiError) as caught:
-            next_discs.discs_payload({"discs": [{"seasonIds": ["nope"]}]})
-        self.assertIn("nope", str(caught.exception))
+    def test_a_non_uuid_reference_is_kept_for_public_id_resolution(self):
+        """The sync wire carries both spellings of a season or episode -- the
+        uuid and the public_id -- and a client may hold either. A non-uuid
+        reference is therefore not an error here: it is opaque text the write
+        path resolves against public_id, where an unknown one is refused by
+        name."""
+        disc = next_discs.discs_payload(
+            {"discs": [{"seasonIds": ["next-season-abc123def456"]}]}
+        )[0]
+        self.assertEqual(disc["season_ids"], ["next-season-abc123def456"])
+
+    def test_an_absurdly_long_reference_is_still_refused(self):
+        with self.assertRaises(NextApiError):
+            next_discs.discs_payload({"discs": [{"seasonIds": ["x" * 200]}]})
 
 
 if __name__ == "__main__":  # pragma: no cover

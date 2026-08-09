@@ -140,7 +140,7 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
         columns = [
             column
             for column in fields
-            if column not in ("metadata", "technical_edits", "location_assignment")
+            if column not in ("metadata", "technical_edits", "location_assignment", "discs")
         ]
         with conn.cursor() as cur:
             if columns:
@@ -158,6 +158,12 @@ class MovieSyncPayloadParityPostgresTests(unittest.TestCase):
             # NULL. It is keyed on presence instead and written separately, and
             # this helper mirrors `apply_movie_upsert`, so it does the same.
             next_app.apply_movie_location_assignment(cur, movie_id, fields["location_assignment"])
+            # `discs` is a table, not a column, and presence-keyed like the two
+            # above; the mirror applies it the way `apply_movie_upsert` does.
+            if fields.get("discs") is not None:
+                next_app.apply_movie_discs(
+                    cur, movie_id, fields["discs"], media_type="MOVIE"
+                )
         conn.commit()
 
     # ---- The two structural guards ----
