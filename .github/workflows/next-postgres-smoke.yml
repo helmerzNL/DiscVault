@@ -168,6 +168,12 @@ jobs:
       - name: Test series identity
         run: python -m unittest tests.test_next_series_identity
 
+      # Layer 4. The PostgreSQL half is what matters: whether the bootstrap and
+      # the delta agree about a disc's seasons is a fact about two SELECT lists,
+      # and the drift they can develop is invisible until somebody reinstalls.
+      - name: Test the series sync wire
+        run: python -m unittest tests.test_next_series_sync_wire
+
       # This one has no database at all, but it guards the surface-id and route
       # registration that a new detail page has to join to be reachable.
       - name: Test the app surface router

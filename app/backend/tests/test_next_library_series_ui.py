@@ -39,12 +39,15 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         end = self.source.index("\n    function ", start + 1)
         return self.source[start:end]
 
-    def test_the_snapshot_carries_series_and_not_the_sync_wire(self):
-        """Layer 4 is a separate contract with its own bootstrap cost.
+    def test_the_snapshot_keeps_its_own_shape_now_that_the_wire_carries_series_too(self):
+        """The snapshot came first, deliberately: it reaches one Library render,
+        while `_MOVIE_SYNC_COLUMNS` reaches every client on every delta, so
+        staging the grouping here let it ship without touching a contract.
 
-        `_MOVIE_SYNC_COLUMNS` reaches every client on every delta; the snapshot
-        reaches one Library render. Putting the grouping in the snapshot is what
-        lets this ship without touching the wire.
+        The wire caught up in layer 4. The snapshot keeps its own shaping anyway
+        rather than being replaced by the wire's -- it answers a different
+        question (what this Library page draws, filtered to what this user may
+        see) and collapsing the two would make one of them wrong.
         """
         self.assertIn('"series": collection_series_preview_entities(conn, actor=user)', self.app_source)
         self.assertIn(
@@ -52,9 +55,6 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             self.app_source,
         )
         self.assertIn("movies = attach_movie_series_membership(conn, movies)", self.app_source)
-        sync_columns_start = self.app_source.index("_MOVIE_SYNC_COLUMNS")
-        sync_columns = self.app_source[sync_columns_start:sync_columns_start + 2000]
-        self.assertNotIn("series_id", sync_columns)
 
     def test_an_empty_snapshot_declares_the_same_keys(self):
         """A logged-out or pre-migration render must not read `undefined`."""

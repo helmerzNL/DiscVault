@@ -221,6 +221,11 @@ jobs:
             type=raw,value=v26,enable=${{ github.ref_type == 'tag' }}
             type=ref,event=tag,enable=${{ startsWith(github.ref, 'refs/tags/v26.') }}
           labels: |
+            # The action derives `revision` from the push event, which on beta is
+            # the merge commit -- one behind the bump commit the image is actually
+            # built from. Set explicitly so the label names the tree that was
+            # built rather than its parent.
+            org.opencontainers.image.revision=${{ steps.version.outputs.sha }}
             org.opencontainers.image.title=DiscVault
             org.opencontainers.image.description=Physical 4K/Blu-ray/DVD collection manager with barcode scanner, web UI and MCP endpoint.
             org.opencontainers.image.url=https://github.com/${{ github.repository }}
