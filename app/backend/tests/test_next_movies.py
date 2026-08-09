@@ -205,6 +205,22 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                 self.assertEqual(caught.exception.code, "invalid_request", key)
                 self.assertIn(key, str(caught.exception), key)
 
+    def test_ignoring_a_client_sent_packaging_list_is_logged(self):
+        # Dropping it in silence is the same invisible failure as ignoring an
+        # unknown key: the client gets a 200 and its edit goes nowhere. Android
+        # is exactly such a client today, so this warning is the only trace that
+        # a packaging edit from it was discarded.
+        with self.assertLogs("app.backend.next_app", level="WARNING") as captured:
+            movie_technical_edits({"packaging": ["steelbook", "slipcover"]})
+        self.assertIn("packaging", captured.output[0])
+        self.assertIn("4.7a", captured.output[0])
+
+    def test_a_body_without_packaging_logs_nothing(self):
+        # The warning has to stay rare enough to mean something. A body that never
+        # mentions the flat list is the normal case and must be silent.
+        with self.assertNoLogs("app.backend.next_app", level="WARNING"):
+            movie_technical_edits({"carrierType": "steelbook"})
+
     def test_a_packaging_echo_cannot_downgrade_the_axes(self):
         # The reason the flat list is dropped rather than split back onto the
         # axes. `futurepak` + `fullslip` mirror down to `steelbook` +
