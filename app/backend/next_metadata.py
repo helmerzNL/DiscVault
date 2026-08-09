@@ -4912,6 +4912,30 @@ def apply_credit_updates(conn, *, movie_id: UUID, credits: list[dict[str, Any]])
     }
 
 
+def _prune_movie_seasons(cur, movie_uuid: UUID, keep_ids: list[UUID]) -> None:
+    """Drop the season links a refresh no longer names, and only those.
+
+    The twin of ``next_app.prune_movie_seasons``, duplicated rather than
+    imported because ``next_app`` imports this module and the other direction
+    would close the loop -- the same seam ``next_series`` documents for its own
+    resolver. Episodes go first: they cite the season directly, so the season
+    link's cascade does not reach them, and an episode of a season the release
+    no longer covers would otherwise be left behind.
+    """
+    if keep_ids:
+        cur.execute(
+            "DELETE FROM movie_episodes WHERE movie_id = %s AND NOT (season_id = ANY(%s))",
+            (movie_uuid, list(keep_ids)),
+        )
+        cur.execute(
+            "DELETE FROM movie_seasons WHERE movie_id = %s AND NOT (season_id = ANY(%s))",
+            (movie_uuid, list(keep_ids)),
+        )
+        return
+    cur.execute("DELETE FROM movie_episodes WHERE movie_id = %s", (movie_uuid,))
+    cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+
+
 def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, Any] | None:
     """Link a disc to the series a metadata source named, creating it if new.
 
@@ -4973,12 +4997,21 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         # the disc may be moving *between* series and the old rows have to go
         # first, while here the series is either unchanged or newly set, so the
         # composite key is satisfied the moment series_id lands.
-        cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+        #
+        # Only the seasons the feed no longer names are removed. A refresh runs
+        # unattended and re-states the same list almost every time; deleting and
+        # re-inserting it would, since migration 075 hung the per-disc season
+        # links off these rows, quietly erase which disc holds what every time a
+        # metadata job ran. Nothing in the refresh is about discs, so nothing in
+        # it should change them.
+        _prune_movie_seasons(cur, movie_uuid, season_ids)
         for index, season_id in enumerate(season_ids):
             cur.execute(
                 """
                 INSERT INTO movie_seasons (movie_id, season_id, series_id, sort_order)
                 VALUES (%s, %s, %s, %s)
+                ON CONFLICT (movie_id, season_id)
+                DO UPDATE SET sort_order = EXCLUDED.sort_order
                 """,
                 (movie_uuid, season_id, series_uuid, index),
             )
