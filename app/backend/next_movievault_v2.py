@@ -12,6 +12,7 @@ import os
 import re
 import socket
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -2481,7 +2482,23 @@ def _decode_release_details_response(status: int, content: bytes) -> dict[str, A
         value = json.loads(content)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise MovieVaultV2Error("release_details_response_invalid") from exc
-    result = validate_release_details_response(value)
+    try:
+        result = validate_release_details_response(value)
+    except MovieVaultV2Error as exc:
+        # Unknown keys are tolerated above, so a refusal here is a genuine
+        # contract violation - but the audit trail still shows one opaque code
+        # for every remaining check. The innermost frame names the check, which
+        # is what the `finishes` incident (2026-08-09) lacked: it was findable
+        # only by replaying the response against the validator by hand.
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        logger.warning(
+            "movievault_v2: release-details response rejected (%s) at %s:%s: %s",
+            exc.code,
+            frame.name,
+            frame.lineno,
+            frame.line,
+        )
+        raise
     if status == 202 and result["status"] != "pending":
         raise MovieVaultV2Error("release_details_response_invalid")
     if status == 200 and result["status"] == "pending":

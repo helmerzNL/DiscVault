@@ -806,6 +806,28 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         ):
             next_movievault_v2.validate_release_details_response(payload)
 
+    def test_release_details_rejection_names_the_failing_check(self):
+        # Unknown keys are ignored now, but a genuine contract violation still
+        # refuses the whole response with one opaque code shared by dozens of
+        # checks. The log must say which check did it, or the next producer
+        # drift is as undiagnosable as the `finishes` incident was.
+        payload = release_details_hit()
+        payload["release"]["discCount"] = 0
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING") as logs:
+            with self.assertRaisesRegex(
+                next_movievault_v2.MovieVaultV2Error,
+                "^release_details_response_invalid$",
+            ):
+                next_movievault_v2._decode_release_details_response(
+                    200,
+                    json.dumps(payload).encode(),
+                )
+        self.assertTrue(
+            any("_release_details_integer" in line for line in logs.output),
+            logs.output,
+        )
+
     def test_release_details_candidates_require_a_film_and_a_release(self):
         for mutate in (
             lambda payload: payload.pop("film"),
