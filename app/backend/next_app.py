@@ -13626,24 +13626,35 @@ def media_asset_authorization_references(conn, media_id: UUID) -> dict[str, set[
         "movie": set(),
         "container": set(),
         "person": set(),
+        "series": set(),
         "user_avatar": set(),
         "wishlist": set(),
     }
     if table_exists(conn, "entity_media"):
         with conn.cursor() as cur:
+            # `series` and `series_season` were missing here, and the symptom was
+            # not an error: the upload succeeded, the row existed, the card showed
+            # its real dimensions -- and the image 404'd, because an asset with no
+            # authorization reference is one nobody may view. Every entity that
+            # can own artwork has to appear in this list, or its artwork is
+            # write-only.
             cur.execute(
                 """
                 SELECT entity_type, entity_id
                 FROM entity_media
                 WHERE media_id=%s
-                  AND entity_type IN ('movie', 'container', 'person')
+                  AND entity_type IN ('movie', 'container', 'person', 'series', 'series_season')
                   AND deleted_at IS NULL
                   AND hidden_at IS NULL
                 """,
                 (media_id,),
             )
             for row in cur.fetchall():
-                references[str(row["entity_type"])].add(row["entity_id"])
+                entity_type = str(row["entity_type"])
+                # A season's artwork is its series' artwork as far as who may see
+                # it goes: a season is never reachable except through its series.
+                bucket = "series" if entity_type in {"series", "series_season"} else entity_type
+                references[bucket].add(row["entity_id"])
 
     if table_exists(conn, "people"):
         with conn.cursor() as cur:
@@ -13692,6 +13703,16 @@ def actor_can_view_media_asset(conn, actor: dict[str, Any] | None, media_id: UUI
     ):
         return True
     if any(actor_can_view_person(conn, actor, person_id) for person_id in references["person"]):
+        return True
+    # `.get` rather than `[...]`: this key was added to an existing contract, and
+    # callers that build the map themselves -- the tests do -- predate it. A new
+    # key must not turn an older reference map into a KeyError.
+    if references.get("series") and actor_effective_has_permission(actor, "collection.view"):
+        # A series is a grouping, not a possession. Its row carries a title and
+        # some years, and its artwork describes the show rather than anybody's
+        # shelf -- which is why `series_sync_entities` publishes series without a
+        # per-user filter too. What is private is *which discs* sit under it, and
+        # that is enforced where discs are listed rather than here.
         return True
 
     actor_id = str(actor.get("id") or "") if actor else ""

@@ -89,16 +89,63 @@ class MergeSeriesArtworkTests(unittest.TestCase):
         self.assertEqual(season["source"], "tmdb")
         self.assertEqual(season["posterSource"], "fanart")
 
-    def test_a_season_that_carries_nothing_usable_is_dropped(self):
-        """An empty entry would otherwise reach the writer and cost a query that
-        can only ever update zero rows."""
+    def test_a_season_the_source_mentions_but_says_nothing_about_is_reported(self):
+        """Carried, but deliberately not acted on by the writer.
+
+        `refresh_series_metadata` writes an overview only where there is one and
+        creates no season at all -- `test_a_season_the_feed_never_recorded_is_not_created`
+        pins that rule: the plugin knows every season TMDB has, the collection
+        knows the ones a disc covers, and this job describes what is there.
+
+        Reporting the season here anyway keeps the merge honest about what the
+        source said, and leaves what to do with it to the caller. That separation
+        is what let the rule above be re-read rather than re-derived when it was
+        questioned.
+        """
         merged = merge_series_details([("tmdb", _result(seasons=[{"seasonNumber": 3}]))])
-        self.assertEqual(merged["seasons"], {})
+        self.assertIn(3, merged["seasons"])
+        self.assertEqual(merged["seasons"][3], {})
 
     def test_a_source_that_answers_nothing_changes_nothing(self):
         merged = merge_series_details([("tmdb", _result())])
         self.assertEqual(merged["artwork"], {})
         self.assertEqual(merged["overview"], "")
+
+
+class PluginContextTests(unittest.TestCase):
+    """Every series path must build its plugin context the way the movie path does.
+
+    `plugin_config_from_db` returns `settings` and `secretsRef` -- the *names* of
+    the secrets. `plugin_execution_context` is what turns those names into
+    `secrets`, which is where a plugin reads its API key.
+
+    Passing the config straight through as the context therefore handed TMDB an
+    empty key on an installation whose key was correctly configured: every series
+    lookup raised "TMDb API key is not configured", the error was collected into a
+    list nothing displayed, and the page reported that no source had anything to
+    add. Movies enriched perfectly throughout, because that path used the context
+    builder from the start -- which is exactly what made it look like a series
+    problem rather than a wiring one.
+    """
+
+    def _body(self, name):
+        import inspect
+
+        from app.backend import next_metadata
+
+        return inspect.getsource(getattr(next_metadata, name))
+
+    def test_every_series_source_call_resolves_secrets(self):
+        for name in (
+            "refresh_series_metadata",
+            "search_series_candidates",
+            "refresh_season_episodes",
+        ):
+            with self.subTest(function=name):
+                body = self._body(name)
+                self.assertIn("plugin_execution_context(", body)
+                # The raw config must never be the context itself.
+                self.assertNotIn("context = plugin_config_from_db(conn, plugin_id)", body)
 
 
 class ArtworkEntityMapTests(unittest.TestCase):

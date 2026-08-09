@@ -5395,7 +5395,14 @@ def search_series_candidates(conn, title: str, *, year: str = "") -> dict[str, A
         plugin_id = str(plugin.get("id") or "")
         if not plugin_id:
             continue
-        context = plugin_config_from_db(conn, plugin_id)
+        # `plugin_execution_context`, not the raw config. The config carries
+        # `secretsRef` -- the *names* of the secrets -- while the context is what
+        # resolves them into `secrets`, which is where a plugin reads its API key.
+        # Passing the config straight through handed TMDB an empty key, so every
+        # series call failed with "TMDb API key is not configured" on an
+        # installation whose key was correctly set. The movie path never had this
+        # because it went through the context builder from the start.
+        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
         try:
             execution = run_plugin_entrypoint(plugin_id, SERIES_SEARCH_CAPABILITY, payload, context)
         except Exception as exc:  # pragma: no cover - a source is not the job
@@ -5567,11 +5574,16 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
             if poster and "posterUrl" not in entry:
                 entry["posterUrl"] = poster[0]
                 entry["posterSource"] = plugin_id
+    # Every season the source reported, including one that offered neither text
+    # nor a poster. When text was all this merged, an empty entry was dropped
+    # because it could only produce a write of zero rows. That stopped being true
+    # once the refresh may *create* seasons: the existence of season 4 is itself
+    # the answer, whether or not anybody wrote a synopsis for it.
     return {
         "overview": overview,
         "overviewSource": overview_source,
         "artwork": artwork,
-        "seasons": {number: entry for number, entry in seasons.items() if entry},
+        "seasons": seasons,
     }
 
 
@@ -5643,7 +5655,14 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
         plugin_id = str(plugin.get("id") or "")
         if not plugin_id:
             continue
-        context = plugin_config_from_db(conn, plugin_id)
+        # `plugin_execution_context`, not the raw config. The config carries
+        # `secretsRef` -- the *names* of the secrets -- while the context is what
+        # resolves them into `secrets`, which is where a plugin reads its API key.
+        # Passing the config straight through handed TMDB an empty key, so every
+        # series call failed with "TMDb API key is not configured" on an
+        # installation whose key was correctly set. The movie path never had this
+        # because it went through the context builder from the start.
+        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
         try:
             execution = run_plugin_entrypoint(plugin_id, SEASON_EPISODES_CAPABILITY, payload, context)
         except Exception as exc:  # pragma: no cover - a source is not the job
@@ -5791,7 +5810,14 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         plugin_id = str(plugin.get("id") or "")
         if not plugin_id:
             continue
-        context = plugin_config_from_db(conn, plugin_id)
+        # `plugin_execution_context`, not the raw config. The config carries
+        # `secretsRef` -- the *names* of the secrets -- while the context is what
+        # resolves them into `secrets`, which is where a plugin reads its API key.
+        # Passing the config straight through handed TMDB an empty key, so every
+        # series call failed with "TMDb API key is not configured" on an
+        # installation whose key was correctly set. The movie path never had this
+        # because it went through the context builder from the start.
+        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
         try:
             execution = run_plugin_entrypoint(plugin_id, SERIES_DETAILS_CAPABILITY, payload, context)
         except Exception as exc:  # pragma: no cover - defensive, a source is not the job
@@ -5825,6 +5851,12 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
             updated_series = True
         updated_seasons = 0
         for number, season in sorted(merged["seasons"].items()):
+            overview_text = season.get("overview")
+            if not overview_text:
+                # The season exists and was created above; there is simply no
+                # synopsis to write. Running the update anyway would cost a query
+                # that can only ever touch zero rows.
+                continue
             # `overview IS NULL OR overview = ''` rather than a read-then-write:
             # the check and the write are one statement, so a second worker
             # running the same job cannot land between them.
@@ -5836,7 +5868,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
                   AND (overview IS NULL OR overview = '')
                 """,
                 (
-                    season["overview"][: SEASON_TEXT_LIMITS["overview"]],
+                    overview_text[: SEASON_TEXT_LIMITS["overview"]],
                     series_uuid,
                     number,
                 ),
@@ -5844,7 +5876,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
             written = cur.rowcount or 0
             updated_seasons += written
             if written:
-                season_sources[str(number)] = season["source"]
+                season_sources[str(number)] = season.get("source", "")
 
     # Artwork is applied outside the cursor above because each write is its own
     # small transaction inside `apply_primary_media_update`, and because a series

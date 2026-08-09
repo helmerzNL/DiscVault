@@ -370,6 +370,42 @@ class SeriesDetailRouteTests(SeriesDetailPostgresTests):
         primary = [a for a in detail["mediaAssets"] if a["kind"] == "poster" and a["is_primary"]]
         self.assertEqual([str(asset["id"]) for asset in primary], [str(mine)])
 
+    def test_an_uploaded_series_poster_can_actually_be_fetched(self):
+        """The test that was missing, and the bug it would have caught.
+
+        The previous version uploaded, set primary and deleted -- and never asked
+        for the image. `media_asset_authorization_references` listed only movie,
+        container and person, so a series asset had no authorization reference at
+        all and `GET /api/next/media/assets/<id>` answered 404.
+
+        Nothing about that looks broken from the outside: the upload returns 200,
+        the row exists, and the card renders the real dimensions out of the
+        database. Only the picture is missing. So the assertion has to be a
+        fetch -- storing an asset and serving one are two different permissions
+        questions, and passing the first says nothing about the second.
+        """
+        png = _png()
+        if png is None:  # pragma: no cover - Pillow is a backend dependency
+            self.skipTest("Pillow is not installed")
+        with self.connect() as conn:
+            series_id = self._series(conn)
+
+        data_dir = tempfile.mkdtemp(prefix="series-artwork-fetch-")
+        self.addCleanup(shutil.rmtree, data_dir, True)
+        with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+            upload = self.client.post(
+                f"/api/next/series/{series_id}/media/upload",
+                data={"kind": "poster", "file": (io.BytesIO(png), "p.png")},
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(upload.status_code, 200, upload.data[:200])
+            media_id = upload.get_json()["media"]["id"]
+
+            fetched = self.client.get(f"/api/next/media/assets/{media_id}")
+
+        self.assertEqual(fetched.status_code, 200, "a series poster must be servable, not only storable")
+        self.assertTrue(fetched.data, "the response carried no image bytes")
+
     def test_the_refresh_route_runs_the_multi_source_fill(self):
         """A miss is a 200 with a status, not an error: nothing was damaged and
         the existing text stands."""

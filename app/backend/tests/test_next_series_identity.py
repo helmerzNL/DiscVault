@@ -121,6 +121,10 @@ class SeriesIdentityRouteTests(unittest.TestCase):
                     "DELETE FROM series_identifiers WHERE series_id IN (SELECT id FROM series WHERE public_id LIKE %s)",
                     (f"{PREFIX}-%",),
                 )
+                cur.execute(
+                    "DELETE FROM series_seasons WHERE series_id IN (SELECT id FROM series WHERE public_id LIKE %s)",
+                    (f"{PREFIX}-%",),
+                )
                 cur.execute("DELETE FROM series WHERE public_id LIKE %s", (f"{PREFIX}-%",))
             conn.commit()
 
