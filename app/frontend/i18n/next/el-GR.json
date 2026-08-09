@@ -2869,5 +2869,15 @@
   "seriesDetail.refreshingMetadata": "Ανανέωση μεταδεδομένων σειράς...",
   "seriesDetail.metadataRefreshed": "Τα μεταδεδομένα της σειράς ανανεώθηκαν.",
   "seriesDetail.metadataNoAnswer": "Καμία πηγή δεν είχε κάτι να προσθέσει.",
+  "seriesDetail.metadataNoIdentifier": "Auti i seira den echei anagnoristiko pigis, opote den itan dynati i erotisi kamias pigis. Erchetai me ta dedomena diskou apo to MovieVault.",
+  "seriesDetail.metadataNoSource": "Kanena energopoiimeno prostheto den bori na perigrapsei seira. Energopoiiste ena sto Profil - Prostheta.",
+  "seriesDetail.metadataUnavailable": "Auti i egkatastasi den bori akoma na apothikefsei dedomena seiras.",
+  "seriesDetail.identityHelp": "Choris anagnoristiko kamia pigi den bori na erotithei gia auti ti seira, opote menei choris perilipsi kai eikones.",
+  "seriesDetail.identitySearch": "Anazitisi",
+  "seriesDetail.identitySearchPlaceholder": "Anazitisi me titlo",
+  "seriesDetail.identityUse": "Chrisi autou",
+  "seriesDetail.identitySearching": "Anazitisi stis piges...",
+  "seriesDetail.identityNoMatches": "Kamia pigi den anagnorise auton ton titlo.",
+  "seriesDetail.identitySaving": "Syndesi seiras kai lipsi dedomenon...",
   "collection.seasonNumber": "Σεζόν {number}"
 }

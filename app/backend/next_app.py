@@ -100,6 +100,7 @@ try:
     from .next_metadata import record_sync_change
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import refresh_series_metadata
+    from .next_metadata import search_series_candidates
     from .next_metadata import (
         normalize_audio_tracks,
         normalize_movie_field_locks,
@@ -370,6 +371,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import record_sync_change
     from next_metadata import refresh_movie_metadata
     from next_metadata import refresh_series_metadata
+    from next_metadata import search_series_candidates
     from next_metadata import (
         normalize_audio_tracks,
         normalize_movie_field_locks,
@@ -23222,6 +23224,124 @@ def register_routes(flask_app: Flask) -> None:
                 # Runs in the request rather than through the queue: the caller is
                 # watching, and the job it would queue does the same never-overwrite
                 # work. Queueing would only add a wait with nothing to show for it.
+                result = refresh_series_metadata(conn, series_uuid)
+                audit_event(
+                    conn,
+                    event_type="metadata.series_refreshed",
+                    category="metadata",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary="Refreshed series metadata",
+                    metadata=result,
+                )
+            detail = series_detail_entity(conn, series_uuid, actor=actor)
+        return response({"status": "ok", "result": result, "detail": detail})
+
+    # A series is only enriched when it carries an identifier, and until now the
+    # only thing that could give it one was a metadata source naming it on the
+    # feed. A series created any other way was therefore un-enrichable for good:
+    # no overview and no artwork, from any source, ever, with the page reporting
+    # the same "nothing to add" it shows for a title nobody has heard of.
+    #
+    # These two routes are the way out, and they are deliberately two. Searching
+    # asserts nothing; only the second one writes, and only with a namespace and
+    # a value a person picked.
+    @flask_app.get("/api/next/series/<series_id>/identity/search")
+    def search_series_identity(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        with connect() as conn:
+            require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            series = series_entity(conn, series_uuid, with_seasons=False)
+            if series is None:
+                raise NextApiError("Series not found", 404)
+            # The series' own title is the default query, because it is almost
+            # always right and typing it again is work the page can spare.
+            query = clean_text(request.args.get("q")) or series.get("title") or ""
+            result = search_series_candidates(conn, query, year=clean_text(request.args.get("year")) or "")
+        return response({"status": "ok", "query": query, "result": result})
+
+    @flask_app.put("/api/next/series/<series_id>/identifiers")
+    def set_series_identity(series_id):
+        series_uuid = parse_uuid(series_id, "series id")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Identifier body must be an object", 400)
+        identifier_type = clean_text(body.get("identifierType") or body.get("identifier_type"))
+        identifier = clean_text(body.get("identifier"))
+        provider_id = clean_text(body.get("providerId") or body.get("provider_id")) or identifier_type
+        if not identifier_type or not identifier:
+            raise NextApiError("identifierType and identifier are required", 400)
+        if len(identifier_type) > 64 or len(identifier) > 160:
+            raise NextApiError("identifierType or identifier is too long", 400)
+
+        with connect() as conn:
+            actor = require_next_permission(conn, "containers.edit")
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            series = series_entity(conn, series_uuid, with_seasons=False)
+            if series is None:
+                raise NextApiError("Series not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # Another series already answering to this identifier is a
+                    # refusal rather than a merge. Two series sharing one id would
+                    # make `series_id_for_identifier` return whichever the planner
+                    # happened to reach first, so the feed would start attaching
+                    # discs at random. Merging them is a real operation, but it is
+                    # not this one.
+                    cur.execute(
+                        """
+                        SELECT s.id, s.title
+                        FROM series_identifiers si
+                        JOIN series s ON s.id = si.series_id
+                        WHERE si.identifier_type = %s AND si.identifier = %s
+                          AND si.series_id <> %s AND s.deleted_at IS NULL
+                        LIMIT 1
+                        """,
+                        (identifier_type, identifier, series_uuid),
+                    )
+                    clash = cur.fetchone()
+                    if clash:
+                        raise NextApiError(
+                            f"{clash['title']} already uses this identifier", 409
+                        )
+                    # Replacing rather than adding for this namespace: a series has
+                    # one identity per source, and leaving the old row behind would
+                    # let `series_identifier_map` pick between two by insertion
+                    # order -- it keeps the first it sees.
+                    cur.execute(
+                        "DELETE FROM series_identifiers WHERE series_id = %s AND identifier_type = %s",
+                        (series_uuid, identifier_type),
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
+                        VALUES (%s, %s, %s, %s)
+                        ON CONFLICT (series_id, provider_id, identifier_type, identifier) DO NOTHING
+                        """,
+                        (series_uuid, provider_id, identifier_type, identifier),
+                    )
+                audit_event(
+                    conn,
+                    event_type="series.identifier_set",
+                    category="admin",
+                    actor=actor,
+                    target_type="series",
+                    target_id=series_uuid,
+                    summary=f"Set {identifier_type} identifier for {series.get('title')}",
+                    metadata={
+                        "identifierType": identifier_type,
+                        "identifier": identifier,
+                        "providerId": provider_id,
+                    },
+                )
+            # Refreshed in the same request. The identifier exists to be used, and
+            # a separate "now press refresh" step is a way to leave a series that
+            # was just identified still looking empty.
+            with conn.transaction():
                 result = refresh_series_metadata(conn, series_uuid)
                 audit_event(
                     conn,

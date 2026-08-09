@@ -2869,5 +2869,15 @@
   "seriesDetail.refreshingMetadata": "Actualizando metadatos...",
   "seriesDetail.metadataRefreshed": "Metadatos de la serie actualizados.",
   "seriesDetail.metadataNoAnswer": "Ninguna fuente tenía nada que añadir.",
+  "seriesDetail.metadataNoIdentifier": "Esta serie no tiene identificador de fuente, por lo que no se pudo consultar ninguna. Llega con los datos de disco de MovieVault.",
+  "seriesDetail.metadataNoSource": "Ningun complemento activado puede describir una serie. Active uno en Perfil - Complementos.",
+  "seriesDetail.metadataUnavailable": "Esta instalacion aun no puede almacenar datos de series.",
+  "seriesDetail.identityHelp": "Sin identificador no se puede consultar ninguna fuente sobre esta serie, por lo que se queda sin sinopsis ni imagenes.",
+  "seriesDetail.identitySearch": "Buscar",
+  "seriesDetail.identitySearchPlaceholder": "Buscar por titulo",
+  "seriesDetail.identityUse": "Usar esta",
+  "seriesDetail.identitySearching": "Buscando en las fuentes...",
+  "seriesDetail.identityNoMatches": "Ninguna fuente reconocio ese titulo.",
+  "seriesDetail.identitySaving": "Vinculando la serie y obteniendo datos...",
   "collection.seasonNumber": "Temporada {number}"
 }

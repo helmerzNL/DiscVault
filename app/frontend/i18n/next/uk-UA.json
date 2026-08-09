@@ -2869,5 +2869,15 @@
   "seriesDetail.refreshingMetadata": "Оновлення метаданих серіалу...",
   "seriesDetail.metadataRefreshed": "Метадані серіалу оновлено.",
   "seriesDetail.metadataNoAnswer": "Жодне джерело не мало що додати.",
+  "seriesDetail.metadataNoIdentifier": "Tsey serial ne maye identyfikatora dzherela, tomu zhodne dzherelo ne bulo opytano. Vin nadkhodyt razom z danymy dysku z MovieVault.",
+  "seriesDetail.metadataNoSource": "Zhoden uvimknenyy plahin ne mozhe opysaty serial. Uvimknit odyn u Profil - Plahiny.",
+  "seriesDetail.metadataUnavailable": "Tsya instalyatsiya shche ne mozhe zberihaty dani serialiv.",
+  "seriesDetail.identityHelp": "Bez identyfikatora zhodne dzherelo ne mozhna opytaty pro tsey serial, tomu vin zalyshayetsya bez opysu ta zobrazhen.",
+  "seriesDetail.identitySearch": "Poshuk",
+  "seriesDetail.identitySearchPlaceholder": "Poshuk za nazvoyu",
+  "seriesDetail.identityUse": "Vykorystaty tsey",
+  "seriesDetail.identitySearching": "Poshuk u dzherelakh...",
+  "seriesDetail.identityNoMatches": "Zhodne dzherelo ne rozpiznalo tsyu nazvu.",
+  "seriesDetail.identitySaving": "Zvyazuvannya serialu ta otrymannya danykh...",
   "collection.seasonNumber": "Сезон {number}"
 }

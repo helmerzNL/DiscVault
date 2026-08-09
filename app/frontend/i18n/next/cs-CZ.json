@@ -2869,5 +2869,15 @@
   "seriesDetail.refreshingMetadata": "Aktualizace metadat seriálu...",
   "seriesDetail.metadataRefreshed": "Metadata seriálu aktualizována.",
   "seriesDetail.metadataNoAnswer": "Žádný zdroj neměl co dodat.",
+  "seriesDetail.metadataNoIdentifier": "Tento serial nema identifikator zdroje, takze nebylo mozne se zeptat zadneho zdroje. Prichazi s daty disku z MovieVault.",
+  "seriesDetail.metadataNoSource": "Zadny povoleny plugin neumi popsat serial. Povolte nejaky v Profil - Pluginy.",
+  "seriesDetail.metadataUnavailable": "Tato instalace zatim neumi ukladat data serialu.",
+  "seriesDetail.identityHelp": "Bez identifikatoru se nelze zeptat zadneho zdroje na tento serial, takze zustane bez popisu a obrazku.",
+  "seriesDetail.identitySearch": "Hledat",
+  "seriesDetail.identitySearchPlaceholder": "Hledat podle nazvu",
+  "seriesDetail.identityUse": "Pouzit tento",
+  "seriesDetail.identitySearching": "Prohledavani zdroju...",
+  "seriesDetail.identityNoMatches": "Zadny zdroj nazev nerozpoznal.",
+  "seriesDetail.identitySaving": "Propojovani serialu a nacitani dat...",
   "collection.seasonNumber": "Řada {number}"
 }

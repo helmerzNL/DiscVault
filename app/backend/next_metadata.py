@@ -5333,6 +5333,87 @@ def enqueue_series_metadata_refresh(conn, series_id: UUID | str) -> None:
 
 
 SERIES_DETAILS_CAPABILITY = "series_details"
+SERIES_SEARCH_CAPABILITY = "search_series"
+
+
+def search_series_candidates(conn, title: str, *, year: str = "") -> dict[str, Any]:
+    """Ask every enabled source which series a person might mean.
+
+    Deliberately *not* the same act as `refresh_series_metadata`. That one refuses
+    to search, because a source matching on a title is a guess wearing an answer's
+    clothes -- the same show is titled differently across regions and two unrelated
+    shows can share a name. §7b of the media-type document turns that into a rule.
+
+    The rule is about *automatic* identification. Here a person typed the title and
+    will pick from what comes back, so the guess never becomes an assertion: this
+    function writes nothing, and identity is established only by the choosing.
+
+    Results are not merged across sources. A candidate is an offer from one source
+    in one namespace, and blending two sources' lists would produce rows nobody
+    can act on -- picking one has to yield exactly one identifier.
+    """
+    title = clean_text(title) or ""
+    if not title:
+        return {"status": "skipped", "reason": "no title", "candidates": []}
+
+    plugins = [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if SERIES_SEARCH_CAPABILITY in plugin_capabilities(plugin)
+    ]
+    if not plugins:
+        return {"status": "skipped", "reason": "no series search source", "candidates": []}
+
+    payload = {"title": title, "year": clean_text(year) or ""}
+    candidates: list[dict[str, Any]] = []
+    errors: list[dict[str, str]] = []
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        if not plugin_id:
+            continue
+        context = plugin_config_from_db(conn, plugin_id)
+        try:
+            execution = run_plugin_entrypoint(plugin_id, SERIES_SEARCH_CAPABILITY, payload, context)
+        except Exception as exc:  # pragma: no cover - a source is not the job
+            errors.append({"pluginId": plugin_id, "error": str(exc)})
+            logger.warning("series search source %s failed", plugin_id, exc_info=True)
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        if execution.get("status") != "ok":
+            errors.append({"pluginId": plugin_id, "error": execution.get("error") or "error"})
+            continue
+        for item in result.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            identifier_type = clean_text(item.get("identifierType"))
+            identifier = clean_text(item.get("identifier"))
+            if not identifier_type or not identifier:
+                # A source that names no namespace cannot be stored, and storing it
+                # under a guessed one is how a wrong id becomes indistinguishable
+                # from a right one.
+                continue
+            candidates.append(
+                {
+                    "pluginId": plugin_id,
+                    "provider": clean_text(item.get("provider")) or plugin_id,
+                    "providerLabel": clean_text(item.get("providerLabel")) or plugin_id,
+                    "identifierType": identifier_type,
+                    "identifier": identifier,
+                    "title": clean_text(item.get("title")),
+                    "originalTitle": clean_text(item.get("originalTitle")),
+                    "year": clean_text(item.get("year")),
+                    "overview": clean_text(item.get("overview")),
+                    # Same filter the artwork path uses, so a candidate cannot show
+                    # a thumbnail from a scheme the rest of the app would refuse.
+                    "posterUrl": (image_url_options(item.get("posterUrl")) or [""])[0],
+                }
+            )
+
+    return {
+        "status": "ok" if candidates else "miss",
+        "candidates": candidates,
+        "errors": errors,
+    }
 
 
 def series_detail_source_plugins(conn) -> list[dict[str, Any]]:

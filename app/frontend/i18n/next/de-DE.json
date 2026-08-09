@@ -2869,5 +2869,15 @@
   "seriesDetail.refreshingMetadata": "Serien-Metadaten werden aktualisiert...",
   "seriesDetail.metadataRefreshed": "Serien-Metadaten aktualisiert.",
   "seriesDetail.metadataNoAnswer": "Keine Quelle hatte etwas hinzuzufügen.",
+  "seriesDetail.metadataNoIdentifier": "Diese Serie hat keine Quellen-Kennung, daher konnte keine Quelle gefragt werden. Sie kommt mit den Disc-Daten von MovieVault.",
+  "seriesDetail.metadataNoSource": "Kein aktiviertes Plug-in kann eine Serie beschreiben. Aktivieren Sie eines unter Profil - Plug-ins.",
+  "seriesDetail.metadataUnavailable": "Diese Installation kann noch keine Seriendaten speichern.",
+  "seriesDetail.identityHelp": "Ohne Kennung kann keine Quelle zu dieser Serie befragt werden, sie bleibt also ohne Inhaltsangabe und Bilder.",
+  "seriesDetail.identitySearch": "Suchen",
+  "seriesDetail.identitySearchPlaceholder": "Nach Titel suchen",
+  "seriesDetail.identityUse": "Diese verwenden",
+  "seriesDetail.identitySearching": "Quellen werden durchsucht...",
+  "seriesDetail.identityNoMatches": "Keine Quelle kannte diesen Titel.",
+  "seriesDetail.identitySaving": "Serie wird verknupft und Daten geholt...",
   "collection.seasonNumber": "Staffel {number}"
 }

@@ -340,6 +340,54 @@ def search_title(payload, context=None):
     return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
 
 
+def search_series(payload, context=None):
+    """Candidate series for a title a person typed.
+
+    Note who is asking. `series_details` refuses to search because a *source*
+    matching on title is a guess dressed as an answer -- the same show is titled
+    differently across regions and two unrelated shows can share a name. That
+    rule is about automatic identification and it stands.
+
+    This is the other case: a person typed the title and will choose from what
+    comes back. The candidate carries a year, an overview and a poster precisely
+    so the choosing is informed rather than a coin flip on the first row. Nothing
+    here writes anything; identity is established only when the caller picks.
+    """
+    title = str((payload or {}).get("title") or "").strip()
+    if not title:
+        return {"status": "skipped", "provider": "tmdb", "items": []}
+    year = str((payload or {}).get("year") or "").strip()
+    data = _request(
+        context or {},
+        "/search/tv",
+        query=title,
+        first_air_date_year=year,
+        language=_language(context),
+    )
+    items = []
+    for item in data.get("results") or []:
+        identifier = item.get("id")
+        if identifier is None:
+            continue
+        items.append(
+            {
+                "provider": "tmdb",
+                "providerLabel": "TMDb",
+                # The namespace travels with the value. A bare id would have to be
+                # matched to a namespace by whoever stores it, which is exactly the
+                # knowledge a source should not be making the caller reconstruct.
+                "identifierType": "tmdb_tv",
+                "identifier": str(identifier),
+                "title": item.get("name") or "",
+                "originalTitle": item.get("original_name") or "",
+                "year": str(item.get("first_air_date") or "")[:4],
+                "overview": item.get("overview") or "",
+                "posterUrl": _image(item.get("poster_path")),
+            }
+        )
+    return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
+
+
 def _normalized_title(value):
     import re
     import unicodedata

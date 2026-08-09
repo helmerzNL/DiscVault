@@ -2869,5 +2869,15 @@
   "seriesDetail.refreshingMetadata": "Osvježavanje metapodataka serije...",
   "seriesDetail.metadataRefreshed": "Metapodaci serije osvježeni.",
   "seriesDetail.metadataNoAnswer": "Nijedan izvor nije imao što dodati.",
+  "seriesDetail.metadataNoIdentifier": "Ova serija nema identifikator izvora, pa nijedan izvor nije mogao biti upitan. Stize s podacima diska iz MovieVaulta.",
+  "seriesDetail.metadataNoSource": "Nijedan omoguceni dodatak ne moze opisati seriju. Omogucite jedan u Profil - Dodaci.",
+  "seriesDetail.metadataUnavailable": "Ova instalacija jos ne moze pohraniti podatke o serijama.",
+  "seriesDetail.identityHelp": "Bez identifikatora nijedan izvor ne moze biti upitan o ovoj seriji, pa ostaje bez sazetka i slika.",
+  "seriesDetail.identitySearch": "Trazi",
+  "seriesDetail.identitySearchPlaceholder": "Trazi po naslovu",
+  "seriesDetail.identityUse": "Koristi ovu",
+  "seriesDetail.identitySearching": "Pretrazivanje izvora...",
+  "seriesDetail.identityNoMatches": "Nijedan izvor nije prepoznao taj naslov.",
+  "seriesDetail.identitySaving": "Povezivanje serije i dohvacanje podataka...",
   "collection.seasonNumber": "Sezona {number}"
 }
