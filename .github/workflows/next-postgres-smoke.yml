@@ -126,6 +126,15 @@ jobs:
       - name: Test the TMDB series mapping
         run: python -m unittest tests.test_next_tmdb_series
 
+      # TheTVDB, same reason and one more: its API is unreachable from the
+      # environment the plugin was written in, so the URLs and field names came
+      # from TheTVDB's own OpenAPI document rather than from a live call. These
+      # assertions are what keep that reading and the code from drifting apart --
+      # the season-ordering one especially, since a show with a DVD order returns
+      # season 1 twice and nothing else would notice.
+      - name: Test the TheTVDB series mapping
+        run: python -m unittest tests.test_next_tvdb_series
+
       # Attribution is a licence obligation: the wording belongs to the source
       # and is rendered as the source's manifest states it. These tests are the
       # guard against that being "improved" into composed or translated copy,
