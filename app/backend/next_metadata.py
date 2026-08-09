@@ -5567,11 +5567,16 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
             if poster and "posterUrl" not in entry:
                 entry["posterUrl"] = poster[0]
                 entry["posterSource"] = plugin_id
+    # Every season the source reported, including one that offered neither text
+    # nor a poster. When text was all this merged, an empty entry was dropped
+    # because it could only produce a write of zero rows. That stopped being true
+    # once the refresh may *create* seasons: the existence of season 4 is itself
+    # the answer, whether or not anybody wrote a synopsis for it.
     return {
         "overview": overview,
         "overviewSource": overview_source,
         "artwork": artwork,
-        "seasons": {number: entry for number, entry in seasons.items() if entry},
+        "seasons": seasons,
     }
 
 
@@ -5817,6 +5822,26 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     updated_series = False
     season_sources: dict[str, str] = {}
     with conn.cursor() as cur:
+        # Create the seasons the source knows about but this collection has no row
+        # for. Until now only the feed did this, which was fine while the feed was
+        # the only thing that could name a series -- but a series identified by
+        # hand has no feed behind it, so its season list stayed empty forever, and
+        # with it every season-shaped thing: the coverage row, the episode list,
+        # and any season overview this very function was about to write.
+        #
+        # `ensure_seasons` is reused rather than reimplemented: it already refuses
+        # to rewrite a season somebody edited, which is the posture this whole
+        # refresh takes.
+        created_seasons = len(
+            ensure_seasons(
+                cur,
+                series_uuid,
+                [
+                    {"season_number": number, "title": season.get("title") or ""}
+                    for number, season in sorted(merged["seasons"].items())
+                ],
+            )
+        )
         if merged["overview"] and not clean_text(row.get("overview")):
             cur.execute(
                 "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
@@ -5825,6 +5850,12 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
             updated_series = True
         updated_seasons = 0
         for number, season in sorted(merged["seasons"].items()):
+            overview_text = season.get("overview")
+            if not overview_text:
+                # The season exists and was created above; there is simply no
+                # synopsis to write. Running the update anyway would cost a query
+                # that can only ever touch zero rows.
+                continue
             # `overview IS NULL OR overview = ''` rather than a read-then-write:
             # the check and the write are one statement, so a second worker
             # running the same job cannot land between them.
@@ -5836,7 +5867,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
                   AND (overview IS NULL OR overview = '')
                 """,
                 (
-                    season["overview"][: SEASON_TEXT_LIMITS["overview"]],
+                    overview_text[: SEASON_TEXT_LIMITS["overview"]],
                     series_uuid,
                     number,
                 ),
@@ -5844,7 +5875,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
             written = cur.rowcount or 0
             updated_seasons += written
             if written:
-                season_sources[str(number)] = season["source"]
+                season_sources[str(number)] = season.get("source", "")
 
     # Artwork is applied outside the cursor above because each write is its own
     # small transaction inside `apply_primary_media_update`, and because a series
@@ -5855,6 +5886,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         "status": "ok",
         "seriesId": str(series_uuid),
         "seriesUpdated": updated_series,
+        "seasonsKnown": created_seasons,
         "seasonsUpdated": updated_seasons,
         "artwork": applied_artwork["series"],
         "seasonArtwork": applied_artwork["seasons"],

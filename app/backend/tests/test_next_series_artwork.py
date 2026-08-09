@@ -89,11 +89,18 @@ class MergeSeriesArtworkTests(unittest.TestCase):
         self.assertEqual(season["source"], "tmdb")
         self.assertEqual(season["posterSource"], "fanart")
 
-    def test_a_season_that_carries_nothing_usable_is_dropped(self):
-        """An empty entry would otherwise reach the writer and cost a query that
-        can only ever update zero rows."""
+    def test_a_season_that_carries_nothing_is_still_reported(self):
+        """It used to be dropped, on the grounds that an empty entry could only
+        produce a write of zero rows. That stopped being true once the refresh may
+        *create* seasons for a series identified by hand: the existence of season
+        3 is itself the answer, whether or not anybody wrote a synopsis for it.
+
+        Dropping it left such a series at zero seasons forever, and with it no
+        coverage row and no episode list -- the season is what those hang off.
+        """
         merged = merge_series_details([("tmdb", _result(seasons=[{"seasonNumber": 3}]))])
-        self.assertEqual(merged["seasons"], {})
+        self.assertIn(3, merged["seasons"])
+        self.assertEqual(merged["seasons"][3], {})
 
     def test_a_source_that_answers_nothing_changes_nothing(self):
         merged = merge_series_details([("tmdb", _result())])
