@@ -697,6 +697,45 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         )
         self.assertNotIn("subtitleLanguages", first)
 
+    def test_release_details_accepts_the_finishes_axis(self):
+        # The search stack serializes `finishes` on every release since the
+        # distribution-5 rollout - empty list included - and it appears on the
+        # technical release and on every candidate summary alike. Before this
+        # key was admitted, one scanned barcode took down both shapes
+        # (5050583001395, 2026-08-09).
+        payload = release_details_hit()
+        payload["release"]["finishes"] = ["foil"]
+        result = next_movievault_v2.validate_release_details_response(payload)
+        self.assertEqual(result["release"]["finishes"], ["foil"])
+
+        payload = release_details_candidates()
+        payload["releases"][0]["finishes"] = []
+        payload["releases"][1]["finishes"] = ["embossed"]
+        result = next_movievault_v2.validate_release_details_response(payload)
+        self.assertEqual(result["releases"][0]["finishes"], [])
+        self.assertEqual(result["releases"][1]["finishes"], ["embossed"])
+
+    def test_release_details_rejection_names_the_failing_check(self):
+        # One opaque code guards dozens of checks; when a response is refused,
+        # the log must say which check did it, or the next producer drift is
+        # as undiagnosable as the `finishes` incident was.
+        payload = release_details_hit()
+        payload["release"]["surfaces"] = ["front"]
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING") as logs:
+            with self.assertRaisesRegex(
+                next_movievault_v2.MovieVaultV2Error,
+                "^release_details_response_invalid$",
+            ):
+                next_movievault_v2._decode_release_details_response(
+                    200,
+                    json.dumps(payload).encode(),
+                )
+        self.assertTrue(
+            any("_release_details_object" in line for line in logs.output),
+            logs.output,
+        )
+
     def test_release_details_candidates_require_a_film_and_a_release(self):
         for mutate in (
             lambda payload: payload.pop("film"),

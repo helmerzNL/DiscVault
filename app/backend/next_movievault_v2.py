@@ -12,6 +12,7 @@ import os
 import re
 import socket
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1688,6 +1689,11 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             "discCount",
             "regions",
             "packaging",
+            # The distribution-5 finish axis. MovieVault's search stack emits it
+            # on every release since 2026-08; the reader learned it only after
+            # the omission had rejected every resolve - exactly the failure the
+            # note below warns about.
+            "finishes",
             "video",
             "audioTracks",
             "subtitleLanguages",
@@ -1737,6 +1743,13 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             maximum=MAX_PACKAGING,
             allowed=PACKAGING_VALUES,
             label="packaging",
+        )
+    if "finishes" in item:
+        result["finishes"] = _release_details_enum_list(
+            item["finishes"],
+            maximum=MAX_FINISHES,
+            allowed=FINISH_VALUES,
+            label="finishes",
         )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
@@ -1793,6 +1806,10 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             "distributor",
             "barcodes",
             "packaging",
+            # Same distribution-5 axis the full release carries - the search
+            # stack serializes summaries from the same shape, so a key admitted
+            # there must be admitted here or `candidates` dies while hits work.
+            "finishes",
             "video",
             "audioTracks",
             "subtitles",
@@ -1862,6 +1879,13 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             maximum=MAX_PACKAGING,
             allowed=PACKAGING_VALUES,
             label="packaging",
+        )
+    if "finishes" in item:
+        result["finishes"] = _release_details_enum_list(
+            item["finishes"],
+            maximum=MAX_FINISHES,
+            allowed=FINISH_VALUES,
+            label="finishes",
         )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
@@ -2338,7 +2362,22 @@ def _decode_release_details_response(status: int, content: bytes) -> dict[str, A
         value = json.loads(content)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise MovieVaultV2Error("release_details_response_invalid") from exc
-    result = validate_release_details_response(value)
+    try:
+        result = validate_release_details_response(value)
+    except MovieVaultV2Error as exc:
+        # The validator raises one opaque code from dozens of checks, and the
+        # audit trail only ever shows that code - when MovieVault's producer
+        # drifted (the `finishes` key, 2026-08), nothing could say *which*
+        # check refused the response. The innermost frame names it.
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        logger.warning(
+            "movievault_v2: release-details response rejected (%s) at %s:%s: %s",
+            exc.code,
+            frame.name,
+            frame.lineno,
+            frame.line,
+        )
+        raise
     if status == 202 and result["status"] != "pending":
         raise MovieVaultV2Error("release_details_response_invalid")
     if status == 200 and result["status"] == "pending":
