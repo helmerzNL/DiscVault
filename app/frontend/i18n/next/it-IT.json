@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Spunta almeno una stagione.",
   "seriesDetail.seasonsAdding": "Aggiunta stagioni...",
   "seriesDetail.seasonsAdded": "{count} stagioni aggiunte.",
-  "seriesDetail.seasonsPartlyAdded": "{added} aggiunte, {failed} no: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} aggiunte, {failed} no: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Attiva la modalità collezionista per aprire una stagione e vederne gli episodi. Vengono recuperati con una richiesta per stagione, quindi l’interruttore decide chi la paga."
 }

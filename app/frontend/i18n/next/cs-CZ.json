@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Zaškrtněte alespoň jednu sezónu.",
   "seriesDetail.seasonsAdding": "Přidávání sezón...",
   "seriesDetail.seasonsAdded": "Přidáno {count} sezón.",
-  "seriesDetail.seasonsPartlyAdded": "{added} přidáno, {failed} ne: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} přidáno, {failed} ne: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Zapněte sběratelský režim, abyste otevřeli sezónu a viděli její epizody. Načítají se jedním požadavkem na sezónu, takže přepínač rozhoduje, kdo to zaplatí."
 }

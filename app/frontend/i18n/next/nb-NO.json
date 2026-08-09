@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Kryss av for minst én sesong.",
   "seriesDetail.seasonsAdding": "Legger til sesonger...",
   "seriesDetail.seasonsAdded": "{count} sesonger lagt til.",
-  "seriesDetail.seasonsPartlyAdded": "{added} lagt til, {failed} ikke: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} lagt til, {failed} ikke: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Slå på samlermodus for å åpne en sesong og se episodene. De hentes med én forespørsel per sesong, så bryteren avgjør hvem som betaler for den."
 }

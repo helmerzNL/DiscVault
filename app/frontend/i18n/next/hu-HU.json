@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Jelölj be legalább egy évadot.",
   "seriesDetail.seasonsAdding": "Évadok hozzáadása...",
   "seriesDetail.seasonsAdded": "{count} évad hozzáadva.",
-  "seriesDetail.seasonsPartlyAdded": "{added} hozzáadva, {failed} nem: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} hozzáadva, {failed} nem: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Kapcsold be a gyűjtői módot, hogy megnyiss egy évadot és lásd az epizódjait. Évadonként egy kéréssel töltődnek be, így a kapcsoló dönti el, ki fizeti meg."
 }

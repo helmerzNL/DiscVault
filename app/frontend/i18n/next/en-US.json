@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Tick at least one season first.",
   "seriesDetail.seasonsAdding": "Adding seasons...",
   "seriesDetail.seasonsAdded": "{count} seasons added.",
-  "seriesDetail.seasonsPartlyAdded": "{added} added, {failed} could not be: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} added, {failed} could not be: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Turn on Collectors mode to open a season and see its episodes. They are fetched one request per season, so the switch decides who pays for it."
 }

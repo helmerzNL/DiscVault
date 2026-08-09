@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Atzīmējiet vismaz vienu sezonu.",
   "seriesDetail.seasonsAdding": "Notiek sezonu pievienošana...",
   "seriesDetail.seasonsAdded": "Pievienotas {count} sezonas.",
-  "seriesDetail.seasonsPartlyAdded": "{added} pievienotas, {failed} nē: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} pievienotas, {failed} nē: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Ieslēdziet kolekcionāra režīmu, lai atvērtu sezonu un redzētu tās sērijas. Tās tiek iegūtas ar vienu pieprasījumu uz sezonu, tāpēc slēdzis izlemj, kas par to maksā."
 }

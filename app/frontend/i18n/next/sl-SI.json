@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Označite vsaj eno sezono.",
   "seriesDetail.seasonsAdding": "Dodajanje sezon...",
   "seriesDetail.seasonsAdded": "Dodanih {count} sezon.",
-  "seriesDetail.seasonsPartlyAdded": "{added} dodanih, {failed} ne: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} dodanih, {failed} ne: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Vklopite zbirateljski način, da odprete sezono in vidite njene epizode. Pridobijo se z eno zahtevo na sezono, zato stikalo odloča, kdo to plača."
 }

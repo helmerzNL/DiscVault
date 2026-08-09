@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Zaznacz najpierw co najmniej jeden sezon.",
   "seriesDetail.seasonsAdding": "Dodawanie sezonów...",
   "seriesDetail.seasonsAdded": "Dodano {count} sezonów.",
-  "seriesDetail.seasonsPartlyAdded": "{added} dodano, {failed} nie: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} dodano, {failed} nie: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Włącz tryb kolekcjonera, aby otworzyć sezon i zobaczyć jego odcinki. Pobierane są jednym zapytaniem na sezon, więc przełącznik decyduje, kto za to płaci."
 }

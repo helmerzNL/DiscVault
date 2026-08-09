@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Märgi vähemalt üks hooaeg.",
   "seriesDetail.seasonsAdding": "Hooaegade lisamine...",
   "seriesDetail.seasonsAdded": "Lisatud {count} hooaega.",
-  "seriesDetail.seasonsPartlyAdded": "{added} lisatud, {failed} mitte: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} lisatud, {failed} mitte: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Lülita kogujarežiim sisse, et hooaeg avada ja selle osasid näha. Need laaditakse ühe päringuga hooaja kohta, seega lüliti otsustab, kes selle eest maksab."
 }

@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Vink eerst minstens één seizoen aan.",
   "seriesDetail.seasonsAdding": "Seizoenen toevoegen...",
   "seriesDetail.seasonsAdded": "{count} seizoenen toegevoegd.",
-  "seriesDetail.seasonsPartlyAdded": "{added} toegevoegd, {failed} niet: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} toegevoegd, {failed} niet: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Zet Collectors-modus aan om een seizoen open te klappen en de afleveringen te zien. Ze worden per seizoen apart opgehaald, dus de schakelaar bepaalt wie daarvoor betaalt."
 }

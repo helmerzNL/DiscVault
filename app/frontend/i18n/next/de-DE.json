@@ -2937,5 +2937,6 @@
   "seriesDetail.seasonsNoneChosen": "Kreuze zuerst mindestens eine Staffel an.",
   "seriesDetail.seasonsAdding": "Staffeln werden hinzugefügt...",
   "seriesDetail.seasonsAdded": "{count} Staffeln hinzugefügt.",
-  "seriesDetail.seasonsPartlyAdded": "{added} hinzugefügt, {failed} nicht: {errors}"
+  "seriesDetail.seasonsPartlyAdded": "{added} hinzugefügt, {failed} nicht: {errors}",
+  "seriesDetail.episodesCollectorsHint": "Aktiviere den Sammlermodus, um eine Staffel zu öffnen und ihre Episoden zu sehen. Sie werden mit einer Anfrage pro Staffel geholt, deshalb entscheidet der Schalter, wer dafür aufkommt."
 }
