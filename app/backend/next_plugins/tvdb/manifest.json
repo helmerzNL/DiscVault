@@ -1,7 +1,7 @@
 {
   "id": "tvdb",
   "name": "TheTVDB",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "categories": [
@@ -43,7 +43,7 @@
         "label": "Subscriber PIN",
         "type": "password",
         "required": false,
-        "description": "For a user-supported subscription key, which is the usual route for a self-hosted install. Leave empty only for a negotiated project key."
+        "description": "Only for a user-supported subscription key. Leave empty for an ordinary project key, which is what most installations use."
       }
     ]
   },
