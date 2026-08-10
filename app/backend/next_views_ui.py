@@ -29832,7 +29832,21 @@ def ui_preview_html(
       eans: ["contribute.field.eans", "Barcodes"],
       // Not "Region": that is the free-text market region, which is
       // withheld. These are the playback regions on the disc itself.
-      discRegions: ["contribute.field.discRegions", "Disc regions"]
+      discRegions: ["contribute.field.discRegions", "Disc regions"],
+      // The technical description, correctable since MovieVault-v2#227. A
+      // field with no entry here falls back to its wire name, so `discs`
+      // read as a lower-case "discs" beside a capitalised "Format" -- the
+      // sheet has to name them the way the rest of the app does.
+      packaging: ["contribute.field.packaging", "Packaging"],
+      finishes: ["contribute.field.finishes", "Finishes"],
+      videoResolution: ["contribute.field.videoResolution", "Resolution"],
+      videoCodecs: ["contribute.field.videoCodecs", "Video codec"],
+      hdrFormats: ["contribute.field.hdrFormats", "HDR"],
+      aspectRatios: ["contribute.field.aspectRatios", "Screen ratio"],
+      audioTracks: ["contribute.field.audioTracks", "Audio tracks"],
+      subtitles: ["contribute.field.subtitles", "Subtitles"],
+      alternateTitles: ["contribute.field.alternateTitles", "Alternate titles"],
+      discs: ["contribute.field.discs", "Discs"]
     };
     const CONTRIBUTE_WITHHELD_REASONS = {
       discvault_holds_one_barcode: ["contribute.withheld.oneBarcode", "MovieVault keeps a list of barcodes and DiscVault keeps one, so sending it would delete the others."],
@@ -29854,9 +29868,75 @@ def ui_preview_html(
       const entry = CONTRIBUTE_FIELD_LABELS[field];
       return entry ? tNext(entry[0], entry[1]) : field;
     }
-    function contributeValueText(value) {
+    // A correction row has to show what is actually being sent. Scalars and
+    // string lists were the whole vocabulary until the technical fields became
+    // correctable; `String(value)` on a list of objects renders
+    // "[object Object]", which asks somebody to approve a change they cannot
+    // read. Each structured shape therefore gets a sentence.
+    // Every vocabulary already has a translated label helper, used by the disc
+    // editor and the detail screen. The correction sheet reuses them rather
+    // than spelling values out itself: a moderator's diff showing "uhd_bluray"
+    // beside an editor showing "4K UHD Blu-ray" is the same fact typed twice.
+    const CONTRIBUTE_VALUE_LABELS = {
+      packaging: packagingLabel,
+      finishes: finishLabel,
+      hdrFormats: hdrFormatLabel,
+      videoCodecs: videoCodecLabel,
+      discRegions: discRegionLabel,
+    };
+    function contributeTrackText(track) {
+      if (!track || typeof track !== "object") return String(track);
+      const parts = [track.languageCode];
+      if (track.codec) parts.push(audioCodecLabel(track.codec));
+      if (track.channels) parts.push(track.channels);
+      if (track.immersiveFormat) parts.push(immersiveLabel(track.immersiveFormat));
+      // A subtitle's variant. `full` stays unsaid: it is the default, and
+      // naming it on every row would bury the ones that are not.
+      if (track.subtitleType && track.subtitleType !== "full") {
+        parts.push(subtitleTypeLabel(track.subtitleType));
+      }
+      if (track.title) parts.push(track.title);
+      return parts.filter(Boolean).join(" ");
+    }
+    function contributeDiscText(disc, index) {
+      if (!disc || typeof disc !== "object") return String(disc);
+      const head = [
+        tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1),
+        disc.discTypeOther || discTypeLabel(disc.discType),
+      ].filter(Boolean).join(": ");
+      // A summary rather than the whole disc: the counts are what tell a
+      // reader the tracks are travelling with it, and the full lists would
+      // make a two-disc set unreadable in a checkbox row.
+      const detail = [
+        disc.label,
+        disc.discRole ? discRoleLabel(disc.discRole) : null,
+        disc.videoResolution,
+        (disc.hdrFormats || []).map(hdrFormatLabel).filter(Boolean).join("/") || null,
+        (disc.audioTracks || []).length
+          ? `${disc.audioTracks.length}× ${tNext("contribute.field.audioTracks", "Audio tracks")}`
+          : null,
+        (disc.subtitles || []).length
+          ? `${disc.subtitles.length}× ${tNext("contribute.field.subtitles", "Subtitles")}`
+          : null,
+      ].filter(Boolean).join(", ");
+      return detail ? `${head} — ${detail}` : head;
+    }
+    function contributeValueText(value, field) {
       if (value === null || value === undefined || value === "") return tNext("contribute.empty", "(empty)");
-      return String(value);
+      if (Array.isArray(value)) {
+        if (!value.length) return tNext("contribute.empty", "(empty)");
+        if (value.every((item) => item === null || typeof item !== "object")) {
+          const label = CONTRIBUTE_VALUE_LABELS[field];
+          return value.map((item) => (label ? label(item) || String(item) : String(item))).join(", ");
+        }
+        if (field === "discs") {
+          return value.map((item, index) => contributeDiscText(item, index)).join("; ");
+        }
+        return value.map(contributeTrackText).join(", ");
+      }
+      if (typeof value === "object") return contributeTrackText(value);
+      const label = CONTRIBUTE_VALUE_LABELS[field];
+      return (label && label(value)) || String(value);
     }
     function contributeButton(entity) {
       return document.getElementById(entity === "container" ? "containerContributeButton" : "movieContributeButton");
@@ -30060,10 +30140,10 @@ def ui_preview_html(
         name.textContent = contributeFieldLabel(change.field);
         const from = document.createElement("span");
         from.className = "contribute-change-from";
-        from.textContent = `${tNext("contribute.currently", "MovieVault has")}: ${contributeValueText(change.expected)}`;
+        from.textContent = `${tNext("contribute.currently", "MovieVault has")}: ${contributeValueText(change.expected, change.field)}`;
         const to = document.createElement("span");
         to.className = "contribute-change-to";
-        to.textContent = `${tNext("contribute.proposed", "You propose")}: ${contributeValueText(change.proposed)}`;
+        to.textContent = `${tNext("contribute.proposed", "You propose")}: ${contributeValueText(change.proposed, change.field)}`;
         body.appendChild(name);
         body.appendChild(from);
         body.appendChild(to);

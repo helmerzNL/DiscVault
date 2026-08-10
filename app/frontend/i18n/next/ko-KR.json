@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "시즌 추가 중...",
   "seriesDetail.seasonsAdded": "{count}개 시즌이 추가되었습니다.",
   "seriesDetail.seasonsPartlyAdded": "{added}개 추가, {failed}개 실패: {errors}",
-  "seriesDetail.episodesCollectorsHint": "시즌을 열어 에피소드를 보려면 컬렉터 모드를 켜세요. 에피소드는 시즌당 한 번의 요청으로 가져오므로, 이 설정이 그 비용을 누가 부담할지 결정합니다."
+  "seriesDetail.episodesCollectorsHint": "시즌을 열어 에피소드를 보려면 컬렉터 모드를 켜세요. 에피소드는 시즌당 한 번의 요청으로 가져오므로, 이 설정이 그 비용을 누가 부담할지 결정합니다.",
+  "contribute.field.packaging": "패키지",
+  "contribute.field.finishes": "마감",
+  "contribute.field.videoResolution": "해상도",
+  "contribute.field.videoCodecs": "비디오 코덱",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "화면비",
+  "contribute.field.audioTracks": "오디오 트랙",
+  "contribute.field.subtitles": "자막",
+  "contribute.field.alternateTitles": "대체 제목",
+  "contribute.field.discs": "디스크"
 }

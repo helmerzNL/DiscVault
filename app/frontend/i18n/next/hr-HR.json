@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Dodavanje sezona...",
   "seriesDetail.seasonsAdded": "Dodano {count} sezona.",
   "seriesDetail.seasonsPartlyAdded": "{added} dodano, {failed} nije: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Uključite kolekcionarski način kako biste otvorili sezonu i vidjeli njezine epizode. Dohvaćaju se jednim zahtjevom po sezoni, pa prekidač odlučuje tko to plaća."
+  "seriesDetail.episodesCollectorsHint": "Uključite kolekcionarski način kako biste otvorili sezonu i vidjeli njezine epizode. Dohvaćaju se jednim zahtjevom po sezoni, pa prekidač odlučuje tko to plaća.",
+  "contribute.field.packaging": "Pakiranje",
+  "contribute.field.finishes": "Obrade",
+  "contribute.field.videoResolution": "Razlučivost",
+  "contribute.field.videoCodecs": "Video kodek",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Omjer slike",
+  "contribute.field.audioTracks": "Zvučni zapisi",
+  "contribute.field.subtitles": "Titlovi",
+  "contribute.field.alternateTitles": "Alternativni naslovi",
+  "contribute.field.discs": "Diskovi"
 }

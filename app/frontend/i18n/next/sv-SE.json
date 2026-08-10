@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Lägger till säsonger...",
   "seriesDetail.seasonsAdded": "{count} säsonger tillagda.",
   "seriesDetail.seasonsPartlyAdded": "{added} tillagda, {failed} inte: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Slå på samlarläget för att öppna en säsong och se dess avsnitt. De hämtas med en förfrågan per säsong, så knappen avgör vem som betalar för den."
+  "seriesDetail.episodesCollectorsHint": "Slå på samlarläget för att öppna en säsong och se dess avsnitt. De hämtas med en förfrågan per säsong, så knappen avgör vem som betalar för den.",
+  "contribute.field.packaging": "Förpackning",
+  "contribute.field.finishes": "Ytbehandlingar",
+  "contribute.field.videoResolution": "Upplösning",
+  "contribute.field.videoCodecs": "Videokodek",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Bildförhållande",
+  "contribute.field.audioTracks": "Ljudspår",
+  "contribute.field.subtitles": "Undertexter",
+  "contribute.field.alternateTitles": "Alternativa titlar",
+  "contribute.field.discs": "Skivor"
 }

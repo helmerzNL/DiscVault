@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Notiek sezonu pievienošana...",
   "seriesDetail.seasonsAdded": "Pievienotas {count} sezonas.",
   "seriesDetail.seasonsPartlyAdded": "{added} pievienotas, {failed} nē: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Ieslēdziet kolekcionāra režīmu, lai atvērtu sezonu un redzētu tās sērijas. Tās tiek iegūtas ar vienu pieprasījumu uz sezonu, tāpēc slēdzis izlemj, kas par to maksā."
+  "seriesDetail.episodesCollectorsHint": "Ieslēdziet kolekcionāra režīmu, lai atvērtu sezonu un redzētu tās sērijas. Tās tiek iegūtas ar vienu pieprasījumu uz sezonu, tāpēc slēdzis izlemj, kas par to maksā.",
+  "contribute.field.packaging": "Iepakojums",
+  "contribute.field.finishes": "Apdares",
+  "contribute.field.videoResolution": "Izšķirtspēja",
+  "contribute.field.videoCodecs": "Video kodeks",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Attēla proporcijas",
+  "contribute.field.audioTracks": "Audio celiņi",
+  "contribute.field.subtitles": "Subtitri",
+  "contribute.field.alternateTitles": "Alternatīvie nosaukumi",
+  "contribute.field.discs": "Diski"
 }

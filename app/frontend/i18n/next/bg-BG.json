@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Добавяне на сезони...",
   "seriesDetail.seasonsAdded": "Добавени са {count} сезона.",
   "seriesDetail.seasonsPartlyAdded": "{added} добавени, {failed} не: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Включете колекционерския режим, за да отворите сезон и да видите епизодите му. Извличат се с по една заявка на сезон, така че превключвателят решава кой плаща за това."
+  "seriesDetail.episodesCollectorsHint": "Включете колекционерския режим, за да отворите сезон и да видите епизодите му. Извличат се с по една заявка на сезон, така че превключвателят решава кой плаща за това.",
+  "contribute.field.packaging": "Опаковка",
+  "contribute.field.finishes": "Довършване",
+  "contribute.field.videoResolution": "Резолюция",
+  "contribute.field.videoCodecs": "Видео кодек",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Съотношение",
+  "contribute.field.audioTracks": "Аудиозаписи",
+  "contribute.field.subtitles": "Субтитри",
+  "contribute.field.alternateTitles": "Алтернативни заглавия",
+  "contribute.field.discs": "Дискове"
 }

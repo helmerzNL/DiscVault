@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "シーズンを追加中...",
   "seriesDetail.seasonsAdded": "{count}件のシーズンを追加しました。",
   "seriesDetail.seasonsPartlyAdded": "{added}件追加、{failed}件失敗: {errors}",
-  "seriesDetail.episodesCollectorsHint": "シーズンを開いてエピソードを表示するには、コレクターモードをオンにしてください。エピソードはシーズンごとに1リクエストで取得されるため、この設定が費用を負担する人を決めます。"
+  "seriesDetail.episodesCollectorsHint": "シーズンを開いてエピソードを表示するには、コレクターモードをオンにしてください。エピソードはシーズンごとに1リクエストで取得されるため、この設定が費用を負担する人を決めます。",
+  "contribute.field.packaging": "パッケージ",
+  "contribute.field.finishes": "表面加工",
+  "contribute.field.videoResolution": "解像度",
+  "contribute.field.videoCodecs": "ビデオコーデック",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "アスペクト比",
+  "contribute.field.audioTracks": "音声トラック",
+  "contribute.field.subtitles": "字幕",
+  "contribute.field.alternateTitles": "別題",
+  "contribute.field.discs": "ディスク"
 }

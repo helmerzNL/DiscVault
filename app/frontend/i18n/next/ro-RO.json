@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Se adaugă sezoanele...",
   "seriesDetail.seasonsAdded": "{count} sezoane adăugate.",
   "seriesDetail.seasonsPartlyAdded": "{added} adăugate, {failed} nu: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Activează modul colecționar pentru a deschide un sezon și a-i vedea episoadele. Sunt aduse cu o cerere per sezon, așa că butonul decide cine plătește pentru asta."
+  "seriesDetail.episodesCollectorsHint": "Activează modul colecționar pentru a deschide un sezon și a-i vedea episoadele. Sunt aduse cu o cerere per sezon, așa că butonul decide cine plătește pentru asta.",
+  "contribute.field.packaging": "Ambalaj",
+  "contribute.field.finishes": "Finisaje",
+  "contribute.field.videoResolution": "Rezoluție",
+  "contribute.field.videoCodecs": "Codec video",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Raport de aspect",
+  "contribute.field.audioTracks": "Piste audio",
+  "contribute.field.subtitles": "Subtitrări",
+  "contribute.field.alternateTitles": "Titluri alternative",
+  "contribute.field.discs": "Discuri"
 }

@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Tilføjer sæsoner...",
   "seriesDetail.seasonsAdded": "{count} sæsoner tilføjet.",
   "seriesDetail.seasonsPartlyAdded": "{added} tilføjet, {failed} ikke: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Slå samlertilstand til for at åbne en sæson og se dens episoder. De hentes med én forespørgsel per sæson, så kontakten afgør, hvem der betaler for den."
+  "seriesDetail.episodesCollectorsHint": "Slå samlertilstand til for at åbne en sæson og se dens episoder. De hentes med én forespørgsel per sæson, så kontakten afgør, hvem der betaler for den.",
+  "contribute.field.packaging": "Emballage",
+  "contribute.field.finishes": "Finish",
+  "contribute.field.videoResolution": "Opløsning",
+  "contribute.field.videoCodecs": "Videocodec",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Billedformat",
+  "contribute.field.audioTracks": "Lydspor",
+  "contribute.field.subtitles": "Undertekster",
+  "contribute.field.alternateTitles": "Alternative titler",
+  "contribute.field.discs": "Discs"
 }

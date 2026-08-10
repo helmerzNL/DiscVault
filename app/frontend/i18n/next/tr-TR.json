@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Sezonlar ekleniyor...",
   "seriesDetail.seasonsAdded": "{count} sezon eklendi.",
   "seriesDetail.seasonsPartlyAdded": "{added} eklendi, {failed} eklenemedi: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Bir sezonu açıp bölümlerini görmek için Koleksiyoncu modunu açın. Sezon başına bir istekle getirilirler, bu yüzden bunun bedelini kimin ödeyeceğine bu anahtar karar verir."
+  "seriesDetail.episodesCollectorsHint": "Bir sezonu açıp bölümlerini görmek için Koleksiyoncu modunu açın. Sezon başına bir istekle getirilirler, bu yüzden bunun bedelini kimin ödeyeceğine bu anahtar karar verir.",
+  "contribute.field.packaging": "Ambalaj",
+  "contribute.field.finishes": "Yüzey işlemleri",
+  "contribute.field.videoResolution": "Çözünürlük",
+  "contribute.field.videoCodecs": "Video kodeki",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "En boy oranı",
+  "contribute.field.audioTracks": "Ses parçaları",
+  "contribute.field.subtitles": "Altyazılar",
+  "contribute.field.alternateTitles": "Alternatif başlıklar",
+  "contribute.field.discs": "Diskler"
 }

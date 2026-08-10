@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Přidávání sezón...",
   "seriesDetail.seasonsAdded": "Přidáno {count} sezón.",
   "seriesDetail.seasonsPartlyAdded": "{added} přidáno, {failed} ne: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Zapněte sběratelský režim, abyste otevřeli sezónu a viděli její epizody. Načítají se jedním požadavkem na sezónu, takže přepínač rozhoduje, kdo to zaplatí."
+  "seriesDetail.episodesCollectorsHint": "Zapněte sběratelský režim, abyste otevřeli sezónu a viděli její epizody. Načítají se jedním požadavkem na sezónu, takže přepínač rozhoduje, kdo to zaplatí.",
+  "contribute.field.packaging": "Balení",
+  "contribute.field.finishes": "Povrchové úpravy",
+  "contribute.field.videoResolution": "Rozlišení",
+  "contribute.field.videoCodecs": "Video kodek",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Poměr stran",
+  "contribute.field.audioTracks": "Zvukové stopy",
+  "contribute.field.subtitles": "Titulky",
+  "contribute.field.alternateTitles": "Alternativní názvy",
+  "contribute.field.discs": "Disky"
 }

@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "正在添加季...",
   "seriesDetail.seasonsAdded": "已添加 {count} 季。",
   "seriesDetail.seasonsPartlyAdded": "已添加 {added} 季，{failed} 季失败：{errors}",
-  "seriesDetail.episodesCollectorsHint": "开启收藏家模式即可展开某一季并查看其剧集。剧集按每季一次请求获取，因此该开关决定由谁承担这项开销。"
+  "seriesDetail.episodesCollectorsHint": "开启收藏家模式即可展开某一季并查看其剧集。剧集按每季一次请求获取，因此该开关决定由谁承担这项开销。",
+  "contribute.field.packaging": "包装",
+  "contribute.field.finishes": "表面工艺",
+  "contribute.field.videoResolution": "分辨率",
+  "contribute.field.videoCodecs": "视频编解码器",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "画面比例",
+  "contribute.field.audioTracks": "音轨",
+  "contribute.field.subtitles": "字幕",
+  "contribute.field.alternateTitles": "其他标题",
+  "contribute.field.discs": "光盘"
 }

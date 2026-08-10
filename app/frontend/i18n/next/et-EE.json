@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Hooaegade lisamine...",
   "seriesDetail.seasonsAdded": "Lisatud {count} hooaega.",
   "seriesDetail.seasonsPartlyAdded": "{added} lisatud, {failed} mitte: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Lülita kogujarežiim sisse, et hooaeg avada ja selle osasid näha. Need laaditakse ühe päringuga hooaja kohta, seega lüliti otsustab, kes selle eest maksab."
+  "seriesDetail.episodesCollectorsHint": "Lülita kogujarežiim sisse, et hooaeg avada ja selle osasid näha. Need laaditakse ühe päringuga hooaja kohta, seega lüliti otsustab, kes selle eest maksab.",
+  "contribute.field.packaging": "Pakend",
+  "contribute.field.finishes": "Viimistlused",
+  "contribute.field.videoResolution": "Eraldusvõime",
+  "contribute.field.videoCodecs": "Videokoodek",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Kuvasuhe",
+  "contribute.field.audioTracks": "Heliribad",
+  "contribute.field.subtitles": "Subtiitrid",
+  "contribute.field.alternateTitles": "Alternatiivsed pealkirjad",
+  "contribute.field.discs": "Plaadid"
 }

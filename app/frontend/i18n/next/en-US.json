@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Adding seasons...",
   "seriesDetail.seasonsAdded": "{count} seasons added.",
   "seriesDetail.seasonsPartlyAdded": "{added} added, {failed} could not be: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Turn on Collectors mode to open a season and see its episodes. They are fetched one request per season, so the switch decides who pays for it."
+  "seriesDetail.episodesCollectorsHint": "Turn on Collectors mode to open a season and see its episodes. They are fetched one request per season, so the switch decides who pays for it.",
+  "contribute.field.packaging": "Packaging",
+  "contribute.field.finishes": "Finishes",
+  "contribute.field.videoResolution": "Resolution",
+  "contribute.field.videoCodecs": "Video codec",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Screen ratio",
+  "contribute.field.audioTracks": "Audio tracks",
+  "contribute.field.subtitles": "Subtitles",
+  "contribute.field.alternateTitles": "Alternate titles",
+  "contribute.field.discs": "Discs"
 }

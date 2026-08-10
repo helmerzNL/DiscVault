@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Ajout des saisons...",
   "seriesDetail.seasonsAdded": "{count} saisons ajoutées.",
   "seriesDetail.seasonsPartlyAdded": "{added} ajoutées, {failed} en échec : {errors}",
-  "seriesDetail.episodesCollectorsHint": "Activez le mode collectionneur pour ouvrir une saison et voir ses épisodes. Ils sont récupérés à raison d’une requête par saison, c’est donc l’interrupteur qui décide qui la paie."
+  "seriesDetail.episodesCollectorsHint": "Activez le mode collectionneur pour ouvrir une saison et voir ses épisodes. Ils sont récupérés à raison d’une requête par saison, c’est donc l’interrupteur qui décide qui la paie.",
+  "contribute.field.packaging": "Emballage",
+  "contribute.field.finishes": "Finitions",
+  "contribute.field.videoResolution": "Résolution",
+  "contribute.field.videoCodecs": "Codec vidéo",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Format d'image",
+  "contribute.field.audioTracks": "Pistes audio",
+  "contribute.field.subtitles": "Sous-titres",
+  "contribute.field.alternateTitles": "Titres alternatifs",
+  "contribute.field.discs": "Disques"
 }
