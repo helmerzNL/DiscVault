@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Seizoenen toevoegen...",
   "seriesDetail.seasonsAdded": "{count} seizoenen toegevoegd.",
   "seriesDetail.seasonsPartlyAdded": "{added} toegevoegd, {failed} niet: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Zet Collectors-modus aan om een seizoen open te klappen en de afleveringen te zien. Ze worden per seizoen apart opgehaald, dus de schakelaar bepaalt wie daarvoor betaalt."
+  "seriesDetail.episodesCollectorsHint": "Zet Collectors-modus aan om een seizoen open te klappen en de afleveringen te zien. Ze worden per seizoen apart opgehaald, dus de schakelaar bepaalt wie daarvoor betaalt.",
+  "contribute.field.packaging": "Verpakking",
+  "contribute.field.finishes": "Afwerkingen",
+  "contribute.field.videoResolution": "Resolutie",
+  "contribute.field.videoCodecs": "Videocodec",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Beeldverhouding",
+  "contribute.field.audioTracks": "Audiotracks",
+  "contribute.field.subtitles": "Ondertitels",
+  "contribute.field.alternateTitles": "Alternatieve titels",
+  "contribute.field.discs": "Schijfjes"
 }

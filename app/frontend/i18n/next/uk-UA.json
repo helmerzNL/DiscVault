@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Додавання сезонів...",
   "seriesDetail.seasonsAdded": "Додано {count} сезонів.",
   "seriesDetail.seasonsPartlyAdded": "{added} додано, {failed} ні: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Увімкніть режим колекціонера, щоб відкрити сезон і побачити його епізоди. Вони завантажуються одним запитом на сезон, тож перемикач вирішує, хто за це платить."
+  "seriesDetail.episodesCollectorsHint": "Увімкніть режим колекціонера, щоб відкрити сезон і побачити його епізоди. Вони завантажуються одним запитом на сезон, тож перемикач вирішує, хто за це платить.",
+  "contribute.field.packaging": "Упаковка",
+  "contribute.field.finishes": "Оздоблення",
+  "contribute.field.videoResolution": "Роздільність",
+  "contribute.field.videoCodecs": "Відеокодек",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Співвідношення сторін",
+  "contribute.field.audioTracks": "Аудіодоріжки",
+  "contribute.field.subtitles": "Субтитри",
+  "contribute.field.alternateTitles": "Альтернативні назви",
+  "contribute.field.discs": "Диски"
 }

@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "正在新增季...",
   "seriesDetail.seasonsAdded": "已新增 {count} 季。",
   "seriesDetail.seasonsPartlyAdded": "已新增 {added} 季，{failed} 季失敗：{errors}",
-  "seriesDetail.episodesCollectorsHint": "開啟收藏家模式即可展開某一季並檢視其集數。集數以每季一次請求取得，因此這個開關決定由誰承擔這項開銷。"
+  "seriesDetail.episodesCollectorsHint": "開啟收藏家模式即可展開某一季並檢視其集數。集數以每季一次請求取得，因此這個開關決定由誰承擔這項開銷。",
+  "contribute.field.packaging": "包裝",
+  "contribute.field.finishes": "表面工藝",
+  "contribute.field.videoResolution": "解析度",
+  "contribute.field.videoCodecs": "視訊編解碼器",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "畫面比例",
+  "contribute.field.audioTracks": "音軌",
+  "contribute.field.subtitles": "字幕",
+  "contribute.field.alternateTitles": "其他標題",
+  "contribute.field.discs": "光碟"
 }

@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Staffeln werden hinzugefügt...",
   "seriesDetail.seasonsAdded": "{count} Staffeln hinzugefügt.",
   "seriesDetail.seasonsPartlyAdded": "{added} hinzugefügt, {failed} nicht: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Aktiviere den Sammlermodus, um eine Staffel zu öffnen und ihre Episoden zu sehen. Sie werden mit einer Anfrage pro Staffel geholt, deshalb entscheidet der Schalter, wer dafür aufkommt."
+  "seriesDetail.episodesCollectorsHint": "Aktiviere den Sammlermodus, um eine Staffel zu öffnen und ihre Episoden zu sehen. Sie werden mit einer Anfrage pro Staffel geholt, deshalb entscheidet der Schalter, wer dafür aufkommt.",
+  "contribute.field.packaging": "Verpackung",
+  "contribute.field.finishes": "Veredelungen",
+  "contribute.field.videoResolution": "Auflösung",
+  "contribute.field.videoCodecs": "Video-Codec",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Bildformat",
+  "contribute.field.audioTracks": "Tonspuren",
+  "contribute.field.subtitles": "Untertitel",
+  "contribute.field.alternateTitles": "Alternativtitel",
+  "contribute.field.discs": "Discs"
 }

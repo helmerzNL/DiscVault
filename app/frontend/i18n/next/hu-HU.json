@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Évadok hozzáadása...",
   "seriesDetail.seasonsAdded": "{count} évad hozzáadva.",
   "seriesDetail.seasonsPartlyAdded": "{added} hozzáadva, {failed} nem: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Kapcsold be a gyűjtői módot, hogy megnyiss egy évadot és lásd az epizódjait. Évadonként egy kéréssel töltődnek be, így a kapcsoló dönti el, ki fizeti meg."
+  "seriesDetail.episodesCollectorsHint": "Kapcsold be a gyűjtői módot, hogy megnyiss egy évadot és lásd az epizódjait. Évadonként egy kéréssel töltődnek be, így a kapcsoló dönti el, ki fizeti meg.",
+  "contribute.field.packaging": "Csomagolás",
+  "contribute.field.finishes": "Felületkezelés",
+  "contribute.field.videoResolution": "Felbontás",
+  "contribute.field.videoCodecs": "Videokodek",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Képarány",
+  "contribute.field.audioTracks": "Hangsávok",
+  "contribute.field.subtitles": "Feliratok",
+  "contribute.field.alternateTitles": "Alternatív címek",
+  "contribute.field.discs": "Lemezek"
 }

@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Lisätään kausia...",
   "seriesDetail.seasonsAdded": "{count} kautta lisätty.",
   "seriesDetail.seasonsPartlyAdded": "{added} lisätty, {failed} ei: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Ota keräilytila käyttöön avataksesi kauden ja nähdäksesi sen jaksot. Ne haetaan yhdellä pyynnöllä kautta kohden, joten kytkin ratkaisee, kuka siitä maksaa."
+  "seriesDetail.episodesCollectorsHint": "Ota keräilytila käyttöön avataksesi kauden ja nähdäksesi sen jaksot. Ne haetaan yhdellä pyynnöllä kautta kohden, joten kytkin ratkaisee, kuka siitä maksaa.",
+  "contribute.field.packaging": "Pakkaus",
+  "contribute.field.finishes": "Viimeistelyt",
+  "contribute.field.videoResolution": "Tarkkuus",
+  "contribute.field.videoCodecs": "Videokoodekki",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Kuvasuhde",
+  "contribute.field.audioTracks": "Ääniraidat",
+  "contribute.field.subtitles": "Tekstitykset",
+  "contribute.field.alternateTitles": "Vaihtoehtoiset nimet",
+  "contribute.field.discs": "Levyt"
 }

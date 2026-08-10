@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Pridedami sezonai...",
   "seriesDetail.seasonsAdded": "Pridėta {count} sezonų.",
   "seriesDetail.seasonsPartlyAdded": "{added} pridėta, {failed} ne: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Įjunkite kolekcininko režimą, kad atvertumėte sezoną ir pamatytumėte jo serijas. Jos gaunamos vienu užklausimu vienam sezonui, todėl jungiklis nusprendžia, kas už tai moka."
+  "seriesDetail.episodesCollectorsHint": "Įjunkite kolekcininko režimą, kad atvertumėte sezoną ir pamatytumėte jo serijas. Jos gaunamos vienu užklausimu vienam sezonui, todėl jungiklis nusprendžia, kas už tai moka.",
+  "contribute.field.packaging": "Pakuotė",
+  "contribute.field.finishes": "Apdailos",
+  "contribute.field.videoResolution": "Raiška",
+  "contribute.field.videoCodecs": "Vaizdo kodekas",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Vaizdo santykis",
+  "contribute.field.audioTracks": "Garso takeliai",
+  "contribute.field.subtitles": "Subtitrai",
+  "contribute.field.alternateTitles": "Alternatyvūs pavadinimai",
+  "contribute.field.discs": "Diskai"
 }

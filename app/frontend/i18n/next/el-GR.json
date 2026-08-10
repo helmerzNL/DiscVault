@@ -2938,5 +2938,15 @@
   "seriesDetail.seasonsAdding": "Προσθήκη σεζόν...",
   "seriesDetail.seasonsAdded": "Προστέθηκαν {count} σεζόν.",
   "seriesDetail.seasonsPartlyAdded": "{added} προστέθηκαν, {failed} όχι: {errors}",
-  "seriesDetail.episodesCollectorsHint": "Ενεργοποίησε τη λειτουργία συλλέκτη για να ανοίξεις μια σεζόν και να δεις τα επεισόδιά της. Ανακτώνται με ένα αίτημα ανά σεζόν, οπότε ο διακόπτης αποφασίζει ποιος το πληρώνει."
+  "seriesDetail.episodesCollectorsHint": "Ενεργοποίησε τη λειτουργία συλλέκτη για να ανοίξεις μια σεζόν και να δεις τα επεισόδιά της. Ανακτώνται με ένα αίτημα ανά σεζόν, οπότε ο διακόπτης αποφασίζει ποιος το πληρώνει.",
+  "contribute.field.packaging": "Συσκευασία",
+  "contribute.field.finishes": "Φινιρίσματα",
+  "contribute.field.videoResolution": "Ανάλυση",
+  "contribute.field.videoCodecs": "Κωδικοποιητής βίντεο",
+  "contribute.field.hdrFormats": "HDR",
+  "contribute.field.aspectRatios": "Αναλογία εικόνας",
+  "contribute.field.audioTracks": "Κομμάτια ήχου",
+  "contribute.field.subtitles": "Υπότιτλοι",
+  "contribute.field.alternateTitles": "Εναλλακτικοί τίτλοι",
+  "contribute.field.discs": "Δίσκοι"
 }
