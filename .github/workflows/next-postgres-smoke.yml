@@ -261,6 +261,14 @@ jobs:
           tests.test_next_discs_postgres
           tests.test_next_discs_ui
 
+      # Who changed a film. The interesting half is the half a real database
+      # settles: that a synced push actually leaves an audit row behind, and
+      # that the two sources -- the audit and the per-field provenance -- merge
+      # into one list in one order. Without a DATABASE_URL those cases skip and
+      # the module looks green while testing only the user-agent mapping.
+      - name: Test the change history of a film
+        run: python -m unittest tests.test_next_movie_history
+
       # This one has no database at all, but it guards the surface-id and route
       # registration that a new detail page has to join to be reachable.
       - name: Test the app surface router
