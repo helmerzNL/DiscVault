@@ -55,6 +55,7 @@ MOVIEVAULT_V2_CONTRACT = "distribution-2"
 MOVIEVAULT_V3_CONTRACT = "distribution-3"
 MOVIEVAULT_V4_CONTRACT = "distribution-4"
 MOVIEVAULT_V5_CONTRACT = "distribution-5"
+MOVIEVAULT_V6_CONTRACT = "distribution-6"
 # Ordered lowest to highest. _negotiated_contract() returns the *maximum* of
 # this plugin's declared range - despite the name it does not negotiate, it
 # never asks the origin what it actually serves. So listing a contract here is
@@ -68,12 +69,14 @@ SUPPORTED_CONTRACTS = (
     MOVIEVAULT_V3_CONTRACT,
     MOVIEVAULT_V4_CONTRACT,
     MOVIEVAULT_V5_CONTRACT,
+    MOVIEVAULT_V6_CONTRACT,
 )
 CONTRACT_PATH_VERSIONS = {
     MOVIEVAULT_V2_CONTRACT: "2",
     MOVIEVAULT_V3_CONTRACT: "3",
     MOVIEVAULT_V4_CONTRACT: "4",
     MOVIEVAULT_V5_CONTRACT: "5",
+    MOVIEVAULT_V6_CONTRACT: "6",
 }
 # Contract feature predicates. Every technical field used to be gated on an
 # equality check against distribution-4, which quietly means "v4 only" - so
@@ -85,17 +88,27 @@ def _is_v3_or_later(contract_version: str) -> bool:
         MOVIEVAULT_V3_CONTRACT,
         MOVIEVAULT_V4_CONTRACT,
         MOVIEVAULT_V5_CONTRACT,
+        MOVIEVAULT_V6_CONTRACT,
     )
 
 
 def _is_v4_or_later(contract_version: str) -> bool:
     """True for the contracts carrying posters and the technical profile."""
-    return contract_version in (MOVIEVAULT_V4_CONTRACT, MOVIEVAULT_V5_CONTRACT)
+    return contract_version in (
+        MOVIEVAULT_V4_CONTRACT,
+        MOVIEVAULT_V5_CONTRACT,
+        MOVIEVAULT_V6_CONTRACT,
+    )
 
 
 def _is_v5_or_later(contract_version: str) -> bool:
     """True for the contracts carrying the full packaging vocabulary and finishes."""
-    return contract_version == MOVIEVAULT_V5_CONTRACT
+    return contract_version in (MOVIEVAULT_V5_CONTRACT, MOVIEVAULT_V6_CONTRACT)
+
+
+def _is_v6_or_later(contract_version: str) -> bool:
+    """True for the contracts carrying the per-disc breakdown."""
+    return contract_version == MOVIEVAULT_V6_CONTRACT
 
 
 SYNC_LOCK_KEY = 2_026_261
@@ -757,6 +770,62 @@ def _finishes(value: Any, *, release_id: str) -> list[str]:
     return result
 
 
+MAX_FEED_DISCS = 99
+
+
+def _discs(value: Any, *, release_id: str) -> list[dict[str, Any]]:
+    """Parse the per-disc breakdown. distribution-6 and later.
+
+    Same posture as ``_seasons`` directly below, for the same paid-for lesson:
+    skip what cannot be read, log it, keep the rest. A release whose disc list
+    is unusable arrives with no discs, which is exactly the state it was in
+    before this field existed -- while a raise here is not one lost breakdown
+    but a dead catalog for every instance.
+
+    Entries are kept verbatim (the mirror stores what the feed said, enums
+    open), with only shape checks: a dict, an int position 1..99, and the
+    remaining keys strings or lists as published. Order is by position, which
+    is the producer's own ordering rule.
+    """
+    if not isinstance(value, list):
+        logger.warning(
+            "movievault_v2: discs on release %s is not a list - ignoring",
+            release_id,
+        )
+        return []
+    if len(value) > MAX_FEED_DISCS:
+        logger.warning(
+            "movievault_v2: discs on release %s exceeds %d entries - truncating",
+            release_id,
+            MAX_FEED_DISCS,
+        )
+        value = value[:MAX_FEED_DISCS]
+    discs: list[dict[str, Any]] = []
+    seen_positions: set[int] = set()
+    for entry in value:
+        if not isinstance(entry, dict):
+            logger.warning(
+                "movievault_v2: skipping non-object disc on release %s", release_id
+            )
+            continue
+        position = entry.get("position")
+        if (
+            not isinstance(position, int)
+            or isinstance(position, bool)
+            or not 1 <= position <= MAX_FEED_DISCS
+            or position in seen_positions
+        ):
+            logger.warning(
+                "movievault_v2: skipping disc with unusable position %r on release %s",
+                position,
+                release_id,
+            )
+            continue
+        seen_positions.add(position)
+        discs.append(entry)
+    return sorted(discs, key=lambda disc: disc["position"])
+
+
 def _seasons(value: Any, *, release_id: str) -> list[dict[str, Any]]:
     """Parse the seasons a release covers. distribution-4 and later.
 
@@ -926,6 +995,11 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # at all. Tolerating the key has to reach instances before the origin
         # does, which is why it lands separately from anything that reads it.
         optional.add("seasons")
+    if _is_v6_or_later(contract_version):
+        # distribution-6's one addition: the per-disc breakdown. Optional
+        # because the producer omits it for a release nobody has broken down,
+        # which is most of the catalogue.
+        optional.add("discs")
     _exact_keys(value, required=required, optional=optional, label="release record")
     if _is_v4_or_later(contract_version):
         _backdrop(value.get("backdrop"), release_id=str(value.get("releaseId")))
@@ -1028,6 +1102,14 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "seasons": (
             _seasons(value["seasons"], release_id=str(value.get("releaseId")))
             if _is_v4_or_later(contract_version) and "seasons" in value
+            else None
+        ),
+        # Same None-versus-[] rule as seasons: a missing key is "the feed has
+        # not said", an empty list is a statement, and only the second may
+        # clear a stored breakdown.
+        "discs": (
+            _discs(value["discs"], release_id=str(value.get("releaseId")))
+            if _is_v6_or_later(contract_version) and "discs" in value
             else None
         ),
         **(
@@ -2889,13 +2971,13 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             language_code, release_date, disc_count, studio, distributor,
             runtime_minutes, assets, revision, poster, packaging, finishes,
             video_resolution, video_codecs, hdr_formats, aspect_ratios,
-            disc_regions, work_type, seasons
+            disc_regions, work_type, seasons, discs
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -2924,7 +3006,8 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             aspect_ratios = EXCLUDED.aspect_ratios,
             disc_regions = EXCLUDED.disc_regions,
             work_type = EXCLUDED.work_type,
-            seasons = EXCLUDED.seasons
+            seasons = EXCLUDED.seasons,
+            discs = EXCLUDED.discs
         """,
         (
             generation,
@@ -2959,6 +3042,7 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             # "the feed has not said" into "the feed says no seasons", and the
             # consuming side is entitled to tell those apart. NULL stays NULL.
             Jsonb(record["seasons"]) if record.get("seasons") is not None else None,
+            Jsonb(record["discs"]) if record.get("discs") is not None else None,
         ),
     )
     for lookup_hash in record["eanHashes"]:
@@ -3761,6 +3845,9 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         # distinct from the `[]` that means "no particular season".
         "seasons": (
             _json_value(row["seasons"]) if row.get("seasons") is not None else None
+        ),
+        "discs": (
+            _json_value(row["discs"]) if row.get("discs") is not None else None
         ),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))

@@ -97,6 +97,7 @@ jobs:
           python -m unittest
           tests.test_next_movievault_distribution_v3
           tests.test_next_movievault_distribution_v4
+          tests.test_next_movievault_distribution_v6
 
       # The barcode resolver's own contract guards - and the clearest case yet of
       # the same gap. `test_next_release_details_subtitles.py` was written after
