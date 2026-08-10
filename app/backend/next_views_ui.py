@@ -30156,10 +30156,22 @@ def ui_preview_html(
     // other two moot.
     function contributeNothingToSendText(preview) {
       if (preview.mode === "unavailable" || preview.mode === "proposal" || !preview.target) {
-        return tNext(
-          "contribute.notInCatalogue",
-          "MovieVault has no release for this film yet, so there is nothing to correct. Link it to a release first."
-        );
+        // Deliberately not "MovieVault has no release for this film". DiscVault
+        // compares against a *local mirror* of a published distribution
+        // generation, not against MovieVault, so a release approved upstream
+        // ten minutes ago is not a target here yet -- and telling the reader it
+        // does not exist sends them looking for a link they already made. The
+        // copy's age is true either way and is the fact that tells them apart.
+        const synced = formatLocalDateTime(preview.catalogueSyncedAt);
+        return synced
+          ? tNext(
+              "contribute.notInCatalogueCopy",
+              "This film is not in this server's copy of the MovieVault catalogue, which was last updated {when}. A release added or approved after that becomes correctable once the catalogue syncs again."
+            ).replace("{when}", synced)
+          : tNext(
+              "contribute.notInCatalogue",
+              "This film is not in this server's copy of the MovieVault catalogue, so there is nothing to compare against yet."
+            );
       }
       const withheld = Object.entries(preview.withheld || {});
       if (withheld.length) {
