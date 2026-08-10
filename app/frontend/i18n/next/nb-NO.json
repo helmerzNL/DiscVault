@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalognummer",
   "contribute.withheld.needsLiveCatalogue": "Dette er en fullstendig erstatningsliste, så den kan bare sendes når MovieVault er tilgjengelig og kan si hva den ville erstatte.",
+  "contribute.withheld.freeTextTracks": "Ett spor er lagret som fritekst i stedet for som språk og kodek, så hele listen blir her. Gi sporet et språk og en kodek for å kunne bidra med det.",
+  "contribute.withheld.freeTextDiscTracks": "En plate har et spor som er lagret som fritekst i stedet for som språk og kodek, så hele plateinndelingen blir her. Gi sporet et språk og en kodek for å kunne bidra med det.",
   "movieDetail.cast": "Medvirkende",
   "movieDetail.castCrew": "Rolleliste og team",
   "movieDetail.collectors": "Samlere",

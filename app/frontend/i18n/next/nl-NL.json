@@ -1781,6 +1781,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Catalogusnummer",
   "contribute.withheld.needsLiveCatalogue": "Dit is een volledige vervangingslijst, dus hij kan alleen verstuurd worden als MovieVault bereikbaar is en kan zeggen wat er vervangen wordt.",
+  "contribute.withheld.freeTextTracks": "Eén spoor staat als vrije tekst opgeslagen in plaats van als taal en codec, dus de hele lijst blijft hier. Geef dat spoor een taal en een codec om het te kunnen bijdragen.",
+  "contribute.withheld.freeTextDiscTracks": "Eén disc heeft een spoor dat als vrije tekst is opgeslagen in plaats van als taal en codec, dus de hele disc-indeling blijft hier. Geef dat spoor een taal en een codec om het te kunnen bijdragen.",
   "movieDetail.cast": "Cast",
   "movieDetail.castCrew": "Cast & crew",
   "movieDetail.collectors": "Verzamelaars",

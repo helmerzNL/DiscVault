@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Numer katalogowy",
   "contribute.withheld.needsLiveCatalogue": "To pełna lista zastępcza, więc można ją wysłać tylko wtedy, gdy MovieVault jest dostępny i może powiedzieć, co zostałoby zastąpione.",
+  "contribute.withheld.freeTextTracks": "Jedna ścieżka jest zapisana jako dowolny tekst, a nie jako język i kodek, więc cała lista zostaje tutaj. Nadaj tej ścieżce język i kodek, aby móc ją przesłać.",
+  "contribute.withheld.freeTextDiscTracks": "Jedna płyta ma ścieżkę zapisaną jako dowolny tekst, a nie jako język i kodek, więc cały podział na płyty zostaje tutaj. Nadaj tej ścieżce język i kodek, aby móc ją przesłać.",
   "movieDetail.cast": "Zarzuć",
   "movieDetail.castCrew": "Obsada i ekipa filmowa",
   "movieDetail.collectors": "Kolekcjonerzy",

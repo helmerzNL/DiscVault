@@ -16,6 +16,7 @@ invents a fact, which is why they are pinned rather than left to the wire.
 """
 
 import os
+from pathlib import Path
 import sys
 import unittest
 
@@ -149,6 +150,16 @@ class PackagingTests(unittest.TestCase):
 
 
 class DiscTests(unittest.TestCase):
+    """Fixtures are in the **wire** shape on purpose.
+
+    `_movie_discs` is fed by `_local_discs`, which renders rows through
+    `MOVIE_DISC_WIRE_KEYS` before they arrive. These tests used to pass column
+    names, which agreed with the converter's old reads and with nothing that
+    ever calls it -- so both sides were wrong together and the suite was green
+    while a disc's audio tracks reached no correction at all. See
+    `WireShapeAgreementTests` below, which pins the two shapes to each other.
+    """
+
     def test_a_disc_travels_without_its_position_or_its_local_links(self):
         """Position is restated by list order and refused if it disagrees, so
         stating it twice is one chance to disagree with itself. Season and
@@ -157,13 +168,13 @@ class DiscTests(unittest.TestCase):
         discs = corrections._movie_discs(
             [
                 {
-                    "disc_type": "uhd_bluray",
-                    "disc_role": "feature",
-                    "video_resolution": "2160p",
+                    "discType": "uhd_bluray",
+                    "discRole": "feature",
+                    "videoResolution": "2160p",
                     "hdr": ["dolby_vision", "hdr10"],
-                    "screen_ratios": ["2.39:1"],
-                    "season_ids": ["6f1c0f3e-0000-4000-8000-000000000000"],
-                    "audio_tracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
+                    "screenRatios": ["2.39:1"],
+                    "seasonIds": ["6f1c0f3e-0000-4000-8000-000000000000"],
+                    "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
                 }
             ]
         )
@@ -195,14 +206,167 @@ class DiscTests(unittest.TestCase):
         self.assertIsNone(
             corrections._movie_discs(
                 [
-                    {"disc_type": "uhd_bluray"},
-                    {"disc_type": "bluray", "audio_tracks": ["Commentary track"]},
+                    {"discType": "uhd_bluray"},
+                    {"discType": "bluray", "audioTracks": ["Commentary track"]},
                 ]
             )
         )
 
     def test_no_discs_recorded_says_nothing(self):
         self.assertIsNone(corrections._movie_discs([]))
+
+
+class RefusingOutLoudTests(unittest.TestCase):
+    """A field withheld for a reason must say the reason.
+
+    The all-or-nothing rule above is right -- these are replacement lists, so a
+    partial one deletes what it could not express. What was wrong was that the
+    refusal was indistinguishable from agreement: `build_changes` skips a `None`
+    proposal, so the field left the sheet with nothing said. A user who edits a
+    disc's audio track and sees no change offered concludes the edit did not
+    register.
+    """
+
+    def test_a_free_text_release_track_is_a_refusal_not_a_silence(self):
+        reasons, details = corrections._untravellable_reasons(
+            {"audio_tracks": ["English (DTS-HD MA 5.1)"]}, []
+        )
+        self.assertEqual(reasons["audioTracks"], "local_tracks_are_free_text")
+        # Quoted back, because the next action is to go and fix that one row.
+        self.assertEqual(details["audioTracks"], "English (DTS-HD MA 5.1)")
+
+    def test_a_free_text_disc_track_names_the_disc_and_the_track(self):
+        reasons, details = corrections._untravellable_reasons(
+            {},
+            [
+                {"discType": "uhd_bluray", "label": "Feature"},
+                {
+                    "discType": "bluray",
+                    "label": "Bonus",
+                    "audioTracks": ["Commentary with the director"],
+                },
+            ],
+        )
+        self.assertEqual(reasons["discs"], "disc_tracks_are_free_text")
+        self.assertEqual(details["discs"], "Bonus - Commentary with the director")
+
+    def test_an_unlabelled_disc_is_named_by_its_position(self):
+        """Position rather than nothing: a box set of six identical-looking
+        discs is a search if the answer only says "one disc"."""
+        _, details = corrections._untravellable_reasons(
+            {}, [{"discType": "bluray"}, {"discType": "bluray", "audioTracks": ["prose"]}]
+        )
+        self.assertEqual(details["discs"], "Disc 2 - prose")
+
+    def test_a_track_missing_only_its_codec_is_described_by_what_it_has(self):
+        _, details = corrections._untravellable_reasons(
+            {"audio_tracks": [{"languageCode": "en"}]}, []
+        )
+        self.assertEqual(details["audioTracks"], "en / ?")
+
+    def test_tracks_that_all_convert_are_not_a_refusal(self):
+        reasons, details = corrections._untravellable_reasons(
+            {"audio_tracks": [{"languageCode": "en", "codec": "dts_hd_ma"}]},
+            [{"discType": "bluray", "audioTracks": [{"languageCode": "nl", "codec": "dts_hd_ma"}]}],
+        )
+        self.assertEqual(reasons, {})
+        self.assertEqual(details, {})
+
+    def test_nothing_recorded_is_not_a_refusal_either(self):
+        """The distinction the converters could not express on their own:
+        `None` meant both "nobody said" and "said, but unsendable", and only the
+        second is a withholding."""
+        reasons, _ = corrections._untravellable_reasons({"audio_tracks": []}, [])
+        self.assertEqual(reasons, {})
+
+    def test_every_reason_it_produces_is_one_the_sheet_can_render(self):
+        """The codes are a shared vocabulary with `CONTRIBUTE_WITHHELD_REASONS`
+        in the UI, and an unknown code reaches the screen raw -- the renderer
+        falls back to printing it. Checked against the UI source rather than
+        against a copy of the list, because a copy drifts silently."""
+        produced: set[str] = set()
+        for technical, discs in (
+            ({"audio_tracks": ["prose"]}, []),
+            ({"subtitles": [{"languageCode": "en", "subtitleType": "nonsense"}]}, []),
+            ({}, [{"discType": "bluray", "audioTracks": ["prose"]}]),
+        ):
+            reasons, _ = corrections._untravellable_reasons(technical, discs)
+            produced.update(reasons.values())
+        self.assertEqual(produced, {"local_tracks_are_free_text", "disc_tracks_are_free_text"})
+
+        ui_source = (
+            Path(__file__).resolve().parents[1] / "next_views_ui.py"
+        ).read_text(encoding="utf-8")
+        for code in produced:
+            self.assertIn(f"{code}: [", ui_source, f"{code} is not in CONTRIBUTE_WITHHELD_REASONS")
+
+
+class WireShapeAgreementTests(unittest.TestCase):
+    """The readers and the converters must be asking for the same keys.
+
+    Three defects of one shape reached production together, and none of them
+    failed anything: a reader answered in a vocabulary the converter did not
+    read, so the converter answered "nobody said" about data the database was
+    holding. `_movie_discs` read column names while `_local_discs` returns wire
+    names; `movie_technical_specs` did not select the two columns that
+    `RELEASE_FIELD_SOURCES` names for `videoResolution` and `videoCodecs`.
+
+    A unit test with a hand-written fixture cannot catch this -- it agrees with
+    whichever side wrote it. These two compare the sides to each other.
+    """
+
+    def test_the_disc_converter_reads_what_the_disc_reader_writes(self):
+        from app.backend import next_app
+
+        # A disc populated entirely through the reader's own vocabulary. If the
+        # converter reads anything else, the value silently fails to travel.
+        row = {
+            "discType": "uhd_bluray",
+            "discRole": "feature",
+            "discTypeOther": None,
+            "label": "Feature",
+            "videoResolution": "2160p",
+            "videoCodecs": ["hevc"],
+            "hdr": ["hdr10"],
+            "screenRatios": ["2.39:1"],
+            "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
+            "subtitles": [{"languageCode": "nl", "subtitleType": "full"}],
+            # Upper case, which is what the editor stores and what
+            # `DISC_REGIONS` accepts -- the per-disc path does not case-fold the
+            # way `_mirror_disc_regions` does at release level.
+            "regions": ["FREE"],
+            "notes": "ignored upstream",
+        }
+        self.assertEqual(set(row) - {"notes"}, set(next_app.MOVIE_DISC_WIRE_KEYS.values()) - {"notes"})
+
+        entry = corrections._movie_discs([row])[0]
+        for key in (
+            "discType",
+            "discRole",
+            "label",
+            "videoResolution",
+            "videoCodecs",
+            "hdrFormats",
+            "aspectRatios",
+            "audioTracks",
+            "subtitles",
+            "regions",
+        ):
+            self.assertIn(key, entry, f"{key} was dropped between the reader and the wire")
+
+    def test_the_technical_reader_selects_every_column_a_correction_needs(self):
+        """`RELEASE_FIELD_SOURCES` declares which column each technical field
+        comes from. A column the reader does not select reads as absent, and
+        the field is quietly never proposed."""
+        source = (
+            Path(__file__).resolve().parents[2] / "backend" / "next_metadata.py"
+        ).read_text(encoding="utf-8")
+        select = source.split("FROM movie_technical_specs")[0].rsplit("SELECT", 1)[1]
+        selected = {part.strip() for line in select.splitlines() for part in line.split(",")}
+        for field, (kind, column) in corrections.RELEASE_FIELD_SOURCES.items():
+            if kind != "technical" or column == "packaging":
+                continue
+            self.assertIn(column, selected, f"{field} reads {column}, which is not selected")
 
 
 class FieldTableTests(unittest.TestCase):

@@ -285,6 +285,69 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         self.assertEqual(preview["withheld"]["title"], "different_field_upstream")
         self.assertNotIn("title", corrections.RELEASE_FIELD_SOURCES)
 
+    def test_a_disc_whose_track_is_free_text_is_refused_out_loud(self):
+        """The reported symptom: a user edits an audio track on a disc and the
+        sheet offers no change, which reads as "the edit did not register".
+
+        `discs` is a replacement list, so one track that cannot be expressed as
+        a language and a codec withholds every disc -- correct, because a disc
+        sent without a track it actually has would delete that track upstream.
+        What was wrong is that `build_changes` skipped the `None` proposal and
+        the field simply left the sheet, indistinguishable from agreement.
+        """
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movie_discs (movie_id, public_id, sort_order, disc_type,
+                                         disc_role, label, audio_tracks)
+                VALUES (%s, %s, 1, 'bluray', 'both', 'Bonus', %s)
+                """,
+                (movie["id"], f"{PREFIX}-disc-{uuid.uuid4()}", Jsonb(["Commentary with the director"])),
+            )
+        self.conn.commit()
+
+        preview = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={}, preflight=False
+        )
+
+        self.assertEqual(preview["withheld"]["discs"], "disc_tracks_are_free_text")
+        # And it names the row to go and fix, which is the whole point of
+        # saying anything: "one track is free text" across a box set is a
+        # search, not an answer.
+        self.assertEqual(
+            preview["withheldDetail"]["discs"], "Bonus - Commentary with the director"
+        )
+        self.assertNotIn("discs", {item["field"] for item in preview["changes"]})
+
+    def test_a_disc_whose_tracks_all_convert_is_still_offered(self):
+        """The refusal must be about the track, not about having discs at all."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        with self.conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movie_discs (movie_id, public_id, sort_order, disc_type,
+                                         disc_role, label, audio_tracks)
+                VALUES (%s, %s, 1, 'bluray', 'both', 'Feature', %s)
+                """,
+                (
+                    movie["id"],
+                    f"{PREFIX}-disc-{uuid.uuid4()}",
+                    Jsonb([{"languageCode": "nl", "codec": "dts_hd_ma"}]),
+                ),
+            )
+        self.conn.commit()
+
+        preview = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={}, preflight=False
+        )
+
+        self.assertNotIn("discs", preview["withheld"])
+        change = next(item for item in preview["changes"] if item["field"] == "discs")
+        self.assertEqual(change["proposed"][0]["audioTracks"][0]["codec"], "dts_hd_ma")
+
     def test_a_box_set_title_is_still_offered(self):
         """A box set's title on both sides names the same product, so the
         release-title reasoning does not carry over to containers -- and it is

@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Kataloška številka",
   "contribute.withheld.needsLiveCatalogue": "To je popoln nadomestni seznam, zato ga je mogoče poslati le, ko je MovieVault dosegljiv in lahko pove, kaj bi nadomestil.",
+  "contribute.withheld.freeTextTracks": "Ena sled je shranjena kot prosto besedilo namesto kot jezik in kodek, zato celoten seznam ostane tukaj. Tej sledi dodelite jezik in kodek, da jo boste lahko prispevali.",
+  "contribute.withheld.freeTextDiscTracks": "En disk ima sled, shranjeno kot prosto besedilo namesto kot jezik in kodek, zato celotna razdelitev po diskih ostane tukaj. Tej sledi dodelite jezik in kodek, da jo boste lahko prispevali.",
   "movieDetail.cast": "Zasedba",
   "movieDetail.castCrew": "Igralska zasedba in ekipa",
   "movieDetail.collectors": "Zbiratelji",

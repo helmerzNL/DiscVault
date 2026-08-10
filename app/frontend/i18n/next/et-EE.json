@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalooginumber",
   "contribute.withheld.needsLiveCatalogue": "See on täielik asendusloend, seega saab selle saata ainult siis, kui MovieVault on kättesaadav ja oskab öelda, mida see asendaks.",
+  "contribute.withheld.freeTextTracks": "Üks lugu on salvestatud vaba tekstina, mitte keele ja koodekina, seega jääb kogu loend siia. Anna sellele loole keel ja koodek, et seda saaks esitada.",
+  "contribute.withheld.freeTextDiscTracks": "Ühel plaadil on lugu, mis on salvestatud vaba tekstina, mitte keele ja koodekina, seega jääb kogu plaadijaotus siia. Anna sellele loole keel ja koodek, et seda saaks esitada.",
   "movieDetail.cast": "Näitlejad",
   "movieDetail.castCrew": "Näitlejad ja meeskond",
   "movieDetail.collectors": "Kogujad",

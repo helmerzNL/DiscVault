@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Каталожен номер",
   "contribute.withheld.needsLiveCatalogue": "Това е пълен заместващ списък, затова може да се изпрати само когато MovieVault е достъпен и може да каже какво ще замени.",
+  "contribute.withheld.freeTextTracks": "Една пътечка е записана като свободен текст, а не като език и кодек, затова целият списък остава тук. Задайте на тази пътечка език и кодек, за да можете да я изпратите.",
+  "contribute.withheld.freeTextDiscTracks": "Един диск има пътечка, записана като свободен текст, а не като език и кодек, затова цялото разпределение по дискове остава тук. Задайте на тази пътечка език и кодек, за да можете да я изпратите.",
   "movieDetail.cast": "Касета",
   "movieDetail.castCrew": "Актьори и екипаж",
   "movieDetail.collectors": "Колекционери",

@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Numero di catalogo",
   "contribute.withheld.needsLiveCatalogue": "È un elenco di sostituzione completo, quindi può essere inviato solo quando MovieVault è raggiungibile e può dire cosa sostituirebbe.",
+  "contribute.withheld.freeTextTracks": "Una traccia è memorizzata come testo libero anziché come lingua e codec, quindi l'intero elenco resta qui. Assegna a quella traccia una lingua e un codec per poterla contribuire.",
+  "contribute.withheld.freeTextDiscTracks": "Un disco ha una traccia memorizzata come testo libero anziché come lingua e codec, quindi l'intera suddivisione per disco resta qui. Assegna a quella traccia una lingua e un codec per poterla contribuire.",
   "movieDetail.cast": "Cast",
   "movieDetail.castCrew": "Cast e crew",
   "movieDetail.collectors": "Collezionisti",

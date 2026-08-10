@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "目錄編號",
   "contribute.withheld.needsLiveCatalogue": "這是一份完整的取代清單，因此只有在能連上 MovieVault 並確認將取代哪些內容時才能送出。",
+  "contribute.withheld.freeTextTracks": "有一條音軌以自由文字形式儲存，而不是語言加編解碼器，因此整個清單都留在此處。為該音軌指定語言和編解碼器後即可提交。",
+  "contribute.withheld.freeTextDiscTracks": "有一張光碟的音軌以自由文字形式儲存，而不是語言加編解碼器，因此整個分碟明細都留在此處。為該音軌指定語言和編解碼器後即可提交。",
   "movieDetail.cast": "演員",
   "movieDetail.castCrew": "演職人員",
   "movieDetail.collectors": "收藏者",

@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalog numarası",
   "contribute.withheld.needsLiveCatalogue": "Bu tam bir değiştirme listesidir, bu yüzden yalnızca MovieVault erişilebilir olduğunda ve neyi değiştireceğini söyleyebildiğinde gönderilebilir.",
+  "contribute.withheld.freeTextTracks": "Bir parça dil ve codec yerine serbest metin olarak saklanıyor, bu yüzden listenin tamamı burada kalıyor. Katkı olarak gönderebilmek için o parçaya bir dil ve bir codec verin.",
+  "contribute.withheld.freeTextDiscTracks": "Bir diskte dil ve codec yerine serbest metin olarak saklanan bir parça var, bu yüzden disk dökümünün tamamı burada kalıyor. Katkı olarak gönderebilmek için o parçaya bir dil ve bir codec verin.",
   "movieDetail.cast": "Oyuncular",
   "movieDetail.castCrew": "Oyuncular ve ekip",
   "movieDetail.collectors": "Koleksiyoncular",

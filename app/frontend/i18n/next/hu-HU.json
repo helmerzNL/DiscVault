@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalógusszám",
   "contribute.withheld.needsLiveCatalogue": "Ez teljes cserelista, ezért csak akkor küldhető el, ha a MovieVault elérhető és meg tudja mondani, mit cserélne le.",
+  "contribute.withheld.freeTextTracks": "Az egyik sáv szabad szövegként van tárolva, nem nyelvként és kodekként, ezért a teljes lista itt marad. Adjon a sávnak nyelvet és kodeket, hogy elküldhető legyen.",
+  "contribute.withheld.freeTextDiscTracks": "Az egyik lemezen olyan sáv van, amely szabad szövegként van tárolva, nem nyelvként és kodekként, ezért a teljes lemezbontás itt marad. Adjon a sávnak nyelvet és kodeket, hogy elküldhető legyen.",
   "movieDetail.cast": "Szereposztás",
   "movieDetail.castCrew": "Szereplők és stáb",
   "movieDetail.collectors": "Gyűjtők",

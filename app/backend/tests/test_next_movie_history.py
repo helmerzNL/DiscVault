@@ -64,6 +64,42 @@ class HistorySourceTests(unittest.TestCase):
         self.assertEqual(next_app.movie_history_source("movie.updated", {}, "Mozilla/5.0"), "web")
 
 
+class ChangedFieldsTests(unittest.TestCase):
+    """What an edit moved, answered on the entity rather than on the request.
+
+    The web PATCH recorded `movie.updated` with the title and the barcode and
+    nothing else, so a History row named a change and never which field. That
+    matters most for the edit it describes worst: a disc-only edit touches no
+    column on `movies` at all, so a diff of the movie's own fields reports
+    nothing and the row reads as no change.
+    """
+
+    def test_a_disc_only_edit_is_still_a_change(self):
+        before = {"id": "m1", "title": "Aladdin", "discs": [{"audioTracks": []}]}
+        after = {"id": "m1", "title": "Aladdin", "discs": [{"audioTracks": [{"languageCode": "nl"}]}]}
+        self.assertEqual(next_app.changed_movie_fields(before, after), ["discs"])
+
+    def test_bookkeeping_that_moves_on_every_write_is_not_a_change(self):
+        """`updated_at` and `revision` move whether or not a field did. Reporting
+        them would make every row claim a change to everything, which is the
+        same as reporting nothing."""
+        before = {"id": "m1", "title": "Aladdin", "updated_at": "1", "revision": 1}
+        after = {"id": "m1", "title": "Aladdin", "updated_at": "2", "revision": 2}
+        self.assertEqual(next_app.changed_movie_fields(before, after), [])
+
+    def test_a_field_that_appears_or_disappears_counts(self):
+        self.assertEqual(next_app.changed_movie_fields({}, {"format": "4k_uhd"}), ["format"])
+        self.assertEqual(next_app.changed_movie_fields({"format": "4k_uhd"}, {}), ["format"])
+
+    def test_the_technical_profile_is_covered_because_it_is_flattened_in(self):
+        """`movie_entity` merges the technical spec into the movie dict, which
+        is why comparing entities covers it and comparing the request body
+        would not."""
+        before = {"id": "m1", "audio_tracks": [{"languageCode": "en", "codec": "dts_hd_ma"}]}
+        after = {"id": "m1", "audio_tracks": [{"languageCode": "nl", "codec": "dts_hd_ma"}]}
+        self.assertEqual(next_app.changed_movie_fields(before, after), ["audio_tracks"])
+
+
 @unittest.skipUnless(
     DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
 )

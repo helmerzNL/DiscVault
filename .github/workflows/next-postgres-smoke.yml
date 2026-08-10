@@ -183,6 +183,13 @@ jobs:
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
 
+      # Below the migrations, unlike the pure-function conversions near the top:
+      # these read through the real readers, so they need the tables to exist.
+      # Placed above them first, where every case died on a missing relation --
+      # the same trap the parser step set once before.
+      - name: Test the field corrections against the readers
+        run: python -m unittest tests.test_next_movievault_v2_field_corrections_postgres
+
       # Two more the hand-written list never named, and they cover the rules
       # migration 063 pushed into the schema rather than into code - a series
       # only on a SHOW, a season only from its own series, and now filling a

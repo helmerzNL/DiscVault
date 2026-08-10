@@ -29948,7 +29948,16 @@ def ui_preview_html(
       // Not about the two data models either, and not about this record: about
       // this attempt. The mirror holds no barcodes, so without a live read
       // there is nothing honest to state as the current list.
-      needs_live_catalogue: ["contribute.withheld.needsLiveCatalogue", "This is a complete replacement list, so it can only be sent when MovieVault is reachable and can say what it would replace."]
+      needs_live_catalogue: ["contribute.withheld.needsLiveCatalogue", "This is a complete replacement list, so it can only be sent when MovieVault is reachable and can say what it would replace."],
+      // The two refusals that a user can actually clear, and the reason this
+      // disclosure had to start naming the culprit. DiscVault's track columns
+      // hold structured tracks and legacy free text side by side; MovieVault
+      // requires a language and a codec. One unconvertible track withholds the
+      // whole list, because these are replacement lists and a partial one would
+      // delete what it could not express. Until now it withheld it silently,
+      // which read as "nothing to correct here".
+      local_tracks_are_free_text: ["contribute.withheld.freeTextTracks", "One track is stored as free text rather than as a language and a codec, so the whole list stays here. Give that track a language and a codec to contribute it."],
+      disc_tracks_are_free_text: ["contribute.withheld.freeTextDiscTracks", "One disc has a track stored as free text rather than as a language and a codec, so the whole disc breakdown stays here. Give that track a language and a codec to contribute it."]
     };
     const contributeState = {movie: null, container: null};
     function contributeFieldLabel(field) {
@@ -30252,7 +30261,12 @@ def ui_preview_html(
         withheld.forEach(([field, code]) => {
           const line = document.createElement("p");
           const reason = CONTRIBUTE_WITHHELD_REASONS[code];
-          line.textContent = `${contributeFieldLabel(field)}: ${reason ? tNext(reason[0], reason[1]) : code}`;
+          // The offending entry, quoted back. A reason a user can act on has to
+          // say which row to act on -- "one track is free text" across a box set
+          // of six discs is a search, not an answer.
+          const detail = (preview.withheldDetail || {})[field];
+          const text = `${contributeFieldLabel(field)}: ${reason ? tNext(reason[0], reason[1]) : code}`;
+          line.textContent = detail ? `${text} (${detail})` : text;
           note.appendChild(line);
         });
         panel.appendChild(note);
@@ -30436,6 +30450,19 @@ def ui_preview_html(
       document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
       bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
+      // The change history is a diagnostic surface, like the debug cards below
+      // it: it answers "what rewrote this" when something looks wrong, which is
+      // not a question a normal viewing of a film asks. Hiding the tab rather
+      // than the route -- the route is permission-checked and iOS and Android
+      // must be able to read the history without a browser-local flag.
+      const historyTab = document.getElementById("movieDetailHistoryTab");
+      const historyPanel = document.getElementById("movieDetailHistoryPanel");
+      if (historyTab) historyTab.classList.toggle("hidden", !appDebugMode);
+      if (historyPanel && !appDebugMode && !historyPanel.classList.contains("hidden")) {
+        // Turning debug off while standing on History would otherwise leave the
+        // reader on a panel whose tab has just disappeared.
+        activateDetailTab("movieSections", "movieDetailReleasePanel");
+      }
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);

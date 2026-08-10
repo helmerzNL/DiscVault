@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalognummer",
   "contribute.withheld.needsLiveCatalogue": "Det här är en fullständig ersättningslista, så den kan bara skickas när MovieVault går att nå och kan säga vad den skulle ersätta.",
+  "contribute.withheld.freeTextTracks": "Ett spår är lagrat som fritext i stället för som språk och codec, så hela listan stannar här. Ge spåret ett språk och en codec för att kunna bidra med det.",
+  "contribute.withheld.freeTextDiscTracks": "En skiva har ett spår som är lagrat som fritext i stället för som språk och codec, så hela skivindelningen stannar här. Ge spåret ett språk och en codec för att kunna bidra med det.",
   "movieDetail.cast": "Skadespelare",
   "movieDetail.castCrew": "Rollista och team",
   "movieDetail.collectors": "Samlare",
