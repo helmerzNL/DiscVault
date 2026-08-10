@@ -25033,6 +25033,47 @@ def register_routes(flask_app: Flask) -> None:
                 }
             )
 
+    @flask_app.post("/api/next/movievault/contributions/propose")
+    def movievault_release_propose():
+        """Offer a release the catalogue does not hold.
+
+        A separate route from `submit` because it is a different act: that one
+        corrects fields of a record MovieVault already has, keyed by an
+        `expected` it must still match. This one proposes a record that does
+        not exist, and there is nothing to conflict with.
+
+        It reuses the payload the barcode scan already sends, under provenance
+        `manual_entry` -- nobody picked this from a candidate list -- and the
+        same queue, so a MovieVault outage cannot fail a click and the signed
+        write never fires in the same second as an anonymous read.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not release_contribution_enabled(conn, actor.get("id") if actor else None):
+                raise NextApiError("Release contributions are not enabled", 403)
+            record, metadata = _correction_record(conn, actor, "movie", str(body.get("id") or ""))
+            # Recomputed, never trusted from the request -- the same rule the
+            # correction submit follows. A client that sent its own payload
+            # could propose a release it never saw described.
+            preview = correction_preview(conn, entity="movie", record=record, metadata=metadata)
+            if preview["mode"] != "proposal":
+                raise NextApiError("This release is already in the catalogue", 409)
+            payload = preview.get("proposal") or {}
+            if not payload:
+                raise NextApiError("There is not enough here to propose", 409)
+            job = queue_release_contribution_job(
+                conn,
+                payload,
+                actor=actor,
+                reason="manual_release_proposal",
+            )
+            return response(
+                {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
+            )
+
     @flask_app.get("/api/next/movievault/contributions/history")
     def movievault_correction_history():
         """What this person has contributed, newest first.
