@@ -1361,6 +1361,72 @@ def _mirror_film_id(conn: Any, target: dict[str, Any]) -> str | None:
         row = cur.fetchone()
     return str(dict(row)["film_id"]) if row and dict(row).get("film_id") else None
 
+# ---- Proposing a release the catalogue does not hold ----------------------
+#
+# `correction_preview` has always answered `mode: "proposal"` for a film with
+# no catalogue target, and nothing consumed it: the sheet said "there is
+# nothing to send" and stopped. But a release MovieVault has never seen is
+# precisely the case where a person holding the disc has the most to add.
+#
+# The payload builder for this already exists and is the one the barcode scan
+# uses. It takes a *candidate*-shaped dict, which for a scan comes from
+# MovieVault's resolver; here it is assembled from the local record, and the
+# provenance it travels under is `manual_entry` rather than
+# `candidate_selection` -- nobody picked this from a list.
+
+
+def local_release_proposal(
+    record: dict[str, Any],
+    metadata: dict[str, Any] | None,
+    technical: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """What a release with no catalogue match would offer, or `{}`.
+
+    Empty for three ordinary reasons, and the builder decides all three: no
+    barcode (MovieVault keys a new release on one), no title, or nothing
+    substantive beyond those two -- "a title plus a barcode is a lookup, not a
+    contribution", as the builder puts it, and it refuses to spend a
+    moderator's attention on one.
+    """
+    try:  # pragma: no cover - import shape depends on runtime layout
+        from .next_movievault_v2 import release_technical_contribution_payload
+    except ImportError:  # pragma: no cover - supports direct module execution
+        from next_movievault_v2 import release_technical_contribution_payload
+
+    specs = technical or {}
+    meta = metadata or {}
+    candidate = {
+        # The pressing's own title, falling back to the film title -- the same
+        # precedence `title` follows as a correction, and for the same reason:
+        # `release_title` is the packaging string when there is one.
+        "title": _clean(record.get("release_title")) or _clean(record.get("title")),
+        "edition": _clean(record.get("edition")),
+        "format": _format_display(record.get("format")),
+        "discCount": record.get("disc_count"),
+        "discRegions": _disc_regions(specs, meta),
+        "packaging": _packaging(specs),
+        "video": {
+            "resolution": _clean(specs.get("video_resolution")),
+            "codecs": specs.get("video_codecs"),
+            "hdrFormats": specs.get("hdr"),
+            "aspectRatios": specs.get("screen_ratios"),
+        },
+        "audioTracks": _audio_tracks(specs.get("audio_tracks")),
+        "subtitles": _subtitles(specs.get("subtitles")),
+    }
+    film = {
+        "title": _clean(record.get("title")),
+        "year": record.get("year"),
+        "mediaType": record.get("media_type"),
+    }
+    return release_technical_contribution_payload(
+        candidate,
+        scanned_barcode=str(record.get("barcode") or ""),
+        film=film,
+        provenance="manual_entry",
+    )
+
+
 def correction_preview(
     conn: Any,
     *,
@@ -1384,6 +1450,15 @@ def correction_preview(
     """
     target = resolve_target(conn, entity=entity, record=record)
     if not target:
+        proposal = (
+            local_release_proposal(
+                record,
+                metadata,
+                movie_technical_specs(conn, record.get("id")) if record.get("id") else {},
+            )
+            if entity == "movie"
+            else {}
+        )
         return {
             "mode": "proposal" if entity == "movie" else "unavailable",
             "target": None,
@@ -1391,6 +1466,10 @@ def correction_preview(
             "withheld": {},
             "withheldDetail": {},
             "catalogueSyncedAt": catalogue_synced_at(conn),
+            # What could be offered instead of a correction. Empty is the
+            # ordinary answer -- no barcode, or nothing substantive to say --
+            # and the sheet reads it as "explain, do not offer".
+            "proposal": proposal,
         }
     mirror = mirror_values(conn, target)
     if mirror is None:

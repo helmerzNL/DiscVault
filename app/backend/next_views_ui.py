@@ -30237,6 +30237,96 @@ def ui_preview_html(
       return tNext("contribute.nothingToSend", "There is nothing to send.");
     }
 
+    // Deliberately its own dialog rather than a mode of the correction sheet.
+    // The two are different acts: a correction states `expected` and must
+    // still match it at review time, while this proposes a record that does
+    // not exist and has nothing to conflict with. Sharing a screen would make
+    // one set of words describe both, and they are not the same promise.
+    async function openProposeReleaseDialog(entity, state, proposal) {
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("contribute.proposeTitle", "Add this release to MovieVault");
+      panel.appendChild(heading);
+
+      const lead = document.createElement("p");
+      lead.className = "contribute-intro";
+      lead.textContent = tNext(
+        "contribute.proposeLead",
+        "MovieVault has no release for this film yet. What you have recorded can be offered as a new one, and a moderator reviews it before it exists for anyone else."
+      );
+      panel.appendChild(lead);
+
+      // The same disclosure a correction gets, for the same reason: what
+      // leaves has to be visible before it leaves.
+      const release = proposal.release || {};
+      const rows = [
+        [tNext("movieDetail.releaseTitle", "Release title"), release.title],
+        [tNext("contribute.field.edition", "Edition"), release.edition],
+        [tNext("contribute.field.format", "Format"), release.format],
+        [tNext("contribute.field.discCount", "Disc count"), release.discCount],
+        [tNext("contribute.field.discRegions", "Disc regions"),
+         (release.regions || []).map(discRegionLabel).join(", ")],
+        [tNext("contribute.field.packaging", "Packaging"),
+         (release.packaging || []).map(packagingLabel).join(", ")],
+        [tNext("contribute.field.videoResolution", "Resolution"), (release.video || {}).resolution],
+        [tNext("contribute.field.audioTracks", "Audio tracks"), audioTracksText(release.audioTracks)],
+        [tNext("contribute.field.subtitles", "Subtitles"), subtitlesText(release.subtitles)],
+        [tNext("contribute.proposeBarcode", "Scanned barcode"), proposal.scannedBarcode],
+      ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+      const list = document.createElement("div");
+      list.className = "contribute-changes";
+      rows.forEach(([label, value]) => {
+        const row = document.createElement("p");
+        row.className = "contribute-change-line";
+        row.textContent = `${label}: ${value}`;
+        list.appendChild(row);
+      });
+      panel.appendChild(list);
+
+      const never = document.createElement("p");
+      never.className = "contribute-intro";
+      never.textContent = tNext("contribute.introNever", "Your collection, viewing history, notes, location, purchase details and artwork are never sent.");
+      panel.appendChild(never);
+
+      const message = document.createElement("p");
+      message.className = "contribute-message";
+      panel.appendChild(message);
+
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "ghost-button";
+      cancel.textContent = tNext("common.cancel", "Cancel");
+      cancel.addEventListener("click", () => overlay.remove());
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "primary-button";
+      send.textContent = tNext("contribute.proposeSend", "Propose this release");
+      send.addEventListener("click", async () => {
+        send.disabled = true;
+        message.textContent = tNext("contribute.sending", "Sending...");
+        try {
+          await apiJson("/api/next/movievault/contributions/propose", {
+            method: "POST",
+            headers: authHeaders({"Content-Type": "application/json"}),
+            body: JSON.stringify({id: state.id})
+          });
+          overlay.remove();
+          contributeSetMessage(entity, tNext("contribute.proposeQueued", "Proposal sent for review."), "good");
+          await refreshContributeButton(entity, state.id);
+        } catch (error) {
+          send.disabled = false;
+          message.textContent = error.message || String(error);
+          message.className = "contribute-message bad";
+        }
+      });
+      actions.appendChild(cancel);
+      actions.appendChild(send);
+      panel.appendChild(actions);
+      cancel.focus();
+    }
+
     async function openContributeDialog(entity) {
       const state = contributeState[entity];
       if (!state) return;
@@ -30259,6 +30349,16 @@ def ui_preview_html(
         return;
       }
       const changes = preview.changes || [];
+      // A release the catalogue has never seen is the case where somebody
+      // holding the disc has the most to add, and until now it was the case
+      // the sheet did least with: it explained why there was nothing to
+      // correct and stopped. There is nothing to *correct* — there is
+      // something to propose.
+      if (!changes.length && preview.mode === "proposal" && preview.proposal
+          && Object.keys(preview.proposal).length) {
+        await openProposeReleaseDialog(entity, state, preview.proposal);
+        return;
+      }
       if (!changes.length) {
         // "There is nothing to send" was said to four different situations, and
         // it is only true of one of them. A release the catalogue does not hold

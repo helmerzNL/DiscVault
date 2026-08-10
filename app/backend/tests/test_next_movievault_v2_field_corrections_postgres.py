@@ -106,6 +106,7 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
             "public_id": f"{PREFIX}-{movie_id}",
             "title": f"{PREFIX} local title",
             "release_title": None,
+            "year": None,
             "barcode": None,
             "edition": "Director's Cut",
             "format": "4K UHD",
@@ -118,11 +119,11 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO movies (id, public_id, title, release_title, barcode,
+                INSERT INTO movies (id, public_id, title, release_title, year, barcode,
                                     edition, format, country, language, release_date,
                                     runtime_minutes)
-                VALUES (%(id)s, %(public_id)s, %(title)s, %(release_title)s, %(barcode)s,
-                        %(edition)s, %(format)s, %(country)s, %(language)s,
+                VALUES (%(id)s, %(public_id)s, %(title)s, %(release_title)s, %(year)s,
+                        %(barcode)s, %(edition)s, %(format)s, %(country)s, %(language)s,
                         %(release_date)s, %(runtime_minutes)s)
                 """,
                 row,
@@ -331,6 +332,80 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         )
         self.assertEqual(several["withheld"]["studio"], "discvault_holds_a_list")
         self.assertNotIn("studio", {item["field"] for item in several["changes"]})
+
+    def test_a_release_the_catalogue_lacks_is_offered_as_a_proposal(self):
+        """`mode: "proposal"` has been the answer for a film with no catalogue
+        target since this route existed, and nothing consumed it -- the sheet
+        explained why there was nothing to correct and stopped. A release
+        MovieVault has never seen is the case where somebody holding the disc
+        has the most to add."""
+        # Clears the bar a hand-typed record has to: a format, a year, and at
+        # least two substantive fields. See `release_technical_contribution_payload`
+        # -- MovieVault holds a manual entry to more, having no provider behind it.
+        movie = self._movie(
+            barcode="5051892229364",
+            release_title=f"{PREFIX} Film (4K Ultra HD + Blu-ray)",
+            edition="Steelbook",
+            year=1992,
+        )
+        # Two substantive fields, not one: the edition above and the disc
+        # count here. One is a lookup as far as the builder is concerned.
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE movies SET disc_count = 2 WHERE id = %s", (movie["id"],)
+            )
+        movie["disc_count"] = 2
+        # No lookup hash: nothing resolves, so there is no target.
+        preview = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={}, preflight=False
+        )
+
+        self.assertEqual(preview["mode"], "proposal")
+        self.assertIsNone(preview["target"])
+        release = preview["proposal"]["release"]
+        self.assertEqual(release["title"], f"{PREFIX} Film (4K Ultra HD + Blu-ray)")
+        self.assertEqual(release["edition"], "Steelbook")
+        self.assertEqual(preview["proposal"]["provenance"], "manual_entry")
+
+    def test_a_film_with_no_barcode_has_nothing_to_propose(self):
+        """MovieVault keys a new release on a barcode. Offering a button that
+        cannot succeed is worse than not offering one."""
+        movie = self._movie(
+            barcode=None, release_title=f"{PREFIX} Film (Blu-ray)", year=1992
+        )
+        preview = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={}, preflight=False
+        )
+        self.assertEqual(preview["mode"], "proposal")
+        self.assertEqual(preview["proposal"], {})
+
+    def test_a_thin_record_is_a_lookup_not_a_proposal(self):
+        """The builder holds a hand-typed record to more than a scanned one:
+        a format, a year, and at least two substantive fields. A title and a
+        barcode cost a moderator a review and tell them nothing they could act
+        on, so the button never appears for one."""
+        movie = self._movie(
+            barcode="5051892229364", edition=None, format=None, release_title=None,
+            year=1992,
+        )
+        preview = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={}, preflight=False
+        )
+        self.assertEqual(preview["proposal"], {})
+
+    def test_a_release_that_does_resolve_is_a_correction_and_not_a_proposal(self):
+        """The two are exclusive by construction: a proposal has nothing to
+        conflict with, and a correction states an `expected` it must still
+        match."""
+        movie = self._movie(
+            barcode=BARCODE, release_title=f"{PREFIX} Film (Blu-ray)", year=1992
+        )
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+        preview = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={}, preflight=False
+        )
+        self.assertEqual(preview["mode"], "correction")
+        self.assertNotIn("proposal", preview)
 
     def test_a_disc_whose_track_is_free_text_is_refused_out_loud(self):
         """The reported symptom: a user edits an audio track on a disc and the
