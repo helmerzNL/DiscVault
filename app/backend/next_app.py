@@ -18821,6 +18821,136 @@ class SyncBatchContext:
         # same batch, so the same clientId twice in one batch collapses to one
         # record (the second mutation reports created=false).
         self.claimed_client_ids: dict[str, UUID] = {}
+        # Who is pushing this batch. Carried on the context rather than
+        # threaded through every apply_* signature: the batch is the unit the
+        # route authenticates, so this is where the answer already lives.
+        # Without it a synced edit records a device and no person.
+        self.actor: dict[str, Any] | None = None
+
+
+#: How many entries the change history returns by default. Ten is what a person
+#: can read at a glance while still covering "what happened to this record
+#: recently", which is the question it exists to answer.
+MOVIE_HISTORY_DEFAULT_LIMIT = 10
+MOVIE_HISTORY_MAX_LIMIT = 100
+
+#: Audit events that describe a change *to the record itself*. Deliberately not
+#: every event carrying this movie as its target: a poster upload or a metadata
+#: refresh attempt is activity about the film, not an edit of its fields, and
+#: mixing the two makes the ten most recent entries stop answering the question.
+MOVIE_HISTORY_EVENT_TYPES = (
+    "movie.updated",
+    "movie.identifier_added",
+    "movie.identifier_removed",
+    "movie.product_identifiers_changed",
+    "movie.imported",
+)
+
+
+def movie_change_history(conn, movie_id: UUID | str, limit: int = MOVIE_HISTORY_DEFAULT_LIMIT):
+    """Who changed this film, most recent first.
+
+    Two sources, because DiscVault records the two kinds of change in two
+    different places and neither alone answers the question:
+
+    - `audit_events` holds what a *person or a device* did, with the actor, the
+      client's user agent and (for a sync push) the client id;
+    - `metadata_field_provenance` holds what a *plugin* supplied, per field,
+      with the plugin id and its source reference.
+
+    A value that changed underneath somebody is in one or the other, and until
+    both were readable the honest answer to "who did this" was "look in the
+    database". Merged and sorted here rather than in the client so every
+    surface -- PWA, iOS, Android -- gets the same answer in the same order.
+
+    Timestamps are returned as ISO 8601 with an offset and never pre-formatted.
+    The device knows its own timezone and the server does not; formatting here
+    would bake the server's zone into a value the reader then mis-reads by
+    however many hours they are away from it.
+    """
+    limit = max(1, min(int(limit or MOVIE_HISTORY_DEFAULT_LIMIT), MOVIE_HISTORY_MAX_LIMIT))
+    entries: list[dict[str, Any]] = []
+    if table_exists(conn, "audit_events"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT created_at, event_type, actor_username, actor_role,
+                       summary, metadata, user_agent
+                FROM audit_events
+                WHERE target_type = 'movie'
+                  AND target_id = %s
+                  AND event_type = ANY(%s)
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (str(movie_id), list(MOVIE_HISTORY_EVENT_TYPES), limit),
+            )
+            for row in cur.fetchall():
+                item = dict(row)
+                metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+                entries.append(
+                    {
+                        "_at": item["created_at"],
+                        "at": item["created_at"].isoformat(),
+                        "event": item.get("event_type"),
+                        "actor": clean_text(item.get("actor_username")) or None,
+                        "actorRole": clean_text(item.get("actor_role")) or None,
+                        "source": movie_history_source(item.get("event_type"), metadata, item.get("user_agent")),
+                        "clientId": clean_text(metadata.get("clientId")) or None,
+                        "fields": sorted(metadata.get("changedFields") or []) or None,
+                        "summary": clean_text(item.get("summary")) or None,
+                    }
+                )
+    if table_exists(conn, "metadata_field_provenance"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT captured_at, field_name, plugin_id, source_ref
+                FROM metadata_field_provenance
+                WHERE entity_type = 'movie' AND entity_id = %s
+                ORDER BY captured_at DESC
+                LIMIT %s
+                """,
+                (str(movie_id), limit),
+            )
+            for row in cur.fetchall():
+                item = dict(row)
+                entries.append(
+                    {
+                        "_at": item["captured_at"],
+                        "at": item["captured_at"].isoformat(),
+                        "event": "metadata.field_written",
+                        "actor": None,
+                        "actorRole": None,
+                        "source": "plugin",
+                        "plugin": clean_text(item.get("plugin_id")) or None,
+                        "sourceRef": clean_text(item.get("source_ref")) or None,
+                        "fields": [clean_text(item.get("field_name"))],
+                    }
+                )
+    # Sorted on the datetime, not on the rendered string: the two queries can
+    # in principle return the same instant with different offsets, and text
+    # ordering would then put a later moment first purely because of its zone.
+    entries.sort(key=lambda entry: entry["_at"], reverse=True)
+    return [{key: value for key, value in entry.items() if key != "_at"} for entry in entries[:limit]]
+
+
+def movie_history_source(event_type: Any, metadata: dict[str, Any], user_agent: Any) -> str:
+    """Which surface the change came through.
+
+    `source` is stated by the sync path itself; everything else is inferred
+    from the user agent, and only coarsely. A user agent is a claim by the
+    client rather than a fact, so this answers "which app says it did this"
+    -- enough to tell an iPhone from a browser, not enough to be evidence.
+    """
+    if clean_text(metadata.get("source")) == "sync":
+        agent = (clean_text(user_agent) or "").lower()
+        if "discvault-ios" in agent or "cfnetwork" in agent or "darwin" in agent:
+            return "ios"
+        if "discvault-android" in agent or "okhttp" in agent or "android" in agent:
+            return "android"
+        return "sync"
+    return "web"
 
 
 def movie_id_for_barcode(conn, barcode: str | None) -> UUID | None:
@@ -19755,6 +19885,39 @@ def apply_movie_upsert(
         entity_id=str(entity_id),
         operation="upsert",
         payload=change_payload,
+    )
+    # The sync path writes the same columns the edit form does, and until now
+    # left no trace of having done it. `movie.updated` was recorded for a PATCH
+    # and for nothing else, so a value that changed underneath somebody could
+    # be attributed to a plugin (provenance names those) or to a person (the
+    # audit named those) or to nothing at all -- and "nothing at all" was every
+    # write from the iOS and Android apps.
+    #
+    # `clientId` is the one identifier that separates them. It is a stable
+    # per-installation string the client chooses, so it says *which device*
+    # rather than which platform; the user agent recorded alongside it says the
+    # platform. Neither alone answers "who changed this".
+    audit_event(
+        conn,
+        event_type="movie.updated",
+        category="sync",
+        actor=(batch_ctx.actor if batch_ctx else None),
+        target_type="movie",
+        target_id=entity_id,
+        summary=f"Synced movie edit from {client_id}",
+        metadata={
+            "movieId": str(entity_id),
+            "clientId": client_id,
+            "created": created,
+            "source": "sync",
+            # Which fields the mutation actually carried. A sync body is
+            # presence-keyed, so this is the difference between "the client
+            # sent a format" and "the client left it alone" -- the question
+            # anyone reading this row is trying to answer.
+            "changedFields": sorted(
+                key for key in payload if key not in {"id", "clientEntityId", "clientMutationId"}
+            ),
+        },
     )
     return {
         "clientMutationId": mutation["clientMutationId"],
@@ -28128,6 +28291,37 @@ def register_routes(flask_app: Flask) -> None:
             capture_collection_value_snapshot(conn, actor)
         return response({"status": "ok", "detail": detail, "receiverSummary": receiver_summary})
 
+    @flask_app.get("/api/next/movies/<movie_id>/history")
+    def movie_history(movie_id: str):
+        """The last changes to one film, most recent first.
+
+        Readable by anyone who can see the film: it says who changed the record
+        they are looking at, which is not privileged information about them --
+        and hiding it is what made "why did my format revert" unanswerable.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        if not movie_uuid:
+            raise NextApiError("movieId is required", 400)
+        try:
+            limit = int(request.args.get("limit") or MOVIE_HISTORY_DEFAULT_LIMIT)
+        except (TypeError, ValueError):
+            raise NextApiError("limit must be a number", 400) from None
+        with connect() as conn:
+            actor = require_any_next_permission(
+                conn,
+                ("collection.view", "collection.view_own", "collection.view_group", "collection.view_all"),
+            )
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            entries = movie_change_history(conn, movie_uuid, limit)
+        return response(
+            {
+                "status": "ok",
+                "movieId": str(movie_uuid),
+                "entries": entries,
+            }
+        )
+
     @flask_app.get("/api/next/movies/<movie_id>/field-locks")
     def movie_field_locks(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -34752,6 +34946,9 @@ def register_routes(flask_app: Flask) -> None:
         batch_ctx = SyncBatchContext()
         with connect() as conn:
             actor = require_next_authenticated_user(conn)
+            # The batch is the unit the route authenticates, so the actor is
+            # attached here and read by every apply_* that audits.
+            batch_ctx.actor = actor
             ensure_sync_state(conn)
             for mutation in mutations:
                 client_mutation_id = None

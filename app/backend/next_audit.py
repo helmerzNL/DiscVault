@@ -13,7 +13,7 @@ from __future__ import annotations
 import ipaddress
 from typing import Any
 
-from flask import Flask, request
+from flask import Flask, has_request_context, request
 from psycopg.types.json import Jsonb
 
 try:  # pragma: no cover - exercised indirectly by both layouts
@@ -102,8 +102,14 @@ def audit_event(
                 str(target_id) if target_id is not None else None,
                 summary,
                 Jsonb(json_ready(redact_sensitive_payload(metadata or {}))),
-                public_request_ip(),
-                request.headers.get("User-Agent"),
+                # Outside a request there is no caller to describe, and that is
+                # a normal state rather than an error: a worker, a migration or
+                # a test writes the same events. Recording the row without the
+                # request-derived columns is strictly better than refusing to
+                # record it -- an audit trail that raises is one that stops
+                # existing exactly when something unusual is happening.
+                public_request_ip() if has_request_context() else None,
+                request.headers.get("User-Agent") if has_request_context() else None,
             ),
         )
 

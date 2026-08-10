@@ -15367,11 +15367,21 @@ def ui_preview_html(
             <button type="button" class="active" id="movieDetailReleaseTab" role="tab" aria-controls="movieDetailReleasePanel" aria-selected="true" data-detail-tab="movieSections" data-detail-panel="movieDetailReleasePanel" data-next-i18n="movieDetail.release">Release</button>
             <button type="button" id="movieDetailTechnicalTab" role="tab" aria-controls="movieDetailTechnicalPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailTechnicalPanel" data-next-i18n="movieDetail.technical">Technical</button>
             <button type="button" id="movieDetailCollectorsTab" role="tab" aria-controls="movieDetailCollectorsPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailCollectorsPanel" data-next-i18n="movieDetail.collectors">Collectors</button>
+            <button type="button" id="movieDetailHistoryTab" role="tab" aria-controls="movieDetailHistoryPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailHistoryPanel" data-next-i18n="movieDetail.history">History</button>
           </nav>
           <div class="detail-card full detail-subpanel movie-detail-section-panel" id="movieDetailReleasePanel" role="tabpanel" aria-labelledby="movieDetailReleaseTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.release">Release</h3>
             <div class="detail-fields" id="movieDetailRelease"></div>
             <div class="detail-panel-links hidden" id="movieDetailExternalLinks"></div>
+          </div>
+          <!-- Who last changed this record. Its own panel rather than a line
+               under the fields: it answers a different question from anything
+               else on the screen, and it is the question somebody asks only
+               once something looks wrong. -->
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailHistoryPanel" role="tabpanel" aria-labelledby="movieDetailHistoryTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.history">History</h3>
+            <p class="hint" data-next-i18n="movieDetail.historyHint">The most recent changes to this record, newest first. Times are shown in this device's timezone.</p>
+            <div id="movieDetailHistory"></div>
           </div>
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
@@ -18303,6 +18313,77 @@ def ui_preview_html(
         const text = ranges.map(([from, to]) => (from === to ? `${from}` : `${from}-${to}`)).join(", ");
         return `${name} (${tNext("movieDetail.discEpisodes", "episodes")} ${text})`;
       }).join(" · ");
+    }
+
+    // YYYY-MM-DD HH:MM:SS in the device's own timezone.
+    //
+    // The server sends ISO 8601 with an offset and never a formatted string,
+    // which is what makes this possible: `new Date` resolves the offset and
+    // the local getters below read back in whatever zone this device is in.
+    // Formatting on the server would have baked its zone into the value, and a
+    // reader an hour away would silently see the wrong time with nothing to
+    // suggest it.
+    function formatLocalDateTime(value) {
+      const parsed = new Date(String(value || ""));
+      if (Number.isNaN(parsed.getTime())) return "";
+      const pad = (part) => String(part).padStart(2, "0");
+      return [
+        `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+        `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`,
+      ].join(" ");
+    }
+    // What the row says did the change, in the order a reader cares about:
+    // the person if there was one, otherwise the plugin, otherwise the surface.
+    function movieHistoryWho(entry) {
+      if (entry.actor) return entry.actor;
+      if (entry.plugin) return entry.plugin;
+      const labels = {
+        ios: tNext("movieDetail.historySourceIos", "iOS app"),
+        android: tNext("movieDetail.historySourceAndroid", "Android app"),
+        sync: tNext("movieDetail.historySourceSync", "Synced device"),
+        plugin: tNext("movieDetail.historySourcePlugin", "Metadata plugin"),
+        web: tNext("movieDetail.historySourceWeb", "Web"),
+      };
+      return labels[entry.source] || entry.source || "";
+    }
+    async function renderMovieDetailHistory(movieId) {
+      const host = document.getElementById("movieDetailHistory");
+      if (!host) return;
+      host.textContent = tNext("collection.loading", "Loading...");
+      let entries = [];
+      try {
+        const payload = await apiJson(`/api/next/movies/${encodeURIComponent(movieId)}/history`, {headers: authHeaders()});
+        entries = Array.isArray(payload?.entries) ? payload.entries : [];
+      } catch (error) {
+        host.textContent = tNext("movieDetail.historyUnavailable", "The change history could not be loaded.");
+        return;
+      }
+      if (!entries.length) {
+        host.textContent = tNext("movieDetail.historyEmpty", "No changes have been recorded for this record yet.");
+        return;
+      }
+      const rows = entries.map((entry) => {
+        const fields = (entry.fields || []).map((field) => contributeFieldLabel(field)).join(", ");
+        const details = [
+          entry.source === "plugin" && entry.sourceRef ? entry.sourceRef : "",
+          entry.clientId ? entry.clientId : "",
+        ].filter(Boolean).join(" - ");
+        return `<tr>
+          <td>${escapeHtml(formatLocalDateTime(entry.at))}</td>
+          <td>${escapeHtml(movieHistoryWho(entry))}</td>
+          <td>${escapeHtml(fields)}</td>
+          <td>${escapeHtml(details)}</td>
+        </tr>`;
+      }).join("");
+      host.innerHTML = `<table class="detail-table movie-history-table">
+        <thead><tr>
+          <th>${escapeHtml(tNext("movieDetail.historyWhen", "When"))}</th>
+          <th>${escapeHtml(tNext("movieDetail.historyWho", "Who"))}</th>
+          <th>${escapeHtml(tNext("movieDetail.historyFields", "Fields"))}</th>
+          <th>${escapeHtml(tNext("movieDetail.historyDetails", "Details"))}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
     }
 
     function renderMovieDetailDiscs(discs) {
@@ -27295,6 +27376,12 @@ def ui_preview_html(
       window.requestAnimationFrame(() => {
         document.getElementById(panelId)?.querySelectorAll("[data-more-button]").forEach(updateResponsiveGridLimit);
       });
+      // The history is fetched when its tab is opened rather than with the
+      // detail: it is a separate query, most detail views never open it, and
+      // paying for it on every film would slow the view everybody does use.
+      if (panelId === "movieDetailHistoryPanel" && activeDetailMovieId) {
+        renderMovieDetailHistory(activeDetailMovieId);
+      }
     }
     function activeDetailPanel(group, fallbackPanelId = "") {
       if (!group) return fallbackPanelId || "";
