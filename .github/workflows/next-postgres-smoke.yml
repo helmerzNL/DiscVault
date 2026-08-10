@@ -268,6 +268,13 @@ jobs:
           tests.test_next_discs_postgres
           tests.test_next_discs_ui
 
+      # The last leg of the same subject: the catalogue's breakdown filling a
+      # release that has none. Below the migrations because it writes rows, and
+      # its mapping half is checked against the plugin's real output rather
+      # than a fixture -- the failure mode that cost a day.
+      - name: Test the disc enrichment from the catalogue
+        run: python -m unittest tests.test_next_disc_enrichment
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge

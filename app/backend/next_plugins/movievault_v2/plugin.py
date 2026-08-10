@@ -381,6 +381,58 @@ def _series(record):
     }.items() if value not in (None, "", [], {})}
 
 
+#: The feed's disc keys against DiscVault's. Three differ, and they differ for
+#: reasons on both sides: MovieVault says `discRegions` because a release record
+#: already carries a scalar `region`, DiscVault says `regions` because a disc
+#: row has no other kind. Restated as a map rather than trusted to memory --
+#: the last time a disc converter guessed at key names it dropped every field
+#: whose spellings differed and looked populated doing it.
+_DISC_KEYS = (
+    ("discType", "discType"),
+    ("discRole", "discRole"),
+    ("discTypeOther", "discTypeOther"),
+    ("label", "label"),
+    ("videoResolution", "videoResolution"),
+    ("videoCodecs", "videoCodecs"),
+    ("hdrFormats", "hdr"),
+    ("aspectRatios", "screenRatios"),
+    ("discRegions", "regions"),
+    ("audioTracks", "audioTracks"),
+    ("subtitles", "subtitles"),
+)
+
+
+def _discs(record):
+    """The catalogue's per-disc breakdown, in DiscVault's own disc shape.
+
+    Outside `movie` for the same reason `series` is: a disc breakdown is not a
+    field of the release, it is a set of rows the host owns. The host decides
+    whether to write them at all -- see `apply_movie_disc_enrichment`, which
+    fills only emptiness.
+
+    `position` is dropped. The feed orders by it and DiscVault orders by list
+    order, so carrying it would state the same thing twice and give the two a
+    way to disagree.
+    """
+    entries = record.get("discs")
+    if not isinstance(entries, list) or not entries:
+        return []
+    ordered = sorted(
+        (entry for entry in entries if isinstance(entry, dict)),
+        key=lambda entry: entry.get("position") or 0,
+    )
+    discs = []
+    for entry in ordered:
+        disc = {}
+        for source, target in _DISC_KEYS:
+            value = entry.get(source)
+            if value not in (None, "", [], {}):
+                disc[target] = value
+        if disc:
+            discs.append(disc)
+    return discs
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -418,6 +470,11 @@ def _release(record):
         # local series row and links the disc to it; nothing about it belongs in
         # the flat field merge that `movie` feeds.
         "series": _series(record),
+        # Outside `movie` for the same reason as `series` above: these are rows
+        # the host owns, not a field to merge. Emitted whenever the feed states
+        # them; the host is what refuses to overwrite a breakdown somebody
+        # entered by hand.
+        "discs": _discs(record),
         **_poster_fields(record)}.items()
         if value not in (None, "", [], {})}
 
