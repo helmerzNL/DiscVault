@@ -1904,6 +1904,60 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
 @unittest.skipUnless(
     DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
 )
+class DiscsMirrorTests(unittest.TestCase):
+    """Migration 076: the mirror column exists and NULL survives a round trip.
+
+    The parser's half of distribution-6 is asserted in
+    test_next_movievault_distribution_v6.py, which runs in the pure-Python
+    parser step. This half needs the schema, so it lives here -- after
+    `next_database.py migrate` has run.
+
+    The distinction it pins is the one the column exists to carry. NULL means
+    this generation's record never mentioned discs (a pre-v6 contract, or a
+    release the producer has not broken down); `[]` means a producer saying
+    there are none. Collapse them and enrichment can no longer tell "unknown"
+    from "known to be empty", which is the difference between filling a gap and
+    overwriting an answer.
+    """
+
+    def test_the_mirror_stores_discs_and_keeps_null_distinct_from_empty(self):
+        generation = str(uuid.uuid4())
+        discs = [{"position": 1, "discType": "uhd_bluray"}]
+        with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
+            with conn.cursor() as cur:
+                for release_id, value in (
+                    (str(uuid.uuid4()), Jsonb(discs)),
+                    (str(uuid.uuid4()), None),
+                ):
+                    cur.execute(
+                        """
+                        INSERT INTO movievault_v2_releases (
+                            generation, release_id, film_id, canonical_title,
+                            release_title, release_year, provider_ids, revision,
+                            assets, discs
+                        )
+                        VALUES (%s, %s, %s, 'Test', 'Test', 2024, '{}', 1, '[]', %s)
+                        """,
+                        (generation, release_id, str(uuid.uuid4()), value),
+                    )
+                cur.execute(
+                    "SELECT discs FROM movievault_v2_releases WHERE generation = %s"
+                    " ORDER BY discs IS NULL",
+                    (generation,),
+                )
+                rows = [row["discs"] for row in cur.fetchall()]
+                cur.execute(
+                    "DELETE FROM movievault_v2_releases WHERE generation = %s",
+                    (generation,),
+                )
+            conn.commit()
+        self.assertEqual(rows[0], discs)
+        self.assertIsNone(rows[1])
+
+
+@unittest.skipUnless(
+    DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
+)
 class SeriesLinkPostgresTests(unittest.TestCase):
     """Linking a disc to the series a feed named, against a real database.
 
