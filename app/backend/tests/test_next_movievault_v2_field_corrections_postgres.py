@@ -105,6 +105,7 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
             "id": movie_id,
             "public_id": f"{PREFIX}-{movie_id}",
             "title": f"{PREFIX} local title",
+            "release_title": None,
             "barcode": None,
             "edition": "Director's Cut",
             "format": "4K UHD",
@@ -117,11 +118,12 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         with self.conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO movies (id, public_id, title, barcode, edition, format,
-                                    country, language, release_date, runtime_minutes)
-                VALUES (%(id)s, %(public_id)s, %(title)s, %(barcode)s, %(edition)s,
-                        %(format)s, %(country)s, %(language)s, %(release_date)s,
-                        %(runtime_minutes)s)
+                INSERT INTO movies (id, public_id, title, release_title, barcode,
+                                    edition, format, country, language, release_date,
+                                    runtime_minutes)
+                VALUES (%(id)s, %(public_id)s, %(title)s, %(release_title)s, %(barcode)s,
+                        %(edition)s, %(format)s, %(country)s, %(language)s,
+                        %(release_date)s, %(runtime_minutes)s)
                 """,
                 row,
             )
@@ -258,19 +260,22 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
         self.assertNotIn("edition", {item["field"] for item in preview["changes"]})
         self.assertEqual(preview["withheld"]["edition"], "locked_locally")
 
-    def test_a_release_title_is_not_the_film_title_and_is_never_offered(self):
-        """The most misleading of the withheld fields, because the two values
-        look comparable.
+    def test_the_film_title_is_never_offered_as_the_release_title(self):
+        """The rule that mattered, kept, and now stated more precisely.
 
         `content.releases.title` names a pressing -- "Spider-Man: Into the
         Spider-Verse Blu-ray (Spider-Man: A New Universe) (Germany)" -- while
-        DiscVault's `movies.title` names the film. Offering it made every
-        correctly titled film read as a disagreement on every release, and
-        accepting one would have flattened a product name into a film name,
-        losing the edition, the alternate title and the country with it.
+        DiscVault's `movies.title` names the film. Offering the film title made
+        every correctly titled film read as a disagreement on every release,
+        and accepting one would have flattened a product name into a film name.
+
+        The field was withheld entirely for that reason, which was one step too
+        far: DiscVault *does* hold the pressing's title, in
+        `movies.release_title`. It is the other half of the same split -- both
+        sides keep the raw packaging string and derive a clean film title from
+        it. So `title` now travels, from that column and never from
+        `movies.title`.
         """
-        # The film title is correct; the mirror holds a product name. Before
-        # this, that pairing produced a proposed "correction" on every release.
         movie = self._movie(barcode=BARCODE, title=f"{PREFIX} Mirror Film")
         self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
 
@@ -281,9 +286,51 @@ class FieldCorrectionResolutionPostgresTests(unittest.TestCase):
 
         preview = corrections.correction_preview(self.conn, entity="movie", record=movie, metadata={})
 
+        # `release_title` is empty on this fixture, so there is nothing to say
+        # -- and critically, the film title has not been substituted for it.
         self.assertNotIn("title", {item["field"] for item in preview["changes"]})
-        self.assertEqual(preview["withheld"]["title"], "different_field_upstream")
-        self.assertNotIn("title", corrections.RELEASE_FIELD_SOURCES)
+        self.assertEqual(corrections.RELEASE_FIELD_SOURCES["title"], ("movie", "release_title"))
+
+    def test_a_packaging_title_does_travel(self):
+        """The half that was missing. A release whose packaging title differs
+        from the catalogue's is a correction a person holding the disc can
+        make -- they are reading the box."""
+        movie = self._movie(
+            barcode=BARCODE,
+            title=f"{PREFIX} Mirror Film",
+            release_title=f"{PREFIX} Film (4K Ultra HD + Blu-ray) (UK Import)",
+        )
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        preview = corrections.correction_preview(self.conn, entity="movie", record=movie, metadata={})
+
+        change = next(item for item in preview["changes"] if item["field"] == "title")
+        self.assertEqual(
+            change["proposed"], f"{PREFIX} Film (4K Ultra HD + Blu-ray) (UK Import)"
+        )
+
+    def test_one_studio_travels_and_two_are_refused_out_loud(self):
+        """MovieVault keeps one studio and DiscVault keeps a list. Joining two
+        names produces a studio that does not exist; joining one loses
+        nothing, and that is the common case."""
+        movie = self._movie(barcode=BARCODE)
+        self._lookup(corrections.barcode_lookup_hash(BARCODE), "release", self.release_id)
+
+        single = corrections.correction_preview(
+            self.conn, entity="movie", record=movie, metadata={"studios": ["Arrow Video"]}
+        )
+        change = next(item for item in single["changes"] if item["field"] == "studio")
+        self.assertEqual(change["proposed"], "Arrow Video")
+        self.assertNotIn("studio", single["withheld"])
+
+        several = corrections.correction_preview(
+            self.conn,
+            entity="movie",
+            record=movie,
+            metadata={"studios": ["Arrow Video", "Second Sight"]},
+        )
+        self.assertEqual(several["withheld"]["studio"], "discvault_holds_a_list")
+        self.assertNotIn("studio", {item["field"] for item in several["changes"]})
 
     def test_a_disc_whose_track_is_free_text_is_refused_out_loud(self):
         """The reported symptom: a user edits an audio track on a disc and the
