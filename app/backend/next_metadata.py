@@ -4940,6 +4940,63 @@ def _prune_movie_seasons(cur, movie_uuid: UUID, keep_ids: list[UUID]) -> None:
     cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
 
 
+def apply_movie_disc_enrichment(conn, movie_uuid: UUID, stated: Any) -> dict[str, Any] | None:
+    """Fill a release's disc breakdown from the catalogue, but only if empty.
+
+    The standing precedence rule for discs, and the one place it is enforced: a
+    user's own breakdown of the copy on their shelf outranks the catalogue's.
+    They are holding the box. So this writes only when the release has **no**
+    discs at all -- not "no matching disc", not "fewer discs than the feed
+    says". One disc entered by hand is an answer, and a refresh must not
+    reorganise it.
+
+    Silence is not disagreement either: a feed that states no discs leaves the
+    stored ones alone, the same posture `apply_movie_series_link` takes and for
+    the same reason. A catalogue with nothing to say must never be able to
+    empty something somebody filled in.
+
+    Returns what it did, or None when it did nothing -- which is the common
+    case, because most releases either have discs already or the feed has none.
+    """
+    if not isinstance(stated, list) or not stated:
+        return None
+    if not table_exists(conn, "movie_discs"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) AS existing FROM movie_discs WHERE movie_id = %s",
+            (movie_uuid,),
+        )
+        row = cur.fetchone()
+        if row and int(dict(row)["existing"]) > 0:
+            return None
+        cur.execute("SELECT media_type FROM movies WHERE id = %s", (movie_uuid,))
+        movie = cur.fetchone()
+        if not movie:
+            return None
+        media_type = str(dict(movie).get("media_type") or "MOVIE")
+        # Deferred, because `next_app` imports this module and the other
+        # direction only works at call time -- the same reason the season
+        # pruner above is duplicated rather than imported. Duplicating the
+        # writer is not an option: it diffs discs by id so their episode links
+        # survive, and a second copy of that would drift.
+        try:  # pragma: no cover - import shape depends on runtime layout
+            from .next_app import apply_movie_discs
+            from .next_discs import discs_payload
+        except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+            from next_app import apply_movie_discs
+            from next_discs import discs_payload
+        # Through the same reader the edit form and the sync route use. The
+        # writer is entitled to a normalised entry -- every key present, ids
+        # stated as null -- and giving it a partial dict from the feed is how a
+        # catalogue disc met a KeyError instead of the writer's own documented
+        # "an entry without an id is a new disc".
+        apply_movie_discs(
+            cur, movie_uuid, discs_payload({"discs": stated}), media_type=media_type
+        )
+    return {"created": len(stated), "source": "catalogue"}
+
+
 def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, Any] | None:
     """Link a disc to the series a metadata source named, creating it if new.
 
@@ -5335,6 +5392,9 @@ def apply_metadata_proposal(
     # After the movie updates, because the link is only permitted once the type
     # is SHOW, and it is those updates that may have made it one.
     applied_series = apply_movie_series_link(conn, movie_uuid, proposal.get("series"))
+    # After the series link, because a disc may carry season and episode
+    # references and those resolve against a series the link just established.
+    applied_discs = apply_movie_disc_enrichment(conn, movie_uuid, proposal.get("discs"))
 
     revision = record_sync_change(
         conn,
@@ -5361,6 +5421,7 @@ def apply_metadata_proposal(
         "mediaUpdates": applied_media_updates,
         "identifiers": identifiers,
         "series": applied_series,
+        "discs": applied_discs,
         "credits": applied_credit_updates,
         "localizations": applied_localizations,
         "genres": applied_genre_keys,
