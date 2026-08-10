@@ -3461,13 +3461,31 @@ def ui_preview_html(
       gap: 2px;
       min-width: 0;
     }
+    .contribute-change-compare {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px 10px;
+      align-items: baseline;
+      margin-top: 4px;
+    }
+    .contribute-change-key {
+      font-size: .78rem;
+      color: var(--muted, #888);
+      white-space: nowrap;
+    }
     .contribute-change-from,
     .contribute-change-to {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
       font-size: .88rem;
       overflow-wrap: anywhere;
     }
     .contribute-change-from {
       color: var(--muted, #888);
+    }
+    .contribute-change-line {
+      display: block;
     }
     .contribute-withheld summary {
       cursor: pointer;
@@ -24584,7 +24602,7 @@ def ui_preview_html(
     function renderLanguageSelect() {
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.innerHTML = localeState.locales.map((item) => (
-          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
+          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(localeOptionLabel(item))}</option>`
         )).join("");
         select.value = localeState.locale;
       });
@@ -24596,7 +24614,21 @@ def ui_preview_html(
       if (locale === "nb-NO") return "no";
       return String(locale || "nl-NL").split("-", 1)[0];
     }
-    function languageLabel(item) {
+    // Named `languageLabel` until it was noticed that a *second* function of
+    // that name already existed, four thousand lines above, taking a language
+    // *code* and resolving it through `Intl.DisplayNames`. Two declarations of
+    // one name in one scope is not an error in JavaScript: the later one wins
+    // silently, for the whole script.
+    //
+    // So this one won, and every caller of the other got `""` -- a string has
+    // no `.nativeName`, no `.locale` and no `.label`. Audio tracks and
+    // subtitles fell back to the raw code on every screen; `languageWithCode`
+    // could never append a name; and `guessAudioTrack`, which converts a
+    // legacy free-text track into a structured one by looking for a language
+    // *name* in the prose, never matched anything and always returned null.
+    // That last one is why free-text tracks stayed free text and kept
+    // withholding their whole field from a contribution.
+    function localeOptionLabel(item) {
       const name = item.nativeName || item.englishName || item.locale || "";
       return item.label || name;
     }
@@ -24621,7 +24653,7 @@ def ui_preview_html(
       const active = localeState.locales.find((item) => item.locale === localeState.locale) || localeState.locales[0] || {};
       if (flag) flag.innerHTML = flagIconHtml(languageFlagCode(active), active.nativeName || active.englishName || active.locale || "");
       select.innerHTML = localeState.locales.map((item) => (
-        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
+        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(localeOptionLabel(item))}</option>`
       )).join("");
       select.value = localeState.locale;
       select.onchange = () => loadLocale(select.value);
@@ -28930,9 +28962,6 @@ def ui_preview_html(
         box.checked = chosen.has(box.value);
       });
     }
-    function collectMovieEditCheckboxGroup(containerId) {
-      return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map((box) => box.value);
-    }
     // ---- Case axes ---------------------------------------------------------
     // The Scanavo generation only means something for a metal case, so the
     // control follows the carrier rather than sitting there inviting a value
@@ -29980,19 +30009,19 @@ def ui_preview_html(
       videoCodecs: videoCodecLabel,
       discRegions: discRegionLabel,
     };
+    // The release screen's own renderers, deliberately, rather than a second
+    // set beside them. A correction is read by comparing two values, and the
+    // comparison a user actually makes is against the film they are looking
+    // at -- so `Nederlands (DTS-HD MA 5.1)` on one screen and `nl DTS-HD MA
+    // 5.1` on the other made them do the translating themselves. Two
+    // formatters for one fact also drift: this one never learned that a
+    // language code has a name.
     function contributeTrackText(track) {
       if (!track || typeof track !== "object") return String(track);
-      const parts = [track.languageCode];
-      if (track.codec) parts.push(audioCodecLabel(track.codec));
-      if (track.channels) parts.push(track.channels);
-      if (track.immersiveFormat) parts.push(immersiveLabel(track.immersiveFormat));
-      // A subtitle's variant. `full` stays unsaid: it is the default, and
-      // naming it on every row would bury the ones that are not.
-      if (track.subtitleType && track.subtitleType !== "full") {
-        parts.push(subtitleTypeLabel(track.subtitleType));
-      }
-      if (track.title) parts.push(track.title);
-      return parts.filter(Boolean).join(" ");
+      const rendered = track.subtitleType !== undefined && track.codec === undefined
+        ? subtitleLabel(track)
+        : audioTrackLabel(track);
+      return rendered || String(track.languageCode || "");
     }
     function contributeDiscText(disc, index) {
       if (!disc || typeof disc !== "object") return String(disc);
@@ -30028,11 +30057,29 @@ def ui_preview_html(
         if (field === "discs") {
           return value.map((item, index) => contributeDiscText(item, index)).join("; ");
         }
+        // Keyed off the field rather than sniffed per entry: `subtitles` is a
+        // subtitle list even when an entry happens to carry no variant, and
+        // guessing per row put two shapes in one list.
+        if (field === "subtitles") return subtitlesText(value);
+        if (field === "audioTracks") return audioTracksText(value);
         return value.map(contributeTrackText).join(", ");
       }
       if (typeof value === "object") return contributeTrackText(value);
       const label = CONTRIBUTE_VALUE_LABELS[field];
       return (label && label(value)) || String(value);
+    }
+    // One entry per line for the structured lists, so the two sides line up
+    // item by item and a reader can see *which* subtitle moved. Scalars and
+    // enum lists stay on one line: six words joined by commas are readable,
+    // six audio tracks are not.
+    const CONTRIBUTE_STACKED_FIELDS = new Set(["audioTracks", "subtitles", "discs"]);
+    function contributeValueLines(value, field) {
+      if (!CONTRIBUTE_STACKED_FIELDS.has(field) || !Array.isArray(value) || !value.length) {
+        return [contributeValueText(value, field)];
+      }
+      if (field === "discs") return value.map((item, index) => contributeDiscText(item, index));
+      if (field === "subtitles") return value.map(subtitleLabel).filter(Boolean);
+      return value.map(audioTrackLabel).filter(Boolean);
     }
     function contributeButton(entity) {
       return document.getElementById(entity === "container" ? "containerContributeButton" : "movieContributeButton");
@@ -30276,15 +30323,31 @@ def ui_preview_html(
         body.className = "contribute-change-body";
         const name = document.createElement("strong");
         name.textContent = contributeFieldLabel(change.field);
-        const from = document.createElement("span");
-        from.className = "contribute-change-from";
-        from.textContent = `${tNext("contribute.currently", "MovieVault has")}: ${contributeValueText(change.expected, change.field)}`;
-        const to = document.createElement("span");
-        to.className = "contribute-change-to";
-        to.textContent = `${tNext("contribute.proposed", "You propose")}: ${contributeValueText(change.proposed, change.field)}`;
+        // A grid rather than two sentences: the point of the row is the
+        // comparison, and two values only compare if they start at the same
+        // place. Prefixed prose put them at different offsets on every field.
+        const compare = document.createElement("span");
+        compare.className = "contribute-change-compare";
+        [
+          ["from", tNext("contribute.currently", "MovieVault has"), change.expected],
+          ["to", tNext("contribute.proposed", "You propose"), change.proposed],
+        ].forEach(([side, label, value]) => {
+          const key = document.createElement("span");
+          key.className = `contribute-change-key contribute-change-key-${side}`;
+          key.textContent = label;
+          const cell = document.createElement("span");
+          cell.className = `contribute-change-${side}`;
+          contributeValueLines(value, change.field).forEach((line) => {
+            const entry = document.createElement("span");
+            entry.className = "contribute-change-line";
+            entry.textContent = line;
+            cell.appendChild(entry);
+          });
+          compare.appendChild(key);
+          compare.appendChild(cell);
+        });
         body.appendChild(name);
-        body.appendChild(from);
-        body.appendChild(to);
+        body.appendChild(compare);
         row.appendChild(box);
         row.appendChild(body);
         list.appendChild(row);

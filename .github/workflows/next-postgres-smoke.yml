@@ -281,6 +281,13 @@ jobs:
       - name: Test the app surface router
         run: python -m unittest tests.test_next_app_surface_router
 
+      # No database either. It guards the PWA's one shared scope: the frontend
+      # is a single inline script, so two functions of one name is not an error
+      # but a silent overwrite -- which is how language names stopped being
+      # displayed anywhere, for months, with nothing red.
+      - name: Test the inline script's scope
+        run: python -m unittest tests.test_next_views_ui_scope
+
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as
       # the bootstrap/delta drift they exist to catch - a guard nobody invokes
