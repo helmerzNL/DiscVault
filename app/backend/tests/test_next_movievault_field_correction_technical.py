@@ -242,3 +242,50 @@ class FieldTableTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+class ExpectedSpellingTests(unittest.TestCase):
+    """`expected` has to be spelled the way the catalogue spells it.
+
+    This is the bug the first real disc contribution hit. MovieVault says "this
+    release has no discs" as `[]`; DiscVault says it as `None`, because on the
+    *proposing* side that distinction is load-bearing — `[]` is a replacement
+    list that deletes, and a record with nothing recorded must never send one.
+
+    Both spellings are right for their own side. They are only wrong against
+    each other, and `expected` is the one place the two meet: MovieVault
+    compares it against its canonical value as a whole and refuses an approved
+    change when they differ. `None` against `[]` reads as "Moved Since" — the
+    moderator is told the catalogue shifted under a field nobody touched, and
+    Approve is disabled with Reject the only button left.
+    """
+
+    def test_an_empty_catalogue_list_is_spelled_the_catalogue_way(self):
+        coerced = corrections._as_expected(
+            {"discs": None, "packaging": None, "audioTracks": None, "edition": None}
+        )
+        self.assertEqual(coerced["discs"], [])
+        self.assertEqual(coerced["packaging"], [])
+        self.assertEqual(coerced["audioTracks"], [])
+        # Scalars keep their null: MovieVault's canonical `edition` for a
+        # release with none really is null, not "".
+        self.assertIsNone(coerced["edition"])
+
+    def test_a_value_the_catalogue_does_hold_is_left_alone(self):
+        coerced = corrections._as_expected({"packaging": ["steelbook"], "discs": [{"discType": "dvd"}]})
+        self.assertEqual(coerced["packaging"], ["steelbook"])
+        self.assertEqual(coerced["discs"], [{"discType": "dvd"}])
+
+    def test_every_list_shaped_correctable_field_is_covered(self):
+        """The list is the whole point, so it must not drift from the source
+        table. A field that grows a list shape later and is missed here comes
+        back as an unapprovable contribution, not as a test failure."""
+        listish = {
+            field
+            for field in corrections.RELEASE_FIELD_SOURCES
+            if field in {
+                "discRegions", "packaging", "finishes", "videoCodecs", "hdrFormats",
+                "aspectRatios", "audioTracks", "subtitles", "discs",
+            }
+        }
+        self.assertEqual(listish, set(corrections._EXPECTED_LIST_FIELDS))
