@@ -369,6 +369,66 @@ class WireShapeAgreementTests(unittest.TestCase):
             self.assertIn(column, selected, f"{field} reads {column}, which is not selected")
 
 
+class FormatSpellingTests(unittest.TestCase):
+    """`movies.format` is free text, and a contribution is a display of it.
+
+    The column is unconstrained on purpose -- providers and sync clients write
+    raw codes into it, which is why every screen in the PWA routes a format
+    through `physicalFormatLabel` before showing it. The correction sheet was
+    the one surface that read the column raw and sent it onward, so a shelf
+    holding `4K_UHD` proposed replacing the catalogue's `4K UHD` with an
+    underscore: a change that is not a change, offered on release after
+    release.
+    """
+
+    def test_a_raw_code_is_spelled_the_way_the_catalogue_spells_it(self):
+        self.assertEqual(corrections._format_display("4K_UHD"), "4K UHD")
+        self.assertEqual(corrections._format_display("BLURAY"), "Blu-ray")
+        self.assertEqual(corrections._format_display("dvd"), "DVD")
+
+    def test_a_combo_keeps_both_halves(self):
+        for raw in ("4K UHD + Blu-Ray", "4K UHD / Blu-ray", "UHD & BD"):
+            with self.subTest(raw=raw):
+                self.assertEqual(corrections._format_display(raw), "4K UHD + Blu-ray")
+
+    def test_a_spelling_this_does_not_know_is_left_alone(self):
+        """Free text on purpose. A person may have typed something this does
+        not recognise, and inventing a spelling for it would propose a
+        correction nobody can defend."""
+        for raw in ("HD DVD", "LaserDisc", "VHS", "Betamax"):
+            with self.subTest(raw=raw):
+                self.assertEqual(corrections._format_display(raw), raw)
+
+    def test_nothing_recorded_stays_nothing(self):
+        self.assertIsNone(corrections._format_display(None))
+        self.assertIsNone(corrections._format_display("   "))
+
+    def test_the_normalisation_runs_before_the_diff_not_after(self):
+        """The reported symptom, stated as the invariant behind it: the local
+        value and the catalogue value have to be compared *after* spelling is
+        settled, or two spellings of one answer read as a disagreement.
+
+        Only the local side is normalised. `expected` is the catalogue's
+        literal value and is what upstream checks the correction against, so
+        rewriting it here would submit an `expected` the catalogue does not
+        hold and have the contribution refused for it.
+        """
+        local = {"format": corrections._format_display("4K_UHD")}
+        mirror = {"format": "4K UHD"}
+        self.assertEqual(
+            corrections.build_changes(allowed=["format"], local=local, mirror=mirror),
+            [],
+        )
+
+    def test_a_real_difference_still_travels(self):
+        local = {"format": corrections._format_display("BLURAY")}
+        mirror = {"format": "4K UHD"}
+        self.assertEqual(
+            corrections.build_changes(allowed=["format"], local=local, mirror=mirror),
+            [{"field": "format", "expected": "4K UHD", "proposed": "Blu-ray"}],
+        )
+
+
 class FieldTableTests(unittest.TestCase):
     def test_every_correctable_field_is_sourced_or_withheld_with_a_reason(self):
         """The table's own invariant, restated because the cost of breaking it
