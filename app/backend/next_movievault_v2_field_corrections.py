@@ -232,6 +232,31 @@ def _active_generation(conn: Any) -> Any:
     return (dict(row).get("active_generation") if row else None) or None
 
 
+def catalogue_synced_at(conn: Any) -> str | None:
+    """When this server last pulled the MovieVault index, as ISO 8601 or None.
+
+    Load-bearing for one message rather than for any decision. DiscVault does
+    not compare against MovieVault; it compares against a *local mirror* of a
+    published distribution generation. So a release approved upstream ten
+    minutes ago is genuinely not a correctable target here yet, and "MovieVault
+    has no release for this film" -- the obvious thing to say -- is false and
+    sends the reader looking for a link that already exists.
+
+    Stating the copy's age instead is true in both cases and lets the reader
+    tell them apart, which is more than this server can do on its own.
+    """
+    if not _table_exists(conn, "movievault_v2_sync_state"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT last_success_at FROM movievault_v2_sync_state WHERE plugin_id = %s",
+            (MOVIEVAULT_V2_PLUGIN_ID,),
+        )
+        row = cur.fetchone()
+    value = dict(row).get("last_success_at") if row else None
+    return value.isoformat() if value is not None else None
+
+
 def _stored_release_id(conn: Any, movie_id: Any) -> str | None:
     """The catalogue release this movie was matched to, if it carries one.
 
@@ -1294,12 +1319,13 @@ def correction_preview(
             "changes": [],
             "withheld": {},
             "withheldDetail": {},
+            "catalogueSyncedAt": catalogue_synced_at(conn),
         }
     mirror = mirror_values(conn, target)
     if mirror is None:
         # The lookup index named a record the mirror no longer holds. A stale
         # index is not a correction opportunity.
-        return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}, "withheldDetail": {}}
+        return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}, "withheldDetail": {}, "catalogueSyncedAt": catalogue_synced_at(conn)}
 
     # `expected` is the conflict check upstream, so the fresher the value the
     # fewer corrections are refused for having been composed against a snapshot.
@@ -1315,7 +1341,7 @@ def correction_preview(
         if live and live.get("_gone"):
             # The catalogue no longer serves this record - merged, retired or
             # deleted. Correcting one is not something to guess at.
-            return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}, "withheldDetail": {}}
+            return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}, "withheldDetail": {}, "catalogueSyncedAt": catalogue_synced_at(conn)}
         if live:
             mirror = live
             source = "catalogue"

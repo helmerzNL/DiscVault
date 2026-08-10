@@ -30151,6 +30151,41 @@ def ui_preview_html(
       panel.appendChild(actions);
       close.focus();
     }
+    // Why the diff is empty, in the order a reader needs it: not in the
+    // catalogue beats withheld beats agreement, because the first makes the
+    // other two moot.
+    function contributeNothingToSendText(preview) {
+      if (preview.mode === "unavailable" || preview.mode === "proposal" || !preview.target) {
+        // Deliberately not "MovieVault has no release for this film". DiscVault
+        // compares against a *local mirror* of a published distribution
+        // generation, not against MovieVault, so a release approved upstream
+        // ten minutes ago is not a target here yet -- and telling the reader it
+        // does not exist sends them looking for a link they already made. The
+        // copy's age is true either way and is the fact that tells them apart.
+        const synced = formatLocalDateTime(preview.catalogueSyncedAt);
+        return synced
+          ? tNext(
+              "contribute.notInCatalogueCopy",
+              "This film is not in this server's copy of the MovieVault catalogue, which was last updated {when}. A release added or approved after that becomes correctable once the catalogue syncs again."
+            ).replace("{when}", synced)
+          : tNext(
+              "contribute.notInCatalogue",
+              "This film is not in this server's copy of the MovieVault catalogue, so there is nothing to compare against yet."
+            );
+      }
+      const withheld = Object.entries(preview.withheld || {});
+      if (withheld.length) {
+        const detail = preview.withheldDetail || {};
+        const named = withheld.map(([field, code]) => {
+          const reason = CONTRIBUTE_WITHHELD_REASONS[code];
+          const text = `${contributeFieldLabel(field)}: ${reason ? tNext(reason[0], reason[1]) : code}`;
+          return detail[field] ? `${text} (${detail[field]})` : text;
+        });
+        return `${tNext("contribute.nothingSendableTitle", "Nothing can be sent from this release right now.")} ${named.join(" ")}`;
+      }
+      return tNext("contribute.nothingToSend", "There is nothing to send.");
+    }
+
     async function openContributeDialog(entity) {
       const state = contributeState[entity];
       if (!state) return;
@@ -30174,7 +30209,14 @@ def ui_preview_html(
       }
       const changes = preview.changes || [];
       if (!changes.length) {
-        contributeSetMessage(entity, tNext("contribute.nothingToSend", "There is nothing to send."), "");
+        // "There is nothing to send" was said to four different situations, and
+        // it is only true of one of them. A release the catalogue does not hold
+        // has nothing to correct *yet*; a field held back for a reason has
+        // something to say; and only an actual agreement is nothing to send.
+        // Reported as the same complaint twice -- "I changed it and it says
+        // nothing changed" -- because the message named the outcome and never
+        // the cause.
+        contributeSetMessage(entity, contributeNothingToSendText(preview), "");
         await refreshContributeButton(entity, state.id);
         return;
       }
@@ -30406,7 +30448,14 @@ def ui_preview_html(
         [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
-        ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
+        ...(appDebugMode
+          ? [[
+              tNext("movieDetail.movieId", "Movie ID"),
+              mvIds.movieId
+                ? mvIds.movieId
+                : tNext("movieDetail.movieIdLocalOnly", "Not linked to MovieVault (local id {id})").replace("{id}", movie.id || "-")
+            ]]
+          : [])
       ]);
       const audioVideoFields = [
         [tNext("movieDetail.hdr", "HDR"), enumListText(specs.hdr || metadata.hdr, hdrFormatLabel)],
@@ -30443,7 +30492,20 @@ def ui_preview_html(
                 : tNext("movieDetail.estimatedValueLocked", "Managed by the box-set this film belongs to"))
             : formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)
         ],
-        ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
+        // Two different ids with one label was actively misleading: with no
+        // MovieVault link this fell back to DiscVault's own `public_id`, and a
+        // reader checking whether the film is in the catalogue saw an id and
+        // concluded it is. Say which one is on screen, and say plainly when
+        // there is no upstream release -- that absence is the answer to "why
+        // is there nothing to correct".
+        ...(appDebugMode
+          ? [[
+              tNext("movieDetail.releaseId", "Release ID"),
+              mvIds.releaseId
+                ? mvIds.releaseId
+                : tNext("movieDetail.releaseIdLocalOnly", "Not linked to MovieVault (local id {id})").replace("{id}", movie.public_id || "-")
+            ]]
+          : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
       renderMovieDetailDiscs(detail.discs);
