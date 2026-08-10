@@ -82,6 +82,16 @@ class FieldCorrectionError(Exception):
 #: fields") mapped onto where DiscVault keeps it. A field absent from this table
 #: is in `RELEASE_FIELDS_WITHHELD` with the reason it cannot travel.
 RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
+    # The title of the *pressing*, and DiscVault does have one -- it was
+    # withheld while only `movies.title` was considered, which holds the film
+    # title and would have flattened every release into it.
+    #
+    # `movies.release_title` is the other half of that split and is the same
+    # fact MovieVault's `content.releases.title` holds: the raw packaging
+    # string, "John Wick (4K Ultra HD + Blu-ray) (UK Import)". Both sides
+    # derive a clean film title from it and keep the original; see
+    # `canonicalize_plugin_result`. Often empty, and empty proposes nothing.
+    "title": ("movie", "release_title"),
     "edition": ("movie", "edition"),
     "format": ("movie", "format"),
     "countryCode": ("movie", "country"),
@@ -92,6 +102,11 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     # "one disc" -- and a record nobody has answered proposes nothing.
     "discCount": ("movie", "disc_count"),
     "distributor": ("metadata", "distributor"),
+    # One name only. DiscVault keeps a list and MovieVault keeps a single
+    # value, so joining is lossy -- but a list of one loses nothing, and that
+    # is the common case. Two or more is withheld with a reason rather than
+    # silently truncated; see `_single_studio`.
+    "studio": ("metadata", "studios"),
     # Not a column: the complete EAN list, assembled from
     # `movie_product_identifiers` plus the scanned `movies.barcode`. Withheld
     # until 26.8.20, when DiscVault gained somewhere to hold more than one code.
@@ -132,30 +147,10 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
 #: DiscVault and MovieVault use one word for two things, and translating would
 #: have produced a confident wrong answer rather than a visible gap.
 RELEASE_FIELDS_WITHHELD: dict[str, str] = {
-    # `content.releases.title` is the title of a *pressing*, not of the film:
-    # "Spider-Man: Into the Spider-Verse Blu-ray (Spider-Man: A New Universe)
-    # (Germany)". DiscVault's `movies.title` is the film title, and a film that
-    # is correctly titled therefore reads as a disagreement on every single
-    # release. Proposing the film title here would flatten a product name into
-    # a film name and lose the edition, the alternate title and the country
-    # with it.
-    #
-    # This is the same shape as `region` and `studio` below - one word naming
-    # two different facts - and it is the most misleading of the three, because
-    # the two values look comparable. DiscVault has no release-title field to
-    # offer instead: what it stores per pressing is `edition` and `format`,
-    # which are already correctable separately.
-    "title": "different_field_upstream",
     # `content.releases.region` is free text at release level. DiscVault's
     # `regions` is a normalised list of disc regions on the technical spec.
     # Same word, different fact.
     "region": "different_field_upstream",
-    # MovieVault has one `studio`; DiscVault has `studios`, a list. Joining a
-    # list into one string is lossy in a way a moderator cannot see.
-    "studio": "discvault_holds_a_list",
-    # Correctable upstream, but DiscVault has nowhere to read it from: there is
-    # no alternate-title store on a movie. Recorded as a withholding rather than
-    # left off the table, so the gap reads as a decision instead of an oversight.
     "alternateTitles": "not_stored_by_discvault",
 }
 
@@ -181,7 +176,10 @@ BOX_SET_FIELDS_WITHHELD: dict[str, str] = {
 #: snake_case canonical (`movie_locked_fields`), the wire vocabulary is
 #: camelCase, and one lock can cover more than one spelling.
 _FIELD_LOCK_NAMES: dict[str, tuple[str, ...]] = {
-    "title": ("title",),
+    # The wire `title` is the packaging title, so the lock that covers it is
+    # `release_title` -- locking the film title protects a different field.
+    "title": ("release_title",),
+    "studio": ("studios",),
     "edition": ("edition",),
     "format": ("format",),
     "countryCode": ("country",),
@@ -910,6 +908,33 @@ def _untravellable_reasons(
     return reasons, details
 
 
+def _single_studio(value: Any) -> Any:
+    """The studio, but only when there is exactly one to name.
+
+    MovieVault holds one `studio`; DiscVault holds `studios`, a list. Joining
+    two names into one string is lossy in a way a moderator cannot see -- the
+    result reads like a studio that does not exist. A list of one joins
+    losslessly, which is most records, so the field travels then and is
+    withheld with a reason when it cannot.
+    """
+    if isinstance(value, str):
+        text = _clean(value)
+        return text if text else None
+    if not isinstance(value, list):
+        return None
+    names = [str(item).strip() for item in value if str(item).strip()]
+    return names[0] if len(names) == 1 else None
+
+
+def _studio_refusal(value: Any) -> str | None:
+    """Why a studio list of two or more may not travel."""
+    if isinstance(value, list):
+        names = [str(item).strip() for item in value if str(item).strip()]
+        if len(names) > 1:
+            return "discvault_holds_a_list"
+    return None
+
+
 def _local_release_values(
     record: dict[str, Any],
     metadata: dict[str, Any],
@@ -939,6 +964,8 @@ def _local_release_values(
             # Normalise before anything reads it, so the eligibility check, the
             # `proposed` value and the submitted payload cannot disagree.
             value = _normalise_country(value)
+        if field == "studio":
+            value = _single_studio(raw)
         if field == "format":
             # Same rule, same reason, and the same symptom when it was missing:
             # a local `4K_UHD` against a catalogue holding `4K UHD` read as a
@@ -1408,6 +1435,12 @@ def correction_preview(
         # than on the two data models.
         untravellable, withheld_detail = _untravellable_reasons(technical, discs)
         extra_withheld.update(untravellable)
+        # Decided on the raw list rather than on the converted value: once
+        # `_single_studio` has answered `None`, "two studios" and "no studio"
+        # look identical, and only the first is a refusal worth reporting.
+        studio_refusal = _studio_refusal((metadata or {}).get("studios"))
+        if studio_refusal:
+            extra_withheld["studio"] = studio_refusal
         locked = movie_locked_fields(metadata or {})
         if source != "catalogue" or not isinstance(mirror.get("eans"), list):
             # `eans` is a complete replacement list and the mirror cannot say

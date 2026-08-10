@@ -29934,9 +29934,13 @@ def ui_preview_html(
     //
     // So this file holds no field list, no lock check and no mirror value.
     const CONTRIBUTE_FIELD_LABELS = {
-      // `title` is no longer offered for a release -- see the withheld map --
-      // but the label stays: the withheld disclosure names it.
-      title: ["contribute.field.title", "Title"],
+      // Reuses the detail screen's key rather than `contribute.field.title`:
+      // the field a release correction carries is the *packaging* title, and
+      // a row labelled plain "Title" beside a film title is the ambiguity that
+      // kept this field withheld in the first place. A box set's `title` is
+      // the container's own name, which the plain label still fits.
+      title: ["movieDetail.releaseTitle", "Release title"],
+      studio: ["movieDetail.studio", "Studio"],
       edition: ["contribute.field.edition", "Edition"],
       format: ["contribute.field.format", "Format"],
       countryCode: ["contribute.field.countryCode", "Country"],
