@@ -1060,6 +1060,8 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
     for summary in payload.get("releases") or []:
         if not isinstance(summary, dict) or str(summary.get("releaseRef")) != wanted:
             continue
+        video = summary.get("video")
+        video = video if isinstance(video, dict) else {}
         return _as_expected({
             "edition": _clean(summary.get("edition")),
             "format": _clean(summary.get("format")),
@@ -1071,19 +1073,21 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "distributor": _clean(summary.get("distributor")),
             "eans": catalogue_eans(summary.get("barcodes")),
             "discRegions": _mirror_disc_regions(summary.get("discRegions")),
-            # The technical description, read live. A summary that predates the
-            # field simply omits it, and the converters turn that into None --
-            # "the catalogue did not say" -- rather than an empty claim.
+            # The technical description, read live. The summary states the four
+            # video facts as one nested `video` object rather than flat, which
+            # is the shape it chose long before they were correctable -- reading
+            # them flat here returned None for every release, and `expected`
+            # then disagreed with a catalogue nobody had touched.
             "packaging": _vocabulary_list(summary.get("packaging"), _MV_PACKAGING),
             "finishes": _vocabulary_list(summary.get("finishes"), _MV_FINISHES),
             "videoResolution": (
-                _clean(summary.get("videoResolution"))
-                if _clean(summary.get("videoResolution")) in _MV_RESOLUTIONS
+                _clean(video.get("resolution"))
+                if _clean(video.get("resolution")) in _MV_RESOLUTIONS
                 else None
             ),
-            "videoCodecs": _vocabulary_list(summary.get("videoCodecs"), _MV_VIDEO_CODECS),
-            "hdrFormats": _vocabulary_list(summary.get("hdrFormats"), _MV_HDR_FORMATS),
-            "aspectRatios": _aspect_ratios(summary.get("aspectRatios")),
+            "videoCodecs": _vocabulary_list(video.get("codecs"), _MV_VIDEO_CODECS),
+            "hdrFormats": _vocabulary_list(video.get("hdrFormats"), _MV_HDR_FORMATS),
+            "aspectRatios": _aspect_ratios(video.get("aspectRatios")),
             "audioTracks": _audio_tracks(summary.get("audioTracks")),
             "subtitles": _subtitles(summary.get("subtitles")),
             "discs": _mirror_discs(summary.get("discs")),
