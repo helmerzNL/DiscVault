@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Kataloga numurs",
   "contribute.withheld.needsLiveCatalogue": "Šis ir pilnīgs aizstāšanas saraksts, tāpēc to var nosūtīt tikai tad, kad MovieVault ir sasniedzams un var pateikt, ko tas aizstātu.",
+  "contribute.withheld.freeTextTracks": "Viens celiņš ir saglabāts kā brīvs teksts, nevis kā valoda un kodeks, tāpēc viss saraksts paliek šeit. Piešķiriet šim celiņam valodu un kodeku, lai to varētu nosūtīt.",
+  "contribute.withheld.freeTextDiscTracks": "Vienam diskam ir celiņš, kas saglabāts kā brīvs teksts, nevis kā valoda un kodeks, tāpēc viss disku sadalījums paliek šeit. Piešķiriet šim celiņam valodu un kodeku, lai to varētu nosūtīt.",
   "movieDetail.cast": "Aktieri",
   "movieDetail.castCrew": "Aktieri un komanda",
   "movieDetail.collectors": "Kolekcionāri",

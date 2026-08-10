@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalogové číslo",
   "contribute.withheld.needsLiveCatalogue": "Jde o úplný náhradní seznam, takže jej lze odeslat jen když je MovieVault dostupný a může říci, co by nahradil.",
+  "contribute.withheld.freeTextTracks": "Jedna stopa je uložena jako volný text, nikoli jako jazyk a kodek, takže celý seznam zůstává zde. Přiřaďte té stopě jazyk a kodek, abyste ji mohli přispět.",
+  "contribute.withheld.freeTextDiscTracks": "Jeden disk má stopu uloženou jako volný text, nikoli jako jazyk a kodek, takže celé rozdělení podle disků zůstává zde. Přiřaďte té stopě jazyk a kodek, abyste ji mohli přispět.",
   "movieDetail.cast": "Promítání",
   "movieDetail.castCrew": "Obsazení a štáb",
   "movieDetail.collectors": "Sběratelé",

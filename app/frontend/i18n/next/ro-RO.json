@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Număr de catalog",
   "contribute.withheld.needsLiveCatalogue": "Aceasta este o listă de înlocuire completă, deci poate fi trimisă doar când MovieVault este accesibil și poate spune ce ar înlocui.",
+  "contribute.withheld.freeTextTracks": "O pistă este stocată ca text liber în loc de limbă și codec, așa că întreaga listă rămâne aici. Atribuiți acelei piste o limbă și un codec pentru a o putea contribui.",
+  "contribute.withheld.freeTextDiscTracks": "Un disc are o pistă stocată ca text liber în loc de limbă și codec, așa că întreaga defalcare pe discuri rămâne aici. Atribuiți acelei piste o limbă și un codec pentru a o putea contribui.",
   "movieDetail.cast": "Distribuţie",
   "movieDetail.castCrew": "Distribuţia şi echipa",
   "movieDetail.collectors": "Colecționari",

@@ -920,7 +920,11 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
         cur.execute(
             """
             SELECT hdr, packaging, carrier_type, outer_packaging, finishes, steelbook_format,
-                   screen_ratios, audio_tracks, subtitles, regions, content_ratings
+                   screen_ratios, audio_tracks, subtitles, regions, content_ratings,
+                   -- Both are correctable release fields (`RELEASE_FIELD_SOURCES`
+                   -- names them) and neither was selected here, so the reader
+                   -- answered "nobody said" for a value the table was holding.
+                   video_resolution, video_codecs
             FROM movie_technical_specs
             WHERE movie_id=%s
             """,

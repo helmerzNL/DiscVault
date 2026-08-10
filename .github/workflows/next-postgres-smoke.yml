@@ -87,6 +87,14 @@ jobs:
       - name: Test the field-correction technical conversions
         run: python -m unittest tests.test_next_movievault_field_correction_technical
 
+      # The same subject against a real database, and the half that matters
+      # most: the pure functions above agree with whatever fixture shape the
+      # test author wrote, while these read the discs and the technical specs
+      # through the actual readers. That difference is what let a converter and
+      # its reader disagree about every key for as long as they did.
+      - name: Test the field corrections against the readers
+        run: python -m unittest tests.test_next_movievault_v2_field_corrections_postgres
+
       # Another module the hand-written list had simply never been given, in the
       # same class as the three below. It holds the plugin's own mapping tests -
       # what a release proposes, and which series a television disc belongs to -

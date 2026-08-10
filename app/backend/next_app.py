@@ -18847,6 +18847,30 @@ MOVIE_HISTORY_EVENT_TYPES = (
 )
 
 
+#: Bookkeeping that moves on every write and describes no edit anybody made.
+#: `revision` and the timestamps change whether or not a field did, and
+#: reporting them would make every history row claim a change to everything.
+_MOVIE_CHANGE_IGNORED_KEYS = frozenset(
+    {"id", "public_id", "created_at", "updated_at", "revision", "sync_revision"}
+)
+
+
+def changed_movie_fields(before: dict[str, Any] | None, after: dict[str, Any] | None) -> list[str]:
+    """Which fields an edit actually moved.
+
+    Compared on the whole movie entity rather than on the request body, because
+    the body is not where the answer is: `movie_entity` carries the technical
+    profile flattened into the same dict and the discs under `discs`, so an edit
+    that touched nothing but one disc's audio tracks shows up here and shows up
+    nowhere in the movie's own columns. Diffing the body would have reported
+    that edit as a change to nothing -- which is exactly how it read before.
+    """
+    before = before or {}
+    after = after or {}
+    keys = (set(before) | set(after)) - _MOVIE_CHANGE_IGNORED_KEYS
+    return sorted(key for key in keys if before.get(key) != after.get(key))
+
+
 def movie_change_history(conn, movie_id: UUID | str, limit: int = MOVIE_HISTORY_DEFAULT_LIMIT):
     """Who changed this film, most recent first.
 
@@ -28256,6 +28280,11 @@ def register_routes(flask_app: Flask) -> None:
                 metadata={
                     "title": payload["title"],
                     "barcode": payload["barcode"],
+                    # The same key the sync path writes, so one History column
+                    # serves both surfaces. Without it a web edit recorded that
+                    # *something* changed and never which field -- and an entry
+                    # that names nothing reads as no change at all.
+                    "changedFields": changed_movie_fields(existing, entity) if entity else [],
                     **(
                         {
                             "releaseCandidate": {

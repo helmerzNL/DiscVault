@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Katalogo numeris",
   "contribute.withheld.needsLiveCatalogue": "Tai visas pakeičiantis sąrašas, todėl jį galima siųsti tik kai „MovieVault“ pasiekiamas ir gali pasakyti, ką pakeistų.",
+  "contribute.withheld.freeTextTracks": "Vienas takelis įrašytas kaip laisvas tekstas, o ne kaip kalba ir kodekas, todėl visas sąrašas lieka čia. Priskirkite tam takeliui kalbą ir kodeką, kad galėtumėte jį pateikti.",
+  "contribute.withheld.freeTextDiscTracks": "Viename diske yra takelis, įrašytas kaip laisvas tekstas, o ne kaip kalba ir kodekas, todėl visas skirstymas pagal diskus lieka čia. Priskirkite tam takeliui kalbą ir kodeką, kad galėtumėte jį pateikti.",
   "movieDetail.cast": "Aktoriai",
   "movieDetail.castCrew": "Aktoriai ir komanda",
   "movieDetail.collectors": "Kolekcininkai",

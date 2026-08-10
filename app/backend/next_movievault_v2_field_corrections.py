@@ -610,6 +610,15 @@ def _movie_discs(rows: Any) -> list[dict[str, Any]] | None:
     Withheld entirely when any disc's tracks cannot travel, for the reason
     `_audio_tracks` is all or nothing: this replaces every disc, so a disc sent
     without the tracks it actually has would delete them upstream.
+
+    Reads the **wire** spelling, because that is what `_local_discs` hands it:
+    `movie_disc_entities` renders every row through `MOVIE_DISC_WIRE_KEYS`
+    before it gets here. Reading the column names instead -- which is what this
+    did -- silently dropped every key whose two spellings differ, which is all
+    of them except `label`, `subtitles`, `regions` and `notes`. A disc's audio
+    tracks, type, role, resolution, codecs, HDR and ratios therefore never
+    reached a correction at all, and an edit to any of them proposed nothing
+    and refused nothing: the two survivors made the result look populated.
     """
     if not isinstance(rows, list) or not rows:
         return None
@@ -618,34 +627,34 @@ def _movie_discs(rows: Any) -> list[dict[str, Any]] | None:
         if not isinstance(row, dict):
             return None
         entry: dict[str, Any] = {}
-        for wire, column in (
-            ("discType", "disc_type"),
-            ("discRole", "disc_role"),
-            ("discTypeOther", "disc_type_other"),
+        for wire, source in (
+            ("discType", "discType"),
+            ("discRole", "discRole"),
+            ("discTypeOther", "discTypeOther"),
             ("label", "label"),
         ):
-            text = _clean(row.get(column))
+            text = _clean(row.get(source))
             if text is not None:
                 entry[wire] = text
-        resolution = _clean(row.get("video_resolution"))
+        resolution = _clean(row.get("videoResolution"))
         if resolution in _MV_RESOLUTIONS:
             entry["videoResolution"] = resolution
-        for wire, column, allowed in (
-            ("videoCodecs", "video_codecs", _MV_VIDEO_CODECS),
+        for wire, source, allowed in (
+            ("videoCodecs", "videoCodecs", _MV_VIDEO_CODECS),
             ("hdrFormats", "hdr", _MV_HDR_FORMATS),
             ("regions", "regions", DISC_REGIONS),
         ):
-            values = _vocabulary_list(row.get(column), allowed)
+            values = _vocabulary_list(row.get(source), allowed)
             if values:
                 entry[wire] = values
-        ratios = _aspect_ratios(row.get("screen_ratios"))
+        ratios = _aspect_ratios(row.get("screenRatios"))
         if ratios:
             entry["aspectRatios"] = ratios
-        for wire, column, convert in (
-            ("audioTracks", "audio_tracks", _audio_tracks),
+        for wire, source, convert in (
+            ("audioTracks", "audioTracks", _audio_tracks),
             ("subtitles", "subtitles", _subtitles),
         ):
-            raw = row.get(column)
+            raw = row.get(source)
             if isinstance(raw, list) and raw:
                 converted = convert(raw)
                 if converted is None:
@@ -728,6 +737,114 @@ def _technical_value(
         "hdrFormats": _MV_HDR_FORMATS,
     }[field]
     return _vocabulary_list(technical.get(column), allowed)
+
+
+# ---- Refusing out loud ----------------------------------------------------
+#
+# `_audio_tracks`, `_subtitles` and `_movie_discs` are all-or-nothing on
+# purpose: each is a replacement list, so sending one without an entry it
+# actually has would delete that entry upstream. What was wrong was not the
+# refusal but the silence around it. A refused field returns `None`,
+# `build_changes` skips a `None` proposal, and the field simply is not on the
+# sheet -- indistinguishable from "you and the catalogue already agree".
+#
+# That is the failure this module already named once, for `eans`: a field that
+# silently vanishes from the sheet reads as a bug rather than as a reason. So a
+# local value that exists but cannot travel is now a withholding with a reason,
+# and it carries the offending entry, because the user's next action is to go
+# and fix that one track.
+
+
+def _describe_audio_track(item: Any) -> str:
+    """One audio track, as the person who typed it would recognise it."""
+    if not isinstance(item, dict):
+        return str(item).strip() or "?"
+    language = str(item.get("languageCode") or item.get("language_code") or "").strip()
+    codec = str(item.get("codec") or "").strip()
+    return " / ".join(part or "?" for part in (language, codec))
+
+
+def _describe_subtitle(item: Any) -> str:
+    if isinstance(item, str):
+        return item.strip() or "?"
+    if not isinstance(item, dict):
+        return str(item).strip() or "?"
+    language = str(item.get("languageCode") or item.get("language_code") or "").strip()
+    variant = str(item.get("subtitleType") or item.get("subtitle_type") or "").strip()
+    return " / ".join(part or "?" for part in (language, variant))
+
+
+def _first_untravellable(value: Any, convert: Any, describe: Any) -> str | None:
+    """The first entry of a list that its converter would refuse.
+
+    Asked one entry at a time rather than inferred from the whole-list refusal,
+    so the answer names the culprit instead of the field. "Audio tracks cannot
+    be sent" tells a user nothing they can act on; "Commentary with the
+    director" tells them exactly which row to fix.
+    """
+    if not isinstance(value, list):
+        return None
+    for item in value:
+        if convert([item]) is None:
+            return describe(item)
+    return None
+
+
+def _disc_name(row: Any, index: int) -> str:
+    label = _clean(row.get("label")) if isinstance(row, dict) else None
+    return str(label) if label else f"Disc {index}"
+
+
+def _untravellable_reasons(
+    technical: dict[str, Any], discs: Any
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Fields that hold something locally which upstream cannot be told.
+
+    Returns the reason codes and, separately, the human detail naming the entry
+    that caused each one. Two maps rather than one composed string: the code is
+    a stable vocabulary the client translates, and the detail is data.
+    """
+    reasons: dict[str, str] = {}
+    details: dict[str, str] = {}
+
+    raw_audio = technical.get("audio_tracks")
+    if isinstance(raw_audio, list) and raw_audio and _audio_tracks(raw_audio) is None:
+        reasons["audioTracks"] = "local_tracks_are_free_text"
+        detail = _first_untravellable(raw_audio, _audio_tracks, _describe_audio_track)
+        if detail:
+            details["audioTracks"] = detail
+
+    raw_subtitles = technical.get("subtitles")
+    if isinstance(raw_subtitles, list) and raw_subtitles and _subtitles(raw_subtitles) is None:
+        reasons["subtitles"] = "local_tracks_are_free_text"
+        detail = _first_untravellable(raw_subtitles, _subtitles, _describe_subtitle)
+        if detail:
+            details["subtitles"] = detail
+
+    if isinstance(discs, list) and discs and _movie_discs(discs) is None:
+        reasons["discs"] = "disc_tracks_are_free_text"
+        for index, row in enumerate(discs, start=1):
+            if not isinstance(row, dict):
+                details["discs"] = _disc_name(row, index)
+                break
+            audio = row.get("audioTracks")
+            detail = (
+                _first_untravellable(audio, _audio_tracks, _describe_audio_track)
+                if isinstance(audio, list) and audio
+                else None
+            )
+            if detail is None:
+                subtitles = row.get("subtitles")
+                detail = (
+                    _first_untravellable(subtitles, _subtitles, _describe_subtitle)
+                    if isinstance(subtitles, list) and subtitles
+                    else None
+                )
+            if detail is not None:
+                details["discs"] = f"{_disc_name(row, index)} - {detail}"
+                break
+
+    return reasons, details
 
 
 def _local_release_values(
@@ -1176,12 +1293,13 @@ def correction_preview(
             "target": None,
             "changes": [],
             "withheld": {},
+            "withheldDetail": {},
         }
     mirror = mirror_values(conn, target)
     if mirror is None:
         # The lookup index named a record the mirror no longer holds. A stale
         # index is not a correction opportunity.
-        return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}}
+        return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}, "withheldDetail": {}}
 
     # `expected` is the conflict check upstream, so the fresher the value the
     # fewer corrections are refused for having been composed against a snapshot.
@@ -1197,20 +1315,29 @@ def correction_preview(
         if live and live.get("_gone"):
             # The catalogue no longer serves this record - merged, retired or
             # deleted. Correcting one is not something to guess at.
-            return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}}
+            return {"mode": "unavailable", "target": None, "changes": [], "withheld": {}, "withheldDetail": {}}
         if live:
             mirror = live
             source = "catalogue"
 
     extra_withheld: dict[str, str] = {}
+    withheld_detail: dict[str, str] = {}
     if entity == "movie":
+        technical = movie_technical_specs(conn, record.get("id")) if record.get("id") else {}
+        discs = _local_discs(conn, record.get("id"))
         local = _local_release_values(
             record,
             metadata or {},
             movie_identifiers_by_type(conn, record.get("id")),
-            movie_technical_specs(conn, record.get("id")) if record.get("id") else {},
-            _local_discs(conn, record.get("id")),
+            technical,
+            discs,
         )
+        # A local value that exists but cannot be expressed upstream is a
+        # refusal, not an agreement. Merged here beside `eans` because it is the
+        # same category: a reason that depends on this record's contents rather
+        # than on the two data models.
+        untravellable, withheld_detail = _untravellable_reasons(technical, discs)
+        extra_withheld.update(untravellable)
         locked = movie_locked_fields(metadata or {})
         if source != "catalogue" or not isinstance(mirror.get("eans"), list):
             # `eans` is a complete replacement list and the mirror cannot say
@@ -1241,6 +1368,10 @@ def correction_preview(
         "target": target,
         "changes": build_changes(allowed=allowed, local=local, mirror=mirror, fields=fields),
         "withheld": withheld,
+        # The entry that caused a refusal, where there is one. Kept beside the
+        # codes rather than folded into them: the code is a stable vocabulary
+        # the client translates, this is the user's own data quoted back.
+        "withheldDetail": withheld_detail,
         # Which of the two the diff was computed against. A client shows the
         # difference: a diff from the mirror may already have moved, and saying
         # so is more honest than presenting both the same way.

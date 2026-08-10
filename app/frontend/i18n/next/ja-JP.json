@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "カタログ番号",
   "contribute.withheld.needsLiveCatalogue": "これは完全な置き換えリストです。そのため MovieVault に接続でき、何が置き換わるかを確認できるときにのみ送信できます。",
+  "contribute.withheld.freeTextTracks": "1 つのトラックが言語とコーデックではなく自由入力のテキストとして保存されているため、リスト全体がここに留まります。そのトラックに言語とコーデックを設定すると送信できます。",
+  "contribute.withheld.freeTextDiscTracks": "あるディスクに、言語とコーデックではなく自由入力のテキストとして保存されたトラックがあるため、ディスク別の内訳全体がここに留まります。そのトラックに言語とコーデックを設定すると送信できます。",
   "movieDetail.cast": "出演者",
   "movieDetail.castCrew": "出演者とスタッフ",
   "movieDetail.collectors": "コレクター",

@@ -1783,6 +1783,8 @@
   "movieDetail.identifierType.asin": "Amazon ASIN",
   "movieDetail.identifierType.catalog_number": "Kataloški broj",
   "contribute.withheld.needsLiveCatalogue": "Ovo je potpuni zamjenski popis, pa se može poslati samo kad je MovieVault dostupan i može reći što bi zamijenio.",
+  "contribute.withheld.freeTextTracks": "Jedan zapis pohranjen je kao slobodan tekst umjesto kao jezik i kodek, pa cijeli popis ostaje ovdje. Dodijelite tom zapisu jezik i kodek kako biste ga mogli poslati.",
+  "contribute.withheld.freeTextDiscTracks": "Jedan disk ima zapis pohranjen kao slobodan tekst umjesto kao jezik i kodek, pa cijela raspodjela po diskovima ostaje ovdje. Dodijelite tom zapisu jezik i kodek kako biste ga mogli poslati.",
   "movieDetail.cast": "Uloge:",
   "movieDetail.castCrew": "Glumci i ekipa",
   "movieDetail.collectors": "Kolekcionari",
