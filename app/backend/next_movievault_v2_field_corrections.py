@@ -771,6 +771,44 @@ def _local_box_set_values(record: dict[str, Any]) -> dict[str, Any]:
     return {field: _clean(record.get(column)) for field, (_, column) in BOX_SET_FIELD_SOURCES.items()}
 
 
+#: The list-shaped correctable fields, and the reason they need their own rule
+#: on the way *in*.
+#:
+#: `expected` is compared against MovieVault's canonical value as a whole, and
+#: MovieVault spells "this release has none" as `[]` -- an empty array from an
+#: absent profile column, an empty list from a disc reader that found no rows.
+#: DiscVault spells the same thing as `None`, following `_mirror_disc_regions`,
+#: because on the *proposing* side the distinction is load-bearing: `[]` is a
+#: replacement list that deletes, and a local record with nothing recorded must
+#: never send one.
+#:
+#: Both spellings are right for their own side and wrong for each other. So the
+#: coercion happens exactly here, where a mirror or a live read becomes
+#: `expected`: empty reads as `[]`, matching the catalogue. Leave it as `None`
+#: and the moderator is shown "Moved Since" on a field nobody moved, with
+#: Approve disabled and Reject the only button left -- which is what happened to
+#: the first real disc contribution.
+_EXPECTED_LIST_FIELDS = (
+    "discRegions",
+    "packaging",
+    "finishes",
+    "videoCodecs",
+    "hdrFormats",
+    "aspectRatios",
+    "audioTracks",
+    "subtitles",
+    "discs",
+)
+
+
+def _as_expected(values: dict[str, Any]) -> dict[str, Any]:
+    """Spell every list-shaped absence the way the catalogue spells it."""
+    for field in _EXPECTED_LIST_FIELDS:
+        if values.get(field) is None:
+            values[field] = []
+    return values
+
+
 def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
     """What the catalogue holds, in the wire vocabulary.
 
@@ -833,7 +871,7 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             ]
         row = dict(row)
         release_date = row.get("release_date")
-        return {
+        return _as_expected({
             "title": _clean(row.get("release_title")),
             "edition": _clean(row.get("edition")),
             "format": _clean(row.get("format")),
@@ -871,7 +909,7 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             # same thing produce the same value.
             "audioTracks": _audio_tracks(tracks),
             "subtitles": _subtitles(subtitles),
-        }
+        })
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -1022,7 +1060,7 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
     for summary in payload.get("releases") or []:
         if not isinstance(summary, dict) or str(summary.get("releaseRef")) != wanted:
             continue
-        return {
+        return _as_expected({
             "edition": _clean(summary.get("edition")),
             "format": _clean(summary.get("format")),
             "countryCode": _clean(summary.get("countryCode")),
@@ -1049,7 +1087,7 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "audioTracks": _audio_tracks(summary.get("audioTracks")),
             "subtitles": _subtitles(summary.get("subtitles")),
             "discs": _mirror_discs(summary.get("discs")),
-        }
+        })
     # The film is known but this release is not among its active ones: it was
     # merged, retired or deleted. Correcting a record that is no longer served
     # is not something to guess at, so this is a refusal rather than a
