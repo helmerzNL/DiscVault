@@ -102,6 +102,30 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     # field that can travel -- `region` below is free-text market region and a
     # different fact.
     "discRegions": ("technical", "regions"),
+    # The rest of the technical description, correctable upstream since
+    # MovieVault-v2#227. Every one of these is a fact a person holding the disc
+    # can read off it, which is the test that put them on that list and the
+    # reason DiscVault is a good source for them.
+    #
+    # `packaging` is the only one that is not a straight copy: DiscVault splits
+    # what MovieVault keeps flat, so it is re-flattened through the mapping that
+    # already existed for the trip in the other direction. See `_packaging`.
+    "packaging": ("technical", "packaging"),
+    "finishes": ("technical", "finishes"),
+    "videoResolution": ("technical", "video_resolution"),
+    "videoCodecs": ("technical", "video_codecs"),
+    # Spelled `hdr` locally and `hdrFormats` on the wire.
+    "hdrFormats": ("technical", "hdr"),
+    # Spelled `screen_ratios` locally. Filtered rather than copied: upstream
+    # requires a bounded decimal-to-one form, and this column is free text.
+    "aspectRatios": ("technical", "screen_ratios"),
+    # Both of these are a union of structured tracks and legacy free text, so
+    # they travel only when every entry converts -- see `_audio_tracks`.
+    "audioTracks": ("technical", "audio_tracks"),
+    "subtitles": ("technical", "subtitles"),
+    # Not on `movie_technical_specs`: the per-disc breakdown is its own table
+    # (`movie_discs`, migration 075), read alongside it.
+    "discs": ("discs", "discs"),
 }
 
 #: Eligible upstream, deliberately not offered here. Each entry is a place where
@@ -129,6 +153,10 @@ RELEASE_FIELDS_WITHHELD: dict[str, str] = {
     # MovieVault has one `studio`; DiscVault has `studios`, a list. Joining a
     # list into one string is lossy in a way a moderator cannot see.
     "studio": "discvault_holds_a_list",
+    # Correctable upstream, but DiscVault has nowhere to read it from: there is
+    # no alternate-title store on a movie. Recorded as a withholding rather than
+    # left off the table, so the gap reads as a decision instead of an oversight.
+    "alternateTitles": "not_stored_by_discvault",
 }
 
 #: A box set is nearly empty on this route, and that is a fact about the data
@@ -165,6 +193,19 @@ _FIELD_LOCK_NAMES: dict[str, tuple[str, ...]] = {
     # Without this row a user who pinned their disc regions against metadata
     # refresh would have them published anyway.
     "discRegions": ("regions",),
+    # The technical fields, same rule as `regions` above and the same failure
+    # if left out: a user who pinned a value against metadata refresh has said
+    # they do not want it moved, and publishing it upstream moves it further
+    # than a refresh would. Locks are spelled with the local column name, which
+    # differs from the wire name for three of these.
+    "packaging": ("packaging", "carrier_type", "outer_packaging"),
+    "finishes": ("finishes",),
+    "videoResolution": ("video_resolution",),
+    "videoCodecs": ("video_codecs",),
+    "hdrFormats": ("hdr",),
+    "aspectRatios": ("screen_ratios",),
+    "audioTracks": ("audio_tracks",),
+    "subtitles": ("subtitles",),
 }
 
 
@@ -344,6 +385,276 @@ def _mirror_disc_regions(value: Any) -> list[str] | None:
     return [item for item in values if item in DISC_REGIONS] or None
 
 
+#: The vocabularies MovieVault will accept for the technical fields. Identical
+#: to DiscVault's own, which is what makes these fields travel at all -- both
+#: sides took them from `release-technical-1`. Stated here rather than imported
+#: from the edit form so that a divergence upstream shows up as a *withheld*
+#: value instead of a rejected contribution: anything outside these sets is
+#: dropped rather than sent and refused.
+_MV_RESOLUTIONS = frozenset({"480p", "576p", "720p", "1080i", "1080p", "2160p"})
+_MV_VIDEO_CODECS = frozenset({"mpeg2", "vc1", "h264", "hevc", "av1"})
+#: `next_packaging.FINISHES` and MovieVault's `FinishType` are the same nine
+#: values. Restated rather than imported, for the reason above -- if one side
+#: adds a tenth, the unknown value is withheld until the other catches up.
+_MV_FINISHES = frozenset(
+    {
+        "spot_uv",
+        "embossed",
+        "debossed",
+        "foil",
+        "holofoil",
+        "matte",
+        "glossy",
+        "reversible_cover",
+        "padded",
+    }
+)
+_MV_HDR_FORMATS = frozenset({"hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"})
+_MV_AUDIO_CODECS = frozenset(
+    {
+        "pcm",
+        "dolby_digital",
+        "dolby_digital_plus",
+        "dolby_truehd",
+        "dts",
+        "dts_hd_hr",
+        "dts_hd_ma",
+        "mpeg_audio",
+        "aac",
+    }
+)
+#: MovieVault's flat packaging alphabet. DiscVault's two axes map onto a subset
+#: of it, so the filter is what keeps a purely local term -- a carrier value
+#: with no legacy counterpart -- from being offered as a correction.
+_MV_PACKAGING = frozenset(
+    {
+        "keep_case", "amaray", "steelbook", "slipcover", "slipcase", "digibook",
+        "mediabook", "digipak", "box", "eco_case", "multi_disc_case", "futurepak",
+        "hardbox", "digisleeve", "card_wallet", "paper_sleeve", "o_card",
+        "fullslip", "half_slip", "quarter_slip", "lenticular_slip",
+        "double_lenticular_slip", "rigid_box", "one_click",
+    }
+)
+_MV_CHANNELS = frozenset({"1.0", "2.0", "5.1", "6.1", "7.1"})
+_MV_IMMERSIVE = frozenset({"dolby_atmos", "dts_x", "auro_3d"})
+_MV_SUBTITLE_TYPES = frozenset({"full", "sdh", "forced", "commentary", "closed_caption"})
+#: Upstream refuses anything else, so a boutique `1.66:1` passes while `16:9`
+#: does not. Filtered rather than refused: one unusable ratio must not cost the
+#: record its other three.
+_MV_ASPECT_RATIO = re.compile(r"^(?:1|2)\.[0-9]{2}:1$")
+_MV_LANGUAGE = re.compile(r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$")
+
+
+def _vocabulary_list(value: Any, allowed: frozenset[str]) -> list[str] | None:
+    """A set-shaped field, sorted and filtered to what upstream accepts.
+
+    Sorted because MovieVault sorts these too, and the two sides are compared
+    as whole lists -- two orderings of one answer would otherwise read as a
+    disagreement and refuse a correction nobody disputed. Empty is `None`, not
+    `[]`: `[]` upstream is the claim "there are none", and a movie with nothing
+    recorded locally is saying "nobody said".
+    """
+    if not isinstance(value, list):
+        return None
+    items = sorted({str(item).strip() for item in value if str(item).strip()})
+    return [item for item in items if item in allowed] or None
+
+
+def _aspect_ratios(value: Any) -> list[str] | None:
+    """Screen ratios in the bounded form upstream requires, order preserved.
+
+    Not sorted, unlike the sets above: a transfer's primary ratio comes first,
+    and that ordering is information rather than an accident of typing.
+    """
+    if not isinstance(value, list):
+        return None
+    ratios: list[str] = []
+    for item in value:
+        text = str(item).strip()
+        if _MV_ASPECT_RATIO.match(text) and text not in ratios:
+            ratios.append(text)
+    return ratios or None
+
+
+def _audio_tracks(value: Any) -> list[dict[str, Any]] | None:
+    """The audio list, but only when every track can travel intact.
+
+    DiscVault's column is a union: structured tracks *and* legacy free text
+    like "English (DTS-HD MA 5.1)", kept verbatim since before MovieVault
+    published structured tracks. Upstream requires a language and a codec from
+    a closed set, so prose cannot be sent -- and must not be guessed at either,
+    because reconstructing a codec from a string misfires on "Commentary with
+    the director", which is exactly why the local normaliser keeps it as text.
+
+    All or nothing per record, therefore. One unconvertible track withholds the
+    whole field rather than proposing a list without it: this is a replacement
+    list, so a partial answer would quietly delete the tracks it could not
+    express.
+    """
+    if not isinstance(value, list) or not value:
+        return None
+    tracks: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            return None
+        language = str(item.get("languageCode") or item.get("language_code") or "").strip()
+        codec = str(item.get("codec") or "").strip()
+        if not _MV_LANGUAGE.match(language) or codec not in _MV_AUDIO_CODECS:
+            return None
+        channels = str(item.get("channels") or "").strip()
+        immersive = str(item.get("immersiveFormat") or item.get("immersive_format") or "").strip()
+        tracks.append(
+            {
+                "languageCode": language,
+                "codec": codec,
+                "channels": channels if channels in _MV_CHANNELS else None,
+                "immersiveFormat": immersive if immersive in _MV_IMMERSIVE else None,
+            }
+        )
+    return tracks or None
+
+
+def _subtitles(value: Any) -> list[dict[str, Any]] | None:
+    """The subtitle list, under the same all-or-nothing rule as the audio one.
+
+    A bare language code is not legacy prose -- it is the pre-variant shape,
+    and an unqualified subtitle listing on a disc means the full variant. That
+    conversion is what `normalize_subtitle_entry` already does locally, so it
+    is applied here rather than withheld over.
+    """
+    if not isinstance(value, list) or not value:
+        return None
+    subtitles: list[dict[str, Any]] = []
+    for item in value:
+        if isinstance(item, str):
+            language, variant = item.strip(), "full"
+        elif isinstance(item, dict):
+            language = str(item.get("languageCode") or item.get("language_code") or "").strip()
+            variant = str(item.get("subtitleType") or item.get("subtitle_type") or "full").strip()
+        else:
+            return None
+        if not _MV_LANGUAGE.match(language) or variant not in _MV_SUBTITLE_TYPES:
+            return None
+        subtitles.append({"languageCode": language, "subtitleType": variant})
+    return subtitles or None
+
+
+def _packaging(technical: dict[str, Any]) -> list[str] | None:
+    """DiscVault's two packaging axes, flattened back to MovieVault's one list.
+
+    Migration 067 split the flat list into carrier plus outer packaging because
+    one bucket could not stop a record claiming both `steelbook` and `amaray`.
+    MovieVault deliberately kept it flat -- it is fed by plugins scraping tokens
+    out of release titles, and asking each source whether "slipcover" describes
+    the case or the wrapper is asking it to guess.
+
+    `derive_legacy_packaging` is the mapping that already existed for the trip
+    in the other direction, so the round trip is closed rather than
+    approximated a second time.
+    """
+    try:
+        from .next_packaging import derive_legacy_packaging
+    except ImportError:  # pragma: no cover - supports direct module execution
+        from next_packaging import derive_legacy_packaging
+
+    values = derive_legacy_packaging(
+        technical.get("carrier_type"), technical.get("outer_packaging")
+    )
+    return _vocabulary_list(values, _MV_PACKAGING)
+
+
+def _mirror_discs(value: Any) -> list[dict[str, Any]] | None:
+    """The catalogue's disc list, as the feed published it.
+
+    Unlike the local rows this is already in the wire spelling -- the mirror
+    stores what v6 sent, verbatim -- so the only work is dropping what upstream
+    would not accept back and stripping `position`. Positions are restated by
+    list order on the way in and refused if they disagree, so carrying them
+    into `expected` would compare a key the proposal does not send.
+    """
+    if not isinstance(value, list) or not value:
+        return None
+    discs: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        entry = {
+            key: item[key]
+            for key in (
+                "discType",
+                "discRole",
+                "discTypeOther",
+                "label",
+                "videoResolution",
+                "videoCodecs",
+                "hdrFormats",
+                "aspectRatios",
+                "regions",
+                "audioTracks",
+                "subtitles",
+            )
+            if item.get(key) not in (None, [], "")
+        }
+        discs.append(entry)
+    return discs or None
+
+
+def _movie_discs(rows: Any) -> list[dict[str, Any]] | None:
+    """The per-disc breakdown, in the shape the contract and v6 already share.
+
+    Positions are not stated: upstream renumbers from list order and refuses a
+    position that disagrees with it, so the stored order says it once. Season
+    and episode links stay local -- MovieVault holds its own season structure
+    and a DiscVault uuid means nothing there.
+
+    Withheld entirely when any disc's tracks cannot travel, for the reason
+    `_audio_tracks` is all or nothing: this replaces every disc, so a disc sent
+    without the tracks it actually has would delete them upstream.
+    """
+    if not isinstance(rows, list) or not rows:
+        return None
+    discs: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            return None
+        entry: dict[str, Any] = {}
+        for wire, column in (
+            ("discType", "disc_type"),
+            ("discRole", "disc_role"),
+            ("discTypeOther", "disc_type_other"),
+            ("label", "label"),
+        ):
+            text = _clean(row.get(column))
+            if text is not None:
+                entry[wire] = text
+        resolution = _clean(row.get("video_resolution"))
+        if resolution in _MV_RESOLUTIONS:
+            entry["videoResolution"] = resolution
+        for wire, column, allowed in (
+            ("videoCodecs", "video_codecs", _MV_VIDEO_CODECS),
+            ("hdrFormats", "hdr", _MV_HDR_FORMATS),
+            ("regions", "regions", DISC_REGIONS),
+        ):
+            values = _vocabulary_list(row.get(column), allowed)
+            if values:
+                entry[wire] = values
+        ratios = _aspect_ratios(row.get("screen_ratios"))
+        if ratios:
+            entry["aspectRatios"] = ratios
+        for wire, column, convert in (
+            ("audioTracks", "audio_tracks", _audio_tracks),
+            ("subtitles", "subtitles", _subtitles),
+        ):
+            raw = row.get(column)
+            if isinstance(raw, list) and raw:
+                converted = convert(raw)
+                if converted is None:
+                    return None
+                entry[wire] = converted
+        discs.append(entry)
+    return discs or None
+
+
 def _disc_regions(technical: dict[str, Any], metadata: dict[str, Any]) -> list[str] | None:
     """The local disc regions, normalised the way upstream compares them.
 
@@ -365,16 +676,75 @@ def _disc_regions(technical: dict[str, Any], metadata: dict[str, Any]) -> list[s
     return [value for value in values if value in DISC_REGIONS] or None
 
 
+def _local_discs(conn: Any, movie_id: Any) -> list[dict[str, Any]]:
+    """The movie's own disc rows, or nothing when the table is not there yet.
+
+    Imported at call time rather than at module scope: `next_app` imports this
+    module, so a top-level import would close the cycle. The reader itself is
+    the one the detail screen uses, so a correction proposes exactly the discs
+    the user can see.
+    """
+    if not movie_id:
+        return []
+    try:
+        from .next_app import movie_disc_entities
+    except ImportError:  # pragma: no cover - supports direct module execution
+        from next_app import movie_disc_entities
+    try:
+        return movie_disc_entities(conn, movie_id)
+    except Exception:  # pragma: no cover - a missing table is not a failed edit
+        return []
+
+
+def _technical_value(
+    field: str,
+    column: str,
+    technical: dict[str, Any],
+    metadata: dict[str, Any],
+) -> Any:
+    """One technical field, converted to what upstream will accept.
+
+    `regions` keeps its own reader because it is the one that falls back to
+    `metadata` -- the same precedence the edit panel and the sync payload use.
+    The others live only on `movie_technical_specs`, so there is nothing to
+    fall back to and a missing spec row simply means nobody has said.
+    """
+    if field == "discRegions":
+        return _disc_regions(technical, metadata)
+    if field == "packaging":
+        return _packaging(technical)
+    if field == "videoResolution":
+        value = _clean(technical.get(column))
+        return value if value in _MV_RESOLUTIONS else None
+    if field == "aspectRatios":
+        return _aspect_ratios(technical.get(column))
+    if field == "audioTracks":
+        return _audio_tracks(technical.get(column))
+    if field == "subtitles":
+        return _subtitles(technical.get(column))
+    allowed = {
+        "finishes": _MV_FINISHES,
+        "videoCodecs": _MV_VIDEO_CODECS,
+        "hdrFormats": _MV_HDR_FORMATS,
+    }[field]
+    return _vocabulary_list(technical.get(column), allowed)
+
+
 def _local_release_values(
     record: dict[str, Any],
     metadata: dict[str, Any],
     identifiers: list[dict[str, str]] | None = None,
     technical: dict[str, Any] | None = None,
+    discs: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     values: dict[str, Any] = {}
+    specs = technical or {}
     for field, (source, column) in RELEASE_FIELD_SOURCES.items():
+        if source == "discs":
+            values[field] = _movie_discs(discs)
+            continue
         if source == "technical":
-            values[field] = _disc_regions(technical or {}, metadata)
+            values[field] = _technical_value(field, column, specs, metadata)
             continue
         if source == "identifiers":
             # A list rather than a column, and empty means "nothing to say"
@@ -417,15 +787,50 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
                 """
                 SELECT release_title, edition, format, country_code, language_code,
                        release_date, runtime_minutes, distributor, disc_regions,
-                       disc_count
+                       disc_count, packaging, finishes, video_resolution,
+                       video_codecs, hdr_formats, aspect_ratios, discs
                 FROM movievault_v2_releases
                 WHERE generation = %s AND release_id = %s
                 """,
                 (generation, target["entityId"]),
             )
             row = cur.fetchone()
-        if not row:
-            return None
+            if not row:
+                return None
+            cur.execute(
+                """
+                SELECT language_code, codec, channels, immersive_format
+                FROM movievault_v2_release_audio_tracks
+                WHERE generation = %s AND release_id = %s
+                ORDER BY position
+                """,
+                (generation, target["entityId"]),
+            )
+            tracks = [
+                {
+                    "languageCode": item["language_code"],
+                    "codec": item["codec"],
+                    "channels": item["channels"],
+                    "immersiveFormat": item["immersive_format"],
+                }
+                for item in (dict(entry) for entry in cur.fetchall())
+            ]
+            cur.execute(
+                """
+                SELECT language_code, subtitle_type
+                FROM movievault_v2_release_subtitle_languages
+                WHERE generation = %s AND release_id = %s
+                ORDER BY position
+                """,
+                (generation, target["entityId"]),
+            )
+            subtitles = [
+                {
+                    "languageCode": item["language_code"],
+                    "subtitleType": item["subtitle_type"],
+                }
+                for item in (dict(entry) for entry in cur.fetchall())
+            ]
         row = dict(row)
         release_date = row.get("release_date")
         return {
@@ -441,6 +846,31 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             # The mirror does carry this one, unlike `eans` -- so a correction
             # can be composed offline and `expected` is still a real value.
             "discRegions": _mirror_disc_regions(row.get("disc_regions")),
+            # The rest of the technical description, mirrored since
+            # distribution-4 (`packaging`, video) and -6 (`discs`). Normalised
+            # through the same converters the local side uses, so `expected`
+            # and `proposed` are comparable as whole values -- a mirror sorted
+            # differently from the local list would read as a disagreement
+            # about the discs rather than about the order somebody typed.
+            "packaging": _vocabulary_list(row.get("packaging"), _MV_PACKAGING),
+            "finishes": _vocabulary_list(row.get("finishes"), _MV_FINISHES),
+            "videoResolution": (
+                _clean(row.get("video_resolution"))
+                if _clean(row.get("video_resolution")) in _MV_RESOLUTIONS
+                else None
+            ),
+            "videoCodecs": _vocabulary_list(row.get("video_codecs"), _MV_VIDEO_CODECS),
+            "hdrFormats": _vocabulary_list(row.get("hdr_formats"), _MV_HDR_FORMATS),
+            "aspectRatios": _aspect_ratios(row.get("aspect_ratios")),
+            # The mirror stores what the feed published, verbatim, so the wire
+            # spelling is already what upstream holds -- unlike the local rows,
+            # which are DiscVault's own columns.
+            "discs": _mirror_discs(row.get("discs")),
+            # Their own tables since distribution-4, not columns. Read through
+            # the same converters, so a mirror row and a local row that say the
+            # same thing produce the same value.
+            "audioTracks": _audio_tracks(tracks),
+            "subtitles": _subtitles(subtitles),
         }
     with conn.cursor() as cur:
         cur.execute(
@@ -603,6 +1033,22 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "distributor": _clean(summary.get("distributor")),
             "eans": catalogue_eans(summary.get("barcodes")),
             "discRegions": _mirror_disc_regions(summary.get("discRegions")),
+            # The technical description, read live. A summary that predates the
+            # field simply omits it, and the converters turn that into None --
+            # "the catalogue did not say" -- rather than an empty claim.
+            "packaging": _vocabulary_list(summary.get("packaging"), _MV_PACKAGING),
+            "finishes": _vocabulary_list(summary.get("finishes"), _MV_FINISHES),
+            "videoResolution": (
+                _clean(summary.get("videoResolution"))
+                if _clean(summary.get("videoResolution")) in _MV_RESOLUTIONS
+                else None
+            ),
+            "videoCodecs": _vocabulary_list(summary.get("videoCodecs"), _MV_VIDEO_CODECS),
+            "hdrFormats": _vocabulary_list(summary.get("hdrFormats"), _MV_HDR_FORMATS),
+            "aspectRatios": _aspect_ratios(summary.get("aspectRatios")),
+            "audioTracks": _audio_tracks(summary.get("audioTracks")),
+            "subtitles": _subtitles(summary.get("subtitles")),
+            "discs": _mirror_discs(summary.get("discs")),
         }
     # The film is known but this release is not among its active ones: it was
     # merged, retired or deleted. Correcting a record that is no longer served
@@ -721,6 +1167,7 @@ def correction_preview(
             metadata or {},
             movie_identifiers_by_type(conn, record.get("id")),
             movie_technical_specs(conn, record.get("id")) if record.get("id") else {},
+            _local_discs(conn, record.get("id")),
         )
         locked = movie_locked_fields(metadata or {})
         if source != "catalogue" or not isinstance(mirror.get("eans"), list):

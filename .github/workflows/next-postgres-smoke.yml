@@ -80,6 +80,13 @@ jobs:
       - name: Test MovieVault v2 release contributions
         run: python -m unittest tests.test_next_movievault_v2_contributions
 
+      # The conversions a field correction makes on the way out - two packaging
+      # axes flattened to one list, free-text ratios filtered to the bounded
+      # form, and the audio/subtitle union refused rather than half-sent. Pure
+      # functions, so they run here rather than after the migrations.
+      - name: Test the field-correction technical conversions
+        run: python -m unittest tests.test_next_movievault_field_correction_technical
+
       # Another module the hand-written list had simply never been given, in the
       # same class as the three below. It holds the plugin's own mapping tests -
       # what a release proposes, and which series a television disc belongs to -
