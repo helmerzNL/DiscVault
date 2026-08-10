@@ -399,28 +399,32 @@ class ContractNegotiationTests(unittest.TestCase):
         with open(path, "rb") as handle:
             return json.load(handle)
 
-    def test_the_shipped_manifest_negotiates_distribution_5(self):
+    def test_the_shipped_manifest_negotiates_distribution_6(self):
         """The declared maximum is not a preference, it is the request.
 
         `_negotiated_contract` does not negotiate despite its name: it returns
         this plugin's own maximum and never asks the origin what it serves. So
-        raising it makes the very next sync request /v5/index/manifest, and an
-        origin without v5 activated answers 503 - which fails the whole
+        raising it makes the very next sync request /v6/index/manifest, and an
+        origin without v6 activated answers 503 - which fails the whole
         synchronisation rather than one record. #562 reverted exactly this line
         for exactly that reason, when v5 support had landed but no origin served
         it yet.
 
-        MovieVault has served distribution-5 since its #206, and the operator has
-        confirmed it is activated on the instance this syncs against. That
-        confirmation is the precondition; this assertion is what makes lowering
-        or raising the pin a deliberate, visible act rather than a silent drift.
+        Both halves of that precondition are met again. MovieVault has served
+        distribution-6 since its #221/#222 shipped the producer and its proxy
+        layer, and the operator has confirmed it is activated on the instance
+        this syncs against. The second half cannot be checked from here, which
+        is why it is stated as an operator instruction rather than assumed.
+
+        This assertion is what makes lowering or raising the pin a deliberate,
+        visible act rather than a silent drift.
         """
         manifest = self._manifest()
         self.assertEqual(
             next_movievault_v2._negotiated_contract(
                 {"distributionContractRange": manifest["distributionContractRange"]}
             ),
-            next_movievault_v2.MOVIEVAULT_V5_CONTRACT,
+            next_movievault_v2.MOVIEVAULT_V6_CONTRACT,
         )
 
     def test_the_manifest_range_stays_within_what_the_code_supports(self):
