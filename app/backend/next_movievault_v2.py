@@ -141,14 +141,20 @@ MAX_RECORDS = 2_000_000
 MAX_DELTA_HOPS_PER_SYNC = 500
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
-# NOTE: MovieVault public asset paths are deliberately `/v2/assets/...` for both
-# distribution-3 and distribution-4 (the producer never versions this path); only
-# the contract envelope itself is versioned.
+# NOTE: MovieVault public asset paths are deliberately `/v2/assets/...` for every
+# contract version (the producer never versions this path); only the contract
+# envelope itself is versioned. Which is exactly why this table is easy to
+# forget when a version is added -- every value is identical, so it reads like
+# a constant and is in fact a required per-version entry: `_asset_variant`
+# indexes it with a bare `[contract_version]`, so a missing key is a KeyError
+# on the first record carrying artwork, and it takes the whole sync with it.
+# distribution-6 shipped without its row and did precisely that.
 ASSET_PATH_PATTERNS = {
     MOVIEVAULT_V2_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V3_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V4_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V5_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V6_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
 }
 POSTER_ASSET_TYPE = "front_cover"
 POSTER_ATTESTATIONS = {"original", "licensed"}

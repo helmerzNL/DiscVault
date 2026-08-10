@@ -38,6 +38,80 @@ class ContractEnumerationTests(unittest.TestCase):
                 self.assertTrue(predicate(mv.MOVIEVAULT_V6_CONTRACT))
         self.assertFalse(mv._is_v6_or_later(mv.MOVIEVAULT_V5_CONTRACT))
 
+    def test_every_table_keyed_by_contract_covers_every_supported_contract(self):
+        """Found by enumerating the module rather than by listing the tables.
+
+        This class's own docstring claims "every place the consumer enumerates
+        contract versions names v6", and it named two of the three. The third
+        was `ASSET_PATH_PATTERNS`, whose five values are character-for-character
+        identical -- so it reads like a constant, and is in fact indexed with a
+        bare `[contract_version]` on every record carrying artwork. v6 shipped
+        without its row, and the first real film with a poster took the whole
+        sync down with `KeyError: 'distribution-6'`.
+
+        A hand-written list of tables has the same failure mode as the thing it
+        is checking, so this asks the module instead.
+        """
+        supported = set(mv.SUPPORTED_CONTRACTS)
+        checked = 0
+        for name in dir(mv):
+            table = getattr(mv, name)
+            if not isinstance(table, dict) or not table:
+                continue
+            # A table *about* contract versions is one whose keys are all
+            # contract versions. Anything else is a different kind of map.
+            if not set(table).issubset(supported):
+                continue
+            checked += 1
+            with self.subTest(table=name):
+                self.assertEqual(
+                    set(table),
+                    supported,
+                    f"{name} is missing {sorted(supported - set(table))}",
+                )
+        # The sweep is only a guard while it finds something to guard.
+        self.assertGreaterEqual(checked, 2, "no contract-keyed tables were found")
+
+
+
+class ArtworkOnV6Tests(unittest.TestCase):
+    """The path that actually broke, exercised directly.
+
+    The sweep above states the invariant; this states the symptom. A v6 record
+    carrying artwork is the ordinary case -- most films have a poster -- so
+    this ran on the very first sync after the contract was raised, and raised
+    `KeyError: 'distribution-6'` before any record was stored.
+    """
+
+    VARIANT = {
+        "path": "/v2/assets/2f1c0f3e-0000-4000-8000-000000000000/thumbnail",
+        "checksum": "b" * 64,
+    }
+
+    def test_an_asset_variant_parses_under_v6(self):
+        parsed = mv._asset_variant(dict(self.VARIANT), mv.MOVIEVAULT_V6_CONTRACT)
+        self.assertEqual(parsed["path"], self.VARIANT["path"])
+
+    def test_the_asset_path_is_still_the_unversioned_one(self):
+        """MovieVault serves assets from `/v2/assets/...` whatever the contract
+        envelope says, which is why every row of the table is identical -- and
+        why a v6 row that pointed at `/v6/assets/...` would be wrong rather
+        than merely redundant."""
+        with self.assertRaises(mv.MovieVaultV2Error):
+            mv._asset_variant(
+                {"path": "/v6/assets/2f1c0f3e-0000-4000-8000-000000000000/thumbnail",
+                 "checksum": "b" * 64},
+                mv.MOVIEVAULT_V6_CONTRACT,
+            )
+
+    def test_every_supported_contract_accepts_the_same_asset_path(self):
+        for contract in mv.SUPPORTED_CONTRACTS:
+            with self.subTest(contract=contract):
+                self.assertEqual(
+                    mv._asset_variant(dict(self.VARIANT), contract)["path"],
+                    self.VARIANT["path"],
+                )
+
 
 class DiscsParserTests(unittest.TestCase):
     """``_discs`` keeps the catalog alive rather than the entry perfect."""
