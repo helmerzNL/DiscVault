@@ -1873,6 +1873,8 @@
   "movieDetail.director": "Regisseur",
   "movieDetail.distributor": "Distributeur",
   "movieDetail.editDetails": "Details bewerken",
+  "movieDetail.editDetailsHelp": "Alle gegevens van deze release, gegroepeerd in secties. Wijzigingen worden pas bewaard wanneer je opslaat.",
+  "movieDetail.editSectionText": "Omschrijving & notities",
   "movieDetail.edition": "Editie",
   "movieDetail.errorLabel": "Fout",
   "movieDetail.fieldNotes": "Notities",

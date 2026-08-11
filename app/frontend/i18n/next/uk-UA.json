@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Директор",
   "movieDetail.distributor": "Дистриб'ютор",
   "movieDetail.editDetails": "Редагувати деталі",
+  "movieDetail.editDetailsHelp": "Усі дані про це видання, згруповані в розділи. Зміни зберігаються лише після збереження.",
+  "movieDetail.editSectionText": "Загальна інформація та примітки",
   "movieDetail.edition": "Редакція",
   "movieDetail.errorLabel": "Помилка",
   "movieDetail.fieldNotes": "Примітки!",

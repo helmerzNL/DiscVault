@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Režisierius",
   "movieDetail.distributor": "Platintojas",
   "movieDetail.editDetails": "Redaguoti informaciją",
+  "movieDetail.editDetailsHelp": "Visa šio leidimo informacija, sugrupuota į skiltis. Pakeitimai išsaugomi tik išsaugojus.",
+  "movieDetail.editSectionText": "Apžvalga ir pastabos",
   "movieDetail.edition": "Leidimas",
   "movieDetail.errorLabel": "Klaida",
   "movieDetail.fieldNotes": "Pastabos",

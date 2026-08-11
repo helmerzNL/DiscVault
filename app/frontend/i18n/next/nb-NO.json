@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Regissor",
   "movieDetail.distributor": "Distributør",
   "movieDetail.editDetails": "Rediger detaljer",
+  "movieDetail.editDetailsHelp": "Alle detaljer om denne utgivelsen, gruppert i seksjoner. Endringer lagres først når du lagrer.",
+  "movieDetail.editSectionText": "Oversikt & notater",
   "movieDetail.edition": "Utgave",
   "movieDetail.errorLabel": "Feil",
   "movieDetail.fieldNotes": "Notater",

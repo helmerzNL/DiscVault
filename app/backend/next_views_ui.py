@@ -213,6 +213,11 @@ def ui_preview_html(
         "appearance": "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 16.7,10 17.5,10Z",
         "library_preferences": "M9 3V18H12V3H9M12 5L16 18L19 17L15 4L12 5M5 5V18H8V5H5M3 19V21H21V19H3Z",
         "collectors_preferences": "M20 21H4V10H6V19H18V10H20V21M3 3H21V9H3V3M9.5 11H14.5C14.78 11 15 11.22 15 11.5V13H9V11.5C9 11.22 9.22 11 9.5 11M5 5V7H19V5H5Z",
+        "edit_release": "M18 4L20 8H17L15 4H13L15 8H12L10 4H8L10 8H7L5 4H4A2 2 0 0 0 2 6V18A2 2 0 0 0 4 20H20A2 2 0 0 0 22 18V4H18Z",
+        "edit_technical": "M3 17V19H9V17H3M3 5V7H13V5H3M13 21V19H21V17H13V15H11V21H13M7 9V11H3V13H7V15H9V9H7M21 13V11H11V13H21M15 9H17V7H21V5H17V3H15V9Z",
+        "edit_discs": "M12 11A1 1 0 0 0 11 12A1 1 0 0 0 12 13A1 1 0 0 0 13 12A1 1 0 0 0 12 11M12 16.5C9.5 16.5 7.5 14.5 7.5 12S9.5 7.5 12 7.5 16.5 9.5 16.5 12 14.5 16.5 12 16.5M12 2A10 10 0 0 0 2 12A10 10 0 0 0 12 22A10 10 0 0 0 22 12A10 10 0 0 0 12 2Z",
+        "edit_collectors": "M16 9H19L14 16M10 9H14L12 17M5 9H8L10 16M15 4H17L19 7H16M11 4H13L14 7H10M7 4H9L8 7H5M6 2L2 8L12 22L22 8L18 2H6Z",
+        "edit_notes": "M14 10H19.5L14 4.5V10M5 3H15L21 9V19A2 2 0 0 1 19 21H5C3.89 21 3 20.1 3 19V5C3 3.89 3.89 3 5 3M5 12V14H19V12H5M5 16V18H14V16H5Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -732,6 +737,28 @@ def ui_preview_html(
       background: var(--bg-solid);
       color: var(--text);
       cursor: pointer;
+    }
+    /* Add-row buttons (tracks, subtitles, discs, product codes): a quiet
+       dashed pill, so they invite without competing with real data. This
+       class shipped unstyled and fell back to the browser default button. */
+    .ghost-button {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+      border-radius: 999px;
+      padding: 0 14px;
+      background: transparent;
+      color: var(--accent-bright);
+      font: inherit;
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .ghost-button:hover {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border-style: solid;
     }
     .secondary-button.active,
     .secondary-button[aria-pressed="true"] {
@@ -6686,9 +6713,101 @@ def ui_preview_html(
         width: 100%;
       }
     }
+    /* Edit-mode workspace. Mirrors the profile center: a sticky
+       settings-style section menu on the left, one section on screen at a
+       time on the right, and a floating action bar that keeps Save/Cancel
+       reachable however long a section grows. On small screens the menu
+       becomes a horizontal pill rail, like the read-mode section tabs. */
+    .movie-edit-layout {
+      display: grid;
+      grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+      gap: 14px 18px;
+      align-items: start;
+    }
+    .movie-edit-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    .movie-edit-nav {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      width: 100%;
+      max-width: none;
+      gap: 6px;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: visible;
+    }
+    .movie-edit-nav button {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
+      min-width: 0;
+      min-height: 44px;
+      padding: 0 12px;
+      border-radius: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: left;
+    }
+    .movie-edit-nav button:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
+    }
+    .movie-edit-nav button:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .movie-edit-nav button.active {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 10px 24px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    html[data-profile-menu-style="icon_only"] .movie-edit-layout {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    html[data-profile-menu-style="icon_only"] .movie-edit-nav button {
+      justify-content: center;
+      padding-inline: 0;
+    }
+    html[data-profile-menu-style="icon_only"] .movie-edit-nav .profile-tab-label {
+      display: none;
+    }
     .movie-edit-sections {
       display: grid;
       gap: 0;
+      min-width: 0;
+    }
+    /* Sections behave as tab panels; the divider that separated them as a
+       stacked list would render on whichever panel is visible. */
+    .movie-edit-sections > .detail-subsection + .detail-subsection {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+    .movie-edit-actions {
+      grid-column: 1 / -1;
+      position: sticky;
+      bottom: 10px;
+      z-index: 3;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 88%, transparent);
+      backdrop-filter: blur(14px) saturate(140%);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .14);
     }
     .movie-edit-grid {
       display: grid;
@@ -6699,16 +6818,15 @@ def ui_preview_html(
     .movie-edit-grid .wide {
       grid-column: 1 / -1;
     }
-    /* The packaging fieldset has shipped without a rule since it was added, so it
-       rendered with the browser default fieldset border and no layout. */
     .movie-edit-checkbox-group {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px 14px;
+      gap: 8px;
       margin: 0;
-      padding: 8px 10px;
-      border: 1px solid var(--border, rgba(128, 128, 128, 0.35));
-      border-radius: 8px;
+      padding: 10px 12px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
       min-width: 0;
     }
     .movie-edit-checkbox-group legend {
@@ -6716,15 +6834,56 @@ def ui_preview_html(
       align-items: center;
       gap: 6px;
       padding: 0 4px;
-      font-size: 0.85rem;
-      opacity: 0.8;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
+    /* Options render as selectable chips: the native checkbox still carries
+       the state (and stays the click target, stretched across the chip) but
+       the pill itself shows it, so a 12-option fieldset reads at a glance. */
     .movie-edit-checkbox-group label {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 0.9rem;
+      min-height: 32px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      font-size: .88rem;
       white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .movie-edit-checkbox-group label input[type="checkbox"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .movie-edit-checkbox-group label:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    }
+    .movie-edit-checkbox-group label:has(input[type="checkbox"]:checked) {
+      color: var(--accent-bright);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      font-weight: 700;
+    }
+    .movie-edit-checkbox-group label:has(input[type="checkbox"]:focus-visible) {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .movie-edit-checkbox-group label:has(input[type="checkbox"]:disabled) {
+      opacity: .55;
+      cursor: not-allowed;
     }
     .movie-edit-track-editor {
       display: flex;
@@ -6747,6 +6906,10 @@ def ui_preview_html(
       grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
       gap: 6px;
       align-items: center;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
     }
     .movie-edit-track-row.movie-edit-subtitle-row {
       grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) auto;
@@ -6759,15 +6922,25 @@ def ui_preview_html(
        a guessed row look like recorded data. */
     .movie-edit-track-row[data-legacy-text]:not([data-legacy-text=""]) {
       border-left: 3px solid var(--accent, #d09a2c);
-      padding-left: 6px;
     }
     .movie-edit-track-remove {
-      background: none;
-      border: 1px solid var(--border, rgba(128, 128, 128, 0.35));
-      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      display: inline-grid;
+      place-items: center;
+      background: var(--bg-solid);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
       cursor: pointer;
+      font-size: 1rem;
       line-height: 1;
-      padding: 6px 9px;
+      padding: 0;
+    }
+    .movie-edit-track-remove:hover {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 45%, transparent);
+      background: color-mix(in srgb, var(--red) 10%, var(--bg-solid));
     }
     .movie-edit-track-add {
       align-self: flex-start;
@@ -6786,21 +6959,32 @@ def ui_preview_html(
     }
     .movie-edit-disc-row {
       border: 1px solid var(--line, rgba(128, 128, 128, 0.35));
-      border-radius: 10px;
+      border-radius: 14px;
       padding: 12px;
       display: flex;
       flex-direction: column;
       gap: 10px;
       min-width: 0;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
     }
     .movie-edit-disc-head {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
     }
     .movie-edit-disc-number {
-      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 11px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent-bright);
+      font-size: .82rem;
+      font-weight: 800;
     }
     .movie-edit-disc-content {
       display: flex;
@@ -7132,6 +7316,20 @@ def ui_preview_html(
       border-radius: var(--radius);
       background: color-mix(in srgb, var(--bg) 92%, transparent);
       box-shadow: var(--shadow-soft);
+    }
+    /* While editing, the edit workspace IS the page: the read-mode cards
+       below it duplicate the same field names and would fight the form for
+       attention, so they step aside until the user saves or cancels. */
+    .movie-detail-page.movie-editing .movie-detail-body > :not(#movieEditPanel) {
+      display: none;
+    }
+    /* Refresh metadata re-renders the detail view and would silently discard
+       an open form; Contribute and Delete are equally out of place mid-edit.
+       Save and Cancel are the only verbs edit mode offers. */
+    .movie-detail-page.movie-editing #movieMetadataApplyButton,
+    .movie-detail-page.movie-editing #movieContributeButton,
+    .movie-detail-page.movie-editing #movieDeleteButton {
+      display: none;
     }
     .detail-card {
       border: 1px solid var(--line);
@@ -13048,6 +13246,42 @@ def ui_preview_html(
       .movie-edit-track-row.movie-edit-subtitle-row {
         grid-template-columns: 1fr;
       }
+      .movie-edit-layout,
+      html[data-profile-menu-style="icon_only"] .movie-edit-layout {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .detail-submenu.movie-edit-nav {
+        position: static;
+        display: flex;
+        width: 100%;
+        max-width: 100%;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 14px;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: inline proximity;
+      }
+      .detail-submenu.movie-edit-nav button,
+      html[data-profile-menu-style="icon_only"] .detail-submenu.movie-edit-nav button {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+        padding: 0 12px;
+        scroll-snap-align: start;
+      }
+      .movie-edit-actions {
+        justify-content: stretch;
+        /* Stick above the floating mobile tabbar (70px tall, 10px inset). */
+        bottom: calc(90px + env(safe-area-inset-bottom));
+      }
+      .movie-edit-actions .primary-button,
+      .movie-edit-actions .secondary-button {
+        flex: 1;
+      }
       .profile-hero-actions {
         justify-content: stretch;
         gap: 8px;
@@ -15132,13 +15366,23 @@ def ui_preview_html(
         <div id="movieDetailReleaseCandidates"></div>
         <section class="movie-detail-body">
           <div class="detail-card full hidden" id="movieEditPanel">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
+            <div class="detail-card-head movie-edit-head">
+              <div>
+                <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
+                <p data-next-i18n="movieDetail.editDetailsHelp">All details of this release, grouped into sections. Changes are only stored when you save.</p>
+              </div>
             </div>
-            <form class="profile-form" id="movieEditForm">
+            <form class="profile-form movie-edit-layout" id="movieEditForm">
+              <nav class="detail-submenu movie-edit-nav" role="tablist" aria-label="Edit details" data-next-i18n-aria="movieDetail.editDetails">
+                <button type="button" class="active" id="movieEditTabRelease" role="tab" aria-controls="movieEditSectionRelease" aria-selected="true" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionRelease" aria-label="Release" title="Release" data-next-i18n-aria="movieDetail.release" data-next-i18n-title="movieDetail.release">""" + nav_icon("edit_release") + """<span class="profile-tab-label" data-next-i18n="movieDetail.release">Release</span></button>
+                <button type="button" id="movieEditTabTechnical" role="tab" aria-controls="movieEditReleaseTechnicalSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditReleaseTechnicalSection" aria-label="Technical" title="Technical" data-next-i18n-aria="movieDetail.technical" data-next-i18n-title="movieDetail.technical">""" + nav_icon("edit_technical") + """<span class="profile-tab-label" data-next-i18n="movieDetail.technical">Technical</span></button>
+                <button type="button" id="movieEditTabDiscs" role="tab" aria-controls="movieEditDiscsSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditDiscsSection" aria-label="Discs" title="Discs" data-next-i18n-aria="movieDetail.discs" data-next-i18n-title="movieDetail.discs">""" + nav_icon("edit_discs") + """<span class="profile-tab-label" data-next-i18n="movieDetail.discs">Discs</span></button>
+                <button type="button" id="movieEditTabCollectors" role="tab" aria-controls="movieEditSectionCollectors" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionCollectors" aria-label="Collectors" title="Collectors" data-next-i18n-aria="movieDetail.collectors" data-next-i18n-title="movieDetail.collectors">""" + nav_icon("edit_collectors") + """<span class="profile-tab-label" data-next-i18n="movieDetail.collectors">Collectors</span></button>
+                <button type="button" id="movieEditTabText" role="tab" aria-controls="movieEditSectionText" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionText" aria-label="Overview &amp; notes" title="Overview &amp; notes" data-next-i18n-aria="movieDetail.editSectionText" data-next-i18n-title="movieDetail.editSectionText">""" + nav_icon("edit_notes") + """<span class="profile-tab-label" data-next-i18n="movieDetail.editSectionText">Overview &amp; notes</span></button>
+              </nav>
               <div class="movie-edit-sections">
-                <div class="detail-subsection">
-                  <h4 class="detail-subsection-title" data-next-i18n="containerDetail.overview">Overview</h4>
+                <div class="detail-subsection" id="movieEditSectionRelease" role="tabpanel" aria-labelledby="movieEditTabRelease" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditTitle">
                       <span data-next-i18n="movieDetail.fieldTitle">Title</span>
@@ -15220,7 +15464,7 @@ def ui_preview_html(
                     </label>
                   </div>
                 </div>
-                <div class="detail-subsection" id="movieEditReleaseTechnicalSection">
+                <div class="detail-subsection hidden" id="movieEditReleaseTechnicalSection" role="tabpanel" aria-labelledby="movieEditTabTechnical" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
                   <p class="hint hidden" id="movieEditReleaseTechnicalDerived" data-next-i18n="movieDetail.technicalDerivedFromDiscs">These values now come from the discs below. Edit them there.</p>
                   <div class="movie-edit-grid" id="movieEditReleaseTechnicalGrid">
@@ -15276,7 +15520,7 @@ def ui_preview_html(
                     </div>
                   </div>
                 </div>
-                <div class="detail-subsection" id="movieEditDiscsSection">
+                <div class="detail-subsection hidden" id="movieEditDiscsSection" role="tabpanel" aria-labelledby="movieEditTabDiscs" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
                   <p class="hint" data-next-i18n="movieDetail.discsHint">Describe each physical disc in the box. The fields above still describe the release as a whole; a disc only narrows them.</p>
                   <p class="hint movie-edit-disc-count-warning hidden" id="movieEditDiscCountWarning"></p>
@@ -15287,7 +15531,7 @@ def ui_preview_html(
                   <div class="movie-edit-disc-list" id="movieEditDiscRows"></div>
                   <button type="button" class="ghost-button movie-edit-track-add" id="movieEditDiscAdd" data-next-i18n="movieDetail.discAdd">Add disc</button>
                 </div>
-                <div class="detail-subsection">
+                <div class="detail-subsection hidden" id="movieEditSectionCollectors" role="tabpanel" aria-labelledby="movieEditTabCollectors" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditEdition">
@@ -15384,8 +15628,8 @@ def ui_preview_html(
                     </label>
                   </div>
                 </div>
-                <div class="detail-subsection">
-                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.fieldOverview">Overview</h4>
+                <div class="detail-subsection hidden" id="movieEditSectionText" role="tabpanel" aria-labelledby="movieEditTabText" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.editSectionText">Overview &amp; notes</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditOverview" class="wide">
                       <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
@@ -15397,6 +15641,10 @@ def ui_preview_html(
                     </label>
                   </div>
                 </div>
+              </div>
+              <div class="movie-edit-actions">
+                <button type="button" class="secondary-button" id="movieEditCancelButton" data-next-i18n="common.cancel">Cancel</button>
+                <button type="submit" class="primary-button" id="movieEditSaveButton" data-next-i18n="common.save">Save</button>
               </div>
             </form>
           </div>
@@ -28296,6 +28544,9 @@ def ui_preview_html(
       if (!node) return;
       node.textContent = message || "";
       node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
+      // A failed save can be triggered from the bottom of a long section;
+      // an error nobody sees is an edit nobody knows was rejected.
+      if (message && tone === "bad") node.scrollIntoView({block: "nearest"});
     }
     function setMovieEditPanelVisible(show) {
       const panel = document.getElementById("movieEditPanel");
@@ -28305,6 +28556,8 @@ def ui_preview_html(
       const cancelButton = document.getElementById("movieEditCancelTopButton");
       if (!panel) return;
       panel.classList.toggle("hidden", !show);
+      document.getElementById("movieDetailPage")?.classList.toggle("movie-editing", show);
+      if (show) activateDetailTab("movieEditSections", "movieEditSectionRelease");
       if (editButton) {
         const labelKey = show ? "common.save" : "common.edit";
         const label = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
@@ -41258,7 +41511,9 @@ def ui_preview_html(
       if (!hasPermission("collection.edit_all") || !activeDetailMovieId) return;
       const title = formTextValue("movieEditTitle");
       if (!title) {
+        activateDetailTab("movieEditSections", "movieEditSectionRelease");
         setMovieDetailMessage(tNext("movieDetail.titleRequired", "Title is required."), "bad");
+        document.getElementById("movieEditTitle")?.focus();
         return;
       }
       if (!(await ensureMovieEditSeries())) return;
@@ -46991,7 +47246,14 @@ def ui_preview_html(
       document.getElementById("locationDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => showLibraryPage(true)));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
+      document.getElementById("movieEditCancelButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      // Native validation may flag a control on an edit section that is not
+      // the one on screen; reveal its section so the browser can focus it.
+      document.getElementById("movieEditForm")?.addEventListener("invalid", (event) => {
+        const section = event.target.closest("[data-detail-panel-group='movieEditSections']");
+        if (section && section.classList.contains("hidden")) activateDetailTab("movieEditSections", section.id);
+      }, true);
       document.getElementById("movieEditIdentifierAdd")?.addEventListener("click", () => addMovieIdentifierRow(null));
       document.getElementById("movieEditMediaType")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieEditSeries")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));

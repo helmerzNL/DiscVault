@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Produkcji",
   "movieDetail.distributor": "Dystrybutor",
   "movieDetail.editDetails": "Edytuj szczegóły",
+  "movieDetail.editDetailsHelp": "Wszystkie szczegóły tego wydania, pogrupowane w sekcje. Zmiany są zapisywane dopiero po zapisaniu.",
+  "movieDetail.editSectionText": "Informacje ogólne i uwagi",
   "movieDetail.edition": "Wydanie",
   "movieDetail.errorLabel": "Błąd",
   "movieDetail.fieldNotes": "Uwagi",

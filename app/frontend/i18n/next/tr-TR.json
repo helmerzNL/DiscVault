@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Yönetmen",
   "movieDetail.distributor": "Dağıtımcı",
   "movieDetail.editDetails": "Ayrıntıları düzenle",
+  "movieDetail.editDetailsHelp": "Bu sürümün tüm ayrıntıları bölümler halinde gruplanmıştır. Değişiklikler yalnızca kaydettiğinizde saklanır.",
+  "movieDetail.editSectionText": "Özet ve notlar",
   "movieDetail.edition": "Sürüm",
   "movieDetail.errorLabel": "Hata",
   "movieDetail.fieldNotes": "Notlar",

@@ -1875,6 +1875,8 @@
   "movieDetail.director": "riaditeľ",
   "movieDetail.distributor": "Distribútor",
   "movieDetail.editDetails": "UPRAVIŤ PODROBNOSTI",
+  "movieDetail.editDetailsHelp": "Všetky údaje o tomto vydaní, rozdelené do sekcií. Zmeny sa uložia až pri uložení.",
+  "movieDetail.editSectionText": "Prehľad a poznámky",
   "movieDetail.edition": "Vydanie",
   "movieDetail.errorLabel": "Chyba",
   "movieDetail.fieldNotes": "Poznámky",

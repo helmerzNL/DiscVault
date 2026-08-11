@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Direktor",
   "movieDetail.distributor": "Distributer",
   "movieDetail.editDetails": "Uredi detalje",
+  "movieDetail.editDetailsHelp": "Svi podaci o ovom izdanju, grupirani u odjeljke. Promjene se spremaju tek prilikom spremanja.",
+  "movieDetail.editSectionText": "Pregled i napomene",
   "movieDetail.edition": "Izdanje ",
   "movieDetail.errorLabel": "Pogreška",
   "movieDetail.fieldNotes": "Napomene",

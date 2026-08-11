@@ -1875,6 +1875,8 @@
   "movieDetail.director": "감독",
   "movieDetail.distributor": "배급사",
   "movieDetail.editDetails": "세부 정보 편집",
+  "movieDetail.editDetailsHelp": "이 릴리스의 모든 정보를 섹션별로 정리했습니다. 변경 사항은 저장할 때만 반영됩니다.",
+  "movieDetail.editSectionText": "개요 및 메모",
   "movieDetail.edition": "판본",
   "movieDetail.errorLabel": "오류",
   "movieDetail.fieldNotes": "메모",

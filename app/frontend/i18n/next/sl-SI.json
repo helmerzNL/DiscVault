@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Direktor",
   "movieDetail.distributor": "Distributer",
   "movieDetail.editDetails": "Uredi podrobnosti",
+  "movieDetail.editDetailsHelp": "Vsi podatki o tej izdaji, razvrščeni v razdelke. Spremembe se shranijo šele ob shranjevanju.",
+  "movieDetail.editSectionText": "Pregled in opombe",
   "movieDetail.edition": "Izdaja",
   "movieDetail.errorLabel": "Napaka",
   "movieDetail.fieldNotes": "Opombe",

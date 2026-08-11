@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Režissöör",
   "movieDetail.distributor": "Levitaja",
   "movieDetail.editDetails": "Muuda üksikasju",
+  "movieDetail.editDetailsHelp": "Kõik selle väljaande andmed, jaotatud osadeks. Muudatused salvestatakse alles salvestamisel.",
+  "movieDetail.editSectionText": "Ülevaade ja märkmed",
   "movieDetail.edition": "Väljaanne",
   "movieDetail.errorLabel": "Viga",
   "movieDetail.fieldNotes": "Märkmed",

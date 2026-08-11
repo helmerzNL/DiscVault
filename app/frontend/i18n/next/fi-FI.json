@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Ohjaaja",
   "movieDetail.distributor": "Levittäjä",
   "movieDetail.editDetails": "Muokkaa tietoja",
+  "movieDetail.editDetailsHelp": "Kaikki tämän julkaisun tiedot ryhmiteltynä osioihin. Muutokset tallennetaan vasta, kun tallennat.",
+  "movieDetail.editSectionText": "Kuvaus ja muistiinpanot",
   "movieDetail.edition": "Painos",
   "movieDetail.errorLabel": "Virhe",
   "movieDetail.fieldNotes": "Muistiinpanot",

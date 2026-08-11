@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Director",
   "movieDetail.distributor": "Distributor",
   "movieDetail.editDetails": "Edit details",
+  "movieDetail.editDetailsHelp": "All details of this release, grouped into sections. Changes are only stored when you save.",
+  "movieDetail.editSectionText": "Overview & notes",
   "movieDetail.edition": "Edition",
   "movieDetail.errorLabel": "Error",
   "movieDetail.fieldNotes": "Notes",

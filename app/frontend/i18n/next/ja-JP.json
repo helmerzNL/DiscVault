@@ -1875,6 +1875,8 @@
   "movieDetail.director": "監督",
   "movieDetail.distributor": "配給",
   "movieDetail.editDetails": "詳細を編集",
+  "movieDetail.editDetailsHelp": "このリリースの全項目をセクションごとにまとめています。変更は保存するまで反映されません。",
+  "movieDetail.editSectionText": "概要とメモ",
   "movieDetail.edition": "エディション",
   "movieDetail.errorLabel": "エラー",
   "movieDetail.fieldNotes": "メモ",

@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Regizor",
   "movieDetail.distributor": "Distribuitor",
   "movieDetail.editDetails": "Editează detaliile",
+  "movieDetail.editDetailsHelp": "Toate detaliile acestei ediții, grupate pe secțiuni. Modificările sunt stocate doar la salvare.",
+  "movieDetail.editSectionText": "Prezentare generală și observații",
   "movieDetail.edition": "Editia",
   "movieDetail.errorLabel": "Eroare",
   "movieDetail.fieldNotes": "Observații",
