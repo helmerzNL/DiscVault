@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Audió",
   "movieDetail.audioVideo": "Hang és kép",
   "movieDetail.technicalDerivedFromDiscs": "Ezek az értékek most az alábbi lemezekből származnak. Ott szerkessze őket.",
+  "movieDetail.technicalSummarisedByDiscs": "A felbontás, a HDR, a kodekek, a képarányok, a régiók, a hang és a feliratok lemezenként lentebb szerepelnek.",
   "movieDetail.backToLibrary": "Vissza",
   "movieDetail.backdrops": "Kulisszanyílások",
   "movieDetail.barcode": "Vonalkód",

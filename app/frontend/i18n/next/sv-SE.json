@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Ljud",
   "movieDetail.audioVideo": "Ljud och video",
   "movieDetail.technicalDerivedFromDiscs": "De här värdena kommer nu från skivorna nedan. Redigera dem där.",
+  "movieDetail.technicalSummarisedByDiscs": "Upplösning, HDR, codec, bildformat, regioner, ljud och undertexter anges per skiva nedan.",
   "movieDetail.backToLibrary": "Tillbaka",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Streckkod",

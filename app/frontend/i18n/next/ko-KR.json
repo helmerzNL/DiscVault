@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "오디오",
   "movieDetail.audioVideo": "오디오 및 비디오",
   "movieDetail.technicalDerivedFromDiscs": "이 값들은 이제 아래 디스크에서 가져옵니다. 그곳에서 수정하세요.",
+  "movieDetail.technicalSummarisedByDiscs": "해상도, HDR, 코덱, 화면비, 지역, 오디오, 자막은 아래에 디스크별로 표시됩니다.",
   "movieDetail.backToLibrary": "뒤로",
   "movieDetail.backdrops": "배경 이미지",
   "movieDetail.barcode": "바코드",

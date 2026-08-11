@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "音频",
   "movieDetail.audioVideo": "音频和视频",
   "movieDetail.technicalDerivedFromDiscs": "这些值现在来自下方的碟片。请在那里编辑。",
+  "movieDetail.technicalSummarisedByDiscs": "分辨率、HDR、编解码器、画面比例、区域、音频和字幕在下方按碟片列出。",
   "movieDetail.backToLibrary": "返回",
   "movieDetail.backdrops": "背景图",
   "movieDetail.barcode": "条形码",

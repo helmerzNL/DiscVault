@@ -15204,9 +15204,9 @@ def ui_preview_html(
                 </div>
                 <div class="detail-subsection" id="movieEditReleaseTechnicalSection">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
-                  <p class="hint" id="movieEditReleaseTechnicalDerived" data-next-i18n="movieDetail.technicalDerivedFromDiscs">These values now come from the discs below. Edit them there.</p>
+                  <p class="hint hidden" id="movieEditReleaseTechnicalDerived" data-next-i18n="movieDetail.technicalDerivedFromDiscs">These values now come from the discs below. Edit them there.</p>
                   <div class="movie-edit-grid" id="movieEditReleaseTechnicalGrid">
-                    <label for="movieEditVideoResolution">
+                    <label for="movieEditVideoResolution" data-derived-from-discs="video_resolution">
                       <span data-next-i18n="movieDetail.videoResolution">Resolution</span>
                       <select id="movieEditVideoResolution" name="video_resolution">
                         <option value="" data-next-i18n="common.notSet">Not set</option>
@@ -15226,7 +15226,7 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.runtime">Runtime</span>
                       <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
                     </label>
-                    <fieldset id="movieEditHdr" class="movie-edit-checkbox-group">
+                    <fieldset id="movieEditHdr" class="movie-edit-checkbox-group" data-derived-from-discs="hdr">
                       <legend data-next-i18n="movieDetail.hdr" data-lock-anchor>HDR</legend>
                       <label><input type="checkbox" value="hdr"> <span data-next-i18n="movieHdrFormat.hdr">HDR</span></label>
                       <label><input type="checkbox" value="hdr10"> <span data-next-i18n="movieHdrFormat.hdr10">HDR10</span></label>
@@ -15234,7 +15234,7 @@ def ui_preview_html(
                       <label><input type="checkbox" value="hlg"> <span data-next-i18n="movieHdrFormat.hlg">HLG</span></label>
                       <label><input type="checkbox" value="dolby_vision"> <span data-next-i18n="movieHdrFormat.dolbyVision">Dolby Vision</span></label>
                     </fieldset>
-                    <fieldset id="movieEditVideoCodecs" class="movie-edit-checkbox-group">
+                    <fieldset id="movieEditVideoCodecs" class="movie-edit-checkbox-group" data-derived-from-discs="video_codecs">
                       <legend data-next-i18n="movieDetail.videoCodecs" data-lock-anchor>Video codec</legend>
                       <label><input type="checkbox" value="mpeg2"> <span data-next-i18n="movieVideoCodec.mpeg2">MPEG-2</span></label>
                       <label><input type="checkbox" value="vc1"> <span data-next-i18n="movieVideoCodec.vc1">VC-1</span></label>
@@ -15242,16 +15242,16 @@ def ui_preview_html(
                       <label><input type="checkbox" value="hevc"> <span data-next-i18n="movieVideoCodec.hevc">HEVC (H.265)</span></label>
                       <label><input type="checkbox" value="av1"> <span data-next-i18n="movieVideoCodec.av1">AV1</span></label>
                     </fieldset>
-                    <label for="movieEditScreenRatio" class="wide">
+                    <label for="movieEditScreenRatio" class="wide" data-derived-from-discs="screen_ratios">
                       <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
                       <input id="movieEditScreenRatio" name="screen_ratios" maxlength="160" autocomplete="off" data-next-i18n-placeholder="movieDetail.commaSeparated" placeholder="Comma separated">
                     </label>
-                    <div id="movieEditAudioTracks" class="movie-edit-track-editor wide" data-lock-container="self">
+                    <div id="movieEditAudioTracks" class="movie-edit-track-editor wide" data-lock-container="self" data-derived-from-discs="audio_tracks">
                       <span data-lock-anchor data-next-i18n="movieDetail.audio">Audio</span>
                       <div class="movie-edit-track-rows" id="movieEditAudioTrackRows"></div>
                       <button type="button" class="ghost-button movie-edit-track-add" id="movieEditAudioTrackAdd" data-next-i18n="movieDetail.audioTrackAdd">Add audio track</button>
                     </div>
-                    <div id="movieEditSubtitles" class="movie-edit-track-editor wide" data-lock-container="self">
+                    <div id="movieEditSubtitles" class="movie-edit-track-editor wide" data-lock-container="self" data-derived-from-discs="subtitles">
                       <span data-lock-anchor data-next-i18n="movieDetail.subtitles">Subtitles</span>
                       <div class="movie-edit-track-rows" id="movieEditSubtitleRows"></div>
                       <button type="button" class="ghost-button movie-edit-track-add" id="movieEditSubtitleAdd" data-next-i18n="movieDetail.subtitleAdd">Add subtitle</button>
@@ -15329,7 +15329,7 @@ def ui_preview_html(
                       <label><input type="checkbox" value="reversible_cover"> <span data-next-i18n="movieFinish.reversibleCover">Reversible cover</span></label>
                       <label><input type="checkbox" value="padded"> <span data-next-i18n="movieFinish.padded">Padded</span></label>
                     </fieldset>
-                    <fieldset id="movieEditRegions" class="movie-edit-checkbox-group">
+                    <fieldset id="movieEditRegions" class="movie-edit-checkbox-group" data-derived-from-discs="regions">
                       <legend data-next-i18n="movieDetail.regions" data-lock-anchor>Regions</legend>
                       <label><input type="checkbox" value="A"> <span>A</span></label>
                       <label><input type="checkbox" value="B"> <span>B</span></label>
@@ -15405,10 +15405,16 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
             <div class="detail-fields" id="movieDetailTechnical"></div>
+            <p class="hint hidden" id="movieDetailTechnicalSummarised"></p>
             <!-- Below the release-level fields rather than instead of them: a
                  disc narrows what the release says, so both have to be readable
                  at once. Hidden entirely when nobody has broken the release
-                 down, which is not the same as a single-disc release. -->
+                 down, which is not the same as a single-disc release.
+
+                 Since the union rule the block above no longer repeats what is
+                 here: the derived rows are dropped once there are discs, and
+                 the hint says so. Format and runtime stay, being authored
+                 release facts that happen to live in the same block. -->
             <div class="movie-detail-discs hidden" id="movieDetailDiscsBlock">
               <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
               <div class="movie-detail-disc-list" id="movieDetailDiscs"></div>
@@ -28313,6 +28319,29 @@ def ui_preview_html(
       "LaserDisc": ["laserdisc"],
       "VCD/SVCD": ["vcd"]
     };
+    // The release-level technical fields that stop being authored once a
+    // release has discs: the server recomputes them as the union of the discs
+    // on every save (next_discs.UNION_LIST_COLUMNS plus the scalar resolution).
+    //
+    // Declared here as the browser's copy of that set, and the markup tags each
+    // one with `data-derived-from-discs` rather than this list naming element
+    // ids. The attribute travels with the field when somebody moves it between
+    // subsections -- which is exactly what went wrong: `regions` lives in the
+    // Collectors block, was never covered by the old grid-level hiding, and was
+    // therefore offered as editable while every save overwrote it.
+    //
+    // test_next_derived_release_fields holds all three copies together: this
+    // constant, the attributes actually present in the markup, and the server's
+    // own set. The markup leg is the one that failed.
+    const MOVIE_DERIVED_RELEASE_FIELDS = [
+      "video_resolution",
+      "hdr",
+      "video_codecs",
+      "screen_ratios",
+      "regions",
+      "audio_tracks",
+      "subtitles"
+    ];
     // The 19 canonical TMDB movie genre keys. English reference labels are
     // only a fallback for genreLabel() before the active locale's
     // genre.<key> i18n catalog entry resolves; genres are otherwise always
@@ -28783,10 +28812,18 @@ def ui_preview_html(
     // to author one fact, and the edit made there would be overwritten by the
     // save that accepted it -- which is worse than not offering it.
     function syncMovieEditReleaseTechnical(discCount) {
-      const grid = document.getElementById("movieEditReleaseTechnicalGrid");
-      const note = document.getElementById("movieEditReleaseTechnicalDerived");
+      // Per field, not per section. The grid this used to hide is neither a
+      // superset nor a subset of the derived set, and it was wrong in both
+      // directions: `regions` is derived and lives in Collectors, so it stayed
+      // editable while the save overwrote it; `disc_count` and
+      // `runtime_minutes` sit in this grid and are *not* derived, so hiding it
+      // took away the disc-count field at exactly the moment
+      // syncMovieEditDiscCountWarning starts telling the user to reconcile it.
       const derived = discCount > 0;
-      if (grid) grid.classList.toggle("hidden", derived);
+      document.querySelectorAll("[data-derived-from-discs]").forEach((field) => {
+        field.classList.toggle("hidden", derived);
+      });
+      const note = document.getElementById("movieEditReleaseTechnicalDerived");
       if (note) note.classList.toggle("hidden", !derived);
     }
 
@@ -30646,16 +30683,29 @@ def ui_preview_html(
             ]]
           : [])
       ]);
+      // Once the release names its discs, the release-level row is a *derivation*
+      // of them (the union), so printing it in full and then repeating the same
+      // values per disc below states one fact twice and calls the summary an
+      // authored value. One disc is enough: that is when the derivation starts.
+      const hasDiscs = Array.isArray(detail.discs) && detail.discs.length > 0;
+      // Tagged with the field name so the derived ones can be dropped once the
+      // release has discs -- the same set the editor hides, named the same way,
+      // rather than a second list that agrees with this one until it does not.
+      // `format` and `runtime` are deliberately untagged: they sit in this block
+      // and are authored release facts, so hiding the block wholesale would take
+      // them with it.
       const audioVideoFields = [
-        [tNext("movieDetail.hdr", "HDR"), enumListText(specs.hdr || metadata.hdr, hdrFormatLabel)],
-        [tNext("movieDetail.videoResolution", "Resolution"), specs.video_resolution || metadata.video_resolution],
-        [tNext("movieDetail.videoCodecs", "Video codec"), enumListText(specs.video_codecs || metadata.video_codecs, videoCodecLabel)],
-        [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
-        [tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format || specs.format || metadata.format)],
-        [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
-        [tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],
-        [tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]
-      ];
+        ["hdr", tNext("movieDetail.hdr", "HDR"), enumListText(specs.hdr || metadata.hdr, hdrFormatLabel)],
+        ["video_resolution", tNext("movieDetail.videoResolution", "Resolution"), specs.video_resolution || metadata.video_resolution],
+        ["video_codecs", tNext("movieDetail.videoCodecs", "Video codec"), enumListText(specs.video_codecs || metadata.video_codecs, videoCodecLabel)],
+        ["screen_ratios", tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
+        [null, tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format || specs.format || metadata.format)],
+        [null, tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
+        ["audio_tracks", tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],
+        ["subtitles", tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]
+      ]
+        .filter(([field]) => !(hasDiscs && MOVIE_DERIVED_RELEASE_FIELDS.includes(field)))
+        .map(([, label, value]) => [label, value]);
       const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
       const storageLocationLabel = movie.location && typeof movie.location === "object"
         ? movie.location.pathLabel || movie.location.name || ""
@@ -30697,6 +30747,17 @@ def ui_preview_html(
           : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
+      // Says the derived rows are missing on purpose. Without it the block just
+      // looks short, and a reader cannot tell "not recorded" from "listed per
+      // disc below" -- which is the whole reason the rows were dropped.
+      const summarised = document.getElementById("movieDetailTechnicalSummarised");
+      if (summarised) {
+        summarised.classList.toggle("hidden", !hasDiscs);
+        summarised.textContent = tNext(
+          "movieDetail.technicalSummarisedByDiscs",
+          "Resolution, HDR, codecs, ratios, regions, audio and subtitles are listed per disc below."
+        );
+      }
       renderMovieDetailDiscs(detail.discs);
       document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
       bindContainerDetailLinks("movieDetailCollectors");

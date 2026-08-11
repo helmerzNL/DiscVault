@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Aani",
   "movieDetail.audioVideo": "Ääni ja kuva",
   "movieDetail.technicalDerivedFromDiscs": "Nämä arvot tulevat nyt alla olevista levyistä. Muokkaa niitä siellä.",
+  "movieDetail.technicalSummarisedByDiscs": "Tarkkuus, HDR, koodekit, kuvasuhteet, alueet, ääni ja tekstitykset on lueteltu alla levykohtaisesti.",
   "movieDetail.backToLibrary": "Takaisin",
   "movieDetail.backdrops": "Taustakuvat",
   "movieDetail.barcode": "Viivakoodi",

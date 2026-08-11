@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Audio",
   "movieDetail.audioVideo": "Audio y vídeo",
   "movieDetail.technicalDerivedFromDiscs": "Estos valores ahora provienen de los discos de abajo. Edítalos allí.",
+  "movieDetail.technicalSummarisedByDiscs": "La resolución, el HDR, los códecs, las relaciones de aspecto, las regiones, el audio y los subtítulos se indican por disco más abajo.",
   "movieDetail.backToLibrary": "Volver",
   "movieDetail.backdrops": "Fondos",
   "movieDetail.barcode": "Codigo de barras",

@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Аудіо",
   "movieDetail.audioVideo": "Аудіо та відео",
   "movieDetail.technicalDerivedFromDiscs": "Ці значення тепер походять із дисків нижче. Редагуйте їх там.",
+  "movieDetail.technicalSummarisedByDiscs": "Роздільність, HDR, кодеки, співвідношення сторін, регіони, аудіо та субтитри наведені нижче для кожного диска.",
   "movieDetail.backToLibrary": "Назад",
   "movieDetail.backdrops": "Фонові зображення",
   "movieDetail.barcode": "Штрих-код",

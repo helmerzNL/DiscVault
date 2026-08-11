@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "音声",
   "movieDetail.audioVideo": "オーディオと映像",
   "movieDetail.technicalDerivedFromDiscs": "これらの値は下のディスクから算出されます。編集はそちらで行ってください。",
+  "movieDetail.technicalSummarisedByDiscs": "解像度、HDR、コーデック、アスペクト比、リージョン、音声、字幕は下のディスクごとに記載しています。",
   "movieDetail.backToLibrary": "戻る",
   "movieDetail.backdrops": "背景",
   "movieDetail.barcode": "バーコード",

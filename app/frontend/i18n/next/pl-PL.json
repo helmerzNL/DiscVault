@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Dźwięk",
   "movieDetail.audioVideo": "Audio i wideo",
   "movieDetail.technicalDerivedFromDiscs": "Te wartości pochodzą teraz z płyt poniżej. Edytuj je tam.",
+  "movieDetail.technicalSummarisedByDiscs": "Rozdzielczość, HDR, kodeki, proporcje obrazu, regiony, dźwięk i napisy są podane poniżej dla każdej płyty.",
   "movieDetail.backToLibrary": "Oparcie",
   "movieDetail.backdrops": "Zdjęcia",
   "movieDetail.barcode": "Kod kreskowy",

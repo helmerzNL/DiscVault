@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Ήχος",
   "movieDetail.audioVideo": "Ήχος και βίντεο",
   "movieDetail.technicalDerivedFromDiscs": "Αυτές οι τιμές προέρχονται πλέον από τους δίσκους παρακάτω. Επεξεργαστείτε τις εκεί.",
+  "movieDetail.technicalSummarisedByDiscs": "Η ανάλυση, το HDR, οι κωδικοποιητές, οι αναλογίες, οι περιοχές, ο ήχος και οι υπότιτλοι αναγράφονται παρακάτω ανά δίσκο.",
   "movieDetail.backToLibrary": "Πίσω",
   "movieDetail.backdrops": "Σκηνικά",
   "movieDetail.barcode": "Γραμμικός κώδικας",

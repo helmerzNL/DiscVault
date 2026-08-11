@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Zvok",
   "movieDetail.audioVideo": "Zvok in slika",
   "movieDetail.technicalDerivedFromDiscs": "Te vrednosti zdaj izhajajo iz spodnjih diskov. Uredite jih tam.",
+  "movieDetail.technicalSummarisedByDiscs": "Ločljivost, HDR, kodeki, razmerja slike, regije, zvok in podnapisi so navedeni spodaj po ploščah.",
   "movieDetail.backToLibrary": "Nazaj",
   "movieDetail.backdrops": "Ozadja",
   "movieDetail.barcode": "Črtna koda",

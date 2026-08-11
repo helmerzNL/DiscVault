@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Heli",
   "movieDetail.audioVideo": "Heli ja video",
   "movieDetail.technicalDerivedFromDiscs": "Need väärtused tulevad nüüd allolevatelt plaatidelt. Muuda neid seal.",
+  "movieDetail.technicalSummarisedByDiscs": "Eraldusvõime, HDR, koodekid, kuvasuhted, piirkonnad, heli ja subtiitrid on allpool plaadi kaupa.",
   "movieDetail.backToLibrary": "Tagasi",
   "movieDetail.backdrops": "Taustapildid",
   "movieDetail.barcode": "Vöötkood",

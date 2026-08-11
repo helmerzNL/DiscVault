@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Zvuk",
   "movieDetail.audioVideo": "Zvuk i slika",
   "movieDetail.technicalDerivedFromDiscs": "Ove vrijednosti sada dolaze s diskova u nastavku. Uredite ih ondje.",
+  "movieDetail.technicalSummarisedByDiscs": "Razlučivost, HDR, kodeci, omjeri slike, regije, zvuk i titlovi navedeni su u nastavku po disku.",
   "movieDetail.backToLibrary": "Natrag",
   "movieDetail.backdrops": "Pozadine",
   "movieDetail.barcode": "Barkod",
