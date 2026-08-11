@@ -26,7 +26,14 @@ Applied after the merge, the bump is derived from the branch it lands on and can
 |---|---|
 | Your PR into `release/v26-beta` | Leave `app/VERSION` alone. The guard fails if you touch it. |
 | The merge into `release/v26-beta` | `Build & Publish Docker Image` bumps the patch, commits to beta, then builds the image from that commit. |
+| A promotion PR into `main` | The opposite rule: its diff **must** carry a newer version. "Leave `app/VERSION` alone" applies to PRs into beta only — applying it to a promotion refused every one of them (#621). |
 | A promotion into `main` | Carries beta's bump commits. The original "strictly greater" check still applies there. |
+
+The bump commit deliberately carries **no `[skip ci]` marker**. GitHub honours that marker for
+`pull_request` as well as `push`, and beta's tip is always a bump commit — so it skipped every
+check on every promotion PR, and a required check that never reports blocks a merge exactly like
+a red one. A human replaying a bump commit is stood down by an explicit condition on the jobs in
+`docker-publish.yml` instead, where it cannot reach another pull request's checks.
 
 Protected paths still exist — they decide whether a bump is *due* — but you no longer act on
 them:

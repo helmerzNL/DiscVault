@@ -33,14 +33,34 @@ jobs:
       # alone. A hand-written bump would go stale the moment another PR lands ahead of
       # it, which is the collision this whole arrangement removes (#473/#474,
       # #516/#517, and the three-way collision repaired by #573).
+      #
+      # A promotion into main is the exception, and it has to be spelled out here: that
+      # pull request exists precisely to carry beta's CI-applied bumps to production, so
+      # its diff always contains app/VERSION. Without the base-ref condition this step
+      # refused every promotion PR -- the rule meant for PRs *into beta* was applied to
+      # the one PR shape that must change the file.
       - name: Refuse a hand-written version bump
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main'
         run: |
           python app/scripts/check_version_bumped.py \
             --base "${{ github.event.pull_request.base.sha }}" \
             --head "${{ github.event.pull_request.head.sha }}" \
             --base-ref "${{ github.event.pull_request.base.ref }}" \
             --forbid-change
+
+      # The promotion's own check: not "was the file left alone" but "does it move
+      # production forward". --aggregate compares the whole range, so it also catches a
+      # promotion that somehow carries protected-path changes without a newer version.
+      # --base-ref resolves the live main tip rather than the sha recorded when the PR
+      # was opened, which is what keeps this honest if main moves while it is open.
+      - name: Check the promotion carries a newer version
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main'
+        run: |
+          python app/scripts/check_version_bumped.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}" \
+            --base-ref "${{ github.event.pull_request.base.ref }}" \
+            --aggregate
 
       # On main the bump is not CI's to make: main only ever receives promotion merges,
       # which carry beta's bump commits with them. So the original progression check

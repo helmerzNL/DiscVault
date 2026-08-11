@@ -154,7 +154,19 @@ merge, the bump is derived from the branch it lands on and cannot go stale.
 |---|---|
 | PR into `release/v26-beta` | `app/VERSION` must be **unchanged** (`check_version_bumped.py --forbid-change`) |
 | Push to `release/v26-beta` | The `version-bump` job in `docker-publish.yml` bumps the patch, commits to beta, and the image is built **from that commit** |
+| PR into `main` (a promotion) | The opposite rule: the diff **must** carry a newer version, checked with `--aggregate`. "Leave the file alone" belongs to PRs into beta only |
 | Push to `main` (a promotion) | Unchanged: the version must be strictly greater, and promotions carry beta's bump commits |
+
+The promotion row is not a special case bolted on — it is what the rule always meant. CI
+applies the bump on beta, so a promotion PR is the one pull request whose whole purpose is
+to carry those bumps to production. Applying "leave `app/VERSION` alone" there refused every
+promotion outright (#621).
+
+The bump commit deliberately carries **no `[skip ci]` marker**. GitHub honours that marker for
+`pull_request` as well as `push`, and beta's tip is always a bump commit — so it skipped every
+check on every promotion PR, and a required check that never reports blocks a merge exactly
+like a red one. A human replaying a bump commit is stood down by an explicit condition on the
+jobs in `docker-publish.yml` instead, where it cannot reach another pull request's checks.
 
 Protected paths are unchanged — they decide whether a bump is *due*, not who applies it:
 

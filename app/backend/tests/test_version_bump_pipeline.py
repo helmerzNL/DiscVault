@@ -61,7 +61,9 @@ class DockerPublishWiringTests(unittest.TestCase):
         the default all-must-succeed rule would skip the build on every event."""
         self.assertIn(
             "if: ${{ !cancelled() && needs.version-guard.result != 'failure' "
-            "&& needs.version-bump.result != 'failure' }}",
+            "&& needs.version-bump.result != 'failure' "
+            "&& !(github.event_name == 'push' "
+            "&& startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')) }}",
             self.source,
         )
 
@@ -82,15 +84,27 @@ class DockerPublishWiringTests(unittest.TestCase):
 
     def test_the_bump_commit_cannot_retrigger_the_workflow(self):
         """A push made with GITHUB_TOKEN does not start a new run -- that is the
-        real guarantee. `[skip ci]` covers a human replaying the commit."""
-        self.assertIn("[skip ci]", self.source)
+        real guarantee. A human replaying the commit is covered by a condition on
+        this workflow's own jobs rather than by `[skip ci]` in the message.
+
+        The marker cannot come back. GitHub honours it for `pull_request` as well
+        as `push`, and beta's tip is always a bump commit, so it skipped every
+        check on every promotion PR opened from beta -- and a required check that
+        never reports blocks the merge exactly like a red one (#621)."""
+        self.assertNotIn("[skip ci]", self.source.replace("`[skip ci]`", ""))
+        self.assertIn('git commit --quiet -m "chore: bump app/VERSION to ${version}"', self.source)
         self.assertIn("permissions:\n      contents: write", self.source)
+        # Every job of this workflow stands down on a replayed bump commit. A skipped
+        # need is not a failed one, so the build needs the clause too or it publishes
+        # the replay after both gates skip.
+        replay = "startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')"
+        self.assertEqual(3, self.source.count(replay))
 
     def test_the_guard_job_stands_down_on_beta_pushes(self):
         """It asks whether the push bumped. On beta nothing does any more, so
         leaving it enabled would fail every merge by construction."""
         self.assertIn(
-            "if: github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push'",
+            "if: (github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push')",
             self.source,
         )
 
@@ -103,6 +117,30 @@ class VersionGuardWorkflowTests(unittest.TestCase):
     def test_a_pull_request_is_checked_for_the_opposite_thing(self):
         self.assertIn("--forbid-change", self.source)
         self.assertIn("if: github.event_name == 'pull_request'", self.source)
+
+    def test_a_promotion_into_main_is_exempt_from_the_forbid_rule(self):
+        """"Leave app/VERSION alone" is a rule for pull requests into beta, where CI
+        applies the bump after the merge. A promotion into main exists to carry those
+        bumps to production, so its diff always contains the file -- applying the rule
+        there refused every promotion PR (#621)."""
+        self.assertIn(
+            "if: github.event_name == 'pull_request' "
+            "&& github.event.pull_request.base.ref != 'main'",
+            self.source,
+        )
+
+    def test_a_promotion_must_still_move_the_version_forward(self):
+        """Exempt from "do not touch" is not exempt from checking: a promotion that
+        somehow carried an equal or lower version would publish `:stable` under a
+        number another image already holds."""
+        self.assertIn(
+            "if: github.event_name == 'pull_request' "
+            "&& github.event.pull_request.base.ref == 'main'",
+            self.source,
+        )
+        promotion = self.source[self.source.index("Check the promotion carries a newer version"):]
+        self.assertIn("--aggregate", promotion)
+        self.assertIn("--base-ref", promotion)
 
     def test_main_keeps_the_progression_check(self):
         """A promotion carries beta's bump commits. If one is ever lost, main would

@@ -29,7 +29,8 @@ jobs:
   version-guard:
     # Not on a beta push: there the bump is applied by version-bump below, so asking
     # "did this push already bump?" would fail every merge by construction.
-    if: github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push'
+    # Not on a replayed bump commit either -- see `replaying a bump` below.
+    if: (github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push') && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: bump app/VERSION'))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -60,10 +61,17 @@ jobs:
   #
   # This has to run *before* the build in the same run, not as a push that retriggers the
   # workflow: a push made with GITHUB_TOKEN deliberately does not start a new workflow
-  # run. That property is also what stops this from looping; `[skip ci]` in the message
-  # covers the case where a human replays the same commit.
+  # run. That property is what stops this from looping.
+  #
+  # `replaying a bump`: the remaining case is a human replaying the bump commit, which the
+  # message used to cover with `[skip ci]`. That marker had to go. GitHub honours it for
+  # `pull_request` as well as `push`, and beta's tip is *always* a bump commit -- so every
+  # promotion PR opened from beta had all of its checks skipped, and a required check that
+  # never reports blocks the merge exactly like a red one (#621). The replay case is now
+  # handled where it belongs: an explicit condition on the jobs of this workflow, which
+  # cannot leak into the checks of an unrelated pull request.
   version-bump:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta' && !startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -101,7 +109,7 @@ jobs:
             version="$(tr -d '[:space:]' < app/VERSION)"
 
             git add app/VERSION
-            git commit --quiet -m "chore: bump app/VERSION to ${version} [skip ci]"
+            git commit --quiet -m "chore: bump app/VERSION to ${version}"
 
             if git push origin release/v26-beta; then
               echo "version=${version}" >> "$GITHUB_OUTPUT"
@@ -122,7 +130,10 @@ jobs:
     # Exactly one of the two jobs above runs on any given event, so the default
     # all-must-succeed rule would skip the build every time. Require instead that
     # neither *failed*.
-    if: ${{ !cancelled() && needs.version-guard.result != 'failure' && needs.version-bump.result != 'failure' }}
+    # The bump-commit clause repeats here on purpose: both jobs above *skip* on a replayed
+    # bump commit, and a skipped need is not a failed one, so without it the build would
+    # publish the replay anyway.
+    if: ${{ !cancelled() && needs.version-guard.result != 'failure' && needs.version-bump.result != 'failure' && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
