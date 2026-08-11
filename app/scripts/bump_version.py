@@ -125,6 +125,16 @@ def _read_base_ref_version(base_ref: str) -> str | None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--working", action="store_true", help="Inspect working-tree changes instead of the staged set.")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Bump without inspecting any change set. This is the mode CI uses on "
+            "release/v26-beta, where there is nothing staged: the workflow already "
+            "decided a bump is due because the push touched app/**, and re-deriving "
+            "that from an empty index would silently skip the bump."
+        ),
+    )
     parser.add_argument("--stage", dest="stage", action="store_true", default=True, help="git add the bumped file (default).")
     parser.add_argument("--no-stage", dest="stage", action="store_false", help="Bump the file without staging it.")
     parser.add_argument(
@@ -141,16 +151,17 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    try:
-        files = working_files() if args.working else staged_files()
-    except subprocess.CalledProcessError:
-        return 0
+    if not args.force:
+        try:
+            files = working_files() if args.working else staged_files()
+        except subprocess.CalledProcessError:
+            return 0
 
-    if not files or not requires_version_bump(files):
-        return 0
-    if VERSION_FILE in files:
-        # An explicit bump is already part of this change set.
-        return 0
+        if not files or not requires_version_bump(files):
+            return 0
+        if VERSION_FILE in files:
+            # An explicit bump is already part of this change set.
+            return 0
 
     try:
         with open(VERSION_FILE, "rb") as handle:

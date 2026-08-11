@@ -72,6 +72,16 @@ PLUGIN_ENTRYPOINTS = (
     "search_barcode",
     "lookup_external_id",
     "movie_details",
+    # Television. Absent until now, which made every series source call return
+    # `entrypoint_unavailable` -- the whole series chain (refresh, identity
+    # search, the season offer, episodes) was calling functions the runtime
+    # refused to reach, on both bundled sources. The plugins had the code and
+    # the manifests declared the capability; this list is what decides whether
+    # a name may run, and nothing compared the two. See
+    # `test_next_plugin_entrypoint_coverage.py`.
+    "series_details",
+    "search_series",
+    "season_episodes",
     "box_set_candidates",
     "people_for_movie",
     "person_details",
@@ -1011,6 +1021,55 @@ def run_plugin_entrypoint(
     except Exception as exc:
         result.update({"status": "error", "state": "runtime_error", "error": str(exc)})
     return result
+
+
+def plugin_attribution(manifest: dict[str, Any]) -> dict[str, Any] | None:
+    """The credit a source requires DiscVault to display, as its manifest states it.
+
+    Attribution is a licence obligation, not decoration: TMDB, TVDB and Fanart
+    each require a specific credit, in specific words, and the words belong to
+    the source. So the manifest carries them and DiscVault renders them -- there
+    is no place here where a statement is composed, shortened or improved.
+
+    Two shapes, and the difference matters:
+
+    * ``statementKey`` / ``disclaimerKey`` name an existing i18n key. Use this
+      only where the source's own terms are satisfied by a translated rendering,
+      or where the translations were checked against those terms. TMDB's card is
+      on this path because its copy was already translated and reviewed.
+    * ``statement`` / ``disclaimer`` are literal text, rendered **untranslated**.
+      This is the safe default for a new source: a machine translation of a
+      required sentence is a different sentence, and nobody here can tell whether
+      the licence still accepts it.
+
+    A source that declares no attribution gets no card. That is a real answer --
+    not every source asks for one -- and it is better than inventing wording to
+    fill a gap.
+    """
+    raw = manifest.get("attribution")
+    if not isinstance(raw, dict):
+        return None
+    statement = str(raw.get("statement") or "").strip()
+    statement_key = str(raw.get("statementKey") or "").strip()
+    if not statement and not statement_key:
+        return None
+    logo = str(raw.get("logo") or "").strip()
+    # A path, not a name, is a mistake worth refusing rather than sanitising:
+    # silently reading `logo.svg` when the manifest asked for `../../secret.svg`
+    # would hide the mistake instead of surfacing it.
+    if logo and Path(logo).name != logo:
+        logo = ""
+    url = str(raw.get("url") or "").strip()
+    if url and not url.startswith("https://"):
+        url = ""
+    return {
+        "statement": statement,
+        "statementKey": statement_key,
+        "disclaimer": str(raw.get("disclaimer") or "").strip(),
+        "disclaimerKey": str(raw.get("disclaimerKey") or "").strip(),
+        "logo": logo,
+        "url": url,
+    }
 
 
 def replacement_plugin_ids(manifest: dict[str, Any]) -> list[str]:

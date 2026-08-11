@@ -80,6 +80,77 @@ def ui_preview_container_cards(containers: list[dict[str, Any]]) -> str:
     return "\n".join(cards)
 
 
+def ui_preview_attribution_cards(attributions: list[dict[str, Any]], icon: str) -> str:
+    """One About card per source that asks to be credited.
+
+    Rendered server-side from the snapshot rather than assembled in the browser,
+    because a credit that appears a moment late, or not at all when a script
+    fails, is a credit that was not displayed.
+
+    The translation rule is the whole point of this function. When the manifest
+    names an i18n key, the card carries `data-next-i18n` and the locale files
+    answer. When it gives literal text, the text is rendered **as written and
+    never translated**: the wording is a licence obligation belonging to the
+    source, and translating a required sentence produces a different sentence
+    that nobody here has cleared.
+    """
+    cards: list[str] = []
+    for entry in attributions or []:
+        statement_key = str(entry.get("statementKey") or "")
+        statement = str(entry.get("statement") or "")
+        if not statement_key and not statement:
+            continue
+        disclaimer_key = str(entry.get("disclaimerKey") or "")
+        disclaimer = str(entry.get("disclaimer") or "")
+        # Only DiscVault's own plugin-asset route. A remote logo would leak a
+        # page view to the source on every visit to the profile page, which is
+        # not something a credit is allowed to cost.
+        logo_url = str(entry.get("logoUrl") or "")
+        if not logo_url.startswith("/api/next/plugins/"):
+            logo_url = ""
+        name = str(entry.get("name") or "")
+        statement_html = (
+            f'<span data-next-i18n="{h(statement_key)}">{h(statement or name)}</span>'
+            if statement_key
+            else f"<span>{h(statement)}</span>"
+        )
+        disclaimer_html = ""
+        if disclaimer_key:
+            disclaimer_html = (
+                f'<p class="profile-about-legal" data-next-i18n="{h(disclaimer_key)}">{h(disclaimer)}</p>'
+            )
+        elif disclaimer:
+            disclaimer_html = f'<p class="profile-about-legal">{h(disclaimer)}</p>'
+        logo_html = (
+            f'<img class="profile-about-source-logo" src="{h(logo_url)}" alt="{h(name)}">'
+            if logo_url
+            else ""
+        )
+        cards.append(
+            """
+                  <section class="profile-dashboard-card profile-about-card">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">"""
+            + icon
+            + """</span>
+                      <div class="profile-about-card-copy">
+                        """
+            + statement_html
+            + """
+                        """
+            + disclaimer_html
+            + """
+                      </div>
+                      """
+            + logo_html
+            + """
+                    </div>
+                  </section>"""
+        )
+    return "".join(cards)
+
+
 def ui_preview_html(
     snapshot: dict[str, Any] | None = None,
     *,
@@ -142,6 +213,12 @@ def ui_preview_html(
         "appearance": "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 16.7,10 17.5,10Z",
         "library_preferences": "M9 3V18H12V3H9M12 5L16 18L19 17L15 4L12 5M5 5V18H8V5H5M3 19V21H21V19H3Z",
         "collectors_preferences": "M20 21H4V10H6V19H18V10H20V21M3 3H21V9H3V3M9.5 11H14.5C14.78 11 15 11.22 15 11.5V13H9V11.5C9 11.22 9.22 11 9.5 11M5 5V7H19V5H5Z",
+        "edit_release": "M18 4L20 8H17L15 4H13L15 8H12L10 4H8L10 8H7L5 4H4A2 2 0 0 0 2 6V18A2 2 0 0 0 4 20H20A2 2 0 0 0 22 18V4H18Z",
+        "edit_technical": "M3 17V19H9V17H3M3 5V7H13V5H3M13 21V19H21V17H13V15H11V21H13M7 9V11H3V13H7V15H9V9H7M21 13V11H11V13H21M15 9H17V7H21V5H17V3H15V9Z",
+        "edit_discs": "M12 11A1 1 0 0 0 11 12A1 1 0 0 0 12 13A1 1 0 0 0 13 12A1 1 0 0 0 12 11M12 16.5C9.5 16.5 7.5 14.5 7.5 12S9.5 7.5 12 7.5 16.5 9.5 16.5 12 14.5 16.5 12 16.5M12 2A10 10 0 0 0 2 12A10 10 0 0 0 12 22A10 10 0 0 0 22 12A10 10 0 0 0 12 2Z",
+        "edit_collectors": "M16 9H19L14 16M10 9H14L12 17M5 9H8L10 16M15 4H17L19 7H16M11 4H13L14 7H10M7 4H9L8 7H5M6 2L2 8L12 22L22 8L18 2H6Z",
+        "edit_notes": "M14 10H19.5L14 4.5V10M5 3H15L21 9V19A2 2 0 0 1 19 21H5C3.89 21 3 20.1 3 19V5C3 3.89 3.89 3 5 3M5 12V14H19V12H5M5 16V18H14V16H5Z",
+        "edit_series": "M8.16 3L6.75 4.41L9.34 7H4C2.89 7 2 7.89 2 9V19C2 20.11 2.89 21 4 21H20C21.11 21 22 20.11 22 19V9C22 7.89 21.11 7 20 7H14.66L17.25 4.41L15.84 3L12 6.84L8.16 3M4 9H20V19H4V9Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -151,6 +228,10 @@ def ui_preview_html(
             f'<svg viewBox="0 0 24 24" focusable="false" role="img"><path d="{path}"></path></svg>'
             "</span>"
         )
+
+    attribution_cards = ui_preview_attribution_cards(
+        snapshot.get("attributions") or [], nav_icon("library")
+    )
 
     def profile_tab(
         name: str,
@@ -657,6 +738,28 @@ def ui_preview_html(
       background: var(--bg-solid);
       color: var(--text);
       cursor: pointer;
+    }
+    /* Add-row buttons (tracks, subtitles, discs, product codes): a quiet
+       dashed pill, so they invite without competing with real data. This
+       class shipped unstyled and fell back to the browser default button. */
+    .ghost-button {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px dashed color-mix(in srgb, var(--accent) 45%, var(--line));
+      border-radius: 999px;
+      padding: 0 14px;
+      background: transparent;
+      color: var(--accent-bright);
+      font: inherit;
+      font-size: .88rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .ghost-button:hover {
+      background: color-mix(in srgb, var(--accent) 10%, transparent);
+      border-style: solid;
     }
     .secondary-button.active,
     .secondary-button[aria-pressed="true"] {
@@ -2364,6 +2467,14 @@ def ui_preview_html(
         linear-gradient(145deg, color-mix(in srgb, var(--accent) 20%, transparent), transparent 58%),
         linear-gradient(145deg, #2f3742, #171b22);
     }
+    .preview-poster.series-tile .preview-poster-art {
+      background:
+        linear-gradient(145deg, color-mix(in srgb, var(--accent) 34%, transparent), transparent 62%),
+        linear-gradient(145deg, #2b3446, #14181f);
+    }
+    .series-tile-seasons {
+      opacity: .82;
+    }
     .container-tile-badge {
       position: absolute;
       right: 8px;
@@ -3344,6 +3455,120 @@ def ui_preview_html(
       gap: 8px;
       justify-content: flex-end;
       margin-top: 14px;
+    }
+    /* The correction sheet. Each row states MovieVault's value and the proposed
+       one on separate lines rather than inline: an edition string can be long
+       enough that "A -> B" on one line wraps into something unreadable, and
+       comparing the two is the entire purpose of the sheet. */
+    .contribute-intro p {
+      margin: 0 0 8px;
+      color: var(--muted, #888);
+      font-size: .92rem;
+      line-height: 1.45;
+    }
+    .contribute-changes {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 12px 0;
+      max-height: 46vh;
+      overflow-y: auto;
+    }
+    .contribute-change {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      cursor: pointer;
+    }
+    .contribute-change-body {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .contribute-change-compare {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 2px 10px;
+      align-items: baseline;
+      margin-top: 4px;
+    }
+    .contribute-change-key {
+      font-size: .78rem;
+      color: var(--muted, #888);
+      white-space: nowrap;
+    }
+    .contribute-change-from,
+    .contribute-change-to {
+      display: flex;
+      flex-direction: column;
+      gap: 1px;
+      font-size: .88rem;
+      overflow-wrap: anywhere;
+    }
+    .contribute-change-from {
+      color: var(--muted, #888);
+    }
+    .contribute-change-line {
+      display: block;
+    }
+    .contribute-withheld summary {
+      cursor: pointer;
+      font-size: .9rem;
+    }
+    .contribute-withheld p {
+      margin: 6px 0 0;
+      color: var(--muted, #888);
+      font-size: .85rem;
+      line-height: 1.4;
+    }
+    .contribute-message:empty {
+      display: none;
+    }
+    .contribute-stale {
+      margin: 0;
+      font-size: .85rem;
+      color: var(--muted, #888);
+      line-height: 1.45;
+    }
+    .contribute-history-row .contribute-status {
+      white-space: nowrap;
+    }
+    /* Outlives the Contribute button: after an accepted correction there is
+       nothing left to send, so the button goes and this is the only thing that
+       still answers what happened. On the container detail it still sits in the
+       button row; on the movie detail it moved out of it -- see
+       .contribute-status-standing. */
+    .contribute-status {
+      font-size: .85rem;
+      color: var(--muted, #888);
+      align-self: center;
+      overflow-wrap: anywhere;
+    }
+    /* The standing half of the contribute UI, on the notice line under the hero
+       rather than in the action row.
+
+       It answers "what became of the correction I sent", which stays true across
+       reloads -- the same kind of statement as the metadata-refresh notice it now
+       sits beside, and not the same kind as "Sent for review", which answers a
+       click and belongs next to the button that was clicked.
+
+       Its own element rather than a second message through
+       setMovieDetailMessage: that writes textContent and would have a refresh
+       notice and a correction status silently overwrite each other, and a movie
+       can hold both at once. */
+    .contribute-status-standing {
+      display: block;
+      margin: 0 0 6px;
+    }
+    .contribute-status.good {
+      color: var(--success, #30a46c);
+    }
+    .contribute-status.bad {
+      color: var(--danger, #e5484d);
     }
     .lists-modal-actions button {
       padding: 8px 16px;
@@ -6444,6 +6669,13 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
     }
+    .release-fallback-film-links {
+      font-size: .8rem;
+      white-space: nowrap;
+    }
+    #movieDetailReleaseCandidates:not(:empty) {
+      margin: 0 0 16px;
+    }
     .release-fallback-list {
       display: grid;
       gap: 10px;
@@ -6482,45 +6714,311 @@ def ui_preview_html(
         width: 100%;
       }
     }
+    /* Edit-mode workspace. Mirrors the profile center: a sticky
+       settings-style section menu on the left, one section on screen at a
+       time on the right, and a floating action bar that keeps Save/Cancel
+       reachable however long a section grows. On small screens the menu
+       becomes a horizontal pill rail, like the read-mode section tabs.
+
+       The selectors are compounded with the base classes they override
+       (.profile-form, .detail-submenu): those base blocks appear LATER in
+       this stylesheet, and at equal specificity the later rule wins — a
+       plain .movie-edit-nav lost to .detail-submenu and collapsed the
+       sidebar into one inline pill. The profile navigation only escapes
+       that by being declared after the base block; these rules must not
+       depend on their position. */
+    .profile-form.movie-edit-layout {
+      display: grid;
+      grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
+      gap: 14px 18px;
+      align-items: start;
+    }
+    .detail-submenu.movie-edit-nav {
+      position: sticky;
+      top: 18px;
+      display: grid;
+      width: 100%;
+      max-width: none;
+      gap: 6px;
+      padding: 8px;
+      border-radius: 16px;
+      overflow: visible;
+    }
+    .detail-submenu.movie-edit-nav button {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 10px;
+      width: 100%;
+      min-width: 0;
+      min-height: 44px;
+      padding: 0 12px;
+      border-radius: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      text-align: left;
+    }
+    .detail-submenu.movie-edit-nav button:hover {
+      color: var(--text);
+      background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
+    }
+    .detail-submenu.movie-edit-nav button:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .detail-submenu.movie-edit-nav button.active {
+      color: var(--accent-bright);
+      background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
+      box-shadow:
+        0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
+        0 10px 24px color-mix(in srgb, var(--accent) 16%, transparent);
+    }
+    html[data-profile-menu-style="icon_only"] .profile-form.movie-edit-layout {
+      grid-template-columns: 72px minmax(0, 1fr);
+    }
+    html[data-profile-menu-style="icon_only"] .detail-submenu.movie-edit-nav button {
+      justify-content: center;
+      padding-inline: 0;
+    }
+    html[data-profile-menu-style="icon_only"] .detail-submenu.movie-edit-nav .profile-tab-label {
+      display: none;
+    }
     .movie-edit-sections {
       display: grid;
       gap: 0;
+      min-width: 0;
+    }
+    /* Sections behave as tab panels; the divider that separated them as a
+       stacked list would render on whichever panel is visible. */
+    .movie-edit-sections > .detail-subsection + .detail-subsection {
+      margin-top: 0;
+      padding-top: 0;
+      border-top: 0;
+    }
+    .movie-edit-actions {
+      grid-column: 1 / -1;
+      position: sticky;
+      bottom: 10px;
+      z-index: 3;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-top: 4px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 88%, transparent);
+      backdrop-filter: blur(14px) saturate(140%);
+      box-shadow: 0 12px 30px rgba(0, 0, 0, .14);
     }
     .movie-edit-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
+      /* Rows share the height of their tallest cell; without this the other
+         cells stretch and hand the surplus to their input or select. */
+      align-items: start;
     }
     .movie-edit-grid label.wide,
     .movie-edit-grid .wide {
       grid-column: 1 / -1;
     }
-    /* The packaging fieldset has shipped without a rule since it was added, so it
-       rendered with the browser default fieldset border and no layout. */
     .movie-edit-checkbox-group {
       display: flex;
       flex-wrap: wrap;
-      gap: 4px 14px;
+      gap: 8px;
       margin: 0;
-      padding: 8px 10px;
-      border: 1px solid var(--border, rgba(128, 128, 128, 0.35));
-      border-radius: 8px;
+      padding: 10px 12px 12px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
       min-width: 0;
+      /* Chips keep their own height; stretched flex lines turned them into
+         tall ovals whenever a neighbouring fieldset was taller. */
+      align-items: flex-start;
+      align-content: flex-start;
     }
     .movie-edit-checkbox-group legend {
       display: flex;
       align-items: center;
       gap: 6px;
       padding: 0 4px;
-      font-size: 0.85rem;
-      opacity: 0.8;
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
-    .movie-edit-checkbox-group label {
+    /* Options render as selectable chips: the native checkbox still carries
+       the state (and stays the click target, stretched across the chip) but
+       the pill itself shows it, so a 12-option fieldset reads at a glance.
+       Prefixed with .profile-form to outrank its later `label` rule, which
+       would otherwise flip the chips back to display:grid in muted ink. */
+    .profile-form .movie-edit-checkbox-group label {
+      position: relative;
       display: inline-flex;
       align-items: center;
       gap: 5px;
-      font-size: 0.9rem;
+      min-height: 32px;
+      padding: 0 13px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--bg-solid);
+      color: var(--text);
+      font-size: .88rem;
       white-space: nowrap;
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .movie-edit-checkbox-group label input[type="checkbox"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .movie-edit-checkbox-group label:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    }
+    .movie-edit-checkbox-group label:has(input[type="checkbox"]:checked) {
+      color: var(--accent-bright);
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      font-weight: 700;
+    }
+    .movie-edit-checkbox-group label:has(input[type="checkbox"]:focus-visible) {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    .movie-edit-checkbox-group label:has(input[type="checkbox"]:disabled) {
+      opacity: .55;
+      cursor: not-allowed;
+    }
+    /* Season picker. Cards rather than a checkbox list: choosing which seasons
+       a box set covers is recognition work, and a column of bare numbers makes
+       the reader do it from memory. Prefixed with .profile-form throughout,
+       since its later `label` rule would otherwise reclaim these. */
+    .movie-edit-seasons {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .movie-edit-seasons-head {
+      display: grid;
+      gap: 2px;
+    }
+    .movie-edit-seasons-head > span {
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .movie-edit-seasons-head .hint {
+      margin: 0;
+    }
+    .movie-edit-seasons-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .profile-form .movie-edit-season-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .profile-form .movie-edit-season-card input[type="checkbox"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .profile-form .movie-edit-season-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    }
+    .profile-form .movie-edit-season-card:has(input[type="checkbox"]:checked) {
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      background: color-mix(in srgb, var(--accent) 14%, var(--bg-solid));
+    }
+    .profile-form .movie-edit-season-card:has(input[type="checkbox"]:focus-visible) {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    /* Reserved whether or not the season resolved a poster, so the titles stay
+       on one vertical line instead of stepping in as artwork arrives. */
+    .movie-edit-season-cover {
+      width: 46px;
+      aspect-ratio: 2 / 3;
+      display: block;
+      border-radius: 7px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--text) 10%, transparent);
+    }
+    .movie-edit-season-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .movie-edit-season-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .movie-edit-season-copy strong {
+      font-size: .92rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* The meta line wraps rather than truncating: season, year and episode
+       count are three separate facts, and an ellipsis drops whichever one
+       happens to sit last. */
+    .movie-edit-season-copy > span {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .profile-form .movie-edit-season-card:has(input[type="checkbox"]:checked) .movie-edit-season-copy strong {
+      color: var(--accent-bright);
+    }
+    /* The plain season toggle, used per disc and in the series-season offer.
+       It also shipped without a rule, so it inherited .profile-form's label
+       styling and stacked the checkbox above its own text. */
+    .profile-form .movie-edit-season,
+    .profile-form .movie-edit-disc-episode {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+      font-size: .88rem;
+      font-weight: 620;
+      cursor: pointer;
+    }
+    .profile-form .movie-edit-season em,
+    .profile-form .movie-edit-disc-episode em {
+      color: var(--muted);
+      font-style: normal;
+      font-weight: 600;
     }
     .movie-edit-track-editor {
       display: flex;
@@ -6543,6 +7041,10 @@ def ui_preview_html(
       grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
       gap: 6px;
       align-items: center;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
     }
     .movie-edit-track-row.movie-edit-subtitle-row {
       grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr) auto;
@@ -6555,15 +7057,25 @@ def ui_preview_html(
        a guessed row look like recorded data. */
     .movie-edit-track-row[data-legacy-text]:not([data-legacy-text=""]) {
       border-left: 3px solid var(--accent, #d09a2c);
-      padding-left: 6px;
     }
     .movie-edit-track-remove {
-      background: none;
-      border: 1px solid var(--border, rgba(128, 128, 128, 0.35));
-      border-radius: 6px;
+      width: 30px;
+      height: 30px;
+      display: inline-grid;
+      place-items: center;
+      background: var(--bg-solid);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
       cursor: pointer;
+      font-size: 1rem;
       line-height: 1;
-      padding: 6px 9px;
+      padding: 0;
+    }
+    .movie-edit-track-remove:hover {
+      color: var(--red);
+      border-color: color-mix(in srgb, var(--red) 45%, transparent);
+      background: color-mix(in srgb, var(--red) 10%, var(--bg-solid));
     }
     .movie-edit-track-add {
       align-self: flex-start;
@@ -6571,6 +7083,88 @@ def ui_preview_html(
     .movie-edit-track-empty {
       opacity: 0.65;
       font-size: 0.9rem;
+    }
+    /* Per-disc editor. A disc is a box around a copy of the release-level
+       fields, so it reuses .movie-edit-grid wholesale and only adds the frame
+       and the header that tell one disc from the next. */
+    .movie-edit-disc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .movie-edit-disc-row {
+      border: 1px solid var(--line, rgba(128, 128, 128, 0.35));
+      border-radius: 14px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
+    }
+    .movie-edit-disc-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--line);
+    }
+    .movie-edit-disc-number {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 11px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--accent) 16%, var(--bg-solid));
+      color: var(--accent-bright);
+      font-size: .82rem;
+      font-weight: 800;
+    }
+    .movie-edit-disc-content {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .movie-edit-disc-season {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .movie-edit-disc-episodes {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      padding-left: 20px;
+    }
+    .movie-edit-disc-episode {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.9rem;
+    }
+    .movie-edit-disc-count-warning {
+      color: var(--warning, #b8860b);
+    }
+    .movie-detail-discs {
+      margin-top: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .movie-detail-disc-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .movie-detail-disc {
+      border: 1px solid var(--line, rgba(128, 128, 128, 0.35));
+      border-radius: 10px;
+      padding: 12px;
+    }
+    .movie-detail-disc-title {
+      margin: 0 0 8px;
+      font-size: 0.95rem;
     }
     .movie-edit-grid label > span:first-child {
       display: flex;
@@ -6858,6 +7452,26 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--bg) 92%, transparent);
       box-shadow: var(--shadow-soft);
     }
+    /* While editing, the edit workspace IS the page: the read-mode cards
+       below it duplicate the same field names and would fight the form for
+       attention, so they step aside until the user saves or cancels. */
+    .movie-detail-page.movie-editing .movie-detail-body > :not(#movieEditPanel) {
+      display: none;
+    }
+    /* Refresh metadata re-renders the detail view and would silently discard
+       an open form; Contribute and Delete are equally out of place mid-edit.
+       Save and Cancel are the only verbs edit mode offers. The container and
+       series heroes carry the same rule, now that their actions live there. */
+    .movie-detail-page.movie-editing #movieMetadataApplyButton,
+    .movie-detail-page.movie-editing #movieContributeButton,
+    .movie-detail-page.movie-editing #movieDeleteButton,
+    .container-detail-page.container-editing #containerMetadataApplyButton,
+    .container-detail-page.container-editing #containerContributeField,
+    .container-detail-page.container-editing #containerDeleteButton,
+    .series-detail-page.series-editing #seriesMetadataRefreshButton,
+    .series-detail-page.series-editing #seriesDeleteButton {
+      display: none;
+    }
     .detail-card {
       border: 1px solid var(--line);
       border-radius: var(--radius);
@@ -7047,6 +7661,17 @@ def ui_preview_html(
       letter-spacing: .06em;
       text-transform: uppercase;
       color: var(--muted);
+    }
+    /* Explanatory copy under a field or section. The class has been in the
+       markup since the edit form was written but never had a rule, so every
+       hint rendered at full body weight and competed with the fields it was
+       meant to annotate. */
+    .hint {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 600;
+      line-height: 1.45;
     }
     .detail-fields {
       display: grid;
@@ -7389,7 +8014,8 @@ def ui_preview_html(
       background: color-mix(in srgb, var(--ok, #2e7d32) 20%, transparent);
       color: var(--ok, #2e7d32);
     }
-    .debug-source-badge.contrib-skipped {
+    .debug-source-badge.contrib-skipped,
+    .debug-source-badge.state-release_candidates {
       background: color-mix(in srgb, var(--warn, #b26a00) 20%, transparent);
       color: var(--warn, #b26a00);
     }
@@ -7652,7 +8278,11 @@ def ui_preview_html(
         linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, transparent), transparent 42%),
         var(--bg-elevated);
     }
-    .container-detail-submenu {
+    /* The series page shares these rules rather than carrying a copy. Both live
+       in the two-column `.movie-detail-body` grid and both need to span it; a
+       second copy is how two pages that should look identical drift apart. */
+    .container-detail-submenu,
+    .series-detail-submenu {
       grid-column: 1 / -1;
       position: sticky;
       top: 72px;
@@ -7667,13 +8297,15 @@ def ui_preview_html(
       box-shadow: var(--shadow-soft);
       backdrop-filter: blur(20px) saturate(160%);
     }
-    .container-detail-panel {
+    .container-detail-panel,
+    .series-detail-panel {
       grid-column: 1 / -1;
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
     }
-    .container-detail-panel.hidden {
+    .container-detail-panel.hidden,
+    .series-detail-panel.hidden {
       display: none;
     }
     .container-overview-grid {
@@ -7681,6 +8313,166 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 14px;
+    }
+    .series-identity-search {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .series-identity-search input {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .series-identity-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .series-identity-candidate {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 12px;
+      padding: 8px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line-strong);
+    }
+    .series-identity-thumb {
+      width: 46px;
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--surface-2, rgba(127, 127, 127, 0.12));
+    }
+    .series-identity-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .series-identity-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .series-identity-text span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    /* Two lines of synopsis: enough to tell two same-named shows apart, not so
+       much that the list stops being scannable. */
+    .series-identity-overview {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    /* One card per season, laid out responsively rather than as a single
+       column: a long-running show is twenty rows of mostly empty width, and
+       the covers are what make a season recognisable at a glance. */
+    .series-season-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .series-season-row {
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      align-items: center;
+      gap: 12px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
+    }
+    .series-season-row.is-owned {
+      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+      background: color-mix(in srgb, var(--accent) 9%, var(--bg-solid));
+    }
+    /* Reserved whether or not the season resolved a poster, so the labels stay on
+       one vertical line instead of stepping in and out as artwork arrives. */
+    .series-season-thumb {
+      width: 46px;
+      aspect-ratio: 2 / 3;
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--surface-2, rgba(127, 127, 127, 0.12));
+    }
+    .series-season-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .series-season-text {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .series-season-text span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    /* The episode button sits under the text rather than beside it: inline, it
+       took the width the season title needed and every card wrapped to three
+       lines. Column 2 keeps it aligned with the copy, not the cover. */
+    .series-season-row {
+      grid-template-columns: 46px minmax(0, 1fr);
+      align-items: start;
+    }
+    .series-season-episodes-toggle {
+      grid-column: 2;
+      min-height: 32px;
+      padding: 0 12px;
+      font-size: .84rem;
+    }
+    .series-season-thumb {
+      grid-row: span 2;
+      align-self: center;
+    }
+    /* The grid cell is the season and its episodes together. */
+    .series-season-item {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+      min-width: 0;
+    }
+    .series-episode-list {
+      display: grid;
+      gap: 4px;
+      margin: 0 0 4px 10px;
+    }
+    .series-episode-list.hidden {
+      display: none;
+    }
+    .series-episode-row {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+      padding: 6px 8px;
+      border-radius: 6px;
+      border: 1px solid var(--line-strong);
+    }
+    /* An episode the collection does not carry is the reason to show this list at
+       all, so it is marked rather than hidden. */
+    .series-episode-row.is-missing {
+      border-style: dashed;
+      opacity: 0.72;
+    }
+    .series-episode-number {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+    }
+    .series-episode-text {
+      display: grid;
+      gap: 1px;
+      min-width: 0;
+    }
+    .series-episode-text span {
+      color: var(--muted);
+      font-size: 12px;
     }
     .container-member-grid {
       display: grid;
@@ -10440,7 +11232,7 @@ def ui_preview_html(
       font-size: .88rem;
       line-height: 1.5;
     }
-    .profile-about-tmdb-logo {
+    .profile-about-source-logo {
       display: block;
       width: 60px;
       max-width: 100%;
@@ -12484,23 +13276,27 @@ def ui_preview_html(
       .movie-media-video-grid .video-card-copy {
         font-size: .8rem;
       }
-      .container-detail-submenu {
+      .container-detail-submenu,
+      .series-detail-submenu {
         position: static;
         justify-content: flex-start;
         overflow-x: auto;
         scrollbar-width: none;
         -webkit-overflow-scrolling: touch;
       }
-      .container-detail-submenu::-webkit-scrollbar {
+      .container-detail-submenu::-webkit-scrollbar,
+      .series-detail-submenu::-webkit-scrollbar {
         display: none;
       }
-      .container-detail-submenu button {
+      .container-detail-submenu button,
+      .series-detail-submenu button {
         flex: 0 0 auto;
         max-width: min(74vw, 260px);
         overflow: hidden;
         text-overflow: ellipsis;
       }
       .container-detail-panel,
+      .series-detail-panel,
       .container-overview-grid {
         grid-template-columns: 1fr;
       }
@@ -12634,6 +13430,42 @@ def ui_preview_html(
       .movie-edit-track-row,
       .movie-edit-track-row.movie-edit-subtitle-row {
         grid-template-columns: 1fr;
+      }
+      .profile-form.movie-edit-layout,
+      html[data-profile-menu-style="icon_only"] .profile-form.movie-edit-layout {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      .detail-submenu.movie-edit-nav {
+        position: static;
+        display: flex;
+        width: 100%;
+        max-width: 100%;
+        gap: 6px;
+        padding: 6px;
+        border-radius: 14px;
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scroll-snap-type: inline proximity;
+      }
+      .detail-submenu.movie-edit-nav button,
+      html[data-profile-menu-style="icon_only"] .detail-submenu.movie-edit-nav button {
+        flex: 0 0 auto;
+        width: auto;
+        min-width: 44px;
+        min-height: 44px;
+        justify-content: center;
+        padding: 0 12px;
+        scroll-snap-align: start;
+      }
+      .movie-edit-actions {
+        justify-content: stretch;
+        /* Stick above the floating mobile tabbar (70px tall, 10px inset). */
+        bottom: calc(90px + env(safe-area-inset-bottom));
+      }
+      .movie-edit-actions .primary-button,
+      .movie-edit-actions .secondary-button {
+        flex: 1;
       }
       .profile-hero-actions {
         justify-content: stretch;
@@ -13151,12 +13983,14 @@ def ui_preview_html(
     }
     @media (max-width: 420px) {
       .detail-submenu,
-      .container-detail-submenu {
+      .container-detail-submenu,
+      .series-detail-submenu {
         gap: 3px;
         padding: 3px;
       }
       .detail-submenu button,
-      .container-detail-submenu button {
+      .container-detail-submenu button,
+      .series-detail-submenu button {
         min-height: 34px;
         padding: 0 10px;
         font-size: .76rem;
@@ -14211,6 +15045,7 @@ def ui_preview_html(
             <button type="button" data-notification-filter="metadata_jobs" data-next-i18n="notifications.prefMetadataJobs">Metadata jobs</button>
             <button type="button" data-notification-filter="imports" data-next-i18n="notifications.prefImports">Imports</button>
             <button type="button" data-notification-filter="price_alerts" data-next-i18n="notifications.prefPriceAlerts">Price alerts</button>
+            <button type="button" data-notification-filter="contributions" data-next-i18n="notifications.prefContributions">Contributions</button>
             <button type="button" data-notification-filter="security" data-next-i18n="notifications.prefSecurity">Security</button>
           </div>
           <div class="notification-list" id="notificationsList"></div>
@@ -14241,8 +15076,8 @@ def ui_preview_html(
               <span class="profile-dashboard-symbol">""" + nav_icon("import") + """</span>
               <div class="profile-dashboard-copy">
                 <span class="eyebrow" data-next-i18n="importCenter.addEyebrow">Quick add</span>
-                <h4 data-next-i18n="importCenter.lookupTitle">Add movie</h4>
-                <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding a movie.</p>
+                <h4 data-next-i18n="importCenter.lookupTitle">Add title</h4>
+                <p data-next-i18n="importCenter.lookupHelp">Scan a barcode or search manually by barcode or title before adding it.</p>
               </div>
             </header>
             <nav class="detail-submenu profile-dashboard-tabs import-section-tabs import-method-tabs" role="tablist" aria-label="Import method" data-next-i18n-aria="importCenter.methods">
@@ -14280,7 +15115,7 @@ def ui_preview_html(
                     <span class="profile-dashboard-card-icon">""" + nav_icon("discover") + """</span>
                     <div>
                       <h4 data-next-i18n="importCenter.manualTitleCard">Manual search</h4>
-                      <p data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film by title.</p>
+                      <p data-next-i18n="importCenter.manualHelp">Use this when the barcode is unreadable or you want to add a film or series by title.</p>
                     </div>
                   </div>
                 </div>
@@ -14291,7 +15126,7 @@ def ui_preview_html(
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualTitle">Title</span>
-                    <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="importTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -14371,7 +15206,7 @@ def ui_preview_html(
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderName">Title</span>
-                    <input id="boxSetBuilderTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="boxSetBuilderTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -14405,7 +15240,7 @@ def ui_preview_html(
                   <div class="import-source-meta import-scan-preview" id="boxSetBuilderMemberPreview" hidden></div>
                   <label>
                     <span data-next-i18n="importCenter.boxSetBuilderMemberTitle">Title (fallback)</span>
-                    <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="boxSetBuilderMemberTitleInput" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label>
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -14679,7 +15514,7 @@ def ui_preview_html(
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 16.58 10.83 12 15.41 7.41 14 6 8 12 14 18 15.41 16.58Z"></path></svg>
             <span class="button-label" data-next-i18n="movieDetail.backToLibrary">Back</span>
           </button>
-          <div class="movie-detail-hero-actions" aria-label="Movie actions" data-next-i18n-aria="movieDetail.title">
+          <div class="movie-detail-hero-actions" aria-label="Title actions" data-next-i18n-aria="movieDetail.titleActions">
             <button type="button" class="movie-detail-icon-action hidden" id="movieEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path id="movieEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
               <span class="button-label" id="movieEditToggleLabel" data-next-i18n="common.edit">Edit</span>
@@ -14692,6 +15527,10 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
             </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="movieContributeButton" aria-label="Contribute corrections to MovieVault" title="Contribute corrections to MovieVault" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
+              <span class="button-label" data-next-i18n="contribute.action">Contribute</span>
+            </button>
             <button type="button" class="movie-detail-icon-action danger hidden" id="movieDeleteButton" aria-label="Delete movie" title="Delete movie" data-next-i18n-aria="movieDetail.deleteMovie" data-next-i18n-title="movieDetail.deleteMovie">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.deleteMovie">Delete movie</span>
@@ -14700,23 +15539,36 @@ def ui_preview_html(
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div class="movie-detail-copy">
-              <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
+              <span class="eyebrow" data-next-i18n="movieDetail.titleDetails">Title details</span>
               <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
               <div class="hero-meta" id="movieDetailTags"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
             </div>
           </div>
         </section>
+        <div class="contribute-status contribute-status-standing hidden" id="movieContributeStatus"></div>
         <div class="detail-message movie-detail-status" id="movieDetailMessage"></div>
+        <div id="movieDetailReleaseCandidates"></div>
         <section class="movie-detail-body">
           <div class="detail-card full hidden" id="movieEditPanel">
-            <div class="detail-card-head">
-              <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
+            <div class="detail-card-head movie-edit-head">
+              <div>
+                <h3 data-next-i18n="movieDetail.editDetails">Edit details</h3>
+                <p data-next-i18n="movieDetail.editDetailsHelp">All details of this release, grouped into sections. Changes are only stored when you save.</p>
+              </div>
             </div>
-            <form class="profile-form" id="movieEditForm">
+            <form class="profile-form movie-edit-layout" id="movieEditForm">
+              <nav class="detail-submenu movie-edit-nav" role="tablist" aria-label="Edit details" data-next-i18n-aria="movieDetail.editDetails">
+                <button type="button" class="active" id="movieEditTabRelease" role="tab" aria-controls="movieEditSectionRelease" aria-selected="true" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionRelease" aria-label="Release" title="Release" data-next-i18n-aria="movieDetail.release" data-next-i18n-title="movieDetail.release">""" + nav_icon("edit_release") + """<span class="profile-tab-label" data-next-i18n="movieDetail.release">Release</span></button>
+                <button type="button" class="hidden" id="movieEditTabSeries" role="tab" aria-controls="movieEditSectionSeries" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionSeries" aria-label="Series" title="Series" data-next-i18n-aria="movieDetail.series" data-next-i18n-title="movieDetail.series">""" + nav_icon("edit_series") + """<span class="profile-tab-label" data-next-i18n="movieDetail.series">Series</span></button>
+                <button type="button" id="movieEditTabTechnical" role="tab" aria-controls="movieEditReleaseTechnicalSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditReleaseTechnicalSection" aria-label="Technical" title="Technical" data-next-i18n-aria="movieDetail.technical" data-next-i18n-title="movieDetail.technical">""" + nav_icon("edit_technical") + """<span class="profile-tab-label" data-next-i18n="movieDetail.technical">Technical</span></button>
+                <button type="button" id="movieEditTabDiscs" role="tab" aria-controls="movieEditDiscsSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditDiscsSection" aria-label="Discs" title="Discs" data-next-i18n-aria="movieDetail.discs" data-next-i18n-title="movieDetail.discs">""" + nav_icon("edit_discs") + """<span class="profile-tab-label" data-next-i18n="movieDetail.discs">Discs</span></button>
+                <button type="button" id="movieEditTabCollectors" role="tab" aria-controls="movieEditSectionCollectors" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionCollectors" aria-label="Collectors" title="Collectors" data-next-i18n-aria="movieDetail.collectors" data-next-i18n-title="movieDetail.collectors">""" + nav_icon("edit_collectors") + """<span class="profile-tab-label" data-next-i18n="movieDetail.collectors">Collectors</span></button>
+                <button type="button" id="movieEditTabText" role="tab" aria-controls="movieEditSectionText" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionText" aria-label="Overview &amp; notes" title="Overview &amp; notes" data-next-i18n-aria="movieDetail.editSectionText" data-next-i18n-title="movieDetail.editSectionText">""" + nav_icon("edit_notes") + """<span class="profile-tab-label" data-next-i18n="movieDetail.editSectionText">Overview &amp; notes</span></button>
+              </nav>
               <div class="movie-edit-sections">
-                <div class="detail-subsection">
-                  <h4 class="detail-subsection-title" data-next-i18n="containerDetail.overview">Overview</h4>
+                <div class="detail-subsection" id="movieEditSectionRelease" role="tabpanel" aria-labelledby="movieEditTabRelease" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.release">Release</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditTitle">
                       <span data-next-i18n="movieDetail.fieldTitle">Title</span>
@@ -14742,6 +15594,12 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.barcode">Barcode</span>
                       <input id="movieEditBarcode" name="barcode" maxlength="160" autocomplete="off">
                     </label>
+                    <div id="movieEditIdentifiersRow" class="movie-edit-identifiers">
+                      <span data-next-i18n="movieDetail.productIdentifiers">Other product codes</span>
+                      <div id="movieEditIdentifiers" class="movie-edit-identifiers-list"></div>
+                      <button type="button" id="movieEditIdentifierAdd" class="ghost-button" data-next-i18n="movieDetail.productIdentifierAdd">Add a code</button>
+                      <p class="hint" data-next-i18n="movieDetail.productIdentifiersHint">The barcode above is what a scan resolves to. These are the same product's other codes: an EAN for Europe, a UPC for North America, an ISBN, an Amazon ASIN, or the distributor's catalogue number.</p>
+                    </div>
                     <label for="movieEditMediaType">
                       <span data-next-i18n="movieDetail.mediaType">Type</span>
                       <select id="movieEditMediaType" name="media_type">
@@ -14749,19 +15607,6 @@ def ui_preview_html(
                         <option value="SHOW" data-next-i18n="movieDetail.mediaTypeShow">TV series</option>
                       </select>
                     </label>
-                    <label for="movieEditSeries" id="movieEditSeriesRow" hidden>
-                      <span data-next-i18n="movieDetail.series">Series</span>
-                      <select id="movieEditSeries" name="series_id"></select>
-                    </label>
-                    <label id="movieEditSeriesNewRow" hidden>
-                      <span data-next-i18n="movieDetail.seriesNewTitle">New series title</span>
-                      <input id="movieEditSeriesNew" maxlength="300" autocomplete="off">
-                    </label>
-                    <div id="movieEditSeasonsRow" class="movie-edit-seasons" hidden>
-                      <span data-next-i18n="movieDetail.seasons">Seasons</span>
-                      <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
-                      <p class="hint" data-next-i18n="movieDetail.seasonsHint">Leave every season unticked for a complete-series set.</p>
-                    </div>
                     <label for="movieEditFormat">
                       <span data-next-i18n="movieDetail.format">Format</span>
                       <select id="movieEditFormat" name="format"></select>
@@ -14792,10 +15637,36 @@ def ui_preview_html(
                     </label>
                   </div>
                 </div>
-                <div class="detail-subsection">
-                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
+                <!-- Only reachable while the type is a TV series: on a film the
+                     tab is hidden and the backend refuses a series link anyway.
+                     Its own section rather than three rows inside Release,
+                     because the seasons list is as long as the show is old. -->
+                <div class="detail-subsection hidden" id="movieEditSectionSeries" role="tabpanel" aria-labelledby="movieEditTabSeries" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.series">Series</h4>
                   <div class="movie-edit-grid">
-                    <label for="movieEditVideoResolution">
+                    <label for="movieEditSeries" id="movieEditSeriesRow">
+                      <span data-next-i18n="movieDetail.series">Series</span>
+                      <select id="movieEditSeries" name="series_id"></select>
+                    </label>
+                    <label id="movieEditSeriesNewRow" hidden>
+                      <span data-next-i18n="movieDetail.seriesNewTitle">New series title</span>
+                      <input id="movieEditSeriesNew" maxlength="300" autocomplete="off">
+                    </label>
+                  </div>
+                  <div id="movieEditSeasonsRow" class="movie-edit-seasons" hidden>
+                    <div class="movie-edit-seasons-head">
+                      <span data-next-i18n="movieDetail.seasons">Seasons</span>
+                      <p class="hint" data-next-i18n="movieDetail.seasonsHint">Leave every season unticked for a complete-series set.</p>
+                    </div>
+                    <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
+                  </div>
+                  <p class="hint" id="movieEditSeriesEmptyHint" hidden data-next-i18n="movieDetail.seriesPickFirst">Pick a series above to choose which seasons this release covers.</p>
+                </div>
+                <div class="detail-subsection hidden" id="movieEditReleaseTechnicalSection" role="tabpanel" aria-labelledby="movieEditTabTechnical" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
+                  <p class="hint hidden" id="movieEditReleaseTechnicalDerived" data-next-i18n="movieDetail.technicalDerivedFromDiscs">These values now come from the discs below. Edit them there.</p>
+                  <div class="movie-edit-grid" id="movieEditReleaseTechnicalGrid">
+                    <label for="movieEditVideoResolution" data-derived-from-discs="video_resolution">
                       <span data-next-i18n="movieDetail.videoResolution">Resolution</span>
                       <select id="movieEditVideoResolution" name="video_resolution">
                         <option value="" data-next-i18n="common.notSet">Not set</option>
@@ -14807,11 +15678,15 @@ def ui_preview_html(
                         <option value="2160p">2160p</option>
                       </select>
                     </label>
+                    <label for="movieEditDiscCount">
+                      <span data-next-i18n="movieDetail.discCount">Number of discs</span>
+                      <input id="movieEditDiscCount" name="disc_count" type="number" min="1" max="999" inputmode="numeric" autocomplete="off">
+                    </label>
                     <label for="movieEditRuntime">
                       <span data-next-i18n="movieDetail.runtime">Runtime</span>
                       <input id="movieEditRuntime" name="runtime_minutes" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="min">
                     </label>
-                    <fieldset id="movieEditHdr" class="movie-edit-checkbox-group">
+                    <fieldset id="movieEditHdr" class="movie-edit-checkbox-group" data-derived-from-discs="hdr">
                       <legend data-next-i18n="movieDetail.hdr" data-lock-anchor>HDR</legend>
                       <label><input type="checkbox" value="hdr"> <span data-next-i18n="movieHdrFormat.hdr">HDR</span></label>
                       <label><input type="checkbox" value="hdr10"> <span data-next-i18n="movieHdrFormat.hdr10">HDR10</span></label>
@@ -14819,7 +15694,7 @@ def ui_preview_html(
                       <label><input type="checkbox" value="hlg"> <span data-next-i18n="movieHdrFormat.hlg">HLG</span></label>
                       <label><input type="checkbox" value="dolby_vision"> <span data-next-i18n="movieHdrFormat.dolbyVision">Dolby Vision</span></label>
                     </fieldset>
-                    <fieldset id="movieEditVideoCodecs" class="movie-edit-checkbox-group">
+                    <fieldset id="movieEditVideoCodecs" class="movie-edit-checkbox-group" data-derived-from-discs="video_codecs">
                       <legend data-next-i18n="movieDetail.videoCodecs" data-lock-anchor>Video codec</legend>
                       <label><input type="checkbox" value="mpeg2"> <span data-next-i18n="movieVideoCodec.mpeg2">MPEG-2</span></label>
                       <label><input type="checkbox" value="vc1"> <span data-next-i18n="movieVideoCodec.vc1">VC-1</span></label>
@@ -14827,42 +15702,94 @@ def ui_preview_html(
                       <label><input type="checkbox" value="hevc"> <span data-next-i18n="movieVideoCodec.hevc">HEVC (H.265)</span></label>
                       <label><input type="checkbox" value="av1"> <span data-next-i18n="movieVideoCodec.av1">AV1</span></label>
                     </fieldset>
-                    <label for="movieEditScreenRatio" class="wide">
+                    <label for="movieEditScreenRatio" class="wide" data-derived-from-discs="screen_ratios">
                       <span data-next-i18n="movieDetail.screenRatio">Screen ratio</span>
                       <input id="movieEditScreenRatio" name="screen_ratios" maxlength="160" autocomplete="off" data-next-i18n-placeholder="movieDetail.commaSeparated" placeholder="Comma separated">
                     </label>
-                    <div id="movieEditAudioTracks" class="movie-edit-track-editor wide" data-lock-container="self">
+                    <div id="movieEditAudioTracks" class="movie-edit-track-editor wide" data-lock-container="self" data-derived-from-discs="audio_tracks">
                       <span data-lock-anchor data-next-i18n="movieDetail.audio">Audio</span>
                       <div class="movie-edit-track-rows" id="movieEditAudioTrackRows"></div>
                       <button type="button" class="ghost-button movie-edit-track-add" id="movieEditAudioTrackAdd" data-next-i18n="movieDetail.audioTrackAdd">Add audio track</button>
                     </div>
-                    <div id="movieEditSubtitles" class="movie-edit-track-editor wide" data-lock-container="self">
+                    <div id="movieEditSubtitles" class="movie-edit-track-editor wide" data-lock-container="self" data-derived-from-discs="subtitles">
                       <span data-lock-anchor data-next-i18n="movieDetail.subtitles">Subtitles</span>
                       <div class="movie-edit-track-rows" id="movieEditSubtitleRows"></div>
                       <button type="button" class="ghost-button movie-edit-track-add" id="movieEditSubtitleAdd" data-next-i18n="movieDetail.subtitleAdd">Add subtitle</button>
                     </div>
                   </div>
                 </div>
-                <div class="detail-subsection">
+                <div class="detail-subsection hidden" id="movieEditDiscsSection" role="tabpanel" aria-labelledby="movieEditTabDiscs" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
+                  <p class="hint" data-next-i18n="movieDetail.discsHint">Describe each physical disc in the box. The fields above still describe the release as a whole; a disc only narrows them.</p>
+                  <p class="hint movie-edit-disc-count-warning hidden" id="movieEditDiscCountWarning"></p>
+                  <!-- Shown only after the first Add disc promoted the release's
+                       own details into Disc 1. Without it, a form that suddenly
+                       holds two filled rows reads as though it invented them. -->
+                  <p class="hint hidden" id="movieEditDiscsSeededHint" data-next-i18n="movieDetail.discsSeededHint">The details you had already entered became Disc 1. Correct them if they belong on another disc.</p>
+                  <div class="movie-edit-disc-list" id="movieEditDiscRows"></div>
+                  <button type="button" class="ghost-button movie-edit-track-add" id="movieEditDiscAdd" data-next-i18n="movieDetail.discAdd">Add disc</button>
+                </div>
+                <div class="detail-subsection hidden" id="movieEditSectionCollectors" role="tabpanel" aria-labelledby="movieEditTabCollectors" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.collectors">Collectors</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditEdition">
                       <span data-next-i18n="movieDetail.edition">Edition</span>
                       <input id="movieEditEdition" name="edition" maxlength="160" autocomplete="off">
                     </label>
-                    <fieldset id="movieEditPackaging" class="movie-edit-checkbox-group">
-                      <legend data-next-i18n="movieDetail.packaging" data-lock-anchor>Packaging</legend>
-                      <label><input type="checkbox" value="keep_case"> <span data-next-i18n="moviePackaging.keepCase">Keep case</span></label>
-                      <label><input type="checkbox" value="amaray"> <span data-next-i18n="moviePackaging.amaray">Amaray</span></label>
-                      <label><input type="checkbox" value="steelbook"> <span data-next-i18n="moviePackaging.steelbook">Steelbook</span></label>
-                      <label><input type="checkbox" value="slipcover"> <span data-next-i18n="moviePackaging.slipcover">Slipcover</span></label>
-                      <label><input type="checkbox" value="slipcase"> <span data-next-i18n="moviePackaging.slipcase">Slipcase</span></label>
-                      <label><input type="checkbox" value="digibook"> <span data-next-i18n="moviePackaging.digibook">Digibook</span></label>
-                      <label><input type="checkbox" value="mediabook"> <span data-next-i18n="moviePackaging.mediabook">Mediabook</span></label>
-                      <label><input type="checkbox" value="digipak"> <span data-next-i18n="moviePackaging.digipak">Digipak</span></label>
-                      <label><input type="checkbox" value="box"> <span data-next-i18n="moviePackaging.box">Box</span></label>
+                    <label for="movieEditCarrierType">
+                      <span data-next-i18n="movieDetail.carrierType" data-lock-anchor>Case type</span>
+                      <select id="movieEditCarrierType" name="carrierType">
+                        <option value="" data-next-i18n="movieCarrier.unset">Not specified</option>
+                        <option value="keep_case" data-next-i18n="movieCarrier.keepCase">Amaray / keep case</option>
+                        <option value="eco_case" data-next-i18n="movieCarrier.ecoCase">Eco case</option>
+                        <option value="multi_disc_case" data-next-i18n="movieCarrier.multiDiscCase">Multi-disc case</option>
+                        <option value="steelbook" data-next-i18n="movieCarrier.steelbook">Steelbook</option>
+                        <option value="futurepak" data-next-i18n="movieCarrier.futurepak">FuturePak</option>
+                        <option value="hardbox" data-next-i18n="movieCarrier.hardbox">Hardbox</option>
+                        <option value="digipak" data-next-i18n="movieCarrier.digipak">Digipak</option>
+                        <option value="digisleeve" data-next-i18n="movieCarrier.digisleeve">Digisleeve</option>
+                        <option value="digibook" data-next-i18n="movieCarrier.digibook">Digibook</option>
+                        <option value="mediabook" data-next-i18n="movieCarrier.mediabook">Mediabook</option>
+                        <option value="card_wallet" data-next-i18n="movieCarrier.cardWallet">Card wallet</option>
+                        <option value="paper_sleeve" data-next-i18n="movieCarrier.paperSleeve">Paper sleeve</option>
+                        <option value="other" data-next-i18n="movieCarrier.other">Other</option>
+                      </select>
+                    </label>
+                    <label for="movieEditSteelbookFormat" id="movieEditSteelbookFormatField" hidden>
+                      <span data-next-i18n="movieDetail.steelbookFormat" data-lock-anchor>Steelbook format</span>
+                      <select id="movieEditSteelbookFormat" name="steelbookFormat">
+                        <option value="" data-next-i18n="movieSteelbookFormat.unset">Not specified</option>
+                        <option value="g1" data-next-i18n="movieSteelbookFormat.g1">G1</option>
+                        <option value="g2" data-next-i18n="movieSteelbookFormat.g2">G2</option>
+                        <option value="g3" data-next-i18n="movieSteelbookFormat.g3">G3</option>
+                      </select>
+                    </label>
+                    <fieldset id="movieEditOuterPackaging" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.outerPackaging" data-lock-anchor>Outer packaging</legend>
+                      <label><input type="checkbox" value="slipcover"> <span data-next-i18n="movieOuterPackaging.slipcover">Slipcover</span></label>
+                      <label><input type="checkbox" value="o_card"> <span data-next-i18n="movieOuterPackaging.oCard">O-card</span></label>
+                      <label><input type="checkbox" value="fullslip"> <span data-next-i18n="movieOuterPackaging.fullslip">Fullslip</span></label>
+                      <label><input type="checkbox" value="half_slip"> <span data-next-i18n="movieOuterPackaging.halfSlip">Half slip</span></label>
+                      <label><input type="checkbox" value="quarter_slip"> <span data-next-i18n="movieOuterPackaging.quarterSlip">Quarter slip</span></label>
+                      <label><input type="checkbox" value="lenticular_slip"> <span data-next-i18n="movieOuterPackaging.lenticularSlip">Lenticular slip</span></label>
+                      <label><input type="checkbox" value="double_lenticular_slip"> <span data-next-i18n="movieOuterPackaging.doubleLenticularSlip">Double lenticular slip</span></label>
+                      <label><input type="checkbox" value="slipcase"> <span data-next-i18n="movieOuterPackaging.slipcase">Slipcase</span></label>
+                      <label><input type="checkbox" value="rigid_box"> <span data-next-i18n="movieOuterPackaging.rigidBox">Rigid box</span></label>
+                      <label><input type="checkbox" value="one_click"> <span data-next-i18n="movieOuterPackaging.oneClick">One-click</span></label>
                     </fieldset>
-                    <fieldset id="movieEditRegions" class="movie-edit-checkbox-group">
+                    <fieldset id="movieEditFinishes" class="movie-edit-checkbox-group">
+                      <legend data-next-i18n="movieDetail.finishes" data-lock-anchor>Finish</legend>
+                      <label><input type="checkbox" value="spot_uv"> <span data-next-i18n="movieFinish.spotUv">Spot UV</span></label>
+                      <label><input type="checkbox" value="embossed"> <span data-next-i18n="movieFinish.embossed">Embossed</span></label>
+                      <label><input type="checkbox" value="debossed"> <span data-next-i18n="movieFinish.debossed">Debossed</span></label>
+                      <label><input type="checkbox" value="foil"> <span data-next-i18n="movieFinish.foil">Foil</span></label>
+                      <label><input type="checkbox" value="holofoil"> <span data-next-i18n="movieFinish.holofoil">Holofoil</span></label>
+                      <label><input type="checkbox" value="matte"> <span data-next-i18n="movieFinish.matte">Matte</span></label>
+                      <label><input type="checkbox" value="glossy"> <span data-next-i18n="movieFinish.glossy">Glossy</span></label>
+                      <label><input type="checkbox" value="reversible_cover"> <span data-next-i18n="movieFinish.reversibleCover">Reversible cover</span></label>
+                      <label><input type="checkbox" value="padded"> <span data-next-i18n="movieFinish.padded">Padded</span></label>
+                    </fieldset>
+                    <fieldset id="movieEditRegions" class="movie-edit-checkbox-group" data-derived-from-discs="regions">
                       <legend data-next-i18n="movieDetail.regions" data-lock-anchor>Regions</legend>
                       <label><input type="checkbox" value="A"> <span>A</span></label>
                       <label><input type="checkbox" value="B"> <span>B</span></label>
@@ -14899,8 +15826,8 @@ def ui_preview_html(
                     </label>
                   </div>
                 </div>
-                <div class="detail-subsection">
-                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.fieldOverview">Overview</h4>
+                <div class="detail-subsection hidden" id="movieEditSectionText" role="tabpanel" aria-labelledby="movieEditTabText" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.editSectionText">Overview &amp; notes</h4>
                   <div class="movie-edit-grid">
                     <label for="movieEditOverview" class="wide">
                       <span data-next-i18n="movieDetail.fieldOverview">Overview</span>
@@ -14913,21 +15840,49 @@ def ui_preview_html(
                   </div>
                 </div>
               </div>
+              <div class="movie-edit-actions">
+                <button type="button" class="secondary-button" id="movieEditCancelButton" data-next-i18n="common.cancel">Cancel</button>
+                <button type="submit" class="primary-button" id="movieEditSaveButton" data-next-i18n="common.save">Save</button>
+              </div>
             </form>
           </div>
-          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Movie details" data-next-i18n-aria="movieDetail.title">
+          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Title details" data-next-i18n-aria="movieDetail.titleDetails">
             <button type="button" class="active" id="movieDetailReleaseTab" role="tab" aria-controls="movieDetailReleasePanel" aria-selected="true" data-detail-tab="movieSections" data-detail-panel="movieDetailReleasePanel" data-next-i18n="movieDetail.release">Release</button>
             <button type="button" id="movieDetailTechnicalTab" role="tab" aria-controls="movieDetailTechnicalPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailTechnicalPanel" data-next-i18n="movieDetail.technical">Technical</button>
             <button type="button" id="movieDetailCollectorsTab" role="tab" aria-controls="movieDetailCollectorsPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailCollectorsPanel" data-next-i18n="movieDetail.collectors">Collectors</button>
+            <button type="button" id="movieDetailHistoryTab" role="tab" aria-controls="movieDetailHistoryPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailHistoryPanel" data-next-i18n="movieDetail.history">History</button>
           </nav>
           <div class="detail-card full detail-subpanel movie-detail-section-panel" id="movieDetailReleasePanel" role="tabpanel" aria-labelledby="movieDetailReleaseTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.release">Release</h3>
             <div class="detail-fields" id="movieDetailRelease"></div>
             <div class="detail-panel-links hidden" id="movieDetailExternalLinks"></div>
           </div>
+          <!-- Who last changed this record. Its own panel rather than a line
+               under the fields: it answers a different question from anything
+               else on the screen, and it is the question somebody asks only
+               once something looks wrong. -->
+          <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailHistoryPanel" role="tabpanel" aria-labelledby="movieDetailHistoryTab" data-detail-panel-group="movieSections">
+            <h3 data-next-i18n="movieDetail.history">History</h3>
+            <p class="hint" data-next-i18n="movieDetail.historyHint">The most recent changes to this record, newest first. Times are shown in this device's timezone.</p>
+            <div id="movieDetailHistory"></div>
+          </div>
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailTechnicalPanel" role="tabpanel" aria-labelledby="movieDetailTechnicalTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h3>
             <div class="detail-fields" id="movieDetailTechnical"></div>
+            <p class="hint hidden" id="movieDetailTechnicalSummarised"></p>
+            <!-- Below the release-level fields rather than instead of them: a
+                 disc narrows what the release says, so both have to be readable
+                 at once. Hidden entirely when nobody has broken the release
+                 down, which is not the same as a single-disc release.
+
+                 Since the union rule the block above no longer repeats what is
+                 here: the derived rows are dropped once there are discs, and
+                 the hint says so. Format and runtime stay, being authored
+                 release facts that happen to live in the same block. -->
+            <div class="movie-detail-discs hidden" id="movieDetailDiscsBlock">
+              <h4 class="detail-subsection-title" data-next-i18n="movieDetail.discs">Discs</h4>
+              <div class="movie-detail-disc-list" id="movieDetailDiscs"></div>
+            </div>
           </div>
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
@@ -15106,9 +16061,40 @@ def ui_preview_html(
         <section class="movie-detail-hero" id="containerDetailHero">
           <img id="containerDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back</button>
+          <div class="movie-detail-hero-actions" aria-label="Container actions" data-next-i18n-aria="containerDetail.actions">
+            <button type="button" class="movie-detail-icon-action hidden" id="containerEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="containerEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
+              <span class="button-label" id="containerEditToggleLabel" data-next-i18n="common.edit">Edit</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="containerEditCancelTopButton" aria-label="Cancel" title="Cancel" data-next-i18n-aria="common.cancel" data-next-i18n-title="common.cancel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"></path></svg>
+              <span class="button-label" data-next-i18n="common.cancel">Cancel</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action metadata hidden" id="containerMetadataApplyButton" aria-label="Refresh metadata" title="Refresh metadata" data-next-i18n-aria="movieDetail.applyMetadata" data-next-i18n-title="movieDetail.applyMetadata">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
+            </button>
+            <!--
+              Two gates that must not fight over one class. The wrapper carries
+              `container-value-field`, so `syncContainerValueFieldVisibility()`
+              removes it the moment the type stops being a box set; the button
+              inside carries its own hidden, set by eligibility. Putting both on
+              the button would have each mechanism undo the other's decision.
+            -->
+            <span class="container-value-field hidden" id="containerContributeField">
+              <button type="button" class="movie-detail-icon-action hidden" id="containerContributeButton" aria-label="Contribute" title="Contribute" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
+              <span class="button-label" data-next-i18n="contribute.action">Contribute</span>
+            </button>
+            </span>
+            <button type="button" class="movie-detail-icon-action danger hidden" id="containerDeleteButton" aria-label="Delete container" title="Delete container" data-next-i18n-aria="containerDetail.deleteContainer" data-next-i18n-title="containerDetail.deleteContainer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
+              <span class="button-label" data-next-i18n="containerDetail.deleteContainer">Delete container</span>
+            </button>
+          </div>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="containerDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
-            <div>
+            <div class="movie-detail-copy">
               <span class="eyebrow" id="containerDetailType" data-next-i18n="containerDetail.title">Container details</span>
               <h2 class="movie-detail-title" id="containerDetailTitle">-</h2>
               <div class="hero-meta" id="containerDetailTags"></div>
@@ -15117,15 +16103,8 @@ def ui_preview_html(
             </div>
           </div>
         </section>
-        <div class="movie-detail-action-strip">
-          <div class="movie-detail-actions">
-            <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action secondary hidden" id="containerEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
-            <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
-            <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
-          </div>
-          <div class="detail-message" id="containerDetailMessage"></div>
-        </div>
+        <div class="contribute-status contribute-status-standing hidden" id="containerContributeStatus"></div>
+        <div class="detail-message movie-detail-status" id="containerDetailMessage"></div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
             <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
@@ -15225,7 +16204,7 @@ def ui_preview_html(
                   <div class="import-source-meta import-scan-preview" id="containerScanAddPreview" hidden></div>
                   <label for="containerScanAddTitle">
                     <span data-next-i18n="containerDetail.scanToAddTitle">Title (fallback)</span>
-                    <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film title">
+                    <input id="containerScanAddTitle" autocomplete="off" data-next-i18n-placeholder="importCenter.titlePlaceholder" placeholder="Film or series title">
                   </label>
                   <label for="containerScanAddYear">
                     <span data-next-i18n="importCenter.manualYear">Year</span>
@@ -15332,6 +16311,177 @@ def ui_preview_html(
                 </summary>
                 <div class="debug-sources" id="containerDetailDebugSources"></div>
               </details>
+            </div>
+          </div>
+        </section>
+      </section>
+      <section class="movie-detail-page series-detail-page hidden" id="seriesDetailPage" aria-labelledby="seriesDetailTitle">
+        <section class="movie-detail-hero" id="seriesDetailHero">
+          <img id="seriesDetailBackdrop" alt="">
+          <button type="button" class="movie-detail-back" id="seriesDetailBackButton" data-next-i18n="seriesDetail.backToLibrary">Back</button>
+          <div class="movie-detail-hero-actions" aria-label="Series actions" data-next-i18n-aria="seriesDetail.actions">
+            <button type="button" class="movie-detail-icon-action hidden" id="seriesEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="seriesEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
+              <span class="button-label" id="seriesEditToggleLabel" data-next-i18n="common.edit">Edit</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="seriesEditCancelTopButton" aria-label="Cancel" title="Cancel" data-next-i18n-aria="common.cancel" data-next-i18n-title="common.cancel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"></path></svg>
+              <span class="button-label" data-next-i18n="common.cancel">Cancel</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action metadata hidden" id="seriesMetadataRefreshButton" aria-label="Refresh metadata" title="Refresh metadata" data-next-i18n-aria="movieDetail.applyMetadata" data-next-i18n-title="movieDetail.applyMetadata">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action danger hidden" id="seriesDeleteButton" aria-label="Delete series" title="Delete series" data-next-i18n-aria="seriesDetail.deleteSeries" data-next-i18n-title="seriesDetail.deleteSeries">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
+              <span class="button-label" data-next-i18n="seriesDetail.deleteSeries">Delete series</span>
+            </button>
+          </div>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="seriesDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div class="movie-detail-copy">
+              <span class="eyebrow" data-next-i18n="seriesDetail.title">Series details</span>
+              <h2 class="movie-detail-title" id="seriesDetailTitle">-</h2>
+              <div class="hero-meta" id="seriesDetailTags"></div>
+              <p class="movie-detail-overview" id="seriesDetailOverview"></p>
+              <div class="container-detail-stats" id="seriesDetailStats"></div>
+            </div>
+          </div>
+        </section>
+        <div class="detail-message movie-detail-status" id="seriesDetailMessage"></div>
+        <section class="movie-detail-body">
+          <nav class="detail-submenu series-detail-submenu" aria-label="Series sections" data-next-i18n-aria="seriesDetail.sections">
+            <button type="button" class="active" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailDiscsPanel" data-next-i18n="seriesDetail.discs">Discs</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailSeasonsPanel" data-next-i18n="movieDetail.seasons">Seasons</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailOverviewPanel" data-next-i18n="containerDetail.overview">Overview</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
+          </nav>
+          <div class="detail-subpanel series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailDiscsPanel">
+            <div class="detail-card full container-content-card">
+              <div class="detail-card-head">
+                <div>
+                  <h3 data-next-i18n="seriesDetail.discs">Discs</h3>
+                  <p data-next-i18n="seriesDetail.discsHelp">Every box set and disc set filed under this series.</p>
+                </div>
+                <div class="segmented compact view-mode-control container-view-mode-control" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
+                  <button type="button" class="active" data-series-view-mode="poster" data-next-i18n="collection.viewPoster">Posters</button>
+                  <button type="button" data-series-view-mode="list" data-next-i18n="collection.viewList">List</button>
+                  <button type="button" data-series-view-mode="detail" data-next-i18n="collection.viewDetail">Detail</button>
+                </div>
+              </div>
+              <div class="container-member-grid" id="seriesDetailDiscs"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailSeasonsPanel">
+            <div class="detail-card full">
+              <div class="detail-card-head">
+                <div>
+                  <h3 data-next-i18n="movieDetail.seasons">Seasons</h3>
+                  <p data-next-i18n="seriesDetail.seasonsHelp">Every season the series has, and whether a disc in your collection covers it.</p>
+                </div>
+                <button type="button" class="secondary-button" id="seriesSeasonPickerButton" data-next-i18n="seriesDetail.chooseSeasons">Choose seasons</button>
+              </div>
+              <div class="detail-fields" id="seriesDetailSeasons"></div>
+              <div id="seriesSeasonPicker"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailOverviewPanel">
+            <div class="container-overview-grid">
+              <div class="detail-card">
+                <h3 data-next-i18n="movieDetail.overview">Overview</h3>
+                <p class="movie-detail-overview" id="seriesDetailOverviewText"></p>
+              </div>
+              <div class="detail-card full" id="seriesEditCard" hidden>
+                <h3 data-next-i18n="seriesDetail.editSeries">Edit series</h3>
+                <form id="seriesEditForm" class="movie-edit-grid" autocomplete="off">
+                  <label for="seriesEditTitle">
+                    <span data-next-i18n="seriesDetail.fieldTitle">Title</span>
+                    <input id="seriesEditTitle" name="title" maxlength="160" required>
+                  </label>
+                  <label for="seriesEditSortTitle">
+                    <span data-next-i18n="seriesDetail.fieldSortTitle">Sort title</span>
+                    <input id="seriesEditSortTitle" name="sortTitle" maxlength="160">
+                  </label>
+                  <label for="seriesEditOriginalTitle">
+                    <span data-next-i18n="seriesDetail.fieldOriginalTitle">Original title</span>
+                    <input id="seriesEditOriginalTitle" name="originalTitle" maxlength="160">
+                  </label>
+                  <label for="seriesEditStartYear">
+                    <span data-next-i18n="seriesDetail.fieldStartYear">First year</span>
+                    <input id="seriesEditStartYear" name="startYear" maxlength="20">
+                  </label>
+                  <label for="seriesEditEndYear">
+                    <span data-next-i18n="seriesDetail.fieldEndYear">Last year</span>
+                    <input id="seriesEditEndYear" name="endYear" maxlength="20">
+                  </label>
+                  <label for="seriesEditOverview" class="wide">
+                    <span data-next-i18n="movieDetail.overview">Overview</span>
+                    <textarea id="seriesEditOverview" name="overview" maxlength="4000"></textarea>
+                  </label>
+                  <div class="button-row compact wide">
+                    <button type="submit" class="primary-button" data-next-i18n="common.save">Save</button>
+                    <button type="button" class="secondary-button" id="seriesEditCancelButton" data-next-i18n="common.cancel">Cancel</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailPostersPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.posters">Posters</h3>
+              <div class="art-option-grid" id="seriesDetailPosterArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="seriesPosterUploadInput" accept="image/*">
+                <!--
+                  No lock toggle here, unlike movies and containers. A lock exists
+                  to stop an automatic source overwriting a chosen image, and
+                  nothing fetches series artwork yet -- so the button would guard
+                  against nothing while implying it guards against something.
+                -->
+                <button type="button" class="secondary-button" data-upload-artwork="series" data-kind="poster" data-input="seriesPosterUploadInput" data-next-i18n="movieDetail.uploadPoster">Upload poster</button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailBackdropsPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.backdrops">Backdrops</h3>
+              <div class="art-option-grid backdrops" id="seriesDetailBackdropArtwork"></div>
+              <div class="art-upload-row" data-art-upload-row>
+                <input type="file" id="seriesBackdropUploadInput" accept="image/*">
+                <!--
+                  No lock toggle here, unlike movies and containers. A lock exists
+                  to stop an automatic source overwriting a chosen image, and
+                  nothing fetches series artwork yet -- so the button would guard
+                  against nothing while implying it guards against something.
+                -->
+                <button type="button" class="secondary-button" data-upload-artwork="series" data-kind="backdrop" data-input="seriesBackdropUploadInput" data-next-i18n="movieDetail.uploadBackdrop">Upload backdrop</button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailVideosPanel">
+            <div class="detail-card full">
+              <h3 data-next-i18n="movieDetail.videos">Videos</h3>
+              <p class="import-source-meta" data-next-i18n="seriesDetail.videosHelp">A series carries no videos of its own; these come from the discs filed under it.</p>
+              <div class="detail-grid" id="seriesDetailVideos"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailMetadataPanel">
+            <div class="detail-card">
+              <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
+              <div class="detail-grid" id="seriesDetailIdentifiers"></div>
+              <p class="import-source-meta" data-next-i18n="seriesDetail.identityHelp">Without an identifier no source can be asked about this series, so it stays without a synopsis or artwork.</p>
+              <div class="series-identity-search">
+                <input type="search" id="seriesIdentitySearchInput" data-next-i18n-placeholder="seriesDetail.identitySearchPlaceholder" placeholder="Search by title">
+                <button type="button" class="secondary-button" id="seriesIdentitySearchButton" data-next-i18n="seriesDetail.identitySearch">Search</button>
+              </div>
+              <div id="seriesIdentityCandidates"></div>
+            </div>
+            <div class="detail-card">
+              <h3 data-next-i18n="containerDetail.metadata">Metadata</h3>
+              <div class="detail-fields" id="seriesDetailMetadataDetails"></div>
             </div>
           </div>
         </section>
@@ -15708,6 +16858,8 @@ def ui_preview_html(
                 <div id="preferencePanelCollectors" class="preferences-panel-content hidden" role="tabpanel" aria-labelledby="preferenceTabCollectors" tabindex="0" aria-hidden="true" data-preferences-panel="collectors">
                   <div id="profileCollectorPreferenceList"></div>
                   <div class="hidden" id="loansSystemSettingRow"></div>
+                  <div class="hidden" id="movieVaultContributionSettingRow"></div>
+                  <div class="hidden" id="contributeHistoryRow"></div>
                 </div>
                 <div class="login-message" id="preferencesMessage" aria-live="polite"></div>
               </div>
@@ -16209,17 +17361,7 @@ def ui_preview_html(
                       </div>
                     </div>
                   </section>
-                  <section class="profile-dashboard-card profile-about-card">
-                    <div class="profile-dashboard-card-head">
-                      <div class="profile-dashboard-card-title">
-                      <span class="profile-dashboard-card-icon">""" + nav_icon("library") + """</span>
-                      <div class="profile-about-card-copy">
-                        <span data-next-i18n="profile.tmdbDataProvidedBy">Data provided by TMDB</span>
-                        <p class="profile-about-legal" data-next-i18n="profile.tmdbDisclaimer">DiscVault is not endorsed or certified by TMDB.</p>
-                      </div>
-                      <img class="profile-about-tmdb-logo" src="/api/next/assets/tmdb-logo.svg" alt="TMDB">
-                    </div>
-                  </section>
+""" + attribution_cards + """
                   <section class="profile-dashboard-card profile-about-card profile-about-card--debug">
                     <div class="profile-dashboard-card-head">
                       <div class="profile-dashboard-card-title">
@@ -17308,6 +18450,13 @@ def ui_preview_html(
     let containers = state.containers || [];
     let locations = state.locations || [];
     let containerMembership = state.containerMembership || [];
+    // The series a disc belongs to is not a second archive of the same fact: it
+    // is filled from the feed's own television id, so these arrays are read-only
+    // as far as the Library is concerned.
+    let seriesList = state.series || [];
+    let seriesSeasonCoverage = state.seriesSeasonCoverage || [];
+    // Set while the user has drilled into one series tile. Not persisted: it is
+    // a place in a list, not a filter the next visit should inherit.
     let mediaGroups = state.mediaGroups || [];
     let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
@@ -17346,6 +18495,14 @@ def ui_preview_html(
     let movieIdentityDebugState = [];
     let activeContainerId = "";
     let activeContainerPayload = null;
+    let activeSeriesId = "";
+    let activeSeriesPayload = null;
+    let seriesDiscsViewMode = normalizeMemberViewMode(localStorage.getItem("dv_next_series_discs_view_mode"));
+    // Never persisted and never restored: a candidate list is an offer about one
+    // typed query, and showing a stale one next to a different series is how a
+    // person links the wrong show.
+    let seriesIdentityCandidates = [];
+    let seriesDetailSort = parseLocalJson("dv_next_series_detail_sort", {key: "title", direction: "asc"});
     let activePersonId = "";
     let activePersonPayload = null;
     let personReturnRoute = null;
@@ -17576,6 +18733,11 @@ def ui_preview_html(
     const HDR_FORMAT_VALUES = ["hdr", "hdr10", "hdr10_plus", "hlg", "dolby_vision"];
     const VIDEO_RESOLUTION_VALUES = ["480p", "576p", "720p", "1080i", "1080p", "2160p"];
     const DISC_REGION_VALUES = ["A", "B", "C", "1", "2", "3", "4", "5", "6", "7", "8", "FREE"];
+    // The two disc axes, mirroring next_discs.py. Medium and content are asked
+    // separately on purpose: a bonus disc is still a Blu-ray or a DVD, and one
+    // merged list could not say which.
+    const DISC_TYPE_VALUES = ["uhd_bluray", "bluray", "bluray_3d", "dvd", "hd_dvd", "laserdisc", "vcd", "cd_audio", "dvd_audio", "sacd", "umd", "other"];
+    const DISC_ROLE_VALUES = ["feature", "bonus", "feature_and_bonus"];
     // A starter list only. Any code stored on a movie that is not here is
     // injected into its select on the fly, so nothing becomes unselectable.
     const TRACK_LANGUAGE_VALUES = ["en", "nl", "de", "fr", "es", "it", "pt", "pl", "cs", "da", "fi", "no", "sv", "hu", "ro", "tr", "el", "uk", "ru", "ja", "ko", "zh", "hi", "ar", "he", "th", "is", "ca"];
@@ -17619,13 +18781,169 @@ def ui_preview_html(
       if (!raw) return "";
       return tNext(`${prefix}.${camelKey(raw)}`, fallback || raw);
     }
+    // moviePackaging.* is the legacy flat vocabulary. Kept because rows written
+    // before the carrier/outer split still render through it.
     const packagingLabel = (value) => enumLabel("moviePackaging", value);
+    const carrierTypeLabel = (value) => enumLabel("movieCarrier", value);
+    const outerPackagingLabel = (value) => enumLabel("movieOuterPackaging", value);
+    const finishLabel = (value) => enumLabel("movieFinish", value);
+    const steelbookFormatLabel = (value) => enumLabel("movieSteelbookFormat", value);
     const hdrFormatLabel = (value) => enumLabel("movieHdrFormat", value);
     const videoCodecLabel = (value) => enumLabel("movieVideoCodec", value);
     const audioCodecLabel = (value) => enumLabel("movieAudioCodec", value);
     const immersiveLabel = (value) => enumLabel("movieAudioImmersive", value);
     const subtitleTypeLabel = (value) => enumLabel("movieSubtitleType", value);
     const discRegionLabel = (value) => (String(value) === "FREE" ? tNext("movieDiscRegion.free", "Region free") : String(value || ""));
+    const discTypeLabel = (value) => enumLabel("movieDiscType", value);
+    const discRoleLabel = (value) => enumLabel("movieDiscRole", value);
+    function discSeasonSummaryText(disc) {
+      // "Season 1, episodes 1-4" rather than a list of ids. Episodes are grouped
+      // under their season because that is how a box lists them on the back, and
+      // consecutive numbers are collapsed to a range for the same reason.
+      const bySeason = new Map();
+      (disc.seasons || []).forEach((season) => bySeason.set(season.id, {season, episodes: []}));
+      (disc.episodes || []).forEach((episode) => {
+        if (!bySeason.has(episode.seasonId)) {
+          bySeason.set(episode.seasonId, {season: null, episodes: []});
+        }
+        bySeason.get(episode.seasonId).episodes.push(episode);
+      });
+      return Array.from(bySeason.values()).map(({season, episodes}) => {
+        const name = season
+          ? (season.title
+            ? `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber} — ${season.title}`
+            : `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber}`)
+          : tNext("movieDetail.seasonNumber", "Season");
+        if (!episodes.length) return name;
+        const numbers = episodes.map((episode) => episode.episodeNumber).sort((a, b) => a - b);
+        const ranges = [];
+        numbers.forEach((number) => {
+          const last = ranges[ranges.length - 1];
+          if (last && number === last[1] + 1) last[1] = number;
+          else ranges.push([number, number]);
+        });
+        const text = ranges.map(([from, to]) => (from === to ? `${from}` : `${from}-${to}`)).join(", ");
+        return `${name} (${tNext("movieDetail.discEpisodes", "episodes")} ${text})`;
+      }).join(" · ");
+    }
+
+    // YYYY-MM-DD HH:MM:SS in the device's own timezone.
+    //
+    // The server sends ISO 8601 with an offset and never a formatted string,
+    // which is what makes this possible: `new Date` resolves the offset and
+    // the local getters below read back in whatever zone this device is in.
+    // Formatting on the server would have baked its zone into the value, and a
+    // reader an hour away would silently see the wrong time with nothing to
+    // suggest it.
+    function formatLocalDateTime(value) {
+      const parsed = new Date(String(value || ""));
+      if (Number.isNaN(parsed.getTime())) return "";
+      const pad = (part) => String(part).padStart(2, "0");
+      return [
+        `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}`,
+        `${pad(parsed.getHours())}:${pad(parsed.getMinutes())}:${pad(parsed.getSeconds())}`,
+      ].join(" ");
+    }
+    // What the row says did the change, in the order a reader cares about:
+    // the person if there was one, otherwise the plugin, otherwise the surface.
+    function movieHistoryWho(entry) {
+      if (entry.actor) return entry.actor;
+      if (entry.plugin) return entry.plugin;
+      const labels = {
+        ios: tNext("movieDetail.historySourceIos", "iOS app"),
+        android: tNext("movieDetail.historySourceAndroid", "Android app"),
+        sync: tNext("movieDetail.historySourceSync", "Synced device"),
+        plugin: tNext("movieDetail.historySourcePlugin", "Metadata plugin"),
+        web: tNext("movieDetail.historySourceWeb", "Web"),
+      };
+      return labels[entry.source] || entry.source || "";
+    }
+    async function renderMovieDetailHistory(movieId) {
+      const host = document.getElementById("movieDetailHistory");
+      if (!host) return;
+      host.textContent = tNext("collection.loading", "Loading...");
+      let entries = [];
+      try {
+        const payload = await apiJson(`/api/next/movies/${encodeURIComponent(movieId)}/history`, {headers: authHeaders()});
+        entries = Array.isArray(payload?.entries) ? payload.entries : [];
+      } catch (error) {
+        host.textContent = tNext("movieDetail.historyUnavailable", "The change history could not be loaded.");
+        return;
+      }
+      if (!entries.length) {
+        host.textContent = tNext("movieDetail.historyEmpty", "No changes have been recorded for this record yet.");
+        return;
+      }
+      const rows = entries.map((entry) => {
+        const fields = (entry.fields || []).map((field) => contributeFieldLabel(field)).join(", ");
+        const details = [
+          entry.source === "plugin" && entry.sourceRef ? entry.sourceRef : "",
+          entry.clientId ? entry.clientId : "",
+        ].filter(Boolean).join(" - ");
+        return `<tr>
+          <td>${escapeHtml(formatLocalDateTime(entry.at))}</td>
+          <td>${escapeHtml(movieHistoryWho(entry))}</td>
+          <td>${escapeHtml(fields)}</td>
+          <td>${escapeHtml(details)}</td>
+        </tr>`;
+      }).join("");
+      host.innerHTML = `<table class="detail-table movie-history-table">
+        <thead><tr>
+          <th>${escapeHtml(tNext("movieDetail.historyWhen", "When"))}</th>
+          <th>${escapeHtml(tNext("movieDetail.historyWho", "Who"))}</th>
+          <th>${escapeHtml(tNext("movieDetail.historyFields", "Fields"))}</th>
+          <th>${escapeHtml(tNext("movieDetail.historyDetails", "Details"))}</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+
+    function renderMovieDetailDiscs(discs) {
+      const block = document.getElementById("movieDetailDiscsBlock");
+      const list = document.getElementById("movieDetailDiscs");
+      if (!block || !list) return;
+      const entries = Array.isArray(discs) ? discs : [];
+      block.classList.toggle("hidden", !entries.length);
+      if (!entries.length) {
+        list.innerHTML = "";
+        return;
+      }
+      list.innerHTML = entries.map((disc, index) => {
+        const rows = detailFieldRows([
+          [tNext("movieDetail.videoResolution", "Resolution"), disc.videoResolution],
+          [tNext("movieDetail.hdr", "HDR"), enumListText(disc.hdr, hdrFormatLabel)],
+          [tNext("movieDetail.videoCodecs", "Video codec"), enumListText(disc.videoCodecs, videoCodecLabel)],
+          [tNext("movieDetail.screenRatio", "Screen ratio"), (disc.screenRatios || []).join(", ")],
+          [tNext("movieDetail.audio", "Audio"), audioTracksText(disc.audioTracks)],
+          [tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(disc.subtitles)],
+          [tNext("movieDetail.regions", "Regions"), enumListText(disc.regions, discRegionLabel)],
+          [tNext("movieDetail.discContent", "On this disc"), discSeasonSummaryText(disc)],
+          [tNext("movieDetail.fieldNotes", "Notes"), disc.notes]
+        ]);
+        // A release with one disc has no "Disc 1" to distinguish it from --
+        // the heading would be a label on the only thing in the room. It comes
+        // back the moment there is a second disc, which is when it starts
+        // telling the reader which one they are looking at.
+        const heading = entries.length > 1
+          ? `<h5 class="movie-detail-disc-title">${escapeHtml(discHeadingText(disc, index))}</h5>`
+          : "";
+        return `<div class="movie-detail-disc">
+          ${heading}
+          <div class="detail-fields">${rows}</div>
+        </div>`;
+      }).join("");
+    }
+
+    function discHeadingText(disc, index) {
+      // The free-text type wins over the word "Other", which tells the reader
+      // nothing they did not already know from picking it.
+      const type = disc.discType === "other" && disc.discTypeOther
+        ? disc.discTypeOther
+        : discTypeLabel(disc.discType);
+      const parts = [type, discRoleLabel(disc.discRole), disc.label].filter(Boolean);
+      const number = tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1);
+      return parts.length ? `${number} — ${parts.join(" · ")}` : number;
+    }
 
     function audioTrackLabel(track) {
       if (typeof track === "string") return track;
@@ -17849,6 +19167,7 @@ def ui_preview_html(
         hit: tNext("movieDetail.debugSourcesStateHit", "used"),
         retained_existing: tNext("movieDetail.debugSourcesStateRetained", "retained existing"),
         no_match: tNext("movieDetail.debugSourcesStateNoMatch", "no match"),
+        release_candidates: tNext("movieDetail.debugSourcesStateReleaseCandidates", "pressing choice"),
         blocked_by_format_policy: tNext("movieDetail.debugSourcesStateBlocked", "blocked by format"),
         needs_configuration: tNext("movieDetail.debugSourcesReasonNeedsConfig", "needs configuration")
       };
@@ -17916,12 +19235,13 @@ def ui_preview_html(
       const text = String(raw || "").trim();
       if (!text) return "";
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return `${text} (not a UUID)`;
-      // App-Guidance `movievault-identity-routing-and-media-formats.md` §1: an
-      // import-derived id is a UUIDv5 and will never resolve against the
-      // catalog, while a real release id is a v4.
+      // App-Guidance `movievault-identity-routing-and-media-formats.md` §1
+      // warns the version nibble is a property of today's implementations,
+      // not a contract -- and the catalog itself keys releases by v5 UUIDs
+      // (observed 2026-08-11: A Minecraft Movie, releaseId 0f417582-...-52a9-...),
+      // so claiming "v5 will not resolve" answered the question wrongly. Print
+      // the version as a plain fact and claim nothing about resolvability.
       const version = Number.parseInt(text.split("-")[2][0], 16);
-      if (version === 4) return `${text} (v4 — catalog release id)`;
-      if (version === 5) return `${text} (v5 — import-derived, will not resolve)`;
       return `${text} (v${version})`;
     }
     function movieIdentityLadderRows(ladder) {
@@ -17950,7 +19270,7 @@ def ui_preview_html(
       const movie = (detail && detail.movie) || {};
       const metadata = movie.metadata || {};
       const identity = (detail && detail.identityDebug) || {};
-      const mvIds = movieVaultExternalIds(movie, metadata);
+      const mvIds = movieVaultExternalIds(movie, metadata, detail && detail.identifiers);
       const rows = [
         movieIdentityDebugRow("surface", `PWA / server (${window.DISCVAULT_APP_VERSION || "unknown"})`),
         movieIdentityDebugRow("id (server movie entity)", movie.id),
@@ -17966,7 +19286,7 @@ def ui_preview_html(
         movieIdentityDebugRow("title (raw)", movie.title),
         movieIdentityDebugRow("title (normalized, tier 4)", identity.normalizedTitle),
         movieIdentityDebugRow("releaseYear (tier 4)", movie.year),
-        movieIdentityDebugRow("movieVaultId", mvIds.movieId ? movieIdentityUuidVersionNote(mvIds.movieId) : "", mvIds.movieId && /\\(v5 /.test(movieIdentityUuidVersionNote(mvIds.movieId)) ? "alert" : undefined),
+        movieIdentityDebugRow("movieVaultId", mvIds.movieId ? movieIdentityUuidVersionNote(mvIds.movieId) : ""),
         movieIdentityDebugRow("movieVaultReleaseId", mvIds.releaseId ? movieIdentityUuidVersionNote(mvIds.releaseId) : ""),
         movieIdentityDebugRow("imdbId", identity.imdbId),
         movieIdentityDebugRow("deleted_at (tombstone)", movie.deleted_at, movie.deleted_at ? "alert" : "normal"),
@@ -18661,6 +19981,17 @@ def ui_preview_html(
       setElementVisible(document.getElementById("containerEditToggleButton"), canEditContainers);
       if (!canEditContainers) setContainerEditPanelVisible(false);
       setElementVisible(document.getElementById("containerDeleteButton"), collectorsEnabled && hasAnyPermission(APP_PERMISSION_GROUPS.containerDelete));
+      // A series is edited and deleted under `containers.edit`, the same permission
+      // its API routes require. It is not gated on Collectors mode: a series is
+      // filled from the feed for every user, not archived by hand like a box set.
+      const canEditSeries = hasPermission("containers.edit");
+      setElementVisible(document.getElementById("seriesEditToggleButton"), canEditSeries);
+      setElementVisible(document.getElementById("seriesDeleteButton"), canEditSeries);
+      setElementVisible(document.getElementById("seriesMetadataRefreshButton"), hasPermission("metadata.refresh_one"));
+      document.querySelectorAll("[data-upload-artwork='series']").forEach((node) => {
+        node.classList.toggle("hidden", !hasPermission("collection.edit_all"));
+      });
+      if (!canEditSeries) setSeriesEditPanelVisible(false);
       if (!collectorsEnabled && activeContainerId) {
         activeContainerId = "";
         activeContainerPayload = null;
@@ -23773,7 +25104,7 @@ def ui_preview_html(
     function renderLanguageSelect() {
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
         select.innerHTML = localeState.locales.map((item) => (
-          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
+          `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(localeOptionLabel(item))}</option>`
         )).join("");
         select.value = localeState.locale;
       });
@@ -23785,7 +25116,21 @@ def ui_preview_html(
       if (locale === "nb-NO") return "no";
       return String(locale || "nl-NL").split("-", 1)[0];
     }
-    function languageLabel(item) {
+    // Named `languageLabel` until it was noticed that a *second* function of
+    // that name already existed, four thousand lines above, taking a language
+    // *code* and resolving it through `Intl.DisplayNames`. Two declarations of
+    // one name in one scope is not an error in JavaScript: the later one wins
+    // silently, for the whole script.
+    //
+    // So this one won, and every caller of the other got `""` -- a string has
+    // no `.nativeName`, no `.locale` and no `.label`. Audio tracks and
+    // subtitles fell back to the raw code on every screen; `languageWithCode`
+    // could never append a name; and `guessAudioTrack`, which converts a
+    // legacy free-text track into a structured one by looking for a language
+    // *name* in the prose, never matched anything and always returned null.
+    // That last one is why free-text tracks stayed free text and kept
+    // withholding their whole field from a contribution.
+    function localeOptionLabel(item) {
       const name = item.nativeName || item.englishName || item.locale || "";
       return item.label || name;
     }
@@ -23810,7 +25155,7 @@ def ui_preview_html(
       const active = localeState.locales.find((item) => item.locale === localeState.locale) || localeState.locales[0] || {};
       if (flag) flag.innerHTML = flagIconHtml(languageFlagCode(active), active.nativeName || active.englishName || active.locale || "");
       select.innerHTML = localeState.locales.map((item) => (
-        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(languageLabel(item))}</option>`
+        `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(localeOptionLabel(item))}</option>`
       )).join("");
       select.value = localeState.locale;
       select.onchange = () => loadLocale(select.value);
@@ -24690,6 +26035,79 @@ def ui_preview_html(
         return String(row.child_container_id || "") === id && (!visibleContainerIds || visibleContainerIds.has(parentId));
       });
     }
+    // Same reasoning as the container index above: grouping by series used to
+    // mean scanning the whole movie list once per series. Both source arrays are
+    // replaced rather than mutated, so identity is a sound cache key.
+    let seriesMemberIndexCache = null;
+    function seriesMemberIndex() {
+      const movieRows = movies || [];
+      const coverageRows = seriesSeasonCoverage || [];
+      if (
+        seriesMemberIndexCache
+        && seriesMemberIndexCache.movies === movieRows
+        && seriesMemberIndexCache.coverage === coverageRows
+      ) {
+        return seriesMemberIndexCache;
+      }
+      const bySeries = new Map();
+      movieRows.forEach((movie) => {
+        const seriesId = String(movie?.series?.id || "");
+        if (!seriesId) return;
+        const bucket = bySeries.get(seriesId);
+        if (bucket) bucket.push(movie);
+        else bySeries.set(seriesId, [movie]);
+      });
+      const seasonsByMovie = new Map();
+      coverageRows.forEach((row) => {
+        const movieId = String(row?.movieId || "");
+        if (!movieId) return;
+        const bucket = seasonsByMovie.get(movieId);
+        if (bucket) bucket.push(row);
+        else seasonsByMovie.set(movieId, [row]);
+      });
+      seriesMemberIndexCache = {
+        movies: movieRows,
+        coverage: coverageRows,
+        bySeries,
+        seasonsByMovie,
+      };
+      return seriesMemberIndexCache;
+    }
+    function seriesById(seriesId) {
+      const id = String(seriesId || "");
+      if (!id) return null;
+      return (seriesList || []).find((entry) => String(entry.id || "") === id) || null;
+    }
+    function seriesMemberMovies(seriesId) {
+      return seriesMemberIndex().bySeries.get(String(seriesId || "")) || [];
+    }
+    function seriesCoveredSeasonNumbers(memberMovies) {
+      const seasonsByMovie = seriesMemberIndex().seasonsByMovie;
+      const numbers = new Set();
+      (memberMovies || []).forEach((movie) => {
+        (seasonsByMovie.get(String(movie?.id || "")) || []).forEach((row) => {
+          const value = Number.parseInt(row?.seasonNumber, 10);
+          if (Number.isFinite(value)) numbers.add(value);
+        });
+      });
+      return [...numbers].sort((a, b) => a - b);
+    }
+    function seriesSeasonSummaryText(item) {
+      // A disc that names no season is the complete-series set. It covers the
+      // show without covering a numbered season, so it must not read as "none".
+      const numbers = seriesCoveredSeasonNumbers(itemMovieRows(item));
+      if (!numbers.length) return "";
+      const total = Number.parseInt(item?.series?.seasonCount, 10);
+      const label = tNext("collection.seasonsCovered", "Seasons {covered}").replace("{covered}", numbers.join(", "));
+      if (!Number.isFinite(total) || total <= 0) return label;
+      return `${label} / ${total}`;
+    }
+    function seriesMatchesSearch(series, memberMovies) {
+      const query = activeSearchQuery();
+      if (!query) return true;
+      if (String(series?.title || "").toLowerCase().includes(query)) return true;
+      return (memberMovies || []).some((movie) => movieMatchesSearch(movie));
+    }
     function movieMatchesGroup(movie) {
       const selected = effectiveCollectionGroupFilter();
       const groups = Array.isArray(movie.media_groups) ? movie.media_groups : [];
@@ -24953,21 +26371,48 @@ def ui_preview_html(
       // the container itself carries no type -- its members do.
       return containerMemberMovies(container.id).some((movie) => movieMatchesType(movie));
     }
+    // A Library item is a movie, a container or a series. The three differ only
+    // in which entity they carry and where a click goes; everything else asks
+    // these accessors rather than branching on the kind again.
+    function itemIsGroup(item) {
+      return item?.kind === "container" || item?.kind === "series";
+    }
+    function itemEntity(item) {
+      if (item?.kind === "container") return item.container || null;
+      if (item?.kind === "series") return item.series || null;
+      return item?.movie || null;
+    }
+    function itemEntityId(item) {
+      return String(itemEntity(item)?.id || "");
+    }
+    function itemPreviewAttr(item) {
+      const id = itemEntityId(item);
+      if (item?.kind === "container") return `data-preview-container="${escapeHtml(id)}"`;
+      if (item?.kind === "series") return `data-preview-series="${escapeHtml(id)}"`;
+      return `data-preview-movie="${escapeHtml(id)}"`;
+    }
+    function itemDebugIdLabel(item) {
+      if (item?.kind === "container") return "Container ID";
+      if (item?.kind === "series") return "Series ID";
+      return "Movie ID";
+    }
     function itemDateValue(item, mode) {
-      if (item.kind === "container") {
-        const values = containerMemberMovies(item.container?.id)
+      if (itemIsGroup(item)) {
+        const values = itemMovieRows(item)
           .map((movie) => Date.parse(movie.created_at || movie.updated_at || ""))
           .filter((time) => Number.isFinite(time));
         if (values.length) return mode === "added_asc" ? Math.min(...values) : Math.max(...values);
       }
-      const value = item?.movie?.created_at || item?.movie?.updated_at || item?.container?.created_at || item?.container?.updated_at || "";
+      const entity = itemEntity(item) || {};
+      const value = entity.created_at || entity.updated_at || "";
       const time = Date.parse(value);
       return Number.isFinite(time) ? time : 0;
     }
     function itemYearValue(item, mode) {
       if (item.kind === "movie") return Number.parseInt(item.movie?.year || "0", 10) || 0;
-      const years = containerMemberMovies(item.container?.id).map((movie) => Number.parseInt(movie.year || "0", 10) || 0).filter(Boolean);
+      const years = itemMovieRows(item).map((movie) => Number.parseInt(movie.year || "0", 10) || 0).filter(Boolean);
       if (years.length) return mode === "year_asc" ? Math.min(...years) : Math.max(...years);
+      if (item.kind === "series") return Number.parseInt(item.series?.startYear || "0", 10) || 0;
       return Number.parseInt(item.container?.year || "0", 10) || 0;
     }
     function sortLibraryItems(items) {
@@ -24999,6 +26444,17 @@ def ui_preview_html(
       const visibleContainerIds = new Set(visibleItems.map((item) => String(item.container?.id || "")).filter(Boolean));
       return visibleItems.filter((item) => !containerIsNestedChild(item.container?.id, visibleContainerIds));
     }
+    function visibleSeriesItems(eligibleMovieIds, visibleMovieIds) {
+      if (!seriesList.length) return [];
+      return (seriesList || [])
+        .map((series) => {
+          const members = seriesMemberMovies(series.id);
+          const allowedIds = seriesMatchesSearch(series, members) ? eligibleMovieIds : visibleMovieIds;
+          const visibleMovies = members.filter((movie) => allowedIds.has(String(movie.id || "")));
+          return {kind: "series", series, visibleMovies, title: series.title || ""};
+        })
+        .filter((item) => item.visibleMovies.length > 0);
+    }
     function libraryDisplayItems(filters = effectiveAdvancedSearchFilters()) {
       const eligibleMovies = (movies || []).filter((movie) => (
         movieMatchesGroup(movie)
@@ -25020,20 +26476,33 @@ def ui_preview_html(
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
       const representedMovieIds = new Set();
-      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters);
+      // Series first, and a disc a series claims is gone from the containers as
+      // well as from the flat list. Both group the same shelf; the series is the
+      // one that fills itself, so it wins -- the same move `containerIsNestedChild`
+      // already makes when one container sits inside another.
+      const seriesItems = visibleSeriesItems(eligibleMovieIds, visibleMovieIds);
+      seriesItems.forEach((item) => {
+        item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
+      });
+      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters)
+        .map((item) => ({
+          ...item,
+          visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || ""))),
+        }))
+        .filter((item) => item.visibleMovies.length > 0);
       containerItems.forEach((item) => {
         item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
       });
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
-      return sortLibraryItems([...containerItems, ...movieItems]);
+      return sortLibraryItems([...seriesItems, ...containerItems, ...movieItems]);
     }
     function libraryDisplayMovieCount(items) {
       const ids = new Set();
       (items || []).forEach((item) => {
         if (item.kind === "movie") ids.add(String(item.movie?.id || ""));
-        if (item.kind === "container") {
+        if (itemIsGroup(item)) {
           itemMovieRows(item).forEach((movie) => ids.add(String(movie?.id || "")));
         }
       });
@@ -25042,12 +26511,22 @@ def ui_preview_html(
     function bulkSelectableLibraryItems() {
       return libraryDisplayItems().filter((item) => {
         if (item.kind === "movie") return !!item.movie?.id;
+        // A series tile is a view of discs, not a thing to act on in bulk: there
+        // is nothing to move, lend or delete that is not one of its discs.
         if (item.kind === "container") return collectorsModeEnabled() && !!item.container?.id;
         return false;
       });
     }
     function normalizeViewMode(value) {
       return ["poster", "list"].includes(value) ? value : "poster";
+    }
+    // Member grids offer a third mode. `normalizeViewMode` knows only two, so
+    // routing a three-way control through it silently turned "detail" into
+    // "poster" -- the button highlighted, the view did not change, and the
+    // `view-detail` class was never applied. Both the container control and the
+    // series one need this wider normaliser.
+    function normalizeMemberViewMode(value) {
+      return ["poster", "list", "detail"].includes(value) ? value : "poster";
     }
     function normalizeLibraryViewMode(value) {
       return value === "list" ? "list" : "poster";
@@ -25072,11 +26551,11 @@ def ui_preview_html(
       return {directors, actors};
     }
     function itemMovieRows(item) {
-      if (item?.kind === "movie") return item.movie ? [item.movie] : [];
-      if (item?.kind === "container") {
-        if (Array.isArray(item.visibleMovies)) return item.visibleMovies;
-        return containerMemberMovies(item.container?.id);
-      }
+      if (!item) return [];
+      if (item.kind === "movie") return item.movie ? [item.movie] : [];
+      if (Array.isArray(item.visibleMovies)) return item.visibleMovies;
+      if (item?.kind === "container") return containerMemberMovies(item.container?.id);
+      if (item?.kind === "series") return seriesMemberMovies(item.series?.id);
       return [];
     }
     function itemDirectorCredits(item) {
@@ -25122,12 +26601,17 @@ def ui_preview_html(
       }).join("");
     }
     function itemTitleValue(item) {
-      return item?.kind === "container"
-        ? (item.container?.title || tNext("common.untitled", "Untitled"))
-        : (item.movie?.title || tNext("common.untitled", "Untitled"));
+      return itemEntity(item)?.title || tNext("common.untitled", "Untitled");
     }
     function itemYearLabel(item) {
       if (item?.kind === "movie") return item.movie?.year || "";
+      if (item?.kind === "series") {
+        // The show's own run, not the years its discs were pressed.
+        const start = item.series?.startYear || "";
+        const end = item.series?.endYear || "";
+        if (start && end && String(start) !== String(end)) return `${start}-${end}`;
+        if (start) return String(start);
+      }
       const years = itemMovieRows(item).map((movie) => Number.parseInt(movie.year || "0", 10)).filter(Boolean);
       if (!years.length) return item.container?.year || "";
       const minYear = Math.min(...years);
@@ -25136,18 +26620,38 @@ def ui_preview_html(
     }
     function itemFormatLabel(item) {
       if (item?.kind === "movie") return physicalFormatLabel(item.movie?.format || item.movie?.edition_type || item.movie?.metadata?.format);
+      if (item?.kind === "series") return tNext("collection.seriesTile", "Series");
       return containerTypeLabel(item.container?.container_type);
     }
     function itemPosterUrl(item) {
-      return item?.kind === "container"
-        ? usableImage(item.container?.poster_url || item.container?.backdrop_url)
-        : usableImage(item.movie?.poster_url);
+      if (item?.kind === "container") return usableImage(item.container?.poster_url || item.container?.backdrop_url);
+      // The series' own poster first; a disc's only when it has none. Borrowing
+      // is still right for a series nobody has given artwork to -- an empty tile
+      // reads as a bug rather than as a gap -- but it must not outrank a poster
+      // somebody chose, which is what it did while a series had no artwork of
+      // its own to outrank it. That stopped being true, and only this surface
+      // never learned: the series page showed the chosen poster and the tile
+      // beside it showed a disc's, so the two disagreed about the same show.
+      // Two `usableImage` calls, not `usableImage(a || b)`: the latter
+      // short-circuits on a truthy-but-unusable `a` and drops a good disc
+      // poster on the floor.
+      // `posterUrl` is camelCase because the series payload is hand-built that
+      // way; `poster_url` beside it is snake_case because a movie row is a raw
+      // database row.
+      if (item?.kind === "series") {
+        return usableImage(item.series?.posterUrl)
+          || usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
+      }
+      return usableImage(item?.movie?.poster_url);
     }
     function itemMembersHtml(item, limit = 6) {
-      if (item?.kind !== "container") return "";
-      const members = containerMemberMovies(item.container?.id).slice(0, limit);
+      if (!itemIsGroup(item)) return "";
+      const allMembers = item?.kind === "series"
+        ? seriesMemberMovies(item.series?.id)
+        : containerMemberMovies(item.container?.id);
+      const members = allMembers.slice(0, limit);
       if (!members.length) return "";
-      const overflow = movieIdSetForContainer(item.container?.id).size - members.length;
+      const overflow = allMembers.length - members.length;
       return `
         <div class="mode-card-members">
           ${members.map((movie) => `<button type="button" data-member-movie="${escapeHtml(movie.id)}">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</button>`).join("")}
@@ -25161,12 +26665,10 @@ def ui_preview_html(
       const year = itemYearLabel(item);
       const directors = itemDirectorCredits(item);
       const actors = itemActorCredits(item);
-      const isContainer = item.kind === "container";
-      const targetAttr = isContainer
-        ? `data-preview-container="${escapeHtml(item.container?.id)}"`
-        : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+      const isGroup = itemIsGroup(item);
+      const targetAttr = itemPreviewAttr(item);
       return `
-        <article class="mode-list-card ${isContainer ? "container-row" : ""}" ${targetAttr} tabindex="0">
+        <article class="mode-list-card ${isGroup ? "container-row" : ""}${item.kind === "series" ? " series-row" : ""}" ${targetAttr} tabindex="0">
           <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(title)}</strong>
@@ -25174,7 +26676,7 @@ def ui_preview_html(
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.director", "Director"))}</span>${personCreditLinksHtml(directors)}</span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.actors", "Actors"))}</span>${personCreditLinksHtml(actors)}</span>
             ${itemMembersHtml(item)}
-            ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+            ${debugIdHtml(itemEntityId(item), itemDebugIdLabel(item))}
           </span>
         </article>
       `;
@@ -25459,18 +26961,16 @@ def ui_preview_html(
             </thead>
             <tbody>
               ${sorted.map((item) => {
-                const isContainer = item.kind === "container";
+                const isGroup = itemIsGroup(item);
                 const title = itemTitleValue(item);
                 const year = itemYearLabel(item);
                 const poster = itemPosterUrl(item);
-                const targetAttr = isContainer
-                  ? `data-preview-container="${escapeHtml(item.container?.id)}"`
-                  : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
-                const selected = isContainer
+                const targetAttr = itemPreviewAttr(item);
+                const selected = item.kind === "container"
                   ? selectedContainerIds.has(String(item.container?.id || ""))
-                  : selectedMovieIds.has(String(item.movie?.id || ""));
+                  : item.kind === "movie" && selectedMovieIds.has(String(item.movie?.id || ""));
                 return `
-                  <tr class="${isContainer ? "container-row " : ""}${selected ? "bulk-selected" : ""}">
+                  <tr class="${isGroup ? "container-row " : ""}${item.kind === "series" ? "series-row " : ""}${selected ? "bulk-selected" : ""}">
                     <td class="library-list-poster-column">
                       <button type="button" class="library-list-poster-target" ${targetAttr} aria-label="${escapeHtml(title)}">
                         ${poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span class="library-list-poster-placeholder" aria-hidden="true">&mdash;</span>`}
@@ -25481,7 +26981,7 @@ def ui_preview_html(
                         <strong>${escapeHtml(title)}</strong>
                         ${year ? `<span class="library-list-year">(${escapeHtml(year)})</span>` : ""}
                       </button>
-                      ${debugIdHtml(isContainer ? item.container?.id : item.movie?.id, isContainer ? "Container ID" : "Movie ID")}
+                      ${debugIdHtml(itemEntityId(item), itemDebugIdLabel(item))}
                     </td>
                     <td class="library-list-format-column">${libraryListFormatsHtml(item)}</td>
                     <td class="library-list-director-column library-list-desktop-column">${libraryListPeopleHtml(itemDirectorCredits(item))}</td>
@@ -25534,13 +27034,10 @@ def ui_preview_html(
             <span role="columnheader">${detailSortButton(scope, "actors", tNext("movieDetail.actors", "Actors"), sortState)}</span>
           </div>
           ${sorted.map((item) => {
-            const isContainer = item.kind === "container";
-            const targetAttr = isContainer
-              ? `data-preview-container="${escapeHtml(item.container?.id)}"`
-              : `data-preview-movie="${escapeHtml(item.movie?.id)}"`;
+            const targetAttr = itemPreviewAttr(item);
             return `
               <div class="mode-detail-row" role="row" ${targetAttr} tabindex="0">
-                <span role="cell"><strong>${escapeHtml(itemTitleValue(item))}</strong>${isContainer ? itemMembersHtml(item, 4) : ""}</span>
+                <span role="cell"><strong>${escapeHtml(itemTitleValue(item))}</strong>${itemMembersHtml(item, 4)}</span>
                 <span role="cell">${escapeHtml(itemYearLabel(item))}</span>
                 <span role="cell">${escapeHtml(itemFormatLabel(item))}</span>
                 <span role="cell">${personCreditLinksHtml(itemDirectorCredits(item))}</span>
@@ -25577,7 +27074,9 @@ def ui_preview_html(
           event.stopPropagation();
           const scope = button.dataset.detailSortScope || "library";
           const key = button.dataset.detailSortKey || "title";
-          const current = scope === "lists" ? listsDetailSort : libraryDetailSort;
+          let current = libraryDetailSort;
+          if (scope === "lists") current = listsDetailSort;
+          if (scope === "series") current = seriesDetailSort;
           const next = {
             key,
             direction: current?.key === key && current.direction === "asc" ? "desc" : "asc"
@@ -25586,6 +27085,10 @@ def ui_preview_html(
             listsDetailSort = next;
             localStorage.setItem("dv_next_lists_detail_sort", JSON.stringify(next));
             renderListsView();
+          } else if (scope === "series") {
+            seriesDetailSort = next;
+            localStorage.setItem("dv_next_series_detail_sort", JSON.stringify(next));
+            if (activeSeriesPayload) renderSeriesDetail(activeSeriesPayload);
           } else {
             libraryDetailSort = next;
             localStorage.setItem("dv_next_library_detail_sort", JSON.stringify(next));
@@ -25909,6 +27412,36 @@ def ui_preview_html(
         </button>
       `;
     }
+    function seriesPosterCardHtml(item, index) {
+      const series = item?.series || {};
+      const discCount = itemMovieRows(item).length;
+      const poster = itemPosterUrl(item);
+      const typeLabel = tNext("collection.seriesTile", "Series");
+      const posterHtml = poster
+        ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">`
+        : `<span>${escapeHtml(typeLabel)}</span>`;
+      const meta = [
+        typeLabel,
+        discCount ? `${discCount} ${tNext("collection.discs", "discs")}` : "",
+        itemYearLabel(item)
+      ].filter(Boolean).join(" / ");
+      const seasonSummary = seriesSeasonSummaryText(item);
+      const selected = index === 0 ? " selected" : "";
+      return `
+        <button type="button" class="preview-poster container-tile series-tile${selected}" data-preview-series="${escapeHtml(series.id)}">
+          <span class="preview-poster-art">${posterHtml}${discCount ? `<span class="container-member-badge">${escapeHtml(discCount)}</span>` : ""}<span class="container-tile-badge">${escapeHtml(typeLabel)}</span></span>
+          <span class="preview-poster-title">${escapeHtml(series.title || tNext("common.untitled", "Untitled"))}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}</span>
+          ${seasonSummary ? `<span class="preview-poster-meta series-tile-seasons">${escapeHtml(seasonSummary)}</span>` : ""}
+          ${debugIdHtml(series.id, "Series ID")}
+        </button>
+      `;
+    }
+    function libraryPosterCardHtml(item, index) {
+      if (item.kind === "series") return seriesPosterCardHtml(item, index);
+      if (item.kind === "container") return containerPosterCardHtml(item.container, index);
+      return posterCardHtml(item.movie, index);
+    }
     function containerCardHtml(container) {
       const label = String(container.container_type || "container").replace(/_/g, " ");
       const selected = selectedContainerIds.has(String(container.id)) ? " bulk-selected" : "";
@@ -25974,17 +27507,32 @@ def ui_preview_html(
       const hhmm = `${hours}:${String(mins).padStart(2, "0")}`;
       return `${hhmm} (${total} ${tNext("movieDetail.minutesShort", "min")})`;
     }
-    function movieVaultExternalIds(movie, metadata) {
+    function movieVaultExternalIds(movie, metadata, identifiers) {
       const meta = metadata || {};
+      // The link the current pipeline writes is an identifier row, not a
+      // metadata key: the movievault_v2 plugin emits the catalog release id as
+      // a `movie_identifiers` row and deliberately stores nothing in
+      // `metadata` (only the legacy movievault_26 plugin ever wrote
+      // `remoteRef`-style keys there). Reading metadata alone therefore calls
+      // a linked movie "not linked" -- the metadata keys stay first only
+      // because they are the authored/legacy value when both exist.
+      const rows = Array.isArray(identifiers) ? identifiers : [];
+      const identifierFor = (provider) => {
+        const hit = rows.find((row) => row
+          && String(row.provider_id || "").toLowerCase() === provider
+          && String(row.identifier_type || "movie_id").toLowerCase() === "movie_id"
+          && String(row.identifier || "").trim());
+        return hit ? String(hit.identifier).trim() : "";
+      };
       const movieId = String(
         meta.movievault_movie_id || meta.movievaultMovieId
         || meta.movievault_id || meta.movieVaultId || meta.movievaultId
         || meta.remoteRef || meta.remote_ref || ""
-      ).trim();
+      ).trim() || identifierFor("movievault_26") || identifierFor("movievault");
       const releaseId = String(
         meta.movievault_release_id || meta.movievaultReleaseId
         || meta.movievault_release || meta.releaseRef || meta.release_ref || ""
-      ).trim();
+      ).trim() || identifierFor("movievault_v2");
       return { movieId, releaseId };
     }
     function containerLinksHtml(containers) {
@@ -26083,15 +27631,21 @@ def ui_preview_html(
     function miniCard(title, subtitle, href) {
       const movieMatch = String(href || "").match(/\\/movies\\/([^/?#]+)/);
       const containerMatch = String(href || "").match(/\\/containers\\/([^/?#]+)/);
-      const debugId = (movieMatch && decodeURIComponent(movieMatch[1])) || (containerMatch && decodeURIComponent(containerMatch[1])) || "";
+      const seriesMatch = String(href || "").match(/\\/series\\/([^/?#]+)/);
+      const debugId = (movieMatch && decodeURIComponent(movieMatch[1]))
+        || (containerMatch && decodeURIComponent(containerMatch[1]))
+        || (seriesMatch && decodeURIComponent(seriesMatch[1]))
+        || "";
+      const debugLabel = movieMatch ? "Movie ID" : (seriesMatch ? "Series ID" : "Container ID");
       const body = `
         <strong>${escapeHtml(title || tNext("common.untitled", "Untitled"))}</strong>
         <span>${escapeHtml(subtitle || "")}</span>
-        ${debugIdHtml(debugId, movieMatch ? "Movie ID" : "Container ID")}
+        ${debugIdHtml(debugId, debugLabel)}
       `;
       let linkAttrs = "";
       if (movieMatch) linkAttrs = ` data-open-movie="${escapeHtml(decodeURIComponent(movieMatch[1]))}"`;
       if (containerMatch) linkAttrs = ` data-open-container="${escapeHtml(decodeURIComponent(containerMatch[1]))}"`;
+      if (seriesMatch) linkAttrs = ` data-open-series="${escapeHtml(decodeURIComponent(seriesMatch[1]))}"`;
       return href
         ? `<a class="detail-mini-card" href="${escapeHtml(href)}"${linkAttrs}>${body}</a>`
         : `<div class="detail-mini-card">${body}</div>`;
@@ -26384,6 +27938,12 @@ def ui_preview_html(
       window.requestAnimationFrame(() => {
         document.getElementById(panelId)?.querySelectorAll("[data-more-button]").forEach(updateResponsiveGridLimit);
       });
+      // The history is fetched when its tab is opened rather than with the
+      // detail: it is a separate query, most detail views never open it, and
+      // paying for it on every film would slow the view everybody does use.
+      if (panelId === "movieDetailHistoryPanel" && activeDetailMovieId) {
+        renderMovieDetailHistory(activeDetailMovieId);
+      }
     }
     function activeDetailPanel(group, fallbackPanelId = "") {
       if (!group) return fallbackPanelId || "";
@@ -26491,7 +28051,7 @@ def ui_preview_html(
           <div class="art-option-preview">${preview}</div>
           <div class="art-option-source" title="${escapeHtml(source)}">${escapeHtml(source || (asset.is_primary ? tNext("movieDetail.primary", "Primary") : ""))}</div>
           ${metaLine ? `<div class="art-option-meta">${escapeHtml(metaLine)}</div>` : ""}
-          ${artworkOptionActionsHtml({asset, entity: "container", kind, canDelete: options.canDelete})}
+          ${artworkOptionActionsHtml({asset, entity: options.entity || "container", kind, canDelete: options.canDelete})}
         </div>
       `;
     }
@@ -26786,7 +28346,7 @@ def ui_preview_html(
     }
     let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: "", collapsed: false};
     const MOVIE_COMPARE_FIELD_LABELS = {
-      "movie:title": ["movieDetail.title", "Title"],
+      "movie:title": ["movieDetail.fieldTitle", "Title"],
       "movie:original_title": ["movieDetail.originalTitle", "Original title"],
       "movie:sort_title": ["movieDetail.fieldSortTitle", "Sort title"],
       "movie:year": ["movieDetail.fieldYear", "Year"],
@@ -26804,11 +28364,19 @@ def ui_preview_html(
       "metadata:studios": ["movieDetail.studios", "Studios"],
       "metadata:distributor": ["movieDetail.distributor", "Distributor"],
       "metadata:packaging": ["movieDetail.packaging", "Packaging"],
+      "metadata:carrier_type": ["movieDetail.carrierType", "Case type"],
+      "metadata:outer_packaging": ["movieDetail.outerPackaging", "Outer packaging"],
+      "metadata:finishes": ["movieDetail.finishes", "Finish"],
+      "metadata:steelbook_format": ["movieDetail.steelbookFormat", "Steelbook format"],
       "technical:hdr": ["movieDetail.hdr", "HDR"],
       "technical:screen_ratios": ["movieDetail.screenRatio", "Screen ratio"],
       "technical:audio_tracks": ["movieDetail.audio", "Audio"],
       "technical:subtitles": ["movieDetail.subtitles", "Subtitles"],
       "technical:packaging": ["movieDetail.packaging", "Packaging"],
+      "technical:carrier_type": ["movieDetail.carrierType", "Case type"],
+      "technical:outer_packaging": ["movieDetail.outerPackaging", "Outer packaging"],
+      "technical:finishes": ["movieDetail.finishes", "Finish"],
+      "technical:steelbook_format": ["movieDetail.steelbookFormat", "Steelbook format"],
       "media:poster": ["movieDetail.posters", "Posters"],
       "media:backdrop": ["movieDetail.backdrops", "Backdrops"]
     };
@@ -26859,7 +28427,7 @@ def ui_preview_html(
       const identifiers = detail.identifiers || [];
       const technical = detail.technicalSpecs || {};
       const rows = [
-        [tNext("movieDetail.title", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
+        [tNext("movieDetail.fieldTitle", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title || metadata.original_title || metadata.originalTitle, metadata.original_title_source || metadata.source || "collection"],
         [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title || metadata.release_title || metadata.releaseTitle, metadata.release_title_source || metadata.source || "collection"],
         [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
@@ -27197,29 +28765,39 @@ def ui_preview_html(
       if (!node) return;
       node.textContent = message || "";
       node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
+      // A failed save can be triggered from the bottom of a long section;
+      // an error nobody sees is an edit nobody knows was rejected.
+      if (message && tone === "bad") node.scrollIntoView({block: "nearest"});
+    }
+    // Shared by the movie, container and series heroes: their Edit button turns
+    // into Save while the panel is open. Written once because three copies of a
+    // label/icon/aria swap is three places for them to drift apart.
+    function setDetailEditToggleState(button, labelId, iconId, editing) {
+      if (!button) return;
+      const labelKey = editing ? "common.save" : "common.edit";
+      const label = editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
+      button.dataset.nextI18nAria = labelKey;
+      button.dataset.nextI18nTitle = labelKey;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
+      button.classList.toggle("is-editing", editing);
+      const labelNode = labelId ? document.getElementById(labelId) : null;
+      if (labelNode) {
+        labelNode.dataset.nextI18n = labelKey;
+        labelNode.textContent = label;
+      }
+      const icon = iconId ? document.getElementById(iconId) : null;
+      if (icon) icon.setAttribute("d", editing ? icon.dataset.savePath : icon.dataset.editPath);
     }
     function setMovieEditPanelVisible(show) {
       const panel = document.getElementById("movieEditPanel");
       const editButton = document.getElementById("movieEditToggleButton");
-      const editLabel = document.getElementById("movieEditToggleLabel");
-      const editIcon = document.getElementById("movieEditToggleIcon");
       const cancelButton = document.getElementById("movieEditCancelTopButton");
       if (!panel) return;
       panel.classList.toggle("hidden", !show);
-      if (editButton) {
-        const labelKey = show ? "common.save" : "common.edit";
-        const label = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
-        editButton.dataset.nextI18nAria = labelKey;
-        editButton.dataset.nextI18nTitle = labelKey;
-        editButton.setAttribute("aria-label", label);
-        editButton.setAttribute("title", label);
-        editButton.classList.toggle("is-editing", show);
-        if (editLabel) {
-          editLabel.dataset.nextI18n = labelKey;
-          editLabel.textContent = label;
-        }
-        if (editIcon) editIcon.setAttribute("d", show ? editIcon.dataset.savePath : editIcon.dataset.editPath);
-      }
+      document.getElementById("movieDetailPage")?.classList.toggle("movie-editing", show);
+      if (show) activateDetailTab("movieEditSections", "movieEditSectionRelease");
+      setDetailEditToggleState(editButton, "movieEditToggleLabel", "movieEditToggleIcon", show);
       if (cancelButton) cancelButton.classList.toggle("hidden", !show);
       if (show) document.getElementById("movieEditTitle")?.focus();
     }
@@ -27246,6 +28824,49 @@ def ui_preview_html(
       {value: "LaserDisc", collectorOnly: true},
       {value: "4K UHD", collectorOnly: false},
       {value: "VCD/SVCD", collectorOnly: true}
+    ];
+    // Which discs a format implies, in order, for pre-filling the disc editor
+    // the first time someone breaks a release down. Keyed by the same seven
+    // strings the select above offers, valued as DISC_TYPE_VALUES members;
+    // test_next_technical_enum_parity keeps both halves honest.
+    //
+    // `4K UHD + Blu-ray` yields two entries because that is what the format
+    // says: it is the one value in this list that already names two discs, so
+    // splitting it is reading the record rather than guessing at it. A format
+    // outside this map -- a custom value a user typed, which
+    // renderMovieEditFormatOptions deliberately keeps selectable -- seeds no
+    // type at all.
+    const MOVIE_FORMAT_DISC_TYPES = {
+      "4K UHD + Blu-ray": ["uhd_bluray", "bluray"],
+      "4K UHD": ["uhd_bluray"],
+      "Blu-ray": ["bluray"],
+      "DVD": ["dvd"],
+      "HD DVD": ["hd_dvd"],
+      "LaserDisc": ["laserdisc"],
+      "VCD/SVCD": ["vcd"]
+    };
+    // The release-level technical fields that stop being authored once a
+    // release has discs: the server recomputes them as the union of the discs
+    // on every save (next_discs.UNION_LIST_COLUMNS plus the scalar resolution).
+    //
+    // Declared here as the browser's copy of that set, and the markup tags each
+    // one with `data-derived-from-discs` rather than this list naming element
+    // ids. The attribute travels with the field when somebody moves it between
+    // subsections -- which is exactly what went wrong: `regions` lives in the
+    // Collectors block, was never covered by the old grid-level hiding, and was
+    // therefore offered as editable while every save overwrote it.
+    //
+    // test_next_derived_release_fields holds all three copies together: this
+    // constant, the attributes actually present in the markup, and the server's
+    // own set. The markup leg is the one that failed.
+    const MOVIE_DERIVED_RELEASE_FIELDS = [
+      "video_resolution",
+      "hdr",
+      "video_codecs",
+      "screen_ratios",
+      "regions",
+      "audio_tracks",
+      "subtitles"
     ];
     // The 19 canonical TMDB movie genre keys. English reference labels are
     // only a fallback for genreLabel() before the active locale's
@@ -27355,7 +28976,10 @@ def ui_preview_html(
       movieEditScreenRatio: "screen_ratios",
       movieEditAudioTracks: "audio_tracks",
       movieEditSubtitles: "subtitles",
-      movieEditPackaging: "packaging",
+      movieEditCarrierType: "carrier_type",
+      movieEditSteelbookFormat: "steelbook_format",
+      movieEditOuterPackaging: "outer_packaging",
+      movieEditFinishes: "finishes",
       movieEditRegions: "regions",
       movieEditVideoResolution: "video_resolution",
       movieEditVideoCodecs: "video_codecs",
@@ -27494,8 +29118,13 @@ def ui_preview_html(
     function fillMovieEditSubtitles(value) {
       renderMovieEditTrackRows("movieEditSubtitleRows", value, subtitleRowHtml, "movieDetail.subtitleNone", "No subtitles yet");
     }
-    function collectMovieEditAudioTracks() {
-      return Array.from(document.querySelectorAll("#movieEditAudioTrackRows .movie-edit-track-row")).map((row) => {
+    // Scoped to a container rather than to a fixed id: the same two editors now
+    // appear once for the release and once inside every disc, and a collector
+    // that reaches for `#movieEditAudioTrackRows` would read the release's rows
+    // for all of them.
+    function collectAudioTrackRows(root) {
+      if (!root) return [];
+      return Array.from(root.querySelectorAll(".movie-edit-track-row")).map((row) => {
         const legacy = row.dataset.legacyText || "";
         // Untouched legacy row: re-emit the original string verbatim. This is
         // what makes a save lossless for someone who never opens this editor.
@@ -27512,8 +29141,9 @@ def ui_preview_html(
         return entry;
       }).filter((item) => item !== null && item !== "");
     }
-    function collectMovieEditSubtitles() {
-      return Array.from(document.querySelectorAll("#movieEditSubtitleRows .movie-edit-track-row")).map((row) => {
+    function collectSubtitleRows(root) {
+      if (!root) return [];
+      return Array.from(root.querySelectorAll(".movie-edit-track-row")).map((row) => {
         const entry = {};
         row.querySelectorAll("select[data-track-field]").forEach((select) => {
           entry[select.dataset.trackField] = select.value || "";
@@ -27521,6 +29151,12 @@ def ui_preview_html(
         if (!entry.languageCode) return row.dataset.legacyText || null;
         return {languageCode: entry.languageCode, subtitleType: entry.subtitleType || "full"};
       }).filter((item) => item !== null && item !== "");
+    }
+    function collectMovieEditAudioTracks() {
+      return collectAudioTrackRows(document.getElementById("movieEditAudioTrackRows"));
+    }
+    function collectMovieEditSubtitles() {
+      return collectSubtitleRows(document.getElementById("movieEditSubtitleRows"));
     }
     function setupMovieEditTrackEditors() {
       const wire = (addId, rowsId, rowHtml) => {
@@ -27542,14 +29178,441 @@ def ui_preview_html(
       wire("movieEditAudioTrackAdd", "movieEditAudioTrackRows", audioTrackRowHtml);
       wire("movieEditSubtitleAdd", "movieEditSubtitleRows", subtitleRowHtml);
     }
+    // ---- Per-disc editor --------------------------------------------------
+    // A release grew a list of the physical discs inside it. The fields below
+    // are the release-level ones narrowed to one disc, so they reuse the same
+    // vocabularies, the same track rows and the same i18n keys -- a disc that
+    // says "Dolby Vision" has to mean what the release means by it.
+    //
+    // Every disc's season and episode ticks are read out of the DOM on save,
+    // exactly like the release-level season list, so nothing has to be kept in
+    // a parallel JS model that can drift from what the user is looking at.
+    const movieEditEpisodeCatalog = new Map();
+
+    function discCheckboxGroupHtml(field, values, current, labeller, legendKey, legendFallback) {
+      const chosen = new Set((current || []).map((item) => String(item)));
+      const boxes = values.map((value) => {
+        const checked = chosen.has(value) ? " checked" : "";
+        return `<label><input type="checkbox" value="${escapeHtml(value)}"${checked}> <span>${escapeHtml(labeller(value) || value)}</span></label>`;
+      }).join("");
+      return `<fieldset class="movie-edit-checkbox-group" data-disc-list="${escapeHtml(field)}">
+        <legend>${escapeHtml(tNext(legendKey, legendFallback))}</legend>${boxes}</fieldset>`;
+    }
+
+    function discSelectHtml(field, values, current, labeller, emptyKey, emptyFallback) {
+      const chosen = String(current ?? "");
+      const options = values.slice();
+      // Same forward-compatibility the track selects have: a stored value this
+      // build does not know is still selectable, so an unrelated save cannot
+      // quietly rewrite it.
+      if (chosen && !options.includes(chosen)) options.push(chosen);
+      const head = `<option value=""${chosen ? "" : " selected"}>${escapeHtml(tNext(emptyKey, emptyFallback))}</option>`;
+      return `<select data-disc-field="${escapeHtml(field)}">${head}${options.map((value) => {
+        const label = labeller ? labeller(value) : value;
+        return `<option value="${escapeHtml(value)}"${value === chosen ? " selected" : ""}>${escapeHtml(label || value)}</option>`;
+      }).join("")}</select>`;
+    }
+
+    function discSeasonPickerHtml(disc) {
+      // Restricted to the seasons the *release* covers, because the schema is:
+      // a disc's seasons are a subset of the release's, enforced by a foreign
+      // key. Offering a season the box does not carry would offer a save that
+      // the database is going to widen behind the user's back.
+      const seriesId = document.getElementById("movieEditSeries")?.value || "";
+      const series = movieEditSeriesCatalog.find((entry) => entry.id === seriesId);
+      const seasons = ((series && series.seasons) || []).filter((season) =>
+        collectMovieEditSeasonIds().includes(season.id)
+      );
+      if (!seasons.length) return "";
+      const chosen = new Set(disc.seasonIds || []);
+      const chosenEpisodes = new Set(disc.episodeIds || []);
+      const rows = seasons.map((season) => {
+        const label = season.title
+          ? `${season.seasonNumber} — ${escapeHtml(season.title)}`
+          : `${escapeHtml(tNext("movieDetail.seasonNumber", "Season"))} ${season.seasonNumber}`;
+        const ticked = chosen.has(season.id) ? " checked" : "";
+        const episodes = movieEditEpisodeCatalog.has(season.id)
+          ? movieEditEpisodeCatalog.get(season.id)
+          : null;
+        const episodeHtml = episodes === null
+          ? `<button type="button" class="ghost-button movie-edit-disc-episodes-load" data-season-id="${escapeHtml(season.id)}">${escapeHtml(tNext("movieDetail.discEpisodesLoad", "Choose episodes"))}</button>`
+          : (episodes.length
+            ? episodes.map((episode) => {
+                const on = chosenEpisodes.has(episode.id) ? " checked" : "";
+                const title = episode.title ? ` ${episode.title}` : "";
+                return `<label class="movie-edit-disc-episode"><input type="checkbox" data-disc-episode value="${escapeHtml(episode.id)}"${on}> <span>${escapeHtml(`${episode.episodeNumber}.${title}`)}</span></label>`;
+              }).join("")
+            : `<p class="hint">${escapeHtml(tNext("movieDetail.discEpisodesNone", "No episodes are stored for this season yet."))}</p>`);
+        return `<div class="movie-edit-disc-season" data-season-id="${escapeHtml(season.id)}">
+          <label class="movie-edit-season"><input type="checkbox" data-disc-season value="${escapeHtml(season.id)}"${ticked}> <span>${label}</span></label>
+          <div class="movie-edit-disc-episodes">${episodeHtml}</div>
+        </div>`;
+      }).join("");
+      return `<div class="movie-edit-disc-content wide">
+        <span>${escapeHtml(tNext("movieDetail.discContent", "On this disc"))}</span>
+        ${rows}
+        <p class="hint">${escapeHtml(tNext("movieDetail.discContentHint", "Ticking an episode also records the season on the release, because a disc in the box holding an episode is the box holding it."))}</p>
+      </div>`;
+    }
+
+    function discRowHtml(disc, index) {
+      const entry = disc || {};
+      const isOther = entry.discType === "other";
+      // Stored discs arrive with a list; a re-render from the live form arrives
+      // with whatever the user typed into the comma-separated field. Both are
+      // valid input to the server, so both have to survive a round trip here.
+      const ratios = Array.isArray(entry.screenRatios)
+        ? entry.screenRatios.join(", ")
+        : String(entry.screenRatios || "");
+      return `<div class="movie-edit-disc-row" data-disc-row data-disc-id="${escapeHtml(entry.id || "")}">
+        <div class="movie-edit-disc-head">
+          <span class="movie-edit-disc-number">${escapeHtml(tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1))}</span>
+          <button type="button" class="movie-edit-track-remove movie-edit-disc-remove" aria-label="${escapeHtml(tNext("movieDetail.discRemove", "Remove disc"))}">&times;</button>
+        </div>
+        <div class="movie-edit-grid">
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.discType", "Disc type"))}</span>
+            ${discSelectHtml("discType", DISC_TYPE_VALUES, entry.discType, discTypeLabel, "movieDiscType.unset", "Not specified")}
+          </label>
+          <label class="movie-edit-disc-other"${isOther ? "" : " hidden"}>
+            <span>${escapeHtml(tNext("movieDetail.discTypeOther", "Other disc type"))}</span>
+            <input data-disc-field="discTypeOther" maxlength="80" autocomplete="off" value="${escapeHtml(entry.discTypeOther || "")}">
+          </label>
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.discRole", "Content"))}</span>
+            ${discSelectHtml("discRole", DISC_ROLE_VALUES, entry.discRole, discRoleLabel, "movieDiscRole.unset", "Not specified")}
+          </label>
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.discLabel", "Label"))}</span>
+            <input data-disc-field="label" maxlength="160" autocomplete="off" value="${escapeHtml(entry.label || "")}">
+          </label>
+          <label>
+            <span>${escapeHtml(tNext("movieDetail.videoResolution", "Resolution"))}</span>
+            ${discSelectHtml("videoResolution", VIDEO_RESOLUTION_VALUES, entry.videoResolution, null, "common.notSet", "Not set")}
+          </label>
+          ${discCheckboxGroupHtml("hdr", HDR_FORMAT_VALUES, entry.hdr, hdrFormatLabel, "movieDetail.hdr", "HDR")}
+          ${discCheckboxGroupHtml("videoCodecs", VIDEO_CODEC_VALUES, entry.videoCodecs, videoCodecLabel, "movieDetail.videoCodecs", "Video codec")}
+          ${discCheckboxGroupHtml("regions", DISC_REGION_VALUES, entry.regions, discRegionLabel, "movieDetail.regions", "Regions")}
+          <label class="wide">
+            <span>${escapeHtml(tNext("movieDetail.screenRatio", "Screen ratio"))}</span>
+            <input data-disc-field="screenRatios" maxlength="160" autocomplete="off" placeholder="${escapeHtml(tNext("movieDetail.commaSeparated", "Comma separated"))}" value="${escapeHtml(ratios)}">
+          </label>
+          <div class="movie-edit-track-editor wide" data-disc-tracks="audioTracks">
+            <span>${escapeHtml(tNext("movieDetail.audio", "Audio"))}</span>
+            <div class="movie-edit-track-rows">${(entry.audioTracks || []).map(audioTrackRowHtml).join("")}</div>
+            <button type="button" class="ghost-button movie-edit-track-add" data-disc-track-add="audioTracks">${escapeHtml(tNext("movieDetail.audioTrackAdd", "Add audio track"))}</button>
+          </div>
+          <div class="movie-edit-track-editor wide" data-disc-tracks="subtitles">
+            <span>${escapeHtml(tNext("movieDetail.subtitles", "Subtitles"))}</span>
+            <div class="movie-edit-track-rows">${(entry.subtitles || []).map(subtitleRowHtml).join("")}</div>
+            <button type="button" class="ghost-button movie-edit-track-add" data-disc-track-add="subtitles">${escapeHtml(tNext("movieDetail.subtitleAdd", "Add subtitle"))}</button>
+          </div>
+          ${discSeasonPickerHtml(entry)}
+          <label class="wide">
+            <span>${escapeHtml(tNext("movieDetail.fieldNotes", "Notes"))}</span>
+            <input data-disc-field="notes" maxlength="2000" autocomplete="off" value="${escapeHtml(entry.notes || "")}">
+          </label>
+        </div>
+      </div>`;
+    }
+
+    function renderMovieEditDiscs(discs) {
+      const container = document.getElementById("movieEditDiscRows");
+      if (!container) return;
+      const list = Array.isArray(discs) ? discs : [];
+      container.innerHTML = list.length
+        ? list.map((disc, index) => discRowHtml(disc, index)).join("")
+        : `<p class="movie-edit-track-empty">${escapeHtml(tNext("movieDetail.discNone", "No discs described yet."))}</p>`;
+      // The notice belongs to the act of promoting, not to the state that
+      // results from it, so every render clears it and only the Add-disc click
+      // that seeded puts it back. Otherwise it would still be sitting there
+      // three releases later, explaining nothing.
+      document.getElementById("movieEditDiscsSeededHint")?.classList.add("hidden");
+      syncMovieEditReleaseTechnical(list.length);
+      syncMovieEditDiscCountWarning();
+    }
+
+    // Once a release has discs, the release-level Audio & Video fields are a
+    // derivation rather than an input: the server recomputes them as the union
+    // of the discs on save. Leaving them editable would offer a second place
+    // to author one fact, and the edit made there would be overwritten by the
+    // save that accepted it -- which is worse than not offering it.
+    function syncMovieEditReleaseTechnical(discCount) {
+      // Per field, not per section. The grid this used to hide is neither a
+      // superset nor a subset of the derived set, and it was wrong in both
+      // directions: `regions` is derived and lives in Collectors, so it stayed
+      // editable while the save overwrote it; `disc_count` and
+      // `runtime_minutes` sit in this grid and are *not* derived, so hiding it
+      // took away the disc-count field at exactly the moment
+      // syncMovieEditDiscCountWarning starts telling the user to reconcile it.
+      const derived = discCount > 0;
+      document.querySelectorAll("[data-derived-from-discs]").forEach((field) => {
+        field.classList.toggle("hidden", derived);
+      });
+      const note = document.getElementById("movieEditReleaseTechnicalDerived");
+      if (note) note.classList.toggle("hidden", !derived);
+    }
+
+    function renumberMovieEditDiscs() {
+      document.querySelectorAll("#movieEditDiscRows .movie-edit-disc-row").forEach((row, index) => {
+        const number = row.querySelector(".movie-edit-disc-number");
+        if (number) {
+          number.textContent = tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1);
+        }
+      });
+      syncMovieEditDiscCountWarning();
+    }
+
+    function syncMovieEditDiscCountWarning() {
+      // The two fields are deliberately independent -- `disc_count` is the
+      // release-level number MovieVault exchanges, and it is routinely known
+      // before anyone enumerates the discs. So a disagreement is shown to the
+      // person who can settle it rather than silently corrected either way.
+      const warning = document.getElementById("movieEditDiscCountWarning");
+      if (!warning) return;
+      const stated = Number(document.getElementById("movieEditDiscCount")?.value || 0);
+      const described = document.querySelectorAll("#movieEditDiscRows .movie-edit-disc-row").length;
+      const mismatch = stated > 0 && described > 0 && stated !== described;
+      warning.classList.toggle("hidden", !mismatch);
+      if (mismatch) {
+        warning.textContent = tNext(
+          "movieDetail.discCountMismatch",
+          "{described} discs described, but the release says {stated}."
+        ).replace("{described}", described).replace("{stated}", stated);
+      }
+    }
+
+    function collectMovieEditDiscs() {
+      return Array.from(document.querySelectorAll("#movieEditDiscRows .movie-edit-disc-row")).map((row) => {
+        const disc = {};
+        const id = row.dataset.discId || "";
+        if (id) disc.id = id;
+        row.querySelectorAll("[data-disc-field]").forEach((input) => {
+          disc[input.dataset.discField] = input.value || "";
+        });
+        row.querySelectorAll("[data-disc-list]").forEach((group) => {
+          disc[group.dataset.discList] = Array.from(
+            group.querySelectorAll("input[type=checkbox]:checked")
+          ).map((box) => box.value);
+        });
+        disc.audioTracks = collectAudioTrackRows(row.querySelector('[data-disc-tracks="audioTracks"]'));
+        disc.subtitles = collectSubtitleRows(row.querySelector('[data-disc-tracks="subtitles"]'));
+        disc.seasonIds = Array.from(row.querySelectorAll("input[data-disc-season]:checked")).map((box) => box.value);
+        // Only episodes under a ticked season. An episode left checked below a
+        // season the user has since unticked is not a statement they are still
+        // making, and sending it would tick the season straight back on.
+        const tickedSeasons = new Set(disc.seasonIds);
+        disc.episodeIds = Array.from(row.querySelectorAll("input[data-disc-episode]:checked"))
+          .filter((box) => tickedSeasons.has(box.closest("[data-season-id]")?.dataset.seasonId))
+          .map((box) => box.value);
+        // The free-text field is only meaningful with the `other` type, and the
+        // server refuses the pair outright rather than guessing which of the two
+        // the user meant. Dropping it here keeps a stale value left behind by
+        // switching the type back from turning into an error nobody caused.
+        if (disc.discType !== "other") disc.discTypeOther = "";
+        return disc;
+      });
+    }
+
+    // ---- Promoting the release's own details to Disc 1 ---------------------
+    // While a release had one disc, the release-level fields *were* that disc's
+    // description. So the first time someone says there is a second disc, the
+    // honest reading of what is already recorded is "this is disc 1" -- and
+    // making them retype it into the new row would be asking them to say the
+    // same thing twice.
+    //
+    // The release-level fields are copied, not moved. Everything that reads the
+    // flat row -- the collection filters, MovieVault contributions,
+    // import/export, the MCP server, the mobile clients -- knows nothing about
+    // discs, and clearing it would make a multi-disc release invisible to all of
+    // them at once. Copying also makes the whole thing reversible: delete the
+    // discs again and nothing was lost.
+    //
+    // And it is a *form* that gets filled, not a record that gets written. The
+    // user sees Disc 1 arrive populated and can correct it before saving, which
+    // is the line between suggesting and claiming.
+    function collectMovieEditCheckboxGroup(containerId) {
+      return Array.from(
+        document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)
+      ).map((box) => box.value);
+    }
+
+    function movieEditReleaseSeedDisc() {
+      // Read from the live form rather than from the detail payload, so edits
+      // made in this sitting but not yet saved land on Disc 1 too. Reading the
+      // stored values would silently drop them.
+      return {
+        videoResolution: document.getElementById("movieEditVideoResolution")?.value || "",
+        screenRatios: document.getElementById("movieEditScreenRatio")?.value || "",
+        hdr: collectMovieEditCheckboxGroup("movieEditHdr"),
+        videoCodecs: collectMovieEditCheckboxGroup("movieEditVideoCodecs"),
+        regions: collectMovieEditCheckboxGroup("movieEditRegions"),
+        audioTracks: collectMovieEditAudioTracks(),
+        subtitles: collectMovieEditSubtitles(),
+        // A one-disc television release covering seasons 1-2 meant *that disc*
+        // held both, so Disc 1 starts with both and the curator moves across
+        // what belongs on Disc 2. Episodes have no release-level statement of
+        // their own to promote -- the disc list is their only writer.
+        seasonIds: collectMovieEditSeasonIds()
+        // label, notes and discRole are deliberately absent. Nothing at release
+        // level means either of the first two, and the role of a lone disc was
+        // never recorded anywhere -- filling in "feature" would put a claim in
+        // the field that nobody made.
+      };
+    }
+
+    function movieEditSeededDiscs() {
+      const format = normalizedMovieFormatValue(
+        document.getElementById("movieEditFormat")?.value || ""
+      );
+      const types = MOVIE_FORMAT_DISC_TYPES[format] || [];
+      const first = movieEditReleaseSeedDisc();
+      first.discType = types[0] || "";
+      // The added disc gets a type only when the format already named a second
+      // one, which today means the 4K UHD + Blu-ray combo.
+      return [first, {discType: types[1] || ""}];
+    }
+
+    async function loadMovieEditDiscEpisodes(seasonId) {
+      if (!seasonId || movieEditEpisodeCatalog.has(seasonId)) return;
+      try {
+        const payload = await authApiJson(`/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes`);
+        movieEditEpisodeCatalog.set(seasonId, payload.episodes || []);
+      } catch (error) {
+        // An empty list rather than nothing: the button has been pressed, and
+        // leaving it there to be pressed again says less than "none stored".
+        movieEditEpisodeCatalog.set(seasonId, []);
+      }
+      // Re-render from the live DOM so nothing the user typed in another disc
+      // is lost to the refresh.
+      renderMovieEditDiscs(collectMovieEditDiscs());
+    }
+
+    function setupMovieEditDiscEditor() {
+      const container = document.getElementById("movieEditDiscRows");
+      const addButton = document.getElementById("movieEditDiscAdd");
+      if (!container || !addButton || addButton.dataset.wired === "1") return;
+      addButton.dataset.wired = "1";
+      addButton.addEventListener("click", () => {
+        const discs = collectMovieEditDiscs();
+        if (discs.length) {
+          // Already broken down: the existing data is attributed, so this is
+          // just one more disc.
+          discs.push({});
+          renderMovieEditDiscs(discs);
+          return;
+        }
+        // The transition from "one disc, described at release level" to "more
+        // than one" -- the only moment the promotion makes sense.
+        renderMovieEditDiscs(movieEditSeededDiscs());
+        document.getElementById("movieEditDiscsSeededHint")?.classList.remove("hidden");
+      });
+      container.addEventListener("click", (event) => {
+        const removeDisc = event.target.closest(".movie-edit-disc-remove");
+        if (removeDisc) {
+          removeDisc.closest(".movie-edit-disc-row").remove();
+          if (!container.querySelector(".movie-edit-disc-row")) renderMovieEditDiscs([]);
+          else renumberMovieEditDiscs();
+          return;
+        }
+        const removeTrack = event.target.closest(".movie-edit-track-remove");
+        if (removeTrack) {
+          removeTrack.closest(".movie-edit-track-row").remove();
+          return;
+        }
+        const addTrack = event.target.closest("[data-disc-track-add]");
+        if (addTrack) {
+          const rows = addTrack.closest("[data-disc-tracks]").querySelector(".movie-edit-track-rows");
+          const html = addTrack.dataset.discTrackAdd === "subtitles" ? subtitleRowHtml : audioTrackRowHtml;
+          rows.insertAdjacentHTML("beforeend", html({}));
+          return;
+        }
+        const loadEpisodes = event.target.closest(".movie-edit-disc-episodes-load");
+        if (loadEpisodes) {
+          loadMovieEditDiscEpisodes(loadEpisodes.dataset.seasonId);
+        }
+      });
+      container.addEventListener("change", (event) => {
+        const select = event.target.closest('select[data-disc-field="discType"]');
+        if (select) {
+          const other = select.closest(".movie-edit-disc-row").querySelector(".movie-edit-disc-other");
+          if (other) other.hidden = select.value !== "other";
+        }
+      });
+      document.getElementById("movieEditDiscCount")?.addEventListener("input", syncMovieEditDiscCountWarning);
+    }
     function fillMovieEditCheckboxGroup(containerId, values) {
       const chosen = new Set((Array.isArray(values) ? values : []).map((item) => String(item)));
       document.querySelectorAll(`#${containerId} input[type=checkbox]`).forEach((box) => {
         box.checked = chosen.has(box.value);
       });
     }
-    function collectMovieEditCheckboxGroup(containerId) {
-      return Array.from(document.querySelectorAll(`#${containerId} input[type=checkbox]:checked`)).map((box) => box.value);
+    // ---- Case axes ---------------------------------------------------------
+    // The Scanavo generation only means something for a metal case, so the
+    // control follows the carrier rather than sitting there inviting a value
+    // that the API would drop again.
+    const STEELBOOK_CARRIERS = new Set(["steelbook", "futurepak"]);
+    function syncMovieEditSteelbookFormat() {
+      const carrier = document.getElementById("movieEditCarrierType");
+      const field = document.getElementById("movieEditSteelbookFormatField");
+      if (!carrier || !field) return;
+      const applies = STEELBOOK_CARRIERS.has(String(carrier.value || ""));
+      field.hidden = !applies;
+      if (!applies) {
+        const select = document.getElementById("movieEditSteelbookFormat");
+        if (select) select.value = "";
+      }
+    }
+    function fillMovieEditCaseAxes(specs, metadata, specList) {
+      // A row written before migration 067 has empty axes and a populated flat
+      // list, so fall back to splitting that rather than showing the form blank.
+      const legacy = specList("packaging");
+      const fallback = legacy.length ? splitLegacyPackaging(legacy) : { carrier: "", outer: [] };
+      const carrier = specs.carrier_type || metadata.carrier_type || fallback.carrier || "";
+      const outer = specList("outer_packaging");
+      const carrierInput = document.getElementById("movieEditCarrierType");
+      if (carrierInput && document.activeElement !== carrierInput) carrierInput.value = carrier;
+      if (carrierInput && !carrierInput.dataset.caseAxisBound) {
+        carrierInput.dataset.caseAxisBound = "1";
+        carrierInput.addEventListener("change", syncMovieEditSteelbookFormat);
+      }
+      const steelbookInput = document.getElementById("movieEditSteelbookFormat");
+      if (steelbookInput && document.activeElement !== steelbookInput) {
+        steelbookInput.value = specs.steelbook_format || metadata.steelbook_format || "";
+      }
+      fillMovieEditCheckboxGroup(
+        "movieEditOuterPackaging",
+        outer.length ? outer : fallback.outer
+      );
+      fillMovieEditCheckboxGroup("movieEditFinishes", specList("finishes"));
+      syncMovieEditSteelbookFormat();
+    }
+    // Mirrors next_packaging.split_legacy_packaging. Matched case-insensitively:
+    // migration 053 preserved hand-entered scalars verbatim ("Steelbook") and
+    // the movievault_26 plugin emits TitleCase.
+    const LEGACY_CARRIER_MAP = {
+      keep_case: "keep_case",
+      amaray: "keep_case",
+      steelbook: "steelbook",
+      digipak: "digipak",
+      digibook: "digibook",
+      mediabook: "mediabook"
+    };
+    const LEGACY_OUTER_MAP = { slipcover: "slipcover", slipcase: "slipcase", box: "rigid_box" };
+    function splitLegacyPackaging(values) {
+      let carrier = "";
+      const outer = [];
+      (Array.isArray(values) ? values : []).forEach((item) => {
+        const key = String(item || "").trim().toLowerCase();
+        if (!key) return;
+        if (!carrier && LEGACY_CARRIER_MAP[key]) {
+          carrier = LEGACY_CARRIER_MAP[key];
+          return;
+        }
+        const mapped = LEGACY_OUTER_MAP[key];
+        if (mapped && !outer.includes(mapped)) outer.push(mapped);
+      });
+      return { carrier, outer };
     }
     // ---- Estimated value currency ------------------------------------------
     // The picker offers exactly the currencies the price-display converter can
@@ -27612,6 +29675,35 @@ def ui_preview_html(
       };
     }
 
+    // A season is a card with its own cover, title and episode count, not a bare
+    // number: picking which seasons a box set covers is a recognition task, and a
+    // list of "1 2 3 4 5" makes the reader do it from memory. The poster is the
+    // one already published on the season (season_entities.posterUrl); a season
+    // without artwork keeps the reserved frame so the grid stays on one baseline.
+    function movieEditSeasonCardHtml(season, checked) {
+      const number = tNext("collection.seasonNumber", "Season {number}")
+        .replace("{number}", season.seasonNumber);
+      const title = season.title || number;
+      const meta = [
+        season.title ? number : "",
+        season.year || "",
+        season.episodeCount
+          ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount)
+          : ""
+      ].filter(Boolean).join(" · ");
+      const cover = season.posterUrl
+        ? `<img src="${escapeHtml(season.posterUrl)}" alt="" loading="lazy">`
+        : "";
+      return `
+        <label class="movie-edit-season-card">
+          <input type="checkbox" value="${escapeHtml(season.id)}"${checked ? " checked" : ""}>
+          <span class="movie-edit-season-cover">${cover}</span>
+          <span class="movie-edit-season-copy">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(meta)}</span>
+          </span>
+        </label>`;
+    }
     function renderMovieEditSeasons(seriesId, selectedIds) {
       const {seasons} = movieEditSeriesElements();
       if (!seasons) return;
@@ -27622,13 +29714,9 @@ def ui_preview_html(
         return;
       }
       const chosen = new Set(selectedIds || []);
-      seasons.innerHTML = list.map((season) => {
-        const label = season.title
-          ? `${season.seasonNumber} — ${escapeHtml(season.title)}`
-          : `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber}`;
-        const checked = chosen.has(season.id) ? " checked" : "";
-        return `<label class="movie-edit-season"><input type="checkbox" value="${escapeHtml(season.id)}"${checked}> <span>${label}</span></label>`;
-      }).join("");
+      seasons.innerHTML = list
+        .map((season) => movieEditSeasonCardHtml(season, chosen.has(season.id)))
+        .join("");
     }
 
     function syncMovieEditSeriesVisibility(selectedSeasonIds) {
@@ -27639,9 +29727,23 @@ def ui_preview_html(
       // Only offered while the type is a series, because the backend refuses a
       // series on a film rather than silently accepting one.
       if (newRow) newRow.hidden = !isShow || seriesId !== "__new__";
-      if (seasonsRow) {
-        const hasSeasons = !!(movieEditSeriesCatalog.find((entry) => entry.id === seriesId)?.seasons || []).length;
-        seasonsRow.hidden = !isShow || !hasSeasons;
+      const hasSeasons = !!(movieEditSeriesCatalog.find((entry) => entry.id === seriesId)?.seasons || []).length;
+      if (seasonsRow) seasonsRow.hidden = !isShow || !hasSeasons;
+      // Says why the seasons are absent instead of showing an empty section:
+      // "no series picked yet" and "this series has no seasons recorded" are
+      // different answers, and a blank panel gives neither.
+      const emptyHint = document.getElementById("movieEditSeriesEmptyHint");
+      if (emptyHint) emptyHint.hidden = !isShow || hasSeasons;
+      // The whole section only exists for a series. Hiding the tab rather than
+      // disabling it: a film has nothing to say here at all.
+      const tab = document.getElementById("movieEditTabSeries");
+      if (tab) {
+        tab.classList.toggle("hidden", !isShow);
+        // Leaving the reader on a tab that just disappeared would show a panel
+        // with no tab lit; send them back to the section every release has.
+        if (!isShow && tab.classList.contains("active")) {
+          activateDetailTab("movieEditSections", "movieEditSectionRelease");
+        }
       }
       if (isShow && seriesId && seriesId !== "__new__") {
         renderMovieEditSeasons(seriesId, selectedSeasonIds);
@@ -27730,10 +29832,16 @@ def ui_preview_html(
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const seriesDetail = detail.series || null;
+      // The disc rows are rendered again once the series catalog has landed:
+      // a disc's season picker only offers the seasons the release covers, and
+      // those are not known until the catalog is in. Rendering once up front as
+      // well means the technical fields are editable immediately rather than
+      // waiting on a request that a film does not even need.
+      const discs = Array.isArray(detail.discs) ? detail.discs : [];
       loadMovieEditSeries(
         seriesDetail ? seriesDetail.id : "",
         (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
-      );
+      ).then(() => renderMovieEditDiscs(collectMovieEditDiscs())).catch(() => {});
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -27752,6 +29860,7 @@ def ui_preview_html(
         movieEditLanguage: movie.language || "",
         movieEditLocation: typeof movie.location === "string" ? movie.location : "",
         movieEditRuntime: movie.runtime_minutes || "",
+        movieEditDiscCount: movie.disc_count || "",
         movieEditDirector: valueText(metadata.director),
         movieEditStudios: valueText(metadata.studios),
         movieEditContentRating: contentRatingInfo.unknown ? "" : (contentRatingInfo.rating || ""),
@@ -27773,7 +29882,7 @@ def ui_preview_html(
         if (Array.isArray(value) && value.length) return value;
         return Array.isArray(metadata[key]) ? metadata[key] : [];
       };
-      fillMovieEditCheckboxGroup("movieEditPackaging", specList("packaging"));
+      fillMovieEditCaseAxes(specs, metadata, specList);
       fillMovieEditCheckboxGroup("movieEditHdr", specList("hdr"));
       fillMovieEditCheckboxGroup("movieEditVideoCodecs", specList("video_codecs"));
       fillMovieEditCheckboxGroup("movieEditRegions", specList("regions"));
@@ -27782,12 +29891,92 @@ def ui_preview_html(
       fillMovieEditAudioTracks(specList("audio_tracks"));
       fillMovieEditSubtitles(specList("subtitles"));
       setupMovieEditTrackEditors();
+      renderMovieEditDiscs(discs);
+      setupMovieEditDiscEditor();
       const locationSelect = document.getElementById("movieEditLocationSelect");
       if (locationSelect && document.activeElement !== locationSelect) {
         const currentLocationId = (movie.location && movie.location.id) || movie.location_id || "";
         populateLocationParentSelect(locationSelect, {selectedId: String(currentLocationId || ""), emptyLabel: tNext("locations.none", "No location")});
       }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
+      loadMovieEditIdentifiers();
+    }
+    // The typed product identifiers. Their own route rather than a slice of the
+    // detail payload, because they are their own table with their own
+    // uniqueness rule -- and because a native client wants them without
+    // fetching a whole detail screen.
+    const MOVIE_IDENTIFIER_TYPES = ["ean", "upc", "isbn", "asin", "catalog_number"];
+    function movieIdentifierTypeLabel(type) {
+      return tNext(`movieDetail.identifierType.${type}`, {
+        ean: "EAN",
+        upc: "UPC",
+        isbn: "ISBN",
+        asin: "Amazon ASIN",
+        catalog_number: "Catalogue number"
+      }[type] || type);
+    }
+    function addMovieIdentifierRow(entry) {
+      const list = document.getElementById("movieEditIdentifiers");
+      if (!list) return;
+      const row = document.createElement("div");
+      row.className = "movie-edit-identifier-row";
+      const select = document.createElement("select");
+      MOVIE_IDENTIFIER_TYPES.forEach((type) => {
+        const option = document.createElement("option");
+        option.value = type;
+        option.textContent = movieIdentifierTypeLabel(type);
+        select.appendChild(option);
+      });
+      select.value = (entry && entry.type) || "ean";
+      const input = document.createElement("input");
+      input.maxLength = 120;
+      input.autocomplete = "off";
+      input.value = (entry && entry.value) || "";
+      input.placeholder = tNext("movieDetail.productIdentifierValue", "Code");
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "secondary";
+      remove.textContent = tNext("common.remove", "Remove");
+      remove.addEventListener("click", () => row.remove());
+      row.appendChild(select);
+      row.appendChild(input);
+      row.appendChild(remove);
+      list.appendChild(row);
+    }
+    async function loadMovieEditIdentifiers() {
+      const list = document.getElementById("movieEditIdentifiers");
+      if (!list || !activeDetailMovieId) return;
+      list.innerHTML = "";
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/identifiers`);
+        (payload.identifiers || []).forEach(addMovieIdentifierRow);
+      } catch (error) {
+        // A read failure must not block editing everything else on the panel.
+        // The rows stay empty and a save simply sends an empty list, which is
+        // why the save is skipped when nothing loaded -- see saveMovieIdentifiers.
+        list.dataset.loadFailed = "1";
+      }
+    }
+    function collectMovieEditIdentifiers() {
+      return Array.from(document.querySelectorAll("#movieEditIdentifiers .movie-edit-identifier-row"))
+        .map((row) => ({
+          type: row.querySelector("select")?.value || "",
+          value: (row.querySelector("input")?.value || "").trim()
+        }))
+        .filter((entry) => entry.value);
+    }
+    async function saveMovieIdentifiers() {
+      const list = document.getElementById("movieEditIdentifiers");
+      if (!list || !activeDetailMovieId) return null;
+      // A PUT is a complete replacement, so sending one built from rows that
+      // never loaded would delete every identifier the record has.
+      if (list.dataset.loadFailed === "1") return null;
+      await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/identifiers`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({identifiers: collectMovieEditIdentifiers()})
+      });
+      return true;
     }
     // While a film sits inside a box-set, the set carries the money for
     // everything in it. The field is blanked and disabled rather than cleared in
@@ -28358,9 +30547,634 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
+    // ---- MovieVault field corrections -------------------------------------
+    //
+    // The client asks and confirms; it never decides. Which record this is,
+    // which fields may travel, and what the catalogue currently holds are all
+    // answered by the server (`/api/next/movievault/contributions/*`), because
+    // iOS and Android consume the same four operations and three
+    // re-derivations of the eligible-field rules would be three chances to
+    // send a field that was withheld for a reason.
+    //
+    // So this file holds no field list, no lock check and no mirror value.
+    const CONTRIBUTE_FIELD_LABELS = {
+      // Reuses the detail screen's key rather than `contribute.field.title`:
+      // the field a release correction carries is the *packaging* title, and
+      // a row labelled plain "Title" beside a film title is the ambiguity that
+      // kept this field withheld in the first place. A box set's `title` is
+      // the container's own name, which the plain label still fits.
+      title: ["movieDetail.releaseTitle", "Release title"],
+      studio: ["movieDetail.studio", "Studio"],
+      edition: ["contribute.field.edition", "Edition"],
+      format: ["contribute.field.format", "Format"],
+      countryCode: ["contribute.field.countryCode", "Country"],
+      languageCode: ["contribute.field.languageCode", "Language"],
+      releaseDate: ["contribute.field.releaseDate", "Release date"],
+      runtimeMinutes: ["contribute.field.runtimeMinutes", "Runtime"],
+      discCount: ["contribute.field.discCount", "Number of discs"],
+      distributor: ["contribute.field.distributor", "Distributor"],
+      eans: ["contribute.field.eans", "Barcodes"],
+      // Not "Region": that is the free-text market region, which is
+      // withheld. These are the playback regions on the disc itself.
+      discRegions: ["contribute.field.discRegions", "Disc regions"],
+      // The technical description, correctable since MovieVault-v2#227. A
+      // field with no entry here falls back to its wire name, so `discs`
+      // read as a lower-case "discs" beside a capitalised "Format" -- the
+      // sheet has to name them the way the rest of the app does.
+      packaging: ["contribute.field.packaging", "Packaging"],
+      finishes: ["contribute.field.finishes", "Finishes"],
+      videoResolution: ["contribute.field.videoResolution", "Resolution"],
+      videoCodecs: ["contribute.field.videoCodecs", "Video codec"],
+      hdrFormats: ["contribute.field.hdrFormats", "HDR"],
+      aspectRatios: ["contribute.field.aspectRatios", "Screen ratio"],
+      audioTracks: ["contribute.field.audioTracks", "Audio tracks"],
+      subtitles: ["contribute.field.subtitles", "Subtitles"],
+      alternateTitles: ["contribute.field.alternateTitles", "Alternate titles"],
+      discs: ["contribute.field.discs", "Discs"]
+    };
+    const CONTRIBUTE_WITHHELD_REASONS = {
+      discvault_holds_one_barcode: ["contribute.withheld.oneBarcode", "MovieVault keeps a list of barcodes and DiscVault keeps one, so sending it would delete the others."],
+      different_field_upstream: ["contribute.withheld.differentField", "The upstream field is not the same field, so sending it would invent data."],
+      discvault_holds_a_list: ["contribute.withheld.list", "DiscVault keeps a list here and MovieVault keeps one value, so joining them would lose detail."],
+      not_stored_by_discvault: ["contribute.withheld.notStored", "DiscVault does not store this field."],
+      // The two value-level refusals. Unlike the four above, these are about
+      // this one record rather than about the two data models, so the text says
+      // what to change -- without it the raw code reached the screen.
+      local_value_is_not_a_country_code: ["contribute.withheld.countryCode", "MovieVault needs a two-letter country code. Change this field to a code such as NL to contribute it."],
+      local_value_is_not_a_language_code: ["contribute.withheld.languageCode", "MovieVault needs a language code. Change this field to a code such as nl to contribute it."],
+      // Not about the two data models either, and not about this record: about
+      // this attempt. The mirror holds no barcodes, so without a live read
+      // there is nothing honest to state as the current list.
+      needs_live_catalogue: ["contribute.withheld.needsLiveCatalogue", "This is a complete replacement list, so it can only be sent when MovieVault is reachable and can say what it would replace."],
+      // The two refusals that a user can actually clear, and the reason this
+      // disclosure had to start naming the culprit. DiscVault's track columns
+      // hold structured tracks and legacy free text side by side; MovieVault
+      // requires a language and a codec. One unconvertible track withholds the
+      // whole list, because these are replacement lists and a partial one would
+      // delete what it could not express. Until now it withheld it silently,
+      // which read as "nothing to correct here".
+      local_tracks_are_free_text: ["contribute.withheld.freeTextTracks", "One track is stored as free text rather than as a language and a codec, so the whole list stays here. Give that track a language and a codec to contribute it."],
+      disc_tracks_are_free_text: ["contribute.withheld.freeTextDiscTracks", "One disc has a track stored as free text rather than as a language and a codec, so the whole disc breakdown stays here. Give that track a language and a codec to contribute it."]
+    };
+    const contributeState = {movie: null, container: null};
+    function contributeFieldLabel(field) {
+      const entry = CONTRIBUTE_FIELD_LABELS[field];
+      return entry ? tNext(entry[0], entry[1]) : field;
+    }
+    // A correction row has to show what is actually being sent. Scalars and
+    // string lists were the whole vocabulary until the technical fields became
+    // correctable; `String(value)` on a list of objects renders
+    // "[object Object]", which asks somebody to approve a change they cannot
+    // read. Each structured shape therefore gets a sentence.
+    // Every vocabulary already has a translated label helper, used by the disc
+    // editor and the detail screen. The correction sheet reuses them rather
+    // than spelling values out itself: a moderator's diff showing "uhd_bluray"
+    // beside an editor showing "4K UHD Blu-ray" is the same fact typed twice.
+    const CONTRIBUTE_VALUE_LABELS = {
+      packaging: packagingLabel,
+      finishes: finishLabel,
+      hdrFormats: hdrFormatLabel,
+      videoCodecs: videoCodecLabel,
+      discRegions: discRegionLabel,
+    };
+    // The release screen's own renderers, deliberately, rather than a second
+    // set beside them. A correction is read by comparing two values, and the
+    // comparison a user actually makes is against the film they are looking
+    // at -- so `Nederlands (DTS-HD MA 5.1)` on one screen and `nl DTS-HD MA
+    // 5.1` on the other made them do the translating themselves. Two
+    // formatters for one fact also drift: this one never learned that a
+    // language code has a name.
+    function contributeTrackText(track) {
+      if (!track || typeof track !== "object") return String(track);
+      const rendered = track.subtitleType !== undefined && track.codec === undefined
+        ? subtitleLabel(track)
+        : audioTrackLabel(track);
+      return rendered || String(track.languageCode || "");
+    }
+    function contributeDiscText(disc, index) {
+      if (!disc || typeof disc !== "object") return String(disc);
+      const head = [
+        tNext("movieDetail.discNumber", "Disc {number}").replace("{number}", index + 1),
+        disc.discTypeOther || discTypeLabel(disc.discType),
+      ].filter(Boolean).join(": ");
+      // A summary rather than the whole disc: the counts are what tell a
+      // reader the tracks are travelling with it, and the full lists would
+      // make a two-disc set unreadable in a checkbox row.
+      const detail = [
+        disc.label,
+        disc.discRole ? discRoleLabel(disc.discRole) : null,
+        disc.videoResolution,
+        (disc.hdrFormats || []).map(hdrFormatLabel).filter(Boolean).join("/") || null,
+        (disc.audioTracks || []).length
+          ? `${disc.audioTracks.length}× ${tNext("contribute.field.audioTracks", "Audio tracks")}`
+          : null,
+        (disc.subtitles || []).length
+          ? `${disc.subtitles.length}× ${tNext("contribute.field.subtitles", "Subtitles")}`
+          : null,
+      ].filter(Boolean).join(", ");
+      return detail ? `${head} — ${detail}` : head;
+    }
+    function contributeValueText(value, field) {
+      if (value === null || value === undefined || value === "") return tNext("contribute.empty", "(empty)");
+      if (Array.isArray(value)) {
+        if (!value.length) return tNext("contribute.empty", "(empty)");
+        if (value.every((item) => item === null || typeof item !== "object")) {
+          const label = CONTRIBUTE_VALUE_LABELS[field];
+          return value.map((item) => (label ? label(item) || String(item) : String(item))).join(", ");
+        }
+        if (field === "discs") {
+          return value.map((item, index) => contributeDiscText(item, index)).join("; ");
+        }
+        // Keyed off the field rather than sniffed per entry: `subtitles` is a
+        // subtitle list even when an entry happens to carry no variant, and
+        // guessing per row put two shapes in one list.
+        if (field === "subtitles") return subtitlesText(value);
+        if (field === "audioTracks") return audioTracksText(value);
+        return value.map(contributeTrackText).join(", ");
+      }
+      if (typeof value === "object") return contributeTrackText(value);
+      const label = CONTRIBUTE_VALUE_LABELS[field];
+      return (label && label(value)) || String(value);
+    }
+    // One entry per line for the structured lists, so the two sides line up
+    // item by item and a reader can see *which* subtitle moved. Scalars and
+    // enum lists stay on one line: six words joined by commas are readable,
+    // six audio tracks are not.
+    const CONTRIBUTE_STACKED_FIELDS = new Set(["audioTracks", "subtitles", "discs"]);
+    function contributeValueLines(value, field) {
+      if (!CONTRIBUTE_STACKED_FIELDS.has(field) || !Array.isArray(value) || !value.length) {
+        return [contributeValueText(value, field)];
+      }
+      if (field === "discs") return value.map((item, index) => contributeDiscText(item, index));
+      if (field === "subtitles") return value.map(subtitleLabel).filter(Boolean);
+      return value.map(audioTrackLabel).filter(Boolean);
+    }
+    function contributeButton(entity) {
+      return document.getElementById(entity === "container" ? "containerContributeButton" : "movieContributeButton");
+    }
+    // Drawn whenever there is something to send and the owner allows sending at
+    // all, including before this user has ever agreed -- agreeing is what the
+    // first-run sheet is for, and a button hidden until the preference is on
+    // would leave no way to reach it.
+    async function refreshContributeButton(entity, id) {
+      const button = contributeButton(entity);
+      if (!button) return;
+      contributeState[entity] = null;
+      button.classList.add("hidden");
+      renderContributeStatus(entity, null);
+      if (!id || !hasPermission("collection.edit_all")) return;
+      try {
+        const query = `entity=${encodeURIComponent(entity === "container" ? "container" : "movie")}&id=${encodeURIComponent(id)}`;
+        const payload = await apiJson(`/api/next/movievault/contributions/eligibility?${query}`, {headers: authHeaders()});
+        // Rendered before the button is decided, and deliberately not gated on
+        // there being something left to send. A correction that was accepted
+        // makes the local row and the catalogue agree, so the diff is empty and
+        // the button goes -- and with it the only place the outcome could have
+        // appeared. The answer to "what happened to my correction" must not
+        // depend on there being a next one.
+        renderContributeStatus(entity, payload.lastContribution);
+        if (payload.mode !== "correction" || !(payload.changedFields || []).length) return;
+        // Drawn whichever half of the gate is off. Hiding it when the owner
+        // half was off was worse than the bug it replaced: on a self-hosted
+        // instance the person looking at the screen usually *is* the owner, so
+        // that hid the one thing they could act on, and a feature that
+        // silently is not there cannot be told apart from one that is broken.
+        // The sheet says which half, and both answers are actionable.
+        contributeState[entity] = {
+          id: String(id),
+          ownerEnabled: !!payload.ownerEnabled,
+          enabled: !!payload.userEnabled,
+        };
+        button.classList.remove("hidden");
+      } catch (error) {
+        // Eligibility runs on every detail render. A MovieVault that is down,
+        // or an instance that never registered, is the ordinary case and must
+        // not put an error on a screen the user did not ask a question on.
+      }
+    }
+    const CONTRIBUTE_STATUS_LABELS = {
+      queued: ["contribute.status.queued", "Queued"],
+      pending: ["contribute.status.pending", "Awaiting moderation"],
+      quarantined: ["contribute.status.pending", "Awaiting moderation"],
+      accepted: ["contribute.status.accepted", "Accepted"],
+      partially_accepted: ["contribute.status.partiallyAccepted", "Partly accepted"],
+      rejected: ["contribute.status.rejected", "Declined"],
+      failed: ["contribute.status.failed", "Not sent"],
+    };
+    function contributeStatusTone(status) {
+      if (status === "accepted" || status === "partially_accepted") return "good";
+      if (status === "rejected" || status === "failed") return "bad";
+      return "";
+    }
+    function renderContributeStatus(entity, contribution) {
+      const node = document.getElementById(
+        entity === "container" ? "containerContributeStatus" : "movieContributeStatus"
+      );
+      if (!node) return;
+      // Tone classes toggled rather than the whole className rewritten: both
+      // nodes are standing lines under their hero, and their placement classes
+      // live in the markup where this must not clobber them.
+      node.classList.remove("good", "bad");
+      if (!contribution || !contribution.status) {
+        node.classList.add("hidden");
+        node.textContent = "";
+        node.removeAttribute("title");
+        return;
+      }
+      const entry = CONTRIBUTE_STATUS_LABELS[contribution.status];
+      // An unrecognised status is shown verbatim rather than swallowed: a new
+      // state upstream should read as something unfamiliar, not as nothing.
+      const label = entry ? tNext(entry[0], entry[1]) : contribution.status;
+      const tone = contributeStatusTone(contribution.status);
+      node.classList.remove("hidden");
+      if (tone) node.classList.add(tone);
+      node.textContent = `${tNext("contribute.statusPrefix", "Your correction")}: ${label}`;
+      const detail = [];
+      if ((contribution.fields || []).length) {
+        detail.push(contribution.fields.map(contributeFieldLabel).join(", "));
+      }
+      if (contribution.lastError) detail.push(contribution.lastError);
+      if (detail.length) node.setAttribute("title", detail.join(" - "));
+      else node.removeAttribute("title");
+    }
+    function contributeSetMessage(entity, message, tone) {
+      if (entity === "container") setContainerDetailMessage(message, tone);
+      else setMovieDetailMessage(message, tone);
+    }
+    function openContributeDisabledDialog() {
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("contribute.disabledTitle", "Contributing is switched off");
+      const body = document.createElement("div");
+      body.className = "contribute-intro";
+      const lead = document.createElement("p");
+      lead.textContent = tNext(
+        "contribute.disabledLead",
+        "This DiscVault does not send anything to MovieVault. That is an owner setting, not a personal one, so agreeing to share here would change nothing."
+      );
+      const where = document.createElement("p");
+      where.textContent = tNext(
+        "contribute.disabledWhere",
+        "An owner can turn it on under Admin, Security, with Toggle Release Contribution. The same switch covers releases and field corrections."
+      );
+      body.appendChild(lead);
+      body.appendChild(where);
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "action secondary";
+      close.textContent = tNext("common.close", "Close");
+      close.addEventListener("click", () => listsCloseOverlay(overlay));
+      actions.appendChild(close);
+      panel.appendChild(heading);
+      panel.appendChild(body);
+      panel.appendChild(actions);
+      close.focus();
+    }
+    // Why the diff is empty, in the order a reader needs it: not in the
+    // catalogue beats withheld beats agreement, because the first makes the
+    // other two moot.
+    function contributeNothingToSendText(preview) {
+      if (preview.mode === "unavailable" || preview.mode === "proposal" || !preview.target) {
+        // Deliberately not "MovieVault has no release for this film". DiscVault
+        // compares against a *local mirror* of a published distribution
+        // generation, not against MovieVault, so a release approved upstream
+        // ten minutes ago is not a target here yet -- and telling the reader it
+        // does not exist sends them looking for a link they already made. The
+        // copy's age is true either way and is the fact that tells them apart.
+        const synced = formatLocalDateTime(preview.catalogueSyncedAt);
+        return synced
+          ? tNext(
+              "contribute.notInCatalogueCopy",
+              "This film is not in this server's copy of the MovieVault catalogue, which was last updated {when}. A release added or approved after that becomes correctable once the catalogue syncs again."
+            ).replace("{when}", synced)
+          : tNext(
+              "contribute.notInCatalogue",
+              "This film is not in this server's copy of the MovieVault catalogue, so there is nothing to compare against yet."
+            );
+      }
+      const withheld = Object.entries(preview.withheld || {});
+      if (withheld.length) {
+        const detail = preview.withheldDetail || {};
+        const named = withheld.map(([field, code]) => {
+          const reason = CONTRIBUTE_WITHHELD_REASONS[code];
+          const text = `${contributeFieldLabel(field)}: ${reason ? tNext(reason[0], reason[1]) : code}`;
+          return detail[field] ? `${text} (${detail[field]})` : text;
+        });
+        return `${tNext("contribute.nothingSendableTitle", "Nothing can be sent from this release right now.")} ${named.join(" ")}`;
+      }
+      return tNext("contribute.nothingToSend", "There is nothing to send.");
+    }
+
+    // Deliberately its own dialog rather than a mode of the correction sheet.
+    // The two are different acts: a correction states `expected` and must
+    // still match it at review time, while this proposes a record that does
+    // not exist and has nothing to conflict with. Sharing a screen would make
+    // one set of words describe both, and they are not the same promise.
+    async function openProposeReleaseDialog(entity, state, proposal) {
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("contribute.proposeTitle", "Add this release to MovieVault");
+      panel.appendChild(heading);
+
+      const lead = document.createElement("p");
+      lead.className = "contribute-intro";
+      lead.textContent = tNext(
+        "contribute.proposeLead",
+        "MovieVault has no release for this film yet. What you have recorded can be offered as a new one, and a moderator reviews it before it exists for anyone else."
+      );
+      panel.appendChild(lead);
+
+      // The same disclosure a correction gets, for the same reason: what
+      // leaves has to be visible before it leaves.
+      const release = proposal.release || {};
+      const rows = [
+        [tNext("movieDetail.releaseTitle", "Release title"), release.title],
+        [tNext("contribute.field.edition", "Edition"), release.edition],
+        [tNext("contribute.field.format", "Format"), release.format],
+        [tNext("contribute.field.discCount", "Disc count"), release.discCount],
+        [tNext("contribute.field.discRegions", "Disc regions"),
+         (release.regions || []).map(discRegionLabel).join(", ")],
+        [tNext("contribute.field.packaging", "Packaging"),
+         (release.packaging || []).map(packagingLabel).join(", ")],
+        [tNext("contribute.field.videoResolution", "Resolution"), (release.video || {}).resolution],
+        [tNext("contribute.field.audioTracks", "Audio tracks"), audioTracksText(release.audioTracks)],
+        [tNext("contribute.field.subtitles", "Subtitles"), subtitlesText(release.subtitles)],
+        [tNext("contribute.proposeBarcode", "Scanned barcode"), proposal.scannedBarcode],
+      ].filter(([, value]) => value !== undefined && value !== null && value !== "");
+      const list = document.createElement("div");
+      list.className = "contribute-changes";
+      rows.forEach(([label, value]) => {
+        const row = document.createElement("p");
+        row.className = "contribute-change-line";
+        row.textContent = `${label}: ${value}`;
+        list.appendChild(row);
+      });
+      panel.appendChild(list);
+
+      const never = document.createElement("p");
+      never.className = "contribute-intro";
+      never.textContent = tNext("contribute.introNever", "Your collection, viewing history, notes, location, purchase details and artwork are never sent.");
+      panel.appendChild(never);
+
+      const message = document.createElement("p");
+      message.className = "contribute-message";
+      panel.appendChild(message);
+
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "ghost-button";
+      cancel.textContent = tNext("common.cancel", "Cancel");
+      cancel.addEventListener("click", () => overlay.remove());
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "primary-button";
+      send.textContent = tNext("contribute.proposeSend", "Propose this release");
+      send.addEventListener("click", async () => {
+        send.disabled = true;
+        message.textContent = tNext("contribute.sending", "Sending...");
+        try {
+          await apiJson("/api/next/movievault/contributions/propose", {
+            method: "POST",
+            headers: authHeaders({"Content-Type": "application/json"}),
+            body: JSON.stringify({id: state.id})
+          });
+          overlay.remove();
+          contributeSetMessage(entity, tNext("contribute.proposeQueued", "Proposal sent for review."), "good");
+          await refreshContributeButton(entity, state.id);
+        } catch (error) {
+          send.disabled = false;
+          message.textContent = error.message || String(error);
+          message.className = "contribute-message bad";
+        }
+      });
+      actions.appendChild(cancel);
+      actions.appendChild(send);
+      panel.appendChild(actions);
+      cancel.focus();
+    }
+
+    async function openContributeDialog(entity) {
+      const state = contributeState[entity];
+      if (!state) return;
+      // Answered before the preview is fetched: with contributions off there
+      // is nothing to preview, and the useful answer is where the switch is
+      // rather than what would have been sent.
+      if (!state.ownerEnabled) {
+        openContributeDisabledDialog();
+        return;
+      }
+      let preview;
+      try {
+        preview = await apiJson("/api/next/movievault/contributions/preview", {
+          method: "POST",
+          headers: authHeaders({"Content-Type": "application/json"}),
+          body: JSON.stringify({entity, id: state.id})
+        });
+      } catch (error) {
+        contributeSetMessage(entity, error.message || String(error), "bad");
+        return;
+      }
+      const changes = preview.changes || [];
+      // A release the catalogue has never seen is the case where somebody
+      // holding the disc has the most to add, and until now it was the case
+      // the sheet did least with: it explained why there was nothing to
+      // correct and stopped. There is nothing to *correct* — there is
+      // something to propose.
+      if (!changes.length && preview.mode === "proposal" && preview.proposal
+          && Object.keys(preview.proposal).length) {
+        await openProposeReleaseDialog(entity, state, preview.proposal);
+        return;
+      }
+      if (!changes.length) {
+        // "There is nothing to send" was said to four different situations, and
+        // it is only true of one of them. A release the catalogue does not hold
+        // has nothing to correct *yet*; a field held back for a reason has
+        // something to say; and only an actual agreement is nothing to send.
+        // Reported as the same complaint twice -- "I changed it and it says
+        // nothing changed" -- because the message named the outcome and never
+        // the cause.
+        contributeSetMessage(entity, contributeNothingToSendText(preview), "");
+        await refreshContributeButton(entity, state.id);
+        return;
+      }
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const selected = new Set(changes.map((change) => change.field));
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("contribute.title", "Send corrections to MovieVault");
+      panel.appendChild(heading);
+
+      // The first-run explanation is not a nicety: agreeing to it is what turns
+      // sharing on, so it has to state what leaves and what never does before
+      // anything can be sent. Afterwards it is repeated only for the user who
+      // asked to be reminded every time; the diff below is shown regardless,
+      // because the contract requires explicit per-field confirmation.
+      if (!state.enabled || preferences.confirm_every_upload) {
+        const intro = document.createElement("div");
+        intro.className = "contribute-intro";
+        const lead = document.createElement("p");
+        lead.textContent = tNext("contribute.introLead", "Corrections you send are reviewed by a MovieVault moderator before anything changes for anyone else.");
+        const sends = document.createElement("p");
+        sends.textContent = tNext("contribute.introSends", "Only the fields listed below travel, together with the value MovieVault currently holds so the moderator can compare them.");
+        const never = document.createElement("p");
+        never.textContent = tNext("contribute.introNever", "Your collection, viewing history, notes, location, purchase details and artwork are never sent.");
+        intro.appendChild(lead);
+        intro.appendChild(sends);
+        intro.appendChild(never);
+        panel.appendChild(intro);
+      }
+
+      // Said out loud, because the two are not equally trustworthy: a diff
+      // computed against the local mirror is as old as the last catalogue
+      // sync, and the value shown may already have moved.
+      if (preview.comparedAgainst === "mirror") {
+        const stale = document.createElement("p");
+        stale.className = "contribute-stale";
+        stale.textContent = tNext(
+          "contribute.comparedAgainstMirror",
+          "Compared against this DiscVault's copy of the catalogue, which may be behind. A value that has moved since is refused at review rather than applied."
+        );
+        panel.appendChild(stale);
+      }
+
+      const list = document.createElement("div");
+      list.className = "contribute-changes";
+      changes.forEach((change) => {
+        const row = document.createElement("label");
+        row.className = "contribute-change";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = true;
+        box.addEventListener("change", () => {
+          if (box.checked) selected.add(change.field);
+          else selected.delete(change.field);
+          send.disabled = selected.size === 0;
+        });
+        const body = document.createElement("span");
+        body.className = "contribute-change-body";
+        const name = document.createElement("strong");
+        name.textContent = contributeFieldLabel(change.field);
+        // A grid rather than two sentences: the point of the row is the
+        // comparison, and two values only compare if they start at the same
+        // place. Prefixed prose put them at different offsets on every field.
+        const compare = document.createElement("span");
+        compare.className = "contribute-change-compare";
+        [
+          ["from", tNext("contribute.currently", "MovieVault has"), change.expected],
+          ["to", tNext("contribute.proposed", "You propose"), change.proposed],
+        ].forEach(([side, label, value]) => {
+          const key = document.createElement("span");
+          key.className = `contribute-change-key contribute-change-key-${side}`;
+          key.textContent = label;
+          const cell = document.createElement("span");
+          cell.className = `contribute-change-${side}`;
+          contributeValueLines(value, change.field).forEach((line) => {
+            const entry = document.createElement("span");
+            entry.className = "contribute-change-line";
+            entry.textContent = line;
+            cell.appendChild(entry);
+          });
+          compare.appendChild(key);
+          compare.appendChild(cell);
+        });
+        body.appendChild(name);
+        body.appendChild(compare);
+        row.appendChild(box);
+        row.appendChild(body);
+        list.appendChild(row);
+      });
+      panel.appendChild(list);
+
+      // Named, with the reason. A user who wonders why the barcode they fixed
+      // is not in the list gets an answer instead of assuming a bug.
+      const withheld = Object.entries(preview.withheld || {});
+      if (withheld.length) {
+        const note = document.createElement("details");
+        note.className = "contribute-withheld";
+        const summary = document.createElement("summary");
+        summary.textContent = tNext("contribute.withheldTitle", "Fields that are never sent");
+        note.appendChild(summary);
+        withheld.forEach(([field, code]) => {
+          const line = document.createElement("p");
+          const reason = CONTRIBUTE_WITHHELD_REASONS[code];
+          // The offending entry, quoted back. A reason a user can act on has to
+          // say which row to act on -- "one track is free text" across a box set
+          // of six discs is a search, not an answer.
+          const detail = (preview.withheldDetail || {})[field];
+          const text = `${contributeFieldLabel(field)}: ${reason ? tNext(reason[0], reason[1]) : code}`;
+          line.textContent = detail ? `${text} (${detail})` : text;
+          note.appendChild(line);
+        });
+        panel.appendChild(note);
+      }
+
+      const message = document.createElement("p");
+      message.className = "contribute-message";
+      panel.appendChild(message);
+
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "action secondary";
+      cancel.textContent = tNext("common.cancel", "Cancel");
+      cancel.addEventListener("click", () => listsCloseOverlay(overlay));
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "action";
+      send.textContent = state.enabled
+        ? tNext("contribute.send", "Send")
+        : tNext("contribute.agreeAndSend", "Agree and send");
+      send.addEventListener("click", async () => {
+        send.disabled = true;
+        message.textContent = tNext("contribute.sending", "Sending...");
+        try {
+          if (!state.enabled) {
+            // Consent precedes the send, and is stored, so the sheet explains
+            // itself once rather than on every correction.
+            await apiJson("/api/next/preferences", {
+              method: "PATCH",
+              headers: authHeaders({"Content-Type": "application/json"}),
+              body: JSON.stringify({preferences: {share_field_corrections: true}})
+            });
+            preferences = Object.assign({}, preferences, {share_field_corrections: true});
+            state.enabled = true;
+            renderPreferences();
+          }
+          const result = await apiJson("/api/next/movievault/contributions/submit", {
+            method: "POST",
+            headers: authHeaders({"Content-Type": "application/json"}),
+            body: JSON.stringify({entity, id: state.id, fields: Array.from(selected)})
+          });
+          listsCloseOverlay(overlay);
+          contributeSetMessage(
+            entity,
+            result.queued
+              ? tNext("contribute.queued", "Sent for moderation. A moderator decides whether it is applied.")
+              : tNext("contribute.notQueued", "Nothing was sent."),
+            result.queued ? "good" : ""
+          );
+          await refreshContributeButton(entity, state.id);
+        } catch (error) {
+          send.disabled = false;
+          message.textContent = error.message || String(error);
+        }
+      });
+      actions.appendChild(cancel);
+      actions.appendChild(send);
+      panel.appendChild(actions);
+      send.focus();
+    }
     function renderMovieDetail(detail) {
       activeDetailPayload = detail;
       const movie = detail.movie || {};
+      // Deliberately not awaited: this render must not wait on a MovieVault
+      // round trip, and the button appearing a beat late is the correct
+      // trade against a detail screen that stalls when MovieVault is slow.
+      void refreshContributeButton("movie", movie.id);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
@@ -28397,11 +31211,28 @@ def ui_preview_html(
       ]);
       fillMovieEditForm(detail);
       renderMovieListState(detail);
-      const mvIds = movieVaultExternalIds(movie, metadata);
+      const mvIds = movieVaultExternalIds(movie, metadata, detail.identifiers);
       const releaseContainers = (detail.containers || []).filter((container) => container && container.title);
       const releaseContainerText = releaseContainers.map((container) => container.title).join(", ");
       const releaseContainerHtml = containerLinksHtml(releaseContainers);
+      // Prefer the axes; fall back to the flat list, then to the free-text
+      // edition fields, which is where packaging used to be typed by hand.
       const releasePackaging = specs.packaging || metadata.packaging || movie.edition_type || movie.edition;
+      const releaseLegacySplit = splitLegacyPackaging(
+        Array.isArray(releasePackaging) ? releasePackaging : []
+      );
+      const releaseCarrier = specs.carrier_type || metadata.carrier_type || releaseLegacySplit.carrier;
+      const releaseOuter = (specs.outer_packaging && specs.outer_packaging.length)
+        ? specs.outer_packaging
+        : ((metadata.outer_packaging && metadata.outer_packaging.length)
+          ? metadata.outer_packaging
+          : releaseLegacySplit.outer);
+      const releaseFinishes = specs.finishes || metadata.finishes;
+      const releaseSteelbookFormat = specs.steelbook_format || metadata.steelbook_format;
+      const releaseCarrierText = [
+        carrierTypeLabel(releaseCarrier),
+        releaseSteelbookFormat ? steelbookFormatLabel(releaseSteelbookFormat) : ""
+      ].filter(Boolean).join(" ");
       document.getElementById("movieDetailRelease").innerHTML = detailFieldRows([
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title],
         [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title],
@@ -28414,18 +31245,38 @@ def ui_preview_html(
         [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
         [tNext("movieDetail.contentRating", "Content rating"), {text: contentRating, html: contentRatingValueHtml(contentRatingInfo)}],
-        ...(appDebugMode && (mvIds.movieId || movie.id) ? [[tNext("movieDetail.movieId", "Movie ID"), mvIds.movieId || movie.id]] : [])
+        ...(appDebugMode
+          ? [[
+              tNext("movieDetail.movieId", "Movie ID"),
+              mvIds.movieId
+                ? mvIds.movieId
+                : tNext("movieDetail.movieIdLocalOnly", "Not linked to MovieVault (local id {id})").replace("{id}", movie.id || "-")
+            ]]
+          : [])
       ]);
+      // Once the release names its discs, the release-level row is a *derivation*
+      // of them (the union), so printing it in full and then repeating the same
+      // values per disc below states one fact twice and calls the summary an
+      // authored value. One disc is enough: that is when the derivation starts.
+      const hasDiscs = Array.isArray(detail.discs) && detail.discs.length > 0;
+      // Tagged with the field name so the derived ones can be dropped once the
+      // release has discs -- the same set the editor hides, named the same way,
+      // rather than a second list that agrees with this one until it does not.
+      // `format` and `runtime` are deliberately untagged: they sit in this block
+      // and are authored release facts, so hiding the block wholesale would take
+      // them with it.
       const audioVideoFields = [
-        [tNext("movieDetail.hdr", "HDR"), enumListText(specs.hdr || metadata.hdr, hdrFormatLabel)],
-        [tNext("movieDetail.videoResolution", "Resolution"), specs.video_resolution || metadata.video_resolution],
-        [tNext("movieDetail.videoCodecs", "Video codec"), enumListText(specs.video_codecs || metadata.video_codecs, videoCodecLabel)],
-        [tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
-        [tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format || specs.format || metadata.format)],
-        [tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
-        [tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],
-        [tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]
-      ];
+        ["hdr", tNext("movieDetail.hdr", "HDR"), enumListText(specs.hdr || metadata.hdr, hdrFormatLabel)],
+        ["video_resolution", tNext("movieDetail.videoResolution", "Resolution"), specs.video_resolution || metadata.video_resolution],
+        ["video_codecs", tNext("movieDetail.videoCodecs", "Video codec"), enumListText(specs.video_codecs || metadata.video_codecs, videoCodecLabel)],
+        ["screen_ratios", tNext("movieDetail.screenRatio", "Screen ratio"), specs.screen_ratios || metadata.screen_ratios],
+        [null, tNext("movieDetail.format", "Format"), physicalFormatLabel(movie.format || specs.format || metadata.format)],
+        [null, tNext("movieDetail.runtime", "Runtime"), formatRuntimeDetail(movie.runtime_minutes)],
+        ["audio_tracks", tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],
+        ["subtitles", tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]
+      ]
+        .filter(([field]) => !(hasDiscs && MOVIE_DERIVED_RELEASE_FIELDS.includes(field)))
+        .map(([, label, value]) => [label, value]);
       const releaseLocationText = typeof movie.location === "string" ? movie.location : "";
       const storageLocationLabel = movie.location && typeof movie.location === "object"
         ? movie.location.pathLabel || movie.location.name || ""
@@ -28433,7 +31284,9 @@ def ui_preview_html(
       const storageLocationHtml = storageLocationLabel ? locationRouteLinkHtml(movie.location, storageLocationLabel) : "";
       const collectorsFields = [
         [tNext("movieDetail.edition", "Edition"), movie.edition],
-        [tNext("movieDetail.packaging", "Packaging"), enumListText(releasePackaging, packagingLabel)],
+        [tNext("movieDetail.carrierType", "Case type"), releaseCarrierText],
+        [tNext("movieDetail.outerPackaging", "Outer packaging"), enumListText(releaseOuter, outerPackagingLabel)],
+        [tNext("movieDetail.finishes", "Finish"), enumListText(releaseFinishes, finishLabel)],
         [tNext("movieDetail.regions", "Regions"), enumListText(specs.regions || metadata.regions, discRegionLabel)],
         [tNext("movieDetail.location", "Location"), releaseLocationText],
         [tNext("locations.assign", "Storage location"), storageLocationHtml ? {text: storageLocationLabel, html: storageLocationHtml} : storageLocationLabel],
@@ -28449,12 +31302,50 @@ def ui_preview_html(
                 : tNext("movieDetail.estimatedValueLocked", "Managed by the box-set this film belongs to"))
             : formatEstimatedValue(movie.estimated_value, movie.estimated_value_currency)
         ],
-        ...(appDebugMode && (mvIds.releaseId || movie.public_id) ? [[tNext("movieDetail.releaseId", "Release ID"), mvIds.releaseId || movie.public_id]] : [])
+        // Two different ids with one label was actively misleading: with no
+        // MovieVault link this fell back to DiscVault's own `public_id`, and a
+        // reader checking whether the film is in the catalogue saw an id and
+        // concluded it is. Say which one is on screen, and say plainly when
+        // there is no upstream release -- that absence is the answer to "why
+        // is there nothing to correct".
+        ...(appDebugMode
+          ? [[
+              tNext("movieDetail.releaseId", "Release ID"),
+              mvIds.releaseId
+                ? mvIds.releaseId
+                : tNext("movieDetail.releaseIdLocalOnly", "Not linked to MovieVault (local id {id})").replace("{id}", movie.public_id || "-")
+            ]]
+          : [])
       ];
       document.getElementById("movieDetailTechnical").innerHTML = detailFieldRows(audioVideoFields);
+      // Says the derived rows are missing on purpose. Without it the block just
+      // looks short, and a reader cannot tell "not recorded" from "listed per
+      // disc below" -- which is the whole reason the rows were dropped.
+      const summarised = document.getElementById("movieDetailTechnicalSummarised");
+      if (summarised) {
+        summarised.classList.toggle("hidden", !hasDiscs);
+        summarised.textContent = tNext(
+          "movieDetail.technicalSummarisedByDiscs",
+          "Resolution, HDR, codecs, ratios, regions, audio and subtitles are listed per disc below."
+        );
+      }
+      renderMovieDetailDiscs(detail.discs);
       document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
       bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
+      // The change history is a diagnostic surface, like the debug cards below
+      // it: it answers "what rewrote this" when something looks wrong, which is
+      // not a question a normal viewing of a film asks. Hiding the tab rather
+      // than the route -- the route is permission-checked and iOS and Android
+      // must be able to read the history without a browser-local flag.
+      const historyTab = document.getElementById("movieDetailHistoryTab");
+      const historyPanel = document.getElementById("movieDetailHistoryPanel");
+      if (historyTab) historyTab.classList.toggle("hidden", !appDebugMode);
+      if (historyPanel && !appDebugMode && !historyPanel.classList.contains("hidden")) {
+        // Turning debug off while standing on History would otherwise leave the
+        // reader on a panel whose tab has just disappeared.
+        activateDetailTab("movieSections", "movieDetailReleasePanel");
+      }
       const debugLocalizationCard = document.getElementById("movieDetailDebugLocalizationsCard");
       const debugLocalizationList = document.getElementById("movieDetailDebugLocalizations");
       if (debugLocalizationCard) debugLocalizationCard.classList.toggle("hidden", !appDebugMode);
@@ -28574,6 +31465,10 @@ def ui_preview_html(
       activeDetailMovieId = movieId || "";
       activeDetailPayload = null;
       movieArtworkHiddenKinds.clear();
+      // Another film's pressings must never survive onto this page.
+      movieDetailReleaseCandidates = null;
+      const releaseCandidatesHost = document.getElementById("movieDetailReleaseCandidates");
+      if (releaseCandidatesHost) releaseCandidatesHost.innerHTML = "";
       movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: ""};
       setMovieEditPanelVisible(false);
       activateDetailTab("movieSections", "movieDetailReleasePanel");
@@ -28690,7 +31585,7 @@ def ui_preview_html(
       const node = document.getElementById("containerDetailMessage");
       if (!node) return;
       node.textContent = message || "";
-      node.className = `detail-message ${tone || ""}`.trim();
+      node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
     }
     function setContainerEditPanelVisible(show) {
       const panel = document.getElementById("containerEditPanel");
@@ -28704,11 +31599,11 @@ def ui_preview_html(
       panel.classList.toggle("hidden", !editing);
       if (addPanel) addPanel.classList.toggle("hidden", !editing);
       if (page) page.classList.toggle("container-editing", editing);
-      if (editButton) {
-        editButton.dataset.nextI18n = editing ? "common.save" : "common.edit";
-        editButton.textContent = editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
-        editButton.classList.toggle("secondary", !editing);
-      }
+      // The form lives inside the Overview panel: pressing Edit from the Movies
+      // tab used to open a panel the reader could not see, which reads as the
+      // button doing nothing at all.
+      if (editing) activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      setDetailEditToggleState(editButton, "containerEditToggleLabel", "containerEditToggleIcon", editing);
       if (cancelButton) cancelButton.classList.toggle("hidden", !editing);
       if (editing) document.getElementById("containerEditTitle")?.focus();
     }
@@ -28846,7 +31741,7 @@ def ui_preview_html(
     }
     function setContainerMemberGridMode(node, mode) {
       if (!node) return;
-      const normalized = normalizeViewMode(mode);
+      const normalized = normalizeMemberViewMode(mode);
       node.classList.toggle("view-list", normalized === "list");
       node.classList.toggle("view-detail", normalized === "detail");
     }
@@ -28914,6 +31809,7 @@ def ui_preview_html(
       activeContainerPayload = detail;
       const container = detail.container || {};
       activeContainerId = container.id || activeContainerId || "";
+      void refreshContributeButton("container", container.container_type === "box_set" ? activeContainerId : "");
       const metadata = container.metadata || {};
       const poster = containerMediaImage(detail, "poster");
       const backdrop = containerMediaImage(detail, "backdrop");
@@ -29018,6 +31914,725 @@ def ui_preview_html(
       syncContainerViewModeControls();
       setContainerDetailMessage("");
       applyAppPermissionVisibility();
+    }
+    function setSeriesDetailMessage(message, tone) {
+      const node = document.getElementById("seriesDetailMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
+    }
+    function setSeriesEditPanelVisible(show) {
+      const card = document.getElementById("seriesEditCard");
+      if (card) card.hidden = !show;
+      document.getElementById("seriesDetailPage")?.classList.toggle("series-editing", !!show);
+      setDetailEditToggleState(
+        document.getElementById("seriesEditToggleButton"),
+        "seriesEditToggleLabel",
+        "seriesEditToggleIcon",
+        !!show
+      );
+      setElementVisible(document.getElementById("seriesEditCancelTopButton"), show);
+    }
+    function seriesDiscSeasonLabel(detail, movieId) {
+      const rows = (detail.seasonCoverage || []).filter((row) => String(row.movieId) === String(movieId));
+      // Zero rows on a linked disc is the complete-series set. Rendering it as
+      // "no seasons" would state the opposite of what the disc actually is.
+      if (!rows.length) return tNext("seriesDetail.completeSeries", "Complete series");
+      const numbers = rows
+        .map((row) => Number.parseInt(row.seasonNumber, 10))
+        .filter((value) => Number.isFinite(value))
+        .sort((a, b) => a - b);
+      if (!numbers.length) return "";
+      return tNext("collection.seasonsCovered", "Seasons {covered}").replace("{covered}", numbers.join(", "));
+    }
+    function seriesArtworkOptionsHtml(detail, kind, emptyKey) {
+      const ownAssets = (detail.mediaAssets || []).filter((asset) => asset.kind === kind && !asset.hidden);
+      const inherited = (detail.aggregateMediaAssets || []).filter((asset) => asset.kind === kind);
+      if (!ownAssets.length && !inherited.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext(emptyKey || "movieDetail.noArtwork", "No artwork options yet."))}</div>`;
+      }
+      const metadata = (detail.series || {}).metadata || {};
+      // Own artwork first and actionable; inherited artwork after it and read
+      // only, because deleting a disc's poster from the series page would reach
+      // into a disc the reader did not open.
+      const own = ownAssets.map((asset) => containerArtworkOptionCardHtml(asset, kind, {
+        aggregate: false,
+        canDelete: true,
+        metadata,
+        entity: "series",
+      })).join("");
+      const borrowed = inherited.map((asset) => containerArtworkOptionCardHtml(asset, kind, {
+        aggregate: true,
+        canDelete: false,
+        metadata,
+        entity: "series",
+      })).join("");
+      return own + borrowed;
+    }
+    function renderSeriesDiscs(detail) {
+      const node = document.getElementById("seriesDetailDiscs");
+      if (!node) return;
+      const discs = detail.discs || [];
+      if (!discs.length) {
+        node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noDiscs", "No discs are filed under this series yet."))}</div>`;
+        setContainerMemberGridMode(node, seriesDiscsViewMode);
+        return;
+      }
+      const decorated = discs.map((disc) => Object.assign({}, disc, {
+        edition: disc.edition || seriesDiscSeasonLabel(detail, disc.id),
+      }));
+      const entries = decorated.map((disc, index) => ({
+        type: "movie", item: disc, index, total: decorated.length, canEdit: false, options: {},
+      }));
+      if (seriesDiscsViewMode === "detail") {
+        node.innerHTML = seriesDiscDetailTableHtml(entries);
+      } else if (seriesDiscsViewMode === "list") {
+        node.innerHTML = entries.map((entry) => containerMemberMovieListHtml(entry.item, entry.index, entry.total, false, {})).join("");
+      } else {
+        node.innerHTML = entries.map((entry) => containerMemberMovieCardHtml(entry.item, entry.index, entry.total, false, {})).join("");
+      }
+      setContainerMemberGridMode(node, seriesDiscsViewMode);
+    }
+    function seriesDiscDetailTableHtml(entries) {
+      // Sortable column headers, unlike the container detail table, which has
+      // fixed ones. A series is read to answer "which season am I missing", and
+      // that question is a sort away rather than a scan away.
+      const items = entries.map((entry) => ({kind: "movie", movie: entry.item, title: entry.item.title || ""}));
+      return detailTableHtml(items, "series", seriesDetailSort);
+    }
+    function syncSeriesViewModeControls() {
+      document.querySelectorAll("[data-series-view-mode]").forEach((button) => {
+        const active = button.dataset.seriesViewMode === seriesDiscsViewMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+    function seriesSeasonRowsHtml(detail) {
+      const seasons = ((detail.series || {}).seasons) || [];
+      if (!seasons.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noSeasons", "No seasons recorded for this series yet."))}</div>`;
+      }
+      const coveredNumbers = new Set(
+        (detail.seasonCoverage || [])
+          .map((row) => Number.parseInt(row.seasonNumber, 10))
+          .filter((value) => Number.isFinite(value))
+      );
+      // A season with a poster becomes a card; one without stays the plain row it
+      // has always been. Not a uniform grid of placeholders: a series where only
+      // half the seasons resolved would then read as half-broken rather than
+      // half-illustrated.
+      // Also when Collectors mode is on: the episode toggle needs a row to live
+      // in, and falling back to the plain text rows would make episodes reachable
+      // only for series whose artwork happened to resolve.
+      const anyPoster = seasons.some((season) => season.posterUrl) || collectorsModeEnabled();
+      const rows = seasons.map((season) => {
+        const label = season.title
+          ? `${season.seasonNumber} - ${season.title}`
+          : tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
+        const owned = coveredNumbers.has(Number.parseInt(season.seasonNumber, 10));
+        const parts = [
+          owned ? tNext("seriesDetail.seasonOwned", "In your collection") : tNext("seriesDetail.seasonMissing", "Not on a disc yet"),
+          season.year || "",
+          season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
+        ].filter(Boolean);
+        return {season, label, owned, meta: parts.join(" / ")};
+      });
+      // Said once, under the list, and after the shape split above so both the
+      // plain rows and the card list carry it. Absence explains nothing: without
+      // this the missing episode button is indistinguishable from a series that
+      // has no episodes, which is the same collapse of distinct outcomes this
+      // page has had to be fixed for three times already.
+      //
+      // It names the reason rather than only the switch. Opening a season costs
+      // one request per season at the source; that is what the switch is for,
+      // and a gate whose reason is unstated reads as an arbitrary obstacle.
+      const episodesHint = collectorsModeEnabled()
+        ? ""
+        : `<p class="import-source-meta">${escapeHtml(tNext("seriesDetail.episodesCollectorsHint", "Turn on Collectors mode to open a season and see its episodes. They are fetched one request per season, so the switch decides who pays for it."))}</p>`;
+      if (!anyPoster) {
+        return detailFieldRows(rows.map((row) => [row.label, row.meta])) + episodesHint;
+      }
+      return `<div class="series-season-list">${rows.map((row) => seriesSeasonRowHtml(row)).join("")}</div>${episodesHint}`;
+    }
+    function seriesSeasonRowHtml(row) {
+      // The episode affordance appears only with Collectors mode on. Fetching an
+      // episode list costs one request per season at the source, so the switch is
+      // not decoration -- it is who agreed to pay for it.
+      const episodes = collectorsModeEnabled()
+        ? `<button type="button" class="secondary-button series-season-episodes-toggle" data-season-episodes="${escapeHtml(row.season.id || "")}">${escapeHtml(tNext("seriesDetail.episodes", "Episodes"))}</button>`
+        : "";
+      // `is-owned` marks a season a disc in the collection covers. Stated as a
+      // border and a badge rather than only in the meta line, because the one
+      // question this list answers at a glance is which seasons are missing.
+      return `
+        <div class="series-season-item">
+        <div class="series-season-row${row.owned ? " is-owned" : ""}">
+          <div class="series-season-thumb">${row.season.posterUrl
+            ? `<img src="${escapeHtml(row.season.posterUrl)}" alt="${escapeHtml(row.label)}" loading="lazy">`
+            : ""}</div>
+          <div class="series-season-text">
+            <strong>${escapeHtml(row.label)}</strong>
+            <span>${escapeHtml(row.meta)}</span>
+          </div>
+          ${episodes}
+        </div>
+        <div class="series-episode-list hidden" data-season-episode-list="${escapeHtml(row.season.id || "")}"></div>
+        </div>`;
+    }
+    function seriesEpisodeRowsHtml(episodes) {
+      if (!episodes.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noEpisodes", "No episodes known for this season yet."))}</div>`;
+      }
+      return episodes.map((episode) => {
+        const parts = [
+          episode.airDate || "",
+          episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : "",
+          episode.onDisc
+            ? tNext("seriesDetail.episodeOnDisc", "On a disc")
+            : tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"),
+        ].filter(Boolean);
+        const watched = Boolean(episode.watchedAt);
+        return `
+          <div class="series-episode-row${episode.onDisc ? "" : " is-missing"}">
+            <span class="series-episode-number">${escapeHtml(String(episode.episodeNumber))}</span>
+            <div class="series-episode-text">
+              <strong>${escapeHtml(episode.title || tNext("common.untitled", "Untitled"))}</strong>
+              <span>${escapeHtml(parts.join(" / "))}</span>
+            </div>
+            <button type="button" class="secondary-button${watched ? " active" : ""}"
+                    data-episode-watched="${escapeHtml(episode.id)}"
+                    data-watched="${watched ? "1" : "0"}"
+                    aria-pressed="${watched ? "true" : "false"}">${escapeHtml(
+                      watched ? tNext("seriesDetail.episodeWatched", "Watched") : tNext("seriesDetail.markEpisodeWatched", "Mark watched")
+                    )}</button>
+          </div>`;
+      }).join("");
+    }
+    async function toggleSeasonEpisodes(seasonId) {
+      const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);
+      if (!node) return;
+      if (!node.classList.contains("hidden")) {
+        node.classList.add("hidden");
+        return;
+      }
+      node.classList.remove("hidden");
+      node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("common.loading", "Loading..."))}</div>`;
+      try {
+        let payload = await authApiJson(`/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes`);
+        if (!(payload.episodes || []).length && hasPermission("metadata.refresh_one")) {
+          // Nothing stored yet, so fetch once rather than showing an empty list
+          // the reader would have to know to refresh. Re-opening a populated
+          // season costs no request at all.
+          payload = await authApiJson(
+            `/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes/refresh`,
+            {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})}
+          );
+          const result = payload.result || {};
+          if (!(payload.episodes || []).length && result.status !== "ok") {
+            node.innerHTML = `<div class="preview-empty">${escapeHtml(seriesRefreshExplanation(result))}</div>`;
+            return;
+          }
+        }
+        node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+      } catch (error) {
+        node.innerHTML = `<div class="preview-empty bad">${escapeHtml(error.message || String(error))}</div>`;
+      }
+    }
+    async function toggleEpisodeWatched(button) {
+      const episodeId = button.dataset.episodeWatched;
+      const watched = button.dataset.watched === "1";
+      if (!episodeId || !hasPermission("watchlist.manage")) return;
+      const node = button.closest("[data-season-episode-list]")
+        || button.parentElement?.closest("[data-season-episode-list]");
+      button.disabled = true;
+      try {
+        const payload = await authApiJson(
+          `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watched`,
+          watched
+            ? {method: "DELETE"}
+            : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})}
+        );
+        if (node) node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      } finally {
+        button.disabled = false;
+      }
+    }
+    function renderSeriesDetail(detail) {
+      activeSeriesPayload = detail || {};
+      const series = detail.series || {};
+      activeSeriesId = String(series.id || activeSeriesId || "");
+      const activePanelId = activeDetailPanel("seriesDetail", "seriesDetailDiscsPanel");
+      const discs = detail.discs || [];
+      const poster = mediaAssetImage(detail.mediaAssets, "poster")
+        || mediaAssetImage(detail.aggregateMediaAssets, "poster");
+      const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop")
+        || mediaAssetImage(detail.aggregateMediaAssets, "backdrop");
+      const hero = document.getElementById("seriesDetailHero");
+      if (hero) hero.classList.toggle("is-flat", !backdrop);
+      const backdropNode = document.getElementById("seriesDetailBackdrop");
+      if (backdropNode) backdropNode.src = backdrop || "";
+      const posterNode = document.getElementById("seriesDetailPoster");
+      if (posterNode) {
+        posterNode.innerHTML = poster
+          ? `<img src="${escapeHtml(poster)}" alt="">`
+          : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      }
+      document.getElementById("seriesDetailTitle").textContent = series.title || tNext("common.untitled", "Untitled");
+      const years = [series.startYear, series.endYear].filter(Boolean);
+      const yearLabel = years.length === 2 && years[0] !== years[1] ? `${years[0]}-${years[1]}` : (years[0] || "");
+      document.getElementById("seriesDetailTags").innerHTML = [
+        yearLabel,
+        series.originalTitle && series.originalTitle !== series.title ? series.originalTitle : "",
+      ].filter(Boolean).map((value) => `<span class="tag">${escapeHtml(value)}</span>`).join("");
+      document.getElementById("seriesDetailOverview").textContent = series.overview || "";
+      document.getElementById("seriesDetailOverviewText").textContent = series.overview
+        || tNext("seriesDetail.noOverview", "No description yet.");
+      const seasonCount = (series.seasons || []).length;
+      document.getElementById("seriesDetailStats").innerHTML = [
+        `${discs.length} ${tNext("seriesDetail.discsLower", "discs")}`,
+        `${seasonCount} ${tNext("movieDetail.seasons", "Seasons").toLowerCase()}`,
+      ].map((value) => `<span>${escapeHtml(value)}</span>`).join("");
+      renderSeriesDiscs(detail);
+      syncSeriesViewModeControls();
+      document.getElementById("seriesDetailSeasons").innerHTML = seriesSeasonRowsHtml(detail);
+      document.getElementById("seriesDetailPosterArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
+      document.getElementById("seriesDetailBackdropArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      document.getElementById("seriesDetailVideos").innerHTML = movieVideoGroupsHtml(detail.aggregateVideos || []);
+      const identifiers = (detail.identifiers || []).map((item) => miniCard(
+        `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
+        item.identifier
+      ));
+      document.getElementById("seriesDetailIdentifiers").innerHTML = identifiers.join("")
+        || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
+      // The search box is only useful to somebody who may change the series, and
+      // only honest while it can actually do something.
+      const identityBox = document.querySelector(".series-identity-search");
+      if (identityBox) identityBox.classList.toggle("hidden", !hasPermission("containers.edit"));
+      const identityInput = document.getElementById("seriesIdentitySearchInput");
+      if (identityInput && !identityInput.value) identityInput.value = series.title || "";
+      renderSeriesIdentityCandidates();
+      const summary = detail.aggregateSummary || {};
+      document.getElementById("seriesDetailMetadataDetails").innerHTML = detailFieldRows([
+        [tNext("seriesDetail.discCount", "Discs"), discs.length],
+        [tNext("movieDetail.seasons", "Seasons"), seasonCount],
+        [tNext("containerDetail.aggregateYearRange", "Year range"), summary.yearRange],
+        [tNext("containerDetail.aggregateFormats", "Formats"), summary.formats],
+        [tNext("containerDetail.aggregateArtwork", "Artwork"), summary.artwork],
+        [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount],
+      ]);
+      fillSeriesEditForm(series);
+      activateDetailTab("seriesDetail", document.getElementById(activePanelId) ? activePanelId : "seriesDetailDiscsPanel");
+      applyAppPermissionVisibility();
+      bindViewModeInteractions(document.getElementById("seriesDetailPage") || document);
+      setSeriesDetailMessage("");
+    }
+    function fillSeriesEditForm(series) {
+      const values = {
+        seriesEditTitle: series.title || "",
+        seriesEditSortTitle: series.sortTitle || "",
+        seriesEditOriginalTitle: series.originalTitle || "",
+        seriesEditStartYear: series.startYear || "",
+        seriesEditEndYear: series.endYear || "",
+        seriesEditOverview: series.overview || "",
+      };
+      Object.entries(values).forEach(([id, value]) => {
+        const node = document.getElementById(id);
+        if (node && document.activeElement !== node) node.value = value;
+      });
+    }
+    function showSeriesDetailLoading(seriesId) {
+      activeSeriesId = seriesId || "";
+      activeSeriesPayload = null;
+      setSeriesEditPanelVisible(false);
+      document.getElementById("seriesDetailTitle").textContent = tNext("collection.loading", "Loading...");
+      document.getElementById("seriesDetailOverview").textContent = "";
+      document.getElementById("seriesDetailOverviewText").textContent = "";
+      document.getElementById("seriesDetailTags").innerHTML = "";
+      document.getElementById("seriesDetailStats").innerHTML = "";
+      document.getElementById("seriesDetailDiscs").innerHTML = "";
+      document.getElementById("seriesDetailSeasons").innerHTML = "";
+      document.getElementById("seriesDetailIdentifiers").innerHTML = "";
+      document.getElementById("seriesDetailMetadataDetails").innerHTML = "";
+      document.getElementById("seriesDetailPosterArtwork").innerHTML = "";
+      document.getElementById("seriesDetailBackdropArtwork").innerHTML = "";
+      document.getElementById("seriesDetailVideos").innerHTML = "";
+      document.getElementById("seriesDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
+      document.getElementById("seriesDetailBackdrop").src = "";
+      activateDetailTab("seriesDetail", "seriesDetailDiscsPanel");
+      setSeriesDetailMessage("");
+    }
+    async function openAppSeriesDetail(seriesId, pushUrl = true) {
+      if (!seriesId) return;
+      activeDetailMovieId = "";
+      activeDetailPayload = null;
+      activeContainerId = "";
+      activeContainerPayload = null;
+      activePersonId = "";
+      activePersonPayload = null;
+      // A candidate list belongs to the query that produced it. Carrying one into
+      // another series is how somebody links the wrong show without noticing.
+      seriesIdentityCandidates = [];
+      seriesSeasonOffer = [];
+      showSeriesDetailLoading(seriesId);
+      showSeriesDetailPage();
+      if (pushUrl && appMode) {
+        const nextPath = `/series/${encodeURIComponent(seriesId)}`;
+        if (window.location.pathname !== nextPath) {
+          history.pushState({seriesId}, "", nextPath);
+        }
+      }
+      try {
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(seriesId)}/detail`);
+        renderSeriesDetail(payload.detail || {});
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function closeAppSeriesDetail(pushUrl = true) {
+      showLibraryPage(false);
+      activeSeriesId = "";
+      activeSeriesPayload = null;
+      setSeriesEditPanelVisible(false);
+      if (pushUrl && appMode && window.location.pathname !== "/") {
+        history.pushState({}, "", "/");
+      }
+    }
+    async function saveSeriesEdit(event) {
+      event?.preventDefault();
+      if (!activeSeriesId) return;
+      const body = {
+        title: document.getElementById("seriesEditTitle")?.value?.trim() || "",
+        sortTitle: document.getElementById("seriesEditSortTitle")?.value?.trim() || "",
+        originalTitle: document.getElementById("seriesEditOriginalTitle")?.value?.trim() || "",
+        startYear: document.getElementById("seriesEditStartYear")?.value?.trim() || "",
+        endYear: document.getElementById("seriesEditEndYear")?.value?.trim() || "",
+        overview: document.getElementById("seriesEditOverview")?.value?.trim() || "",
+      };
+      if (!body.title) {
+        setSeriesDetailMessage(tNext("seriesDetail.titleRequired", "A series needs a title."), "bad");
+        return;
+      }
+      setSeriesDetailMessage(tNext("seriesDetail.saving", "Saving series..."));
+      try {
+        await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/detail`);
+        renderSeriesDetail(payload.detail || {});
+        setSeriesEditPanelVisible(false);
+        await loadAppSnapshot();
+        setSeriesDetailMessage(tNext("seriesDetail.saved", "Series saved."), "good");
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function seriesIdentityCandidateHtml(candidate, index) {
+      const meta = [candidate.year, candidate.providerLabel].filter(Boolean).join(" / ");
+      return `
+        <div class="series-identity-candidate">
+          <div class="series-identity-thumb">${candidate.posterUrl
+            ? `<img src="${escapeHtml(candidate.posterUrl)}" alt="" loading="lazy">`
+            : ""}</div>
+          <div class="series-identity-text">
+            <strong>${escapeHtml(candidate.title || "")}</strong>
+            <span>${escapeHtml(meta)}</span>
+            <span class="series-identity-overview">${escapeHtml(candidate.overview || "")}</span>
+          </div>
+          <button type="button" class="secondary-button" data-series-identity-pick="${index}">${escapeHtml(tNext("seriesDetail.identityUse", "Use this one"))}</button>
+        </div>`;
+    }
+    function renderSeriesIdentityCandidates() {
+      const node = document.getElementById("seriesIdentityCandidates");
+      if (!node) return;
+      if (!seriesIdentityCandidates.length) {
+        node.innerHTML = "";
+        return;
+      }
+      node.innerHTML = `<div class="series-identity-list">${
+        seriesIdentityCandidates.map(seriesIdentityCandidateHtml).join("")
+      }</div>`;
+    }
+    async function searchSeriesIdentity() {
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const input = document.getElementById("seriesIdentitySearchInput");
+      const query = (input?.value || "").trim() || (activeSeriesPayload?.series?.title || "");
+      if (!query) return;
+      setSeriesDetailMessage(tNext("seriesDetail.identitySearching", "Searching sources..."));
+      try {
+        const payload = await authApiJson(
+          `/api/next/series/${encodeURIComponent(activeSeriesId)}/identity/search?q=${encodeURIComponent(query)}`
+        );
+        const result = payload.result || {};
+        seriesIdentityCandidates = result.candidates || [];
+        renderSeriesIdentityCandidates();
+        if (seriesIdentityCandidates.length) {
+          setSeriesDetailMessage("");
+        } else if (result.reason === "no series search source") {
+          setSeriesDetailMessage(tNext("seriesDetail.metadataNoSource", "No enabled plugin can describe a series. Enable one under Profile - Plugins."), "info");
+        } else if (sourceErrorText(result)) {
+          // A source that *failed* is not a source that found nothing. Saying
+          // "no source recognised that title" when the request was rejected --
+          // a missing API key is the usual reason -- sends the reader off to
+          // check their spelling instead of their credentials.
+          setSeriesDetailMessage(sourceErrorText(result), "bad");
+        } else {
+          setSeriesDetailMessage(tNext("seriesDetail.identityNoMatches", "No source recognised that title."), "info");
+        }
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function chooseSeriesIdentity(index) {
+      const candidate = seriesIdentityCandidates[Number(index)];
+      if (!candidate || !activeSeriesId || !hasPermission("containers.edit")) return;
+      setSeriesDetailMessage(tNext("seriesDetail.identitySaving", "Linking series and fetching details..."));
+      try {
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/identifiers`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            identifierType: candidate.identifierType,
+            identifier: candidate.identifier,
+            providerId: candidate.provider
+          })
+        });
+        // The route sets the identifier and refreshes in one request, so the page
+        // repaints with whatever the sources just supplied rather than showing an
+        // identified-but-still-empty series.
+        seriesIdentityCandidates = [];
+        renderSeriesDetail(payload.detail || {});
+        await loadAppSnapshot();
+        const status = (payload.result || {}).status;
+        setSeriesDetailMessage(
+          status === "ok"
+            ? tNext("seriesDetail.metadataRefreshed", "Series metadata refreshed.")
+            : seriesRefreshExplanation(payload.result || {}),
+          status === "ok" ? "good" : "info"
+        );
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    let seriesSeasonOffer = [];
+    async function openSeriesSeasonPicker() {
+      // Deliberately a separate act from showing the list. `refresh_series_metadata`
+      // must not create seasons nobody owns -- the source knows every season the
+      // show has, the collection knows the ones a disc covers -- so the only way
+      // a season can come into existence here is somebody ticking it.
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const node = document.getElementById("seriesSeasonPicker");
+      if (!node) return;
+      setSeriesDetailMessage(tNext("seriesDetail.seasonsLoading", "Asking sources which seasons this series has..."));
+      try {
+        const payload = await authApiJson(
+          `/api/next/series/${encodeURIComponent(activeSeriesId)}/seasons/available`
+        );
+        const result = payload.result || {};
+        seriesSeasonOffer = result.seasons || [];
+        renderSeriesSeasonPicker();
+        if (seriesSeasonOffer.length) {
+          setSeriesDetailMessage("");
+        } else if (result.reason === "no series identifier") {
+          // The same dead end the identity picker exists to escape, and the same
+          // sentence, so the reader is sent there rather than concluding the show
+          // has no seasons.
+          setSeriesDetailMessage(seriesRefreshExplanation(result), "info");
+        } else if (result.reason === "no series source") {
+          setSeriesDetailMessage(seriesRefreshExplanation(result), "info");
+        } else if (sourceErrorText(result)) {
+          setSeriesDetailMessage(sourceErrorText(result), "bad");
+        } else {
+          setSeriesDetailMessage(tNext("seriesDetail.seasonsNoneOffered", "No source lists any seasons for this series."), "info");
+        }
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    function renderSeriesSeasonPicker() {
+      const node = document.getElementById("seriesSeasonPicker");
+      if (!node) return;
+      if (!seriesSeasonOffer.length) {
+        node.innerHTML = "";
+        return;
+      }
+      const rows = seriesSeasonOffer.map((season, index) => {
+        const label = season.title
+          ? `${season.seasonNumber} - ${season.title}`
+          : tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
+        const meta = [
+          season.year || "",
+          season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
+        ].filter(Boolean).join(" / ");
+        // A season already in the collection stays visible and stays ticked, but
+        // cannot be unticked here: removing one is the delete route, and a
+        // checkbox that silently means two different things is how somebody
+        // deletes a season while believing they are choosing one.
+        return `
+          <label class="movie-edit-season">
+            <input type="checkbox" data-series-season-offer="${escapeHtml(String(index))}"${season.exists ? " checked disabled" : ""}>
+            <span>${escapeHtml(label)}${meta ? ` <em>${escapeHtml(meta)}</em>` : ""}</span>
+          </label>
+        `;
+      }).join("");
+      node.innerHTML = `
+        <div class="series-season-picker">
+          <p class="import-source-meta">${escapeHtml(tNext("seriesDetail.seasonsPickHelp", "Tick the seasons you own on disc. Only the ones you tick are added."))}</p>
+          ${rows}
+          <button type="button" class="primary-button" id="seriesSeasonPickerSave" data-next-i18n="seriesDetail.seasonsAdd">Add selected seasons</button>
+        </div>
+      `;
+    }
+    async function saveSeriesSeasonSelection() {
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const node = document.getElementById("seriesSeasonPicker");
+      const chosen = Array.from(node?.querySelectorAll("input[data-series-season-offer]:checked") || [])
+        .filter((box) => !box.disabled)
+        .map((box) => seriesSeasonOffer[Number(box.dataset.seriesSeasonOffer)])
+        .filter(Boolean);
+      if (!chosen.length) {
+        setSeriesDetailMessage(tNext("seriesDetail.seasonsNoneChosen", "Tick at least one season first."), "info");
+        return;
+      }
+      setSeriesDetailMessage(tNext("seriesDetail.seasonsAdding", "Adding seasons..."));
+      let added = 0;
+      const failed = [];
+      for (const season of chosen) {
+        try {
+          await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/seasons`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({
+              seasonNumber: season.seasonNumber,
+              title: season.title || "",
+              year: season.year || "",
+              overview: season.overview || "",
+              episodeCount: season.episodeCount
+            })
+          });
+          added += 1;
+        } catch (error) {
+          // One season failing must not hide the ones that landed, and must not
+          // be reported as if nothing happened. The route already answers 409 for
+          // a season that exists, so a second click is harmless rather than a
+          // duplicate.
+          failed.push(`${season.seasonNumber}: ${error.message || String(error)}`);
+        }
+      }
+      seriesSeasonOffer = [];
+      renderSeriesSeasonPicker();
+      try {
+        const detail = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/detail`);
+        renderSeriesDetail(detail.detail || {});
+      } catch (error) {
+        // The seasons were created either way; failing to repaint is not a
+        // reason to report that they were not.
+      }
+      await loadAppSnapshot();
+      if (failed.length) {
+        setSeriesDetailMessage(
+          tNext("seriesDetail.seasonsPartlyAdded", "{added} added, {failed} could not be: {errors}")
+            .replace("{added}", added)
+            .replace("{failed}", failed.length)
+            .replace("{errors}", failed.join(" / ")),
+          added ? "info" : "bad"
+        );
+      } else {
+        setSeriesDetailMessage(
+          tNext("seriesDetail.seasonsAdded", "{count} seasons added.").replace("{count}", added),
+          "good"
+        );
+      }
+    }
+    function sourceErrorText(result) {
+      // The backend has always collected these; nothing ever showed them, so a
+      // broken source was indistinguishable from an uninteresting one.
+      const errors = (result || {}).errors || [];
+      if (!errors.length) return "";
+      const detail = errors
+        .map((entry) => [entry.pluginId, entry.error].filter(Boolean).join(": "))
+        .filter(Boolean)
+        .join(" / ");
+      if (!detail) return "";
+      return tNext("seriesDetail.identitySourceError", "A source could not answer: {error}")
+        .replace("{error}", detail);
+    }
+    function seriesRefreshExplanation(result) {
+      // `skipped` carries the reason the backend already knows; the others are
+      // states rather than reasons. Nothing is composed here beyond the mapping,
+      // so a new backend status falls through to the honest generic sentence
+      // rather than to a guess about what it meant.
+      if (result.status === "skipped" && result.reason === "no series identifier") {
+        return tNext(
+          "seriesDetail.metadataNoIdentifier",
+          "This series has no source identifier, so no source could be asked. It arrives with the disc data from MovieVault."
+        );
+      }
+      if (result.status === "skipped" && result.reason === "no series source") {
+        return tNext(
+          "seriesDetail.metadataNoSource",
+          "No enabled plugin can describe a series. Enable one under Profile - Plugins."
+        );
+      }
+      if (result.status === "unavailable") {
+        return tNext("seriesDetail.metadataUnavailable", "This installation cannot store series data yet.");
+      }
+      // Same rule as the identity search: a miss that is really a stack of failed
+      // requests should say so rather than imply the sources were asked and shrugged.
+      return sourceErrorText(result) || tNext("seriesDetail.metadataNoAnswer", "No source had anything to add.");
+    }
+    async function refreshActiveSeriesMetadata() {
+      if (!activeSeriesId) return;
+      setSeriesDetailMessage(tNext("seriesDetail.refreshingMetadata", "Refreshing series metadata..."));
+      try {
+        const payload = await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}/metadata/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({})
+        });
+        renderSeriesDetail(payload.detail || activeSeriesPayload || {});
+        const result = payload.result || {};
+        const status = result.status;
+        if (status === "ok") {
+          setSeriesDetailMessage(tNext("seriesDetail.metadataRefreshed", "Series metadata refreshed."), "good");
+        } else {
+          // A miss is not a failure: nothing was damaged and the existing text
+          // stands. Saying "refreshed" would claim something happened.
+          //
+          // But "nothing to add" is three different situations, and collapsing
+          // them into one sentence is what makes an empty series page
+          // undiagnosable: a series nobody can look up, a build with no source
+          // installed, and a source that genuinely had nothing all read the
+          // same. The reason is the whole answer here, so it is shown.
+          setSeriesDetailMessage(seriesRefreshExplanation(result), "info");
+        }
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function deleteActiveSeries() {
+      if (!activeSeriesId || !hasPermission("containers.edit")) return;
+      const title = activeSeriesPayload?.series?.title || tNext("common.untitled", "Untitled");
+      const confirmed = window.confirm(
+        tNext(
+          "seriesDetail.deleteConfirm",
+          "Delete {title}? The discs stay in your collection, only the grouping goes. A later sync can recreate the series."
+        ).replace("{title}", title)
+      );
+      if (!confirmed) return;
+      setSeriesDetailMessage(tNext("seriesDetail.deleting", "Deleting series..."));
+      try {
+        await authApiJson(`/api/next/series/${encodeURIComponent(activeSeriesId)}`, {method: "DELETE"});
+        activeSeriesId = "";
+        activeSeriesPayload = null;
+        await loadAppSnapshot();
+        showLibraryPage(true);
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+      }
     }
     function showContainerDetailLoading(containerId) {
       activeContainerId = containerId || "";
@@ -31201,7 +34816,7 @@ def ui_preview_html(
                 ${(detectedBoxSetAudit.memberPreview || []).slice(0, 4).map((member) => `<span class="tag blue">${escapeHtml(member.title || member.name || "-")}${member.year ? ` (${escapeHtml(member.year)})` : ""}</span>`).join("")}
               </div>` : ""}
               ${evidence ? `<div class="import-review-evidence">${evidence}</div>` : ""}
-              ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual movie match before import."))}</div>` : ""}
+              ${releaseRisk ? `<div class="import-release-warning">${escapeHtml(tNext("importCenter.releaseTitleWarning", "This looks like a release title. Choose the actual match before import."))}</div>` : ""}
               ${row.recommendedMatch ? `<div class="import-selected-match import-recommended-match">${escapeHtml(tNext("importCenter.recommendedMatch", "Recommended match"))}: ${escapeHtml(row.recommendedMatch.title || "")} ${escapeHtml(row.recommendedMatch.year || "")}</div>` : ""}
               ${selectedMatch ? `<div class="import-selected-match">${escapeHtml(tNext("importCenter.selectedMatch", "Selected"))}: ${escapeHtml(selectedMatch.title || "")} ${escapeHtml(selectedMatch.year || "")}</div>` : ""}
               <div class="import-review-tools">
@@ -31816,7 +35431,7 @@ def ui_preview_html(
             <div class="import-counts">
               ${pluginId ? `<span class="tag">${escapeHtml(tNext("importCenter.plugin", "Plugin"))} ${escapeHtml(pluginDisplayName(pluginId, pluginId))}</span>` : ""}
               ${entrypoint ? `<span class="tag">${escapeHtml(tNext("importCenter.entrypoint", "Entrypoint"))} ${escapeHtml(entrypoint)}</span>` : ""}
-              ${movieId ? `<span class="tag">${escapeHtml(tNext("importCenter.movie", "Movie"))} ${escapeHtml(String(movieId).slice(0, 8))}</span>` : ""}
+              ${movieId ? `<span class="tag">${escapeHtml(tNext("importCenter.movie", "Title"))} ${escapeHtml(String(movieId).slice(0, 8))}</span>` : ""}
               ${payload.dryRun !== undefined ? `<span class="tag ${payload.dryRun ? "" : "good"}">${escapeHtml(tNext("importCenter.dryRun", "Dry run"))} ${escapeHtml(String(payload.dryRun))}</span>` : ""}
             </div>
             <div class="import-counts">${importCountChips(counters || {}, 5)}</div>
@@ -32625,6 +36240,13 @@ def ui_preview_html(
       const posterUrl = lookupCandidateImage(result, candidate, "poster");
       const backdropUrl = lookupCandidateImage(result, candidate, "backdrop");
       const barcode = String(candidate.barcode || candidate.externalBarcode || candidate.external_barcode || candidate.ean || candidate.upc || document.getElementById("importBarcodeInput")?.value || "").trim();
+      // What makes a series a series. Both were being dropped here, which is why
+      // a television result -- once one could be returned at all -- still arrived
+      // as a MOVIE with no series behind it: the card was right and the payload
+      // was not.
+      const series = candidate.series && typeof candidate.series === "object" ? candidate.series : null;
+      const mediaType = String(candidate.mediaType || candidate.media_type || movieUpdates.media_type || (series ? "SHOW" : "")).trim().toUpperCase();
+      const seriesRef = String(series?.tmdbTvId || series?.tmdb_tv_id || (String(candidate.identifierType || "") === "tmdb_tv" ? candidate.identifier : "") || "").trim();
       const keyParts = [
         provider,
         title.toLowerCase(),
@@ -32632,6 +36254,10 @@ def ui_preview_html(
         format.toLowerCase(),
         identifiers.tmdb ? `tmdb:${identifiers.tmdb}` : "",
         identifiers.imdb ? `imdb:${identifiers.imdb}` : "",
+        // A film and a series of the same name and year carry no `tmdb` id in
+        // common -- the series id lives in the television namespace -- so
+        // without this their keys collide and picking one selects the other.
+        seriesRef ? `tmdbtv:${seriesRef}` : "",
         sourceRef,
         posterUrl,
         resultIndex,
@@ -32639,6 +36265,8 @@ def ui_preview_html(
       ];
       return {
         candidateKey: keyParts.join("|"),
+        mediaType,
+        series,
         provider,
         pluginId: provider,
         sourceLabel,
@@ -32676,6 +36304,7 @@ def ui_preview_html(
             normalized.format.toLowerCase(),
             normalized.identifiers.tmdb,
             normalized.identifiers.imdb,
+            normalized.series?.tmdbTvId || "",
             normalized.sourceRef,
             normalized.posterUrl
           ].join("|");
@@ -32983,10 +36612,10 @@ def ui_preview_html(
       const container = boxSet.container || boxSet || {};
       const members = boxSet.members || boxSet.memberMovies || [];
       const stateLabel = payload.state === "already_exists"
-        ? (container.id ? tNext("importCenter.boxSetExists", "Box-set already exists.") : tNext("importCenter.movieExists", "Movie already exists."))
+        ? (container.id ? tNext("importCenter.boxSetExists", "Box-set already exists.") : tNext("importCenter.movieExists", "This title is already in your collection."))
         : payload.state === "box_set_created"
           ? tNext("importCenter.boxSetAdded", "Box-set added.")
-          : tNext("importCenter.movieAdded", "Movie added.");
+          : tNext("importCenter.movieAdded", "Title added.");
       const primaryTitle = container.title || movie.title || movie.original_title || tNext("importCenter.importResult", "Import result");
       const metadataJobs = payload.metadataRefreshQueued || payload.queuedMetadataRefreshJobs || (payload.metadataJobs || []).length || 0;
       return `
@@ -33030,7 +36659,7 @@ def ui_preview_html(
       const tmdbGuidance = tmdbNeedsConfiguration ? `
         <div class="preview-empty warn import-tmdb-guidance" role="status">
           <strong>${escapeHtml(tNext("importCenter.tmdbKeyRequiredTitle", "Add a free TMDb API key for full metadata"))}</strong>
-          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this movie, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
+          <span>${escapeHtml(tNext("importCenter.tmdbKeyRequiredHelp", "You can still add this title, but plot, cast and crew, artwork, and trailers will be limited until a TMDb API key is configured."))}</span>
           <div class="button-row compact">
             <a class="secondary-button" href="${escapeHtml(tmdbEnrichment.requestKeyUrl || "https://www.themoviedb.org/settings/api")}" target="_blank" rel="noopener noreferrer">${escapeHtml(tNext("importCenter.requestTmdbKey", "Request free TMDb key"))}</a>
             ${canUseAppAdmin() ? `<button type="button" class="secondary-button" data-import-configure-tmdb="1">${escapeHtml(tNext("importCenter.configureTmdbKey", "Configure TMDb key"))}</button>` : ""}
@@ -33180,6 +36809,7 @@ def ui_preview_html(
             <div class="import-result-body">
               <div class="import-result-kicker">
                 ${provider ? `<span class="tag">${escapeHtml(provider)}</span>` : ""}
+                ${item.candidateKey ? `<span class="tag">${escapeHtml(item.mediaType === "SHOW" ? tNext("importCenter.candidateSeries", "Series") : tNext("importCenter.candidateFilm", "Film"))}</span>` : ""}
                 ${item.state ? `<span class="tag ${item.state === "applied" ? "good" : ""}">${escapeHtml(item.state)}</span>` : ""}
                 ${selected ? `<span class="tag good">${escapeHtml(tNext("importCenter.selectedMatch", "Selected match"))}</span>` : ""}
               </div>
@@ -33374,7 +37004,7 @@ def ui_preview_html(
               <span class="tag" title="${escapeHtml(tNext("importCenter.sourcesUsedHelp", "Number of metadata sources that returned a matching title."))}">${escapeHtml(tNext("importCenter.sourcesUsed", "Sources"))}: ${escapeHtml(String(movieResultCards.length || (proposedTitle ? 1 : 0)))}</span>
             </div>
             <h3 class="import-result-title">${escapeHtml(proposedTitle || tNext("importCenter.previewReady", "Preview ready"))}</h3>
-            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected movie details before adding it to your library."))}</div>
+            <div class="import-result-subtitle">${escapeHtml(tNext("importCenter.previewReadyHelp", "Review the detected details before adding this title to your library."))}</div>
             <div class="import-counts">
               ${proposedYear ? `<span class="tag">${escapeHtml(tNext("importCenter.previewYear", "Year"))} ${escapeHtml(proposedYear)}</span>` : ""}
               ${proposedFormat ? `<span class="tag">${escapeHtml(tNext("importCenter.previewFormat", "Format"))} ${escapeHtml(proposedFormat)}</span>` : ""}
@@ -33424,7 +37054,7 @@ def ui_preview_html(
         ? tNext("importCenter.useSelectedMatch", "Use selected match")
         : selectedBoxSetForAction
           ? tNext("importCenter.addBoxSet", "Add box-set")
-          : tNext("importCenter.addMovie", "Add movie");
+          : tNext("importCenter.addMovie", "Add title");
       const lookupActionFooter = `
         <div class="import-result-action-footer">
           ${hasMovieCandidate && !allBatchAdded ? `<button type="button" class="primary-button" data-import-add-lookup="1" data-import-mode="${escapeHtml(primaryImportMode)}" ${selectedBoxSetActionKey ? `data-box-set-proposal-key="${escapeHtml(selectedBoxSetActionKey)}"` : ""}>${escapeHtml(primaryImportLabel)}</button>` : ""}
@@ -33721,6 +37351,24 @@ def ui_preview_html(
         ""
       );
     }
+    // The film behind a candidate list, linkable. The Add flow's route
+    // flattens the film to bare ids while the metadata pipeline forwards the
+    // resolver's film with its `links` object; both spellings resolve to the
+    // same two URLs here so every picker shows the same header.
+    function releaseCandidateFilmLinksHtml(film) {
+      const source = film && typeof film === "object" ? film : {};
+      const links = source.links && typeof source.links === "object" ? source.links : {};
+      const identifiers = source.identifiers && typeof source.identifiers === "object" ? source.identifiers : {};
+      const tmdbId = identifiers.tmdbMovieId || source.tmdbMovieId || "";
+      const imdbId = identifiers.imdbId || source.imdbId || "";
+      const tmdb = links.tmdb || (tmdbId ? `https://www.themoviedb.org/movie/${encodeURIComponent(tmdbId)}` : "");
+      const imdb = links.imdb || (imdbId ? `https://www.imdb.com/title/${encodeURIComponent(imdbId)}/` : "");
+      const anchors = [];
+      if (tmdb) anchors.push(`<a href="${escapeHtml(tmdb)}" target="_blank" rel="noopener noreferrer">TMDB</a>`);
+      if (imdb) anchors.push(`<a href="${escapeHtml(imdb)}" target="_blank" rel="noopener noreferrer">IMDb</a>`);
+      if (!anchors.length) return "";
+      return `<span class="release-fallback-film-links">${anchors.join(" &middot; ")}</span>`;
+    }
     function releaseFallbackFactList(candidate) {
       const facts = [];
       const push = (value) => { if (value) facts.push(value); };
@@ -33734,6 +37382,10 @@ def ui_preview_html(
         push(`${candidate.discCount} ${tNext("releaseFallback.discs", "discs")}`);
       }
       push(enumListText(candidate.packaging, packagingLabel));
+      // Two pressings of one film often differ by nothing else: same format,
+      // same region, same disc count, and one is holofoil while the other is
+      // matte. Reuses `movieFinish.*`, which every locale already carries.
+      push(enumListText(candidate.finishes, finishLabel));
       const video = candidate.video && typeof candidate.video === "object" ? candidate.video : {};
       push(video.resolution);
       push(enumListText(video.codecs, videoCodecLabel));
@@ -33805,6 +37457,16 @@ def ui_preview_html(
           text: tNext("releaseFallback.catalogDefect", "MovieVault holds this release but cannot publish it. Trying again will not help; add the disc by hand below.")
         };
       }
+      // MovieVault answered and DiscVault could not read the answer. Neither
+      // "could not be reached" nor "could not complete this lookup" is true, and
+      // both send the user to retry something that cannot succeed - the disc is
+      // very likely known, by a client that is behind the contract.
+      if (fallback.failureKind === "client") {
+        return {
+          tone: "bad",
+          text: tNext("releaseFallback.clientDefect", "MovieVault answered, but this version of DiscVault could not read the answer. Updating DiscVault should fix it; add the disc by hand below in the meantime.")
+        };
+      }
       if (fallback.answered === false) {
         return {
           tone: "bad",
@@ -33863,7 +37525,7 @@ def ui_preview_html(
       host.innerHTML = `
         <div class="release-fallback-card">
           <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
-          <div><strong>${escapeHtml(filmLine)}</strong></div>
+          <div><strong>${escapeHtml(filmLine)}</strong> ${releaseCandidateFilmLinksHtml(film)}</div>
           <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.pickEditionHelp", "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."))}</div>
           ${fallback.verificationStatus === "unreviewed_external"
             ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
@@ -34023,7 +37685,7 @@ def ui_preview_html(
           } else {
             const outcome = releaseFallbackOutcomeMessage();
             const notRecognized = outcome.text
-              || tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this movie manually.");
+              || tNext("importCenter.barcodeNotRecognized", "Barcode not recognized. Add a title to create this entry manually.");
             setImportLookupActionMessage(notRecognized, outcome.tone || "warn");
             setImportCenterMessage(notRecognized, outcome.tone || "warn");
           }
@@ -34074,12 +37736,12 @@ def ui_preview_html(
       setImportCenterMessage(
         wantsBoxSet
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}...`
-          : tNext("importCenter.addingMovie", "Adding movie...")
+          : tNext("importCenter.addingMovie", "Adding title...")
       );
       setImportLookupActionMessage(
         wantsBoxSet
           ? `${tNext("importCenter.addBoxSet", "Add box-set")}: ${tNext("importCenter.resolvingSelection", "resolving selection...")}`
-          : tNext("importCenter.addingMovie", "Adding movie...")
+          : tNext("importCenter.addingMovie", "Adding title...")
       );
       if (button) {
         // Immediate click feedback: spinner + busy state. This stays visible
@@ -34179,10 +37841,10 @@ def ui_preview_html(
             ? "importCenter.boxSetAdded"
           : "importCenter.movieAdded";
         const messageFallback = payload.state === "already_exists"
-          ? (payload.boxSet ? "Box-set already exists." : "Movie already exists.")
+          ? (payload.boxSet ? "Box-set already exists." : "This title is already in your collection.")
           : payload.state === "box_set_created"
             ? "Box-set added."
-            : "Movie added.";
+            : "Title added.";
         setImportLookupActionMessage(tNext(messageKey, messageFallback), "good");
         setImportCenterMessage(tNext(messageKey, messageFallback), "good");
         // The save completed, so the list it came from is done with.
@@ -36865,7 +40527,7 @@ def ui_preview_html(
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
       const empty = document.getElementById("notificationsEmptyMessage");
-      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "security"].includes(notificationFilter) ? notificationFilter : "all";
+      notificationFilter = ["all", "unread", "group_invites", "metadata_jobs", "imports", "price_alerts", "contributions", "security"].includes(notificationFilter) ? notificationFilter : "all";
       document.querySelectorAll("[data-notification-filter]").forEach((button) => {
         button.classList.toggle("active", button.dataset.notificationFilter === notificationFilter);
         button.setAttribute("aria-pressed", button.dataset.notificationFilter === notificationFilter ? "true" : "false");
@@ -36969,6 +40631,7 @@ def ui_preview_html(
       const route = appRouteFromPath();
       if (route.view === "movie") openAppMovieDetail(route.movieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "series") openAppSeriesDetail(route.seriesId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
@@ -37013,7 +40676,8 @@ def ui_preview_html(
         ["price_alerts", "notifications.pref.price_alerts", "notifications.prefPriceAlertsHelp"]
       ],
       sharing: [
-        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"]
+        ["group_invites", "notifications.prefGroupInvites", "notifications.prefGroupInvitesHelp"],
+        ["contributions", "notifications.prefContributions", "notifications.prefContributionsHelp"]
       ]
     };
     function pushPreferenceRowsHtml(preferencesMap, rows) {
@@ -37274,6 +40938,7 @@ def ui_preview_html(
       "adminView",
       "movieDetailPage",
       "containerDetailPage",
+      "seriesDetailPage",
       "personDetailPage",
       "locationDetailPage",
       "discoverDetailPage",
@@ -37840,6 +41505,11 @@ def ui_preview_html(
       setActiveAppRoute("library");
       scrollPreviewTop();
     }
+    function showSeriesDetailPage() {
+      showAppSurface("seriesDetailPage");
+      setActiveAppRoute("library");
+      scrollPreviewTop();
+    }
     function showPersonDetailPage() {
       showAppSurface("personDetailPage");
       setActiveAppRoute("library");
@@ -38037,6 +41707,10 @@ def ui_preview_html(
       if (containerMatch) {
         return {view: "container", containerId: decodeURIComponent(containerMatch[1] || containerMatch[2])};
       }
+      const seriesMatch = window.location.pathname.match(/^\\/app\\/series\\/([^/]+)$|^\\/series\\/([^/]+)$/);
+      if (seriesMatch) {
+        return {view: "series", seriesId: decodeURIComponent(seriesMatch[1] || seriesMatch[2])};
+      }
       const personMatch = window.location.pathname.match(/^\\/app\\/people\\/([^/]+)$|^\\/people\\/([^/]+)$/);
       if (personMatch) {
         return {view: "person", personId: decodeURIComponent(personMatch[1] || personMatch[2])};
@@ -38112,7 +41786,9 @@ def ui_preview_html(
       if (!hasPermission("collection.edit_all") || !activeDetailMovieId) return;
       const title = formTextValue("movieEditTitle");
       if (!title) {
+        activateDetailTab("movieEditSections", "movieEditSectionRelease");
         setMovieDetailMessage(tNext("movieDetail.titleRequired", "Title is required."), "bad");
+        document.getElementById("movieEditTitle")?.focus();
         return;
       }
       if (!(await ensureMovieEditSeries())) return;
@@ -38134,6 +41810,11 @@ def ui_preview_html(
         // Absent keys mean "leave the link alone" server-side, so both are sent
         // together and only while the type is a series.
         ...movieEditSeriesBody(),
+        // Always sent, and always the whole list: this form is the only place a
+        // disc can be described, so what is on screen is the complete statement.
+        // The server treats an absent key as "leave them alone" for the benefit
+        // of clients that have no disc editor at all.
+        discs: collectMovieEditDiscs(),
         edition: formTextValue("movieEditEdition"),
         releaseDate: formTextValue("movieEditReleaseDate"),
         country: formTextValue("movieEditCountry"),
@@ -38141,6 +41822,7 @@ def ui_preview_html(
         location: formTextValue("movieEditLocation"),
         locationId: document.getElementById("movieEditLocationSelect")?.value || null,
         runtimeMinutes: formTextValue("movieEditRuntime"),
+        discCount: formTextValue("movieEditDiscCount"),
         director: formTextValue("movieEditDirector"),
         studios: formTextValue("movieEditStudios"),
         contentRating: formTextValue("movieEditContentRating"),
@@ -38152,7 +41834,10 @@ def ui_preview_html(
         discRegions: collectMovieEditCheckboxGroup("movieEditRegions"),
         audioTracks: collectMovieEditAudioTracks(),
         subtitles: collectMovieEditSubtitles(),
-        packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),
+        carrierType: formTextValue("movieEditCarrierType"),
+        steelbookFormat: formTextValue("movieEditSteelbookFormat"),
+        outerPackaging: collectMovieEditCheckboxGroup("movieEditOuterPackaging"),
+        finishes: collectMovieEditCheckboxGroup("movieEditFinishes"),
         estimatedValue: formTextValue("movieEditEstimatedValue"),
         estimatedValueCurrency: formTextValue("movieEditEstimatedValueCurrency"),
         distributor: formTextValue("movieEditDistributor"),
@@ -38190,8 +41875,23 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify(body)
         });
+        // After the movie, not with it: the identifiers are a separate table
+        // with a uniqueness rule of their own. The movie is already saved by
+        // the time this runs, so a rejected code is reported on its own rather
+        // than presented as the whole save having failed -- and the panel stays
+        // open, because the value that needs fixing is in it.
+        let identifierError = null;
+        try {
+          await saveMovieIdentifiers();
+        } catch (error) {
+          identifierError = error;
+        }
         renderMovieDetail(payload.detail || {});
         await loadAppSnapshot();
+        if (identifierError) {
+          setMovieDetailMessage(identifierError.message || String(identifierError), "bad");
+          return;
+        }
         setMovieEditPanelVisible(false);
         setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
         if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
@@ -38241,9 +41941,132 @@ def ui_preview_html(
           await loadAppSnapshot();
         }
         setMovieDetailMessage(successMessage, "good");
+        // The resolver identified the film but could not confirm which
+        // pressing this disc is. That is a choice, not a miss - render the
+        // picker instead of leaving "no usable match" as the last word.
+        setMovieDetailReleaseCandidates((payload.metadata || {}).preview?.releaseCandidates);
         console.log("metadata refresh", payload);
       } catch (error) {
         setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    // ---- Edition picker on the movie detail page ---------------------------
+    //
+    // The refresh counterpart of the Add flow's candidate picker: a disc that
+    // is already on the shelf, whose barcode MovieVault answers with a list of
+    // pressings rather than a confirmed release. Nothing may be merged
+    // automatically (nothing was confirmed), so the choice is offered here and
+    // the chosen summary is written onto the disc through the ordinary movie
+    // edit route - MovieVault has no server-side choice endpoint.
+    let movieDetailReleaseCandidates = null;
+    function setMovieDetailReleaseCandidates(candidates) {
+      const releases = Array.isArray(candidates?.releases) ? candidates.releases.filter((item) => item && typeof item === "object") : [];
+      movieDetailReleaseCandidates = releases.length
+        ? {
+            film: candidates.film && typeof candidates.film === "object" ? candidates.film : {},
+            releases,
+            verificationStatus: String(candidates.verificationStatus || ""),
+            appliedIndex: -1,
+            busy: false
+          }
+        : null;
+      renderMovieDetailReleaseCandidates();
+      if (movieDetailReleaseCandidates && hasPermission("collection.edit_all")) {
+        setMovieDetailMessage(tNext("releaseFallback.pickEdition", "Which pressing is this?"), "warn");
+      }
+    }
+    function movieDetailReleaseCandidateOptionHtml(candidate, index) {
+      const picker = movieDetailReleaseCandidates || {};
+      const applied = Number(picker.appliedIndex) === index;
+      const facts = releaseFallbackFactList(candidate);
+      const audio = audioTracksText(candidate.audioTracks);
+      const subtitles = Array.isArray(candidate.subtitles) && candidate.subtitles.length
+        ? subtitlesText(candidate.subtitles)
+        : (Array.isArray(candidate.subtitleLanguages) ? candidate.subtitleLanguages.map(languageWithCode).filter(Boolean).join(", ") : "");
+      return `
+        <div class="release-fallback-option ${applied ? "selected" : ""}">
+          <div class="release-fallback-facts">
+            ${facts.map((fact) => `<span class="tag">${escapeHtml(fact)}</span>`).join("")
+              || `<span class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.noDistinguishingFacts", "This source published no distinguishing details for this pressing."))}</span>`}
+          </div>
+          ${audio ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.audio", "Audio"))}:</strong> ${escapeHtml(audio)}</div>` : ""}
+          ${subtitles ? `<div class="release-fallback-meta"><strong>${escapeHtml(tNext("movieDetail.subtitles", "Subtitles"))}:</strong> ${escapeHtml(subtitles)}</div>` : ""}
+          <div class="release-fallback-actions">
+            <button type="button" class="${applied ? "secondary-button" : "primary-button"}" data-movie-release-candidate-choose="${index}" ${picker.busy ? "disabled" : ""}>
+              ${escapeHtml(applied
+                ? tNext("releaseFallback.editionChosen", "Chosen")
+                : tNext("releaseFallback.useEdition", "Use this edition"))}
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    function renderMovieDetailReleaseCandidates() {
+      const host = document.getElementById("movieDetailReleaseCandidates");
+      if (!host) return;
+      const picker = movieDetailReleaseCandidates;
+      // Reading the list needs no permission; writing the choice does. Without
+      // the edit permission the picker would render buttons whose only outcome
+      // is a 403, so it does not render at all.
+      if (!picker || !hasPermission("collection.edit_all")) {
+        host.innerHTML = "";
+        return;
+      }
+      const film = picker.film || {};
+      const filmLine = [film.title, film.year ? `(${film.year})` : ""].filter(Boolean).join(" ");
+      host.innerHTML = `
+        <div class="release-fallback-card">
+          <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
+          <div><strong>${escapeHtml(filmLine)}</strong> ${releaseCandidateFilmLinksHtml(film)}</div>
+          <div class="release-fallback-meta">${escapeHtml(tNext("movieDetail.releaseCandidatesHelp", "MovieVault identified the film but not this disc's exact pressing. Pick the one you are holding to fill in its details."))}</div>
+          ${picker.verificationStatus === "unreviewed_external"
+            ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
+            : ""}
+          <div class="release-fallback-list">
+            ${picker.releases.map(movieDetailReleaseCandidateOptionHtml).join("")}
+          </div>
+          <div class="release-fallback-actions">
+            <button type="button" class="secondary-button" data-movie-release-candidate-dismiss="1">${escapeHtml(tNext("movieDetail.releaseCandidatesKeep", "Keep current details"))}</button>
+          </div>
+        </div>
+      `;
+    }
+    async function applyMovieDetailReleaseCandidate(index) {
+      const picker = movieDetailReleaseCandidates;
+      const releases = Array.isArray(picker?.releases) ? picker.releases : [];
+      const position = Number(index);
+      if (!picker || picker.busy || !activeDetailMovieId) return;
+      if (!Number.isInteger(position) || position < 0 || position >= releases.length) return;
+      const film = picker.film || {};
+      const identifiers = film.identifiers && typeof film.identifiers === "object" ? film.identifiers : {};
+      picker.busy = true;
+      renderMovieDetailReleaseCandidates();
+      setMovieDetailMessage(tNext("movieDetail.releaseCandidatesApplying", "Applying this edition to the disc..."));
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            releaseCandidate: releases[position],
+            releaseCandidateFilm: {
+              title: film.title || "",
+              year: film.year || null,
+              tmdbMovieId: identifiers.tmdbMovieId || film.tmdbMovieId || null,
+              imdbId: identifiers.imdbId || film.imdbId || null
+            }
+          })
+        });
+        // A second pick fully reassigns every field the edition governs, so
+        // the list survives the choice - "wrong one, show me the others" must
+        // stay expressible.
+        picker.appliedIndex = position;
+        if (payload.detail) renderMovieDetail(payload.detail);
+        setMovieDetailMessage(tNext("movieDetail.releaseCandidatesApplied", "Edition applied to this disc."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      } finally {
+        picker.busy = false;
+        renderMovieDetailReleaseCandidates();
       }
     }
     async function refreshActiveContainerMetadata(dryRun) {
@@ -38304,71 +42127,96 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    // Three entities now carry artwork, and `isContainer ? a : b` cannot express
+    // three. A descriptor per entity keeps the difference in one table instead of
+    // scattered across each handler, where a missed branch would silently send a
+    // series to the movies route.
+    function detailArtworkEntity(entity) {
+      const entities = {
+        movie: {
+          path: "movies",
+          activeId: () => activeDetailMovieId,
+          detailUrl: (id) => `/api/next/movies/${encodeURIComponent(id)}`,
+          setMessage: setMovieDetailMessage,
+          render: (detail) => renderMovieDetail(detail),
+        },
+        container: {
+          path: "containers",
+          activeId: () => activeContainerId,
+          detailUrl: (id) => `/api/next/containers/${encodeURIComponent(id)}`,
+          setMessage: setContainerDetailMessage,
+          render: (detail) => renderContainerDetail(detail),
+        },
+        series: {
+          path: "series",
+          activeId: () => activeSeriesId,
+          // A series reads its own sibling route: `/api/next/series/<id>` answers
+          // under `series`, not `detail`, and is what the movie edit form uses.
+          detailUrl: (id) => `/api/next/series/${encodeURIComponent(id)}/detail`,
+          setMessage: setSeriesDetailMessage,
+          render: (detail) => renderSeriesDetail(detail),
+        },
+      };
+      return entities[entity] || entities.movie;
+    }
+    async function reloadDetailAfterArtwork(target, targetId) {
+      const payload = await authApiJson(target.detailUrl(targetId));
+      target.render(payload.detail || {});
+      await loadAppSnapshot();
+    }
     async function setPrimaryArtwork(entity, mediaId, kind) {
-      const isContainer = entity === "container";
-      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
       if (!targetId || !mediaId) return;
-      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
-      setMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
+      target.setMessage(tNext("movieDetail.savingArtwork", "Saving artwork..."));
       try {
-        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/primary`, {
+        await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/media/primary`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({mediaId, kind})
         });
-        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
-        if (isContainer) renderContainerDetail(payload.detail || {});
-        else renderMovieDetail(payload.detail || {});
-        await loadAppSnapshot();
-        setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+        await reloadDetailAfterArtwork(target, targetId);
+        target.setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
       } catch (error) {
-        setMessage(error.message || String(error), "bad");
+        target.setMessage(error.message || String(error), "bad");
       }
     }
     async function uploadDetailArtwork(entity, kind, inputId) {
       const input = document.getElementById(inputId);
-      const isContainer = entity === "container";
-      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
-      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
       if (!targetId || !input || !input.files || !input.files.length) return;
-      setMessage(tNext("movieDetail.uploadingArtwork", "Uploading artwork..."));
+      target.setMessage(tNext("movieDetail.uploadingArtwork", "Uploading artwork..."));
       try {
         const data = new FormData();
         data.append("file", input.files[0]);
         data.append("kind", kind);
         data.append("primary", "true");
-        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/upload`, {
+        await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/media/upload`, {
           method: "POST",
           body: data
         });
         input.value = "";
-        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
-        if (isContainer) renderContainerDetail(payload.detail || {});
-        else renderMovieDetail(payload.detail || {});
-        await loadAppSnapshot();
-        setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
+        await reloadDetailAfterArtwork(target, targetId);
+        target.setMessage(tNext("movieDetail.artworkSaved", "Artwork saved."), "good");
       } catch (error) {
-        setMessage(error.message || String(error), "bad");
+        target.setMessage(error.message || String(error), "bad");
       }
     }
     async function deleteDetailArtwork(entity, mediaId, kind) {
-      const isContainer = entity === "container";
-      const targetId = isContainer ? activeContainerId : activeDetailMovieId;
-      const setMessage = isContainer ? setContainerDetailMessage : setMovieDetailMessage;
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
       if (!targetId || !mediaId) return;
       if (!window.confirm(tNext("movieDetail.deleteArtworkConfirm", "Delete this artwork option?"))) return;
-      setMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
+      target.setMessage(tNext("movieDetail.deletingArtwork", "Deleting artwork..."));
       try {
-        await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
+        await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/media/${encodeURIComponent(mediaId)}?kind=${encodeURIComponent(kind || "")}`, {
           method: "DELETE"
         });
-        const payload = await authApiJson(`/api/next/${isContainer ? "containers" : "movies"}/${encodeURIComponent(targetId)}`);
-        if (isContainer) renderContainerDetail(payload.detail || {});
-        else renderMovieDetail(payload.detail || {});
-        await loadAppSnapshot();
-        setMessage(tNext("movieDetail.artworkDeleted", "Artwork deleted."), "good");
+        await reloadDetailAfterArtwork(target, targetId);
+        target.setMessage(tNext("movieDetail.artworkDeleted", "Artwork deleted."), "good");
       } catch (error) {
-        setMessage(error.message || String(error), "bad");
+        target.setMessage(error.message || String(error), "bad");
       }
     }
     function movieArtworkLockSet(detail) {
@@ -38474,7 +42322,7 @@ def ui_preview_html(
     }
     async function shareMovieArtwork(url, kind) {
       if (!url) return;
-      const movieTitle = activeDetailPayload?.movie?.title || tNext("movieDetail.title", "Movie details");
+      const movieTitle = activeDetailPayload?.movie?.title || tNext("movieDetail.titleDetails", "Title details");
       const kindLabel = kind === "backdrop"
         ? tNext("movieDetail.backdrops", "Backdrops")
         : tNext("movieDetail.posters", "Posters");
@@ -38740,6 +42588,17 @@ def ui_preview_html(
           openAppContainerDetail(button.dataset.previewContainer);
         });
       });
+      root.querySelectorAll("[data-preview-series]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          if (event.target.closest("[data-person-link], [data-member-movie], [data-detail-sort-scope]")) return;
+          if (consumeLongPressClick()) return;
+          // No bulk selection here: a series tile stands for its discs, and the
+          // discs are what the bulk bar can act on.
+          if (selectionMode) return;
+          openAppSeriesDetail(button.dataset.previewSeries);
+        });
+      });
     }
     function renderLocationDetailPage() {
       if (!activeLocationRoutePublicId) return;
@@ -38820,11 +42679,7 @@ def ui_preview_html(
           ? libraryVisibleSlice(displayItems).map((item, index) => (
               libraryViewMode === "list"
                 ? libraryListItemHtml(item)
-                : (
-                    item.kind === "container"
-                      ? containerPosterCardHtml(item.container, index)
-                      : posterCardHtml(item.movie, index)
-                  )
+                : libraryPosterCardHtml(item, index)
             )).join("") + libraryRenderSentinelHtml(displayItems.length)
           : `<div class="preview-empty">${escapeHtml(
               activeLocationRouteMissing
@@ -38976,11 +42831,7 @@ def ui_preview_html(
               (
                 libraryViewMode === "list"
                   ? libraryListTableHtml(displayItems)
-                  : libraryVisibleSlice(displayItems).map((item, index) => (
-                      item.kind === "container"
-                        ? containerPosterCardHtml(item.container, index)
-                        : posterCardHtml(item.movie, index)
-                    )).join("")
+                  : libraryVisibleSlice(displayItems).map((item, index) => libraryPosterCardHtml(item, index)).join("")
               ) + libraryRenderSentinelHtml(displayItems.length)
             )
           : `<div class="preview-empty">${escapeHtml(tNext("collection.emptyMovies", "No movies match the current filter."))}</div>`;
@@ -39011,6 +42862,12 @@ def ui_preview_html(
       const firstItem = libraryViewMode === "list" ? sortLibraryListItems(displayItems)[0] : displayItems[0];
       if (firstItem?.kind === "movie") selectMovie(firstItem.movie.id);
       if (firstItem?.kind === "container") selectContainer(firstItem.container.id);
+      // A series has no artwork or hero of its own yet, so the featured panel
+      // shows the first disc under it rather than going blank.
+      if (firstItem?.kind === "series") {
+        const firstDisc = itemMovieRows(firstItem)[0];
+        if (firstDisc?.id) selectMovie(firstDisc.id);
+      }
       updateBulkBar();
       renderLibraryMetadataJobs();
       libraryAfterRender();
@@ -39455,6 +43312,30 @@ def ui_preview_html(
           ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
           ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"]
         ]
+      },
+      {
+        // Deliberately on Library rather than Collectors: the Collectors tab is
+        // hidden unless the user holds container-management permissions, and a
+        // user who scans discs and picks editions - the one who contributes -
+        // does not need those. A privacy choice must be reachable by the person
+        // whose data it is, not gated behind an unrelated capability.
+        //
+        // The API still declares its own "sharing" section, so a native client
+        // is free to group it separately; only this layout is shared with
+        // Library.
+        key: "sharing",
+        titleKey: "preferences.cardSharing",
+        title: "Sharing with MovieVault",
+        helpKey: "preferences.cardSharingHelp",
+        help: "Help the shared catalogue by contributing the releases you identify.",
+        items: [
+          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"],
+          ["share_field_corrections", "preferences.shareFieldCorrections", "preferences.shareFieldCorrectionsHelp"],
+          // Depends on the correction preference rather than standing alone:
+          // "ask me every time" is a question about an upload that only
+          // happens once corrections are on.
+          ["confirm_every_upload", "preferences.confirmEveryUpload", "preferences.confirmEveryUploadHelp", "share_field_corrections"]
+        ]
       }
     ];
     const preferenceCollectorGroups = [
@@ -39489,19 +43370,6 @@ def ui_preview_html(
         items: [
           ["delete_container_members_with_container", "preferences.deleteContainerMembersWithContainer", "preferences.deleteContainerMembersWithContainerHelp", "collectors_mode"],
           ["show_metadata_jobs", "preferences.showMetadataJobs", "preferences.showMetadataJobsHelp"]
-        ]
-      },
-      {
-        // Its own card rather than a line under "management": this is the only
-        // preference that sends anything outside this instance, and it should
-        // read as that rather than as another display toggle.
-        key: "sharing",
-        titleKey: "preferences.cardSharing",
-        title: "Sharing with MovieVault",
-        helpKey: "preferences.cardSharingHelp",
-        help: "Help the shared catalogue by contributing the releases you identify.",
-        items: [
-          ["share_release_selections", "preferences.shareReleaseSelections", "preferences.shareReleaseSelectionsHelp"]
         ]
       }
     ];
@@ -39794,6 +43662,218 @@ def ui_preview_html(
         setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
       }
     }
+    // ---- MovieVault contribution (owner setting) --------------------------
+    //
+    // The owner half of the contribution gate, on the Collectors tab beside the
+    // Loans system switch. It lived only on the separate `/api/next/collection`
+    // dashboard until now, which meant the whole feature was unreachable from
+    // the app people actually use: the gate was off, and there was no way in
+    // here to turn it on.
+    //
+    // Deliberately *not* a preference row. `preferenceCardsHtml` writes to
+    // `/api/next/preferences`, and effective preferences are
+    // global-default-then-user-override - a flag placed there is user-writable
+    // by construction, which is the opposite of a gate. This is a sibling card
+    // with its own endpoint, exactly like the Loans system switch.
+    const movieVaultContribution = {loaded: false, enabled: false, registration: {}};
+
+    // The owner settings route is `require_owner`, so an admin who is not the
+    // owner would get a 403 from a switch we had drawn for them. Drawing it for
+    // exactly who can use it is the honest gate - showing a control that
+    // answers "no" is the mistake this whole surface already made once.
+    function canManageMovieVaultContribution() {
+      if (!appMode) return true;
+      return !!currentAuthStatus.authenticated && currentRole() === "owner";
+    }
+    async function loadMovieVaultContributionSetting() {
+      if (!canManageMovieVaultContribution()) return;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings");
+        const settings = payload.settings || {};
+        movieVaultContribution.enabled = !!settings.movievault_v2_contribution_enabled;
+        movieVaultContribution.registration = settings.movievault_v2_contribution || {};
+        movieVaultContribution.loaded = true;
+        renderMovieVaultContributionSetting();
+      } catch (error) {
+        /* Not an owner, or offline. The card stays as it was. */
+      }
+    }
+    function movieVaultContributionStatusLine() {
+      const registration = movieVaultContribution.registration || {};
+      const parts = [];
+      parts.push(
+        registration.registered
+          ? `${tNext("preferences.movieVaultRegistered", "Registered")}: ${registration.instanceId || "-"}`
+          : tNext("preferences.movieVaultNotRegistered", "Not registered yet. The first contribution registers this instance.")
+      );
+      // Worth showing even while sharing is on, and the only thing that
+      // explains why sending stopped: MovieVault blocking an instance turns
+      // this switch off by itself.
+      if (registration.lastError) {
+        parts.push(`${tNext("preferences.movieVaultLastError", "Last error")}: ${registration.lastError}`);
+      }
+      return parts.join(" - ");
+    }
+    function renderMovieVaultContributionSetting() {
+      const row = document.getElementById("movieVaultContributionSettingRow");
+      if (!row) return;
+      if (!canManageMovieVaultContribution()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      if (!movieVaultContribution.loaded) {
+        void loadMovieVaultContributionSetting();
+      }
+      const active = movieVaultContribution.enabled;
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <section class="preferences-setting-card system wide" data-preference-card="movievault-contribution">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("preferences.cardMovieVaultContribution", "Contributing to MovieVault"))}</h5>
+            <p>${escapeHtml(tNext("preferences.cardMovieVaultContributionHelp", "Whether this DiscVault may send anything to the shared catalogue at all. Each user still decides for themselves, and nothing is sent without confirming it field by field."))}</p>
+          </div>
+          <div class="preferences-card-list">
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(tNext("preferences.movieVaultContribution", "Allow contributions to MovieVault"))}</strong>
+                <span>${escapeHtml(tNext("preferences.movieVaultContributionHelp", "Covers both the releases people identify and the field corrections they send. Off means nothing leaves this instance, whatever a user has agreed to."))}</span>
+              </span>
+              <button type="button" class="switch ${active ? "on" : ""}" id="movieVaultContributionToggle" aria-label="${escapeHtml(tNext("preferences.movieVaultContribution", "Allow contributions to MovieVault"))}" aria-pressed="${active ? "true" : "false"}"></button>
+            </div>
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(tNext("preferences.movieVaultInstanceStatus", "Instance status"))}</strong>
+                <span id="movieVaultContributionStatus">${escapeHtml(movieVaultContribution.loaded ? movieVaultContributionStatusLine() : tNext("common.loading", "Loading..."))}</span>
+              </span>
+            </div>
+          </div>
+        </section>
+      `;
+      const toggle = document.getElementById("movieVaultContributionToggle");
+      if (toggle) toggle.addEventListener("click", () => toggleMovieVaultContribution(!active));
+    }
+    async function toggleMovieVaultContribution(enabled) {
+      const toggle = document.getElementById("movieVaultContributionToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movievault_v2_contribution_enabled: !!enabled})
+        });
+        const settings = payload.settings || {};
+        movieVaultContribution.enabled = !!settings.movievault_v2_contribution_enabled;
+        movieVaultContribution.registration = settings.movievault_v2_contribution || {};
+        movieVaultContribution.loaded = true;
+        renderMovieVaultContributionSetting();
+        // The Contribute button on a detail screen is drawn from this gate, so
+        // the screen behind this one is now stale.
+        if (activeDetailPayload) void refreshContributeButton("movie", (activeDetailPayload.movie || {}).id);
+        setPreferencesMessage(tNext("preferences.saved", "Saved."), "good");
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
+    // ---- Contribution history --------------------------------------------
+    //
+    // Per-record the detail screen answers "did my correction land". This
+    // answers the other half: what have I sent at all. Deliberately a separate
+    // surface rather than a badge somewhere -- it is read occasionally and on
+    // purpose, not glanced at.
+    const contributeHistory = {loaded: false, loading: false, items: [], scope: "mine", canReadInstance: false};
+
+    function contributeHistoryStatusLabel(status) {
+      const entry = CONTRIBUTE_STATUS_LABELS[status];
+      return entry ? tNext(entry[0], entry[1]) : status;
+    }
+    async function loadContributeHistory(scope) {
+      if (contributeHistory.loading) return;
+      contributeHistory.loading = true;
+      try {
+        const query = scope === "instance" ? "?scope=instance&limit=50" : "?limit=50";
+        const payload = await apiJson(`/api/next/movievault/contributions/history${query}`, {
+          headers: authHeaders()
+        });
+        contributeHistory.items = payload.contributions || [];
+        // Taken from the answer rather than from what was asked: a non-owner
+        // who requested the instance is narrowed to their own, and the panel
+        // has to say so instead of quietly showing a shorter list.
+        contributeHistory.scope = payload.scope || "mine";
+        contributeHistory.canReadInstance = !!payload.canReadInstance;
+        contributeHistory.loaded = true;
+      } catch (error) {
+        contributeHistory.items = [];
+        contributeHistory.loaded = true;
+      } finally {
+        contributeHistory.loading = false;
+        renderContributeHistory();
+      }
+    }
+    function contributeHistoryRow(item) {
+      const title = item.title || tNext("contribute.historyDeletedRecord", "(record deleted here)");
+      const fields = (item.fields || []).map(contributeFieldLabel).join(", ");
+      const detail = [fields, item.lastError].filter(Boolean).join(" - ");
+      return `
+        <div class="preference-row contribute-history-row">
+          <span>
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(detail || tNext("contribute.historyNoFields", "No fields recorded."))}</span>
+          </span>
+          <span class="contribute-status ${contributeStatusTone(item.status)}">${escapeHtml(contributeHistoryStatusLabel(item.status))}</span>
+        </div>
+      `;
+    }
+    function renderContributeHistory() {
+      const row = document.getElementById("contributeHistoryRow");
+      if (!row) return;
+      // Same gate as the button itself: contributing is an edit to a shared
+      // record, so someone who may not edit has nothing here to read.
+      if (!hasPermission("collection.edit_all")) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      if (!contributeHistory.loaded && !contributeHistory.loading) {
+        void loadContributeHistory(contributeHistory.scope);
+      }
+      row.classList.remove("hidden");
+      const items = contributeHistory.items || [];
+      const body = !contributeHistory.loaded
+        ? `<div class="preference-row"><span>${escapeHtml(tNext("common.loading", "Loading..."))}</span></div>`
+        : items.length
+          ? items.map(contributeHistoryRow).join("")
+          : `<div class="preference-row"><span>${escapeHtml(tNext("contribute.historyEmpty", "You have not contributed anything yet."))}</span></div>`;
+      const scopeToggle = contributeHistory.canReadInstance
+        ? `<button type="button" class="secondary-button" id="contributeHistoryScopeButton">${escapeHtml(
+            contributeHistory.scope === "instance"
+              ? tNext("contribute.historyScopeMine", "Show only mine")
+              : tNext("contribute.historyScopeInstance", "Show everyone's")
+          )}</button>`
+        : "";
+      row.innerHTML = `
+        <section class="preferences-setting-card wide" data-preference-card="contribute-history">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("contribute.historyTitle", "Corrections you sent"))}</h5>
+            <p>${escapeHtml(tNext("contribute.historyHelp", "What you proposed to MovieVault and what a moderator decided. A correction can take days to be reviewed."))}</p>
+          </div>
+          <div class="preferences-card-list">${body}</div>
+          <div class="app-admin-plugin-actions">
+            <button type="button" class="secondary-button" id="contributeHistoryRefreshButton">${escapeHtml(tNext("common.refresh", "Refresh"))}</button>
+            ${scopeToggle}
+          </div>
+        </section>
+      `;
+      document.getElementById("contributeHistoryRefreshButton")?.addEventListener("click", () => {
+        contributeHistory.loaded = false;
+        void loadContributeHistory(contributeHistory.scope);
+      });
+      document.getElementById("contributeHistoryScopeButton")?.addEventListener("click", () => {
+        contributeHistory.loaded = false;
+        void loadContributeHistory(contributeHistory.scope === "instance" ? "mine" : "instance");
+      });
+    }
     function setPreferencesMessage(message, tone) {
       const node = document.getElementById("preferencesMessage");
       if (!node) return;
@@ -39812,6 +43892,8 @@ def ui_preview_html(
         bindPreferenceList(collectorList);
       }
       renderLoansSystemSetting();
+      renderMovieVaultContributionSetting();
+      renderContributeHistory();
       setProfileMenuStyle(effectiveProfileMenuStyle());
       applyAppPermissionVisibility();
       setPreferenceTab(activePreferenceTab);
@@ -40849,6 +44931,8 @@ def ui_preview_html(
       containers = state.containers || [];
       locations = state.locations || locations || [];
       containerMembership = state.containerMembership || [];
+      seriesList = state.series || [];
+      seriesSeasonCoverage = state.seriesSeasonCoverage || [];
       mediaGroups = state.mediaGroups || [];
       preferences = Object.assign({}, preferences, state.preferences || {});
       setTheme(preferences.theme || localStorage.getItem("dv_next_theme") || "system");
@@ -42145,6 +46229,7 @@ def ui_preview_html(
       const routeMovieId = route.view === "movie" ? (route.movieId || initialMovieId) : "";
       if (routeMovieId) openAppMovieDetail(routeMovieId, false);
       else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "series") openAppSeriesDetail(route.seriesId, false);
       else if (route.view === "person") openAppPersonDetail(route.personId, false);
       else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
       else if (route.view === "people") showLibraryPage(false);
@@ -42307,7 +46392,7 @@ def ui_preview_html(
       }
       document.querySelectorAll("[data-container-view-mode]").forEach((button) => {
         button.addEventListener("click", () => {
-          const mode = normalizeViewMode(button.dataset.containerViewMode);
+          const mode = normalizeMemberViewMode(button.dataset.containerViewMode);
           const scope = button.dataset.containerViewScope || "movies";
           if (scope === "items") {
             containerItemsViewMode = mode;
@@ -43089,6 +47174,21 @@ def ui_preview_html(
           resetReleaseFallback();
         }
       });
+      document.getElementById("movieDetailReleaseCandidates")?.addEventListener("click", (event) => {
+        const chooseButton = event.target.closest("[data-movie-release-candidate-choose]");
+        const dismissButton = event.target.closest("[data-movie-release-candidate-dismiss]");
+        if (chooseButton) {
+          event.preventDefault();
+          applyMovieDetailReleaseCandidate(chooseButton.dataset.movieReleaseCandidateChoose);
+          return;
+        }
+        if (dismissButton) {
+          event.preventDefault();
+          movieDetailReleaseCandidates = null;
+          renderMovieDetailReleaseCandidates();
+          setMovieDetailMessage("");
+        }
+      });
       document.getElementById("importBarcodeResults")?.addEventListener("click", (event) => {
         const configureTmdbButton = event.target.closest("[data-import-configure-tmdb]");
         const addLookupButton = event.target.closest("[data-import-add-lookup]");
@@ -43331,6 +47431,12 @@ def ui_preview_html(
       document.getElementById("heroDetailLink")?.addEventListener("click", (event) => {
         const href = event.currentTarget.getAttribute("href") || "";
         const movieMatch = href.match(/\\/movies\\/([^/?#]+)/);
+        const seriesMatch = href.match(/\\/series\\/([^/?#]+)/);
+        if (seriesMatch) {
+          event.preventDefault();
+          openAppSeriesDetail(decodeURIComponent(seriesMatch[1]));
+          return;
+        }
         const containerMatch = href.match(/\\/containers\\/([^/?#]+)/);
         if (!movieMatch && !containerMatch) return;
         event.preventDefault();
@@ -43345,13 +47451,89 @@ def ui_preview_html(
         if (activeDiscoverItem) addDiscoverItemToWishlist(activeDiscoverItem, {detail: true});
       });
       document.getElementById("containerDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppContainerDetail()));
+      document.getElementById("seriesDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => closeAppSeriesDetail()));
+      document.getElementById("seriesEditToggleButton")?.addEventListener("click", () => {
+        const card = document.getElementById("seriesEditCard");
+        const show = Boolean(card?.hidden);
+        setSeriesEditPanelVisible(show);
+        // The form lives on the Overview tab. Revealing it while another tab is
+        // open would leave the button looking broken -- it did nothing visible.
+        if (show) activateDetailTab("seriesDetail", "seriesDetailOverviewPanel");
+      });
+      document.getElementById("seriesEditCancelTopButton")?.addEventListener("click", () => {
+        setSeriesEditPanelVisible(false);
+        fillSeriesEditForm((activeSeriesPayload || {}).series || {});
+      });
+      document.getElementById("seriesEditCancelButton")?.addEventListener("click", () => {
+        setSeriesEditPanelVisible(false);
+        fillSeriesEditForm((activeSeriesPayload || {}).series || {});
+      });
+      document.getElementById("seriesEditForm")?.addEventListener("submit", (event) => saveSeriesEdit(event));
+      document.getElementById("seriesMetadataRefreshButton")?.addEventListener("click", () => refreshActiveSeriesMetadata());
+      document.getElementById("seriesDeleteButton")?.addEventListener("click", () => deleteActiveSeries());
+      document.getElementById("seriesIdentitySearchButton")?.addEventListener("click", () => searchSeriesIdentity());
+      document.getElementById("seriesSeasonPickerButton")?.addEventListener("click", () => openSeriesSeasonPicker());
+      // Delegated: the save button is rendered by the picker, so it does not
+      // exist when the page is wired.
+      document.getElementById("seriesSeasonPicker")?.addEventListener("click", (event) => {
+        if (event.target?.closest("#seriesSeasonPickerSave")) saveSeriesSeasonSelection();
+      });
+      document.getElementById("seriesIdentitySearchInput")?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        // The input sits inside no form, so Enter would otherwise do nothing --
+        // which reads as a broken search box rather than as a missing shortcut.
+        event.preventDefault();
+        searchSeriesIdentity();
+      });
+      // Delegated: the candidate cards are rebuilt on every search, so a listener
+      // bound per card would have to be rebound with them.
+      // Delegated on the panel: season rows and episode rows are both rebuilt on
+      // every render, so per-row listeners would have to be rebound with them.
+      document.getElementById("seriesDetailSeasons")?.addEventListener("click", (event) => {
+        const seasonToggle = event.target.closest("[data-season-episodes]");
+        if (seasonToggle) {
+          event.preventDefault();
+          toggleSeasonEpisodes(seasonToggle.dataset.seasonEpisodes);
+          return;
+        }
+        const watchedButton = event.target.closest("[data-episode-watched]");
+        if (watchedButton) {
+          event.preventDefault();
+          toggleEpisodeWatched(watchedButton);
+        }
+      });
+      document.getElementById("seriesIdentityCandidates")?.addEventListener("click", (event) => {
+        const pick = event.target.closest("[data-series-identity-pick]");
+        if (!pick) return;
+        event.preventDefault();
+        chooseSeriesIdentity(pick.dataset.seriesIdentityPick);
+      });
+      document.querySelectorAll("[data-series-view-mode]").forEach((button) => {
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          const mode = normalizeMemberViewMode(button.dataset.seriesViewMode);
+          seriesDiscsViewMode = mode;
+          localStorage.setItem("dv_next_series_discs_view_mode", mode);
+          if (activeSeriesPayload) renderSeriesDetail(activeSeriesPayload);
+          else syncSeriesViewModeControls();
+        });
+      });
       document.getElementById("locationDetailBackButton")?.addEventListener("click", () => navigatePreviousFromDetail(() => showLibraryPage(true)));
       document.getElementById("movieEditToggleButton")?.addEventListener("click", () => handleMovieEditAction());
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
+      document.getElementById("movieEditCancelButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      // Native validation may flag a control on an edit section that is not
+      // the one on screen; reveal its section so the browser can focus it.
+      document.getElementById("movieEditForm")?.addEventListener("invalid", (event) => {
+        const section = event.target.closest("[data-detail-panel-group='movieEditSections']");
+        if (section && section.classList.contains("hidden")) activateDetailTab("movieEditSections", section.id);
+      }, true);
+      document.getElementById("movieEditIdentifierAdd")?.addEventListener("click", () => addMovieIdentifierRow(null));
       document.getElementById("movieEditMediaType")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieEditSeries")?.addEventListener("change", () => syncMovieEditSeriesVisibility([]));
       document.getElementById("movieDeleteButton")?.addEventListener("click", () => deleteActiveMovie());
+      document.getElementById("movieContributeButton")?.addEventListener("click", () => openContributeDialog("movie"));
       document.getElementById("movieWatchlistToggleButton")?.addEventListener("click", () => toggleActiveMovieWatchlist());
       document.getElementById("movieLogRewatchButton")?.addEventListener("click", () => openMovieRewatchDialog());
       document.getElementById("movieWatchHistoryPills")?.addEventListener("click", (event) => {
@@ -43395,6 +47577,7 @@ def ui_preview_html(
       document.getElementById("containerMetadataDryRunButton")?.addEventListener("click", () => refreshActiveContainerMetadata(true));
       document.getElementById("containerMetadataApplyButton")?.addEventListener("click", () => refreshActiveContainerMetadata(false));
       document.getElementById("containerDeleteButton")?.addEventListener("click", () => deleteActiveContainer());
+      document.getElementById("containerContributeButton")?.addEventListener("click", () => openContributeDialog("container"));
       document.getElementById("containerAddMovieForm")?.addEventListener("submit", (event) => addContainerMovie(event));
       document.getElementById("containerScanAddForm")?.addEventListener("submit", (event) => addContainerScanMember(event));
       wireImportScanPreview("containerScanAddBarcode", "containerScanAddPreview");
@@ -43462,6 +47645,21 @@ def ui_preview_html(
       });
       document.getElementById("personFilmographyRefreshButton")?.addEventListener("click", () => refreshActivePersonFilmography(false));
       document.getElementById("personMetadataRefreshButton")?.addEventListener("click", () => refreshActivePersonMetadata(false));
+      // The series page carries member cards built by the container renderers, so
+      // it needs the same open-a-disc delegate. Only that one: reordering and
+      // removing are container-only affordances and the cards render without them.
+      document.getElementById("seriesDetailPage")?.addEventListener("click", (event) => {
+        const movieLink = event.target.closest("[data-open-movie]");
+        if (!movieLink) return;
+        event.preventDefault();
+        openAppMovieDetail(movieLink.dataset.openMovie);
+      });
+      document.addEventListener("click", (event) => {
+        const seriesLink = event.target.closest("[data-open-series]");
+        if (!seriesLink) return;
+        event.preventDefault();
+        openAppSeriesDetail(seriesLink.dataset.openSeries);
+      });
       document.getElementById("containerDetailPage")?.addEventListener("click", (event) => {
         const movieLink = event.target.closest("[data-open-movie]");
         const containerLink = event.target.closest("[data-open-container]");
@@ -43531,7 +47729,10 @@ def ui_preview_html(
         if (!items.length) return;
         const item = items[Math.floor(Math.random() * items.length)];
         if (item.kind === "container") selectContainer(item.container.id);
-        else selectMovie(item.movie.id);
+        else if (item.kind === "series") {
+          const disc = itemMovieRows(item)[0];
+          if (disc?.id) selectMovie(disc.id);
+        } else selectMovie(item.movie.id);
       });
       refreshAppFlow().catch((error) => {
         if (appMode) {
@@ -43546,6 +47747,7 @@ def ui_preview_html(
         const route = appRouteFromPath();
         if (route.view === "movie") openAppMovieDetail(route.movieId, false);
         else if (route.view === "container") openAppContainerDetail(route.containerId, false);
+      else if (route.view === "series") openAppSeriesDetail(route.seriesId, false);
         else if (route.view === "person") openAppPersonDetail(route.personId, false);
         else if (route.view === "location") openAppLocationRoute(route.locationPublicId, false);
         else if (route.view === "people") showLibraryPage(false);

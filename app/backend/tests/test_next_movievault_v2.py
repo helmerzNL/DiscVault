@@ -112,6 +112,7 @@ def release_details_hit(*, external: bool = False) -> dict:
             "discCount": 2,
             "regions": ["B"],
             "packaging": ["steelbook"],
+            "finishes": ["holofoil"],
             "video": {
                 "resolution": "2160p",
                 "codecs": ["hevc"],
@@ -156,6 +157,7 @@ def release_details_candidates(*, count: int = 2) -> dict:
                 "discRegions": ["B"],
                 "discCount": index + 1,
                 "packaging": ["steelbook"] if index else [],
+                "finishes": ["holofoil"] if index else [],
                 "video": {
                     "resolution": "2160p",
                     "codecs": ["hevc"],
@@ -601,15 +603,22 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         ):
             next_movievault_v2.validate_release_details_response(payload)
 
-    def test_release_details_rejects_provider_owned_or_unknown_fields(self):
+    def test_release_details_ignores_provider_owned_or_unknown_fields(self):
+        """A field this reader does not know is dropped, not fatal.
+
+        It used to reject the whole response, which meant a purely additive
+        field on MovieVault's side took barcode scanning down until this repo
+        caught up - twice, with `subtitles` and then `finishes`. The provider
+        prose still never reaches anything: it is filtered out here, so no
+        caller can read a key the parser did not declare.
+        """
         payload = release_details_hit(external=True)
         payload["release"]["description"] = "provider-owned prose"
 
-        with self.assertRaisesRegex(
-            next_movievault_v2.MovieVaultV2Error,
-            "^release_details_response_invalid$",
-        ):
-            next_movievault_v2.validate_release_details_response(payload)
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "external_hit")
+        self.assertNotIn("description", result["release"])
 
     def test_release_details_accepts_strict_ordered_box_set(self):
         payload = release_details_hit(external=True)
@@ -696,6 +705,128 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             ],
         )
         self.assertNotIn("subtitleLanguages", first)
+        # Two pressings of one film may differ by the finish alone, so it is
+        # read rather than merely tolerated.
+        self.assertEqual(first["finishes"], [])
+        self.assertEqual(result["releases"][1]["finishes"], ["holofoil"])
+
+    def test_release_details_ignores_an_unknown_future_key(self):
+        """An additive producer field must not cost the whole answer.
+
+        This is the failure that took barcode scanning down twice - `subtitles`
+        on 2026-08-04 and `finishes` on 2026-08-09 - because the reader
+        validated with a closed key set. Checked at every nesting level, since
+        that is where the next one will appear.
+        """
+        payload = release_details_candidates()
+        payload["glitter"] = True
+        payload["releases"][0]["sparkleLevel"] = 3
+        payload["releases"][0]["video"]["frameRate"] = "24p"
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(len(result["releases"]), 2)
+        self.assertNotIn("glitter", result)
+        self.assertNotIn("sparkleLevel", result["releases"][0])
+        self.assertNotIn("frameRate", result["releases"][0]["video"])
+
+    def test_release_details_keeps_an_unknown_finish_value(self):
+        payload = release_details_candidates()
+        payload["releases"][0]["finishes"] = ["mirror_foil"]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["releases"][0]["finishes"], ["mirror_foil"])
+
+    def test_release_details_keeps_an_unknown_audio_codec_and_channel_layout(self):
+        """Vocabulary is open, shape is not.
+
+        A codec name this repo has not heard of describes a track that is
+        otherwise perfectly readable; refusing it used to discard every field of
+        every lookup until the allow-list caught up.
+        """
+        payload = release_details_candidates()
+        payload["releases"][0]["audioTracks"] = [
+            {"languageCode": "en", "codec": "dts_hd_x", "channels": "9.1.6"}
+        ]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["releases"][0]["audioTracks"],
+            [{"languageCode": "en", "codec": "dts_hd_x", "channels": "9.1.6"}],
+        )
+
+    def test_release_details_still_refuses_an_unreadable_audio_track_shape(self):
+        for track in (
+            {"languageCode": "en", "codec": ""},
+            {"languageCode": "en", "codec": 5},
+            {"languageCode": "en", "codec": "dts", "channels": "x" * 32},
+        ):
+            with self.subTest(track=track):
+                payload = release_details_candidates()
+                payload["releases"][0]["audioTracks"] = [track]
+
+                with self.assertRaisesRegex(
+                    next_movievault_v2.MovieVaultV2Error,
+                    "^release_details_response_invalid$",
+                ):
+                    next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_ignores_an_unknown_film_link(self):
+        """The resolver already runs a Wikidata step.
+
+        The two links DiscVault knows must still match the identifiers beside
+        them - a link is never taken on trust - but comparing the whole `links`
+        object made the day MovieVault publishes a third one an outage.
+        """
+        payload = release_details_candidates()
+        payload["film"]["links"]["wikidata"] = "https://www.wikidata.org/wiki/Q104123"
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["film"]["links"],
+            {"tmdb": "https://www.themoviedb.org/movie/123"},
+        )
+
+    def test_release_details_rejects_a_hit_carrying_a_candidate_list(self):
+        """`release` and `releases` answer the same question incompatibly.
+
+        Unknown keys are ignored now, but this pair is a contradiction rather
+        than an addition, so it stays a refusal on both sides.
+        """
+        payload = release_details_hit()
+        payload["releases"] = release_details_candidates()["releases"]
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_rejection_names_the_failing_check(self):
+        # Unknown keys are ignored now, but a genuine contract violation still
+        # refuses the whole response with one opaque code shared by dozens of
+        # checks. The log must say which check did it, or the next producer
+        # drift is as undiagnosable as the `finishes` incident was.
+        payload = release_details_hit()
+        payload["release"]["discCount"] = 0
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING") as logs:
+            with self.assertRaisesRegex(
+                next_movievault_v2.MovieVaultV2Error,
+                "^release_details_response_invalid$",
+            ):
+                next_movievault_v2._decode_release_details_response(
+                    200,
+                    json.dumps(payload).encode(),
+                )
+        self.assertTrue(
+            any("_release_details_integer" in line for line in logs.output),
+            logs.output,
+        )
 
     def test_release_details_candidates_require_a_film_and_a_release(self):
         for mutate in (
@@ -1424,6 +1555,185 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         next_movievault_v2.validate_record(
             record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
         )
+
+    def test_v4_release_accepts_the_seasons_a_release_covers(self):
+        """The next field MovieVault publishes, and the one most able to break us.
+
+        `workType` above could at least be argued to arrive gradually. This one
+        cannot: upstream publishes `seasons` on *every* v4 release record,
+        because an empty list there is a statement -- "the complete series, or
+        unspecified" -- rather than an omission. So there is no window in which
+        only some records carry it. The first sync after an origin ships it
+        either tolerates the key on every record or fails on every record.
+        """
+        record = self._v4_release(
+            seasons=[
+                {"seasonNumber": 1, "title": "Season One", "releaseYear": 2005, "episodeCount": 13},
+                {"seasonNumber": 2, "title": None, "releaseYear": None, "episodeCount": None},
+            ]
+        )
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
+    def test_v4_release_accepts_an_empty_seasons_list(self):
+        """This is the case that arrives on every film in the catalogue.
+
+        A film covers no seasons, so upstream publishes `[]` -- and `[]` is what
+        the overwhelming majority of records carry. A tolerance that only handled
+        the populated shape would still take the whole feed down.
+        """
+        record = self._v4_release(seasons=[])
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
+    def test_v4_release_tolerates_malformed_seasons(self):
+        """Nothing reads the field yet, so there is nothing to protect by
+        refusing it -- and refusing it would cost the entire catalogue rather
+        than one release's season list."""
+        for value in ("not-a-list", [{"seasonNumber": "one"}], [None], [{}]):
+            with self.subTest(seasons=value):
+                record = self._v4_release(seasons=value)
+                next_movievault_v2.validate_record(
+                    record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+                )
+
+    def test_v4_release_without_seasons_still_parses(self):
+        """Records projected before the field existed have no key at all."""
+        record = self._v4_release()
+        self.assertNotIn("seasons", record)
+        next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+
+    def test_seasons_are_parsed_into_the_stored_shape(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[
+                    {
+                        "seasonNumber": 1,
+                        "title": "Season One",
+                        "releaseYear": 2005,
+                        "episodeCount": 13,
+                    },
+                    {
+                        "seasonNumber": 0,
+                        "title": None,
+                        "releaseYear": None,
+                        "episodeCount": None,
+                    },
+                ]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(
+            parsed["seasons"],
+            [
+                {
+                    "seasonNumber": 1,
+                    "title": "Season One",
+                    "releaseYear": 2005,
+                    "episodeCount": 13,
+                },
+                # Season 0 is specials, on TMDB and on the disc, so the floor is
+                # 0 rather than 1 and this entry must survive.
+                {
+                    "seasonNumber": 0,
+                    "title": None,
+                    "releaseYear": None,
+                    "episodeCount": None,
+                },
+            ],
+        )
+
+    def test_an_absent_season_list_is_not_the_same_as_an_empty_one(self):
+        """The distinction the whole column rests on.
+
+        A missing key means the feed has not said -- an older projection, or a
+        pre-v4 contract. `[]` means it has said, and the answer is "no particular
+        season": a film, or a complete-series set. Collapsing the two would let a
+        record that never mentioned seasons clear a list somebody else recorded.
+        """
+        absent = next_movievault_v2.validate_record(
+            self._v4_release(), contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        stated = next_movievault_v2.validate_record(
+            self._v4_release(seasons=[]),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertIsNone(absent["seasons"])
+        self.assertEqual(stated["seasons"], [])
+
+    def test_an_unusable_season_is_skipped_rather_than_costing_the_record(self):
+        """563 paid for this lesson at the key level; the same has to hold here.
+
+        A rejection one layer deeper would still be a rejection, and this field
+        arrives on every record at once -- so it would still be a dead catalogue
+        rather than one missing season list.
+        """
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[
+                    {"seasonNumber": 1},
+                    "not-an-object",
+                    {"seasonNumber": "two"},
+                    {"seasonNumber": True},
+                    {"title": "no number at all"},
+                    {"seasonNumber": 999},
+                    {"seasonNumber": -1},
+                ]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual([season["seasonNumber"] for season in parsed["seasons"]], [1])
+
+    def test_a_duplicate_season_number_keeps_the_first(self):
+        """Upstream rejects a duplicate before publishing, so this is producer
+        drift. Storing both would hand `series_seasons` two rows for one number,
+        which its own unique index refuses mid-sync."""
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[
+                    {"seasonNumber": 2, "title": "First seen"},
+                    {"seasonNumber": 2, "title": "Second seen"},
+                ]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(len(parsed["seasons"]), 1)
+        self.assertEqual(parsed["seasons"][0]["title"], "First seen")
+
+    def test_an_over_long_season_list_is_truncated_rather_than_refused(self):
+        parsed = next_movievault_v2.validate_record(
+            self._v4_release(
+                seasons=[{"seasonNumber": number} for number in range(0, 150)]
+            ),
+            contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT,
+        )
+        self.assertEqual(len(parsed["seasons"]), next_movievault_v2.MAX_SEASONS)
+
+    def test_a_v3_record_never_carries_seasons(self):
+        """The field is distribution-4 and later. A v3 contract has no key for it
+        and must not invent an empty answer -- `None` here, not `[]`, so a v3
+        generation cannot read as "this release covers no seasons"."""
+        record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)
+        for key in (
+            "audioTracks",
+            "subtitles",
+            "packaging",
+            "poster",
+            "videoResolution",
+            "videoCodecs",
+            "hdrFormats",
+            "aspectRatios",
+            "discRegions",
+        ):
+            del record[key]
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V3_CONTRACT
+        )
+        self.assertIsNone(parsed["seasons"])
 
     def test_v3_release_does_not_require_or_accept_the_new_fields(self):
         record = self._v4_release(contractVersion=next_movievault_v2.MOVIEVAULT_V3_CONTRACT)

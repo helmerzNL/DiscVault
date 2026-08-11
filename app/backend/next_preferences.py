@@ -44,6 +44,16 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     # `movievault_v2_contribution_enabled`: a user cannot turn on sharing that
     # the instance owner has not allowed. See release_contribution_enabled().
     "share_release_selections": False,
+    # A second preference rather than a reuse of the one above. Offering a disc
+    # you scanned and editing a record everyone else reads are different acts
+    # with different consequences; one checkbox for both would mean consenting
+    # to the second by having agreed to the first. Gated again by the same
+    # owner setting -- see field_correction_enabled().
+    "share_field_corrections": False,
+    # Whether the confirmation sheet keeps its full explanation after the first
+    # time. The diff itself is always shown -- contribution-2 requires explicit
+    # field confirmation -- so this governs the wording, not the confirmation.
+    "confirm_every_upload": False,
 }
 APP_PREFERENCE_ALIASES = {
     "show_search_button": "show_collection_search",
@@ -63,6 +73,8 @@ APP_BOOLEAN_PREFERENCES = {
     "show_metadata_jobs",
     "price_monitoring_enabled",
     "share_release_selections",
+    "share_field_corrections",
+    "confirm_every_upload",
 }
 APP_CHOICE_PREFERENCES = {
     "theme": {"system", "light", "dark"},
@@ -96,7 +108,11 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
     # Its own section rather than an entry under "library": this is the only
     # preference that sends anything outside the instance, and burying that
     # among display toggles would be the wrong kind of quiet.
-    "sharing": ("share_release_selections",),
+    "sharing": (
+        "share_release_selections",
+        "share_field_corrections",
+        "confirm_every_upload",
+    ),
 }
 
 PRICE_DISPLAY_SUPPORTED_CURRENCIES: tuple[str, ...] = ("EUR", "USD", "GBP", "CAD", "AUD", "CHF", "JPY")

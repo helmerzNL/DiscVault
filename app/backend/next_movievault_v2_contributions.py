@@ -32,6 +32,7 @@ import json
 import secrets
 import socket
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any
@@ -74,6 +75,7 @@ except ImportError:  # pragma: no cover - supports running modules directly
     from versioning import backend_version
 
 CONTRIBUTION_PROTOCOL = "contribution-1"
+FIELD_CORRECTION_PROTOCOL = "contribution-2"
 RELEASE_TECHNICAL_ENTITY = "release_technical"
 REGISTER_PATH = "/v2/contributions/register"
 SUBMIT_PATH = "/v2/contributions"
@@ -162,16 +164,21 @@ def canonical_json(payload: Any) -> bytes:
     ).encode("utf-8")
 
 
-def idempotency_key(payload: dict[str, Any]) -> str:
+def idempotency_key(payload: dict[str, Any], *, prefix: str = "dv-rt1") -> str:
     """A key derived from the payload, so a repeat is recognised as one.
 
     Scanning the same disc twice and picking the same edition produces the same
     bytes and therefore the same key, and MovieVault returns the original
     contribution instead of queueing a second review. Picking a *different*
     edition is different content and legitimately a new contribution.
+
+    The prefix names the shape the digest was taken over. Two entity types
+    sharing one prefix would produce keys from one namespace for payloads that
+    are not comparable, and the uniqueness is per instance -- so a collision
+    would return somebody's unrelated contribution as "the original".
     """
     digest = hashlib.sha256(canonical_json(payload)).hexdigest()
-    return f"dv-rt1-{digest[:56]}"
+    return f"{prefix}-{digest[:56]}"
 
 
 def source_reference(scanned_barcode: str, release_ref: str) -> dict[str, str]:
@@ -184,6 +191,21 @@ def source_reference(scanned_barcode: str, release_ref: str) -> dict[str, str]:
     barcode_hash = hashlib.sha256(scanned_barcode.encode("ascii")).hexdigest()[:16]
     ref_hash = hashlib.sha256((release_ref or "manual").encode("utf-8")).hexdigest()[:16]
     return {"type": "discvault_release", "key": f"rt1.{barcode_hash}.{ref_hash}"}
+
+
+def field_correction_source_reference(entity_type: str, entity_id: str) -> dict[str, str]:
+    """A non-personal reference for a correction.
+
+    Keyed on the target rather than on a scanned barcode, because a correction
+    does not come from a scan -- it comes from someone looking at a record they
+    already have. The entity id is hashed rather than sent: it is not secret,
+    but this field is meant to be opaque to everyone but the sender, and a
+    readable id here would let the moderation queue be joined against the
+    catalogue by anyone who could see both.
+    """
+    digest = hashlib.sha256(f"{entity_type}:{entity_id}".encode("ascii")).hexdigest()[:32]
+    kind = "discvault_box_set" if entity_type == "box_set" else "discvault_release"
+    return {"type": kind, "key": f"fc2.{digest}"}
 
 
 def _signed_headers(private_key_pem: str, body: bytes) -> dict[str, str]:
@@ -225,6 +247,35 @@ def _http(url: str, *, body: bytes, headers: dict[str, str], timeout_seconds: in
         # A timeout proves nothing: MovieVault may have stored this already.
         # The idempotency key makes a repeat safe anyway, which is the only
         # reason this is retryable at all.
+        raise MovieVaultContributionError("contribution_network_error", retryable=True) from exc
+
+
+def _http_get(url: str, *, headers: dict[str, str], timeout_seconds: int) -> tuple[int, bytes]:
+    """The read-back half of the transport.
+
+    Separate from `_http` rather than a `method=` parameter on it: a GET carries
+    no body, and the signature covers the body, so the two differ in what is
+    signed and not only in the verb. Collapsing them would put an empty-body
+    special case inside the one function whose correctness is the signature.
+    """
+    request_headers = {
+        "Accept": "application/json",
+        "User-Agent": "DiscVault-MovieVault-v2",
+        **headers,
+    }
+    request = urllib.request.Request(url, method="GET", headers=request_headers)
+    opener = urllib.request.build_opener(_NoRedirect())
+    try:
+        with opener.open(request, timeout=timeout_seconds) as response:
+            return int(response.status), response.read(MAX_RESPONSE_BYTES + 1)
+    except urllib.error.HTTPError as exc:
+        if 300 <= exc.code < 400:
+            raise MovieVaultContributionError("redirect_rejected") from exc
+        return int(exc.code), exc.read(MAX_RESPONSE_BYTES + 1)
+    except (urllib.error.URLError, TimeoutError, socket.timeout) as exc:
+        # A read has no side effect, so every transport failure here is simply
+        # "ask again later" -- none of the ambiguity that makes the POST path
+        # depend on an idempotency key.
         raise MovieVaultContributionError("contribution_network_error", retryable=True) from exc
 
 
@@ -435,6 +486,145 @@ def submit_release_technical(
         timeout_seconds=timeout_seconds,
     )
     return _raise_for_status(status, content)
+
+
+def submit_field_correction(
+    conn,
+    correction: dict[str, Any],
+    *,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """Send one field correction, registering first if needed.
+
+    Shares the identity, the signing, the transport and the error
+    classification with `submit_release_technical` -- only the envelope differs,
+    because only the envelope is what makes this contribution-2 rather than
+    contribution-1. Two entity types, one registered instance: MovieVault keys
+    reputation on the instance, so a second identity here would split one
+    contributor into two.
+    """
+    state = ensure_registration(conn, timeout_seconds=timeout_seconds)
+    if not state.get("registered"):
+        raise MovieVaultContributionError("contribution_not_registered")
+    token = _decrypt_secret_value(_setting_value(conn, TOKEN_KEY, "", include_secret=True))
+    key_id = _text(_setting_value(conn, KEY_ID_KEY, ""))
+    private_pem = _decrypt_secret_value(_setting_value(conn, PRIVATE_KEY_KEY, "", include_secret=True))
+
+    target = correction.get("target") or {}
+    entity_type = _text(target.get("entityType"))
+    entity_id = _text(target.get("entityId"))
+    changes = correction.get("changes") or []
+    if not entity_type or not entity_id or not changes:
+        raise MovieVaultContributionError("payload_invalid")
+
+    envelope = {
+        "protocolVersion": FIELD_CORRECTION_PROTOCOL,
+        "sourceClient": "discvault",
+        "sourceVersion": backend_version()[:80],
+        "idempotencyKey": idempotency_key(
+            {"target": target, "changes": changes},
+            prefix="dv-fc2",
+        ),
+        "entityType": entity_type,
+        "sourceReference": field_correction_source_reference(entity_type, entity_id),
+        "target": {"entityId": entity_id, "baseRevision": int(target.get("baseRevision") or 0)},
+        "changes": changes,
+    }
+    body = canonical_json(envelope)
+    if len(body) > DEFAULT_MAX_RELEASE_DETAILS_BYTES:
+        raise MovieVaultContributionError("payload_too_large")
+    headers = _signed_headers(private_pem, body)
+    headers["Authorization"] = f"Bearer {token}"
+    headers["X-DiscVault-Key-Id"] = key_id
+    status, content = _http(
+        f"{enforced_origin()}{SUBMIT_PATH}",
+        body=body,
+        headers=headers,
+        timeout_seconds=timeout_seconds,
+    )
+    return _raise_for_status(status, content)
+
+
+# MovieVault's whole status vocabulary is pending, quarantined, accepted,
+# partially_accepted and rejected (migration 0041). Only the last three are
+# decisions. `quarantined` deliberately is not: a moderator may still review a
+# quarantined contribution, so treating it as final would stop asking exactly
+# when the answer is most likely to change. A duplicate is not a status here -
+# it is an ordinary status plus a `duplicateOf` pointer.
+TERMINAL_CONTRIBUTION_STATUSES = frozenset({"accepted", "partially_accepted", "rejected"})
+
+
+def read_contribution(
+    conn,
+    contribution_id: str,
+    *,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """What became of one contribution we sent.
+
+    Unsigned, matching the route: a GET has no body, and the signature covers
+    the body, so the bearer token is what proves possession here. The answer is
+    scoped upstream to the submitting instance, so this cannot read anyone
+    else's submission even by guessing an id.
+
+    Does not register: a read-back for a contribution id we hold implies we
+    registered to send it, and registering here would turn a lost token into a
+    silent new identity that the original contribution does not belong to.
+    """
+    identifier = _text(contribution_id)
+    if not identifier:
+        raise MovieVaultContributionError("payload_invalid")
+    token = _decrypt_secret_value(_setting_value(conn, TOKEN_KEY, "", include_secret=True))
+    key_id = _text(_setting_value(conn, KEY_ID_KEY, ""))
+    if not token or not key_id:
+        raise MovieVaultContributionError("contribution_not_registered")
+    status, content = _http_get(
+        f"{enforced_origin()}{SUBMIT_PATH}/{urllib.parse.quote(identifier, safe='')}",
+        headers={"Authorization": f"Bearer {token}", "X-DiscVault-Key-Id": key_id},
+        timeout_seconds=timeout_seconds,
+    )
+    return _raise_for_status(status, content)
+
+
+def field_correction_enabled(conn, user_id: Any = None) -> bool:
+    """Whether this user's edits may be offered as corrections.
+
+    The same two-gate composition as `release_contribution_enabled`, with a
+    second user preference rather than a reuse of the first. Offering a disc you
+    scanned and editing a record everyone else reads are different acts with
+    different consequences, and one checkbox for both would mean consenting to
+    the second by having agreed to the first.
+
+    The owner flag is shared: it answers "does anything leave this instance at
+    all", which is one question however many kinds of contribution exist.
+    """
+    gate = field_correction_gate(conn, user_id)
+    return gate["owner"] and gate["user"]
+
+
+def field_correction_gate(conn, user_id: Any = None) -> dict[str, bool]:
+    """The two halves of the gate, separately.
+
+    Composed they answer "may this be sent". Apart they answer "and who has to
+    do something about it", which is a different question and the one a screen
+    needs. Collapsing them into one boolean made a client offer the user a
+    consent that could not possibly help: the owner flag was off, the user
+    agreed to sharing, and the send was refused anyway with a message that read
+    as though agreeing had not registered.
+
+    An owner flag that is off is nothing the user can act on. A preference that
+    is off is nothing anyone else can act on. One boolean cannot say which.
+    """
+    if not _table_exists(conn, "app_settings"):
+        return {"owner": False, "user": False}
+    enabled = _setting_value(conn, CONTRIBUTION_ENABLED_KEY, False)
+    owner = enabled is True or _text(enabled).lower() in {"1", "true", "yes", "on"}
+    try:
+        from .next_preferences import app_effective_preferences
+    except ImportError:  # pragma: no cover - supports running modules directly
+        from next_preferences import app_effective_preferences
+    preferences = app_effective_preferences(conn, user_id)
+    return {"owner": owner, "user": bool(preferences.get("share_field_corrections"))}
 
 
 def record_failure(conn, code: str) -> None:

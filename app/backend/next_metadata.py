@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import hashlib
+import logging
 import os
 import re
 import unicodedata
@@ -21,7 +22,9 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from .dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from .dedup_identity import extract_identity_identifiers
+    from .dedup_identity import MEDIA_TYPE_SHOW
     from .dedup_identity import normalize_media_type
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
@@ -32,11 +35,17 @@ try:
     from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_packaging import split_legacy_packaging
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from .next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
+    from .next_series import ensure_seasons, ensure_series, provider_series_payload
+    from .next_series import series_id_for_identifier
 except ImportError:  # pragma: no cover - supports direct module execution
+    from dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from dedup_identity import extract_identity_identifiers
+    from dedup_identity import MEDIA_TYPE_SHOW
     from dedup_identity import normalize_media_type
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
@@ -47,13 +56,24 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_movievault_connection import movievault_plugin_context
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
+    from next_packaging import split_legacy_packaging
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
+    from next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
+    from next_series import ensure_seasons, ensure_series, provider_series_payload
+    from next_series import series_id_for_identifier
 
+
+logger = logging.getLogger(__name__)
 
 METADATA_REFRESH_JOB_TYPE = "metadata.refresh_movie"
 PERSON_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_person"
+# A series is enriched on its own schedule rather than as part of the disc that
+# revealed it. One series is shared by every edition a collector owns, so
+# attaching the work to a disc would repeat it once per pressing and make which
+# disc happened to sync first decide when the series got described.
+SERIES_METADATA_REFRESH_JOB_TYPE = "metadata.refresh_series"
 
 METADATA_MAIN_FIELDS = {
     "title",
@@ -121,6 +141,10 @@ METADATA_DISPLAY_TITLE_FIELDS = {
 METADATA_TECHNICAL_FIELDS = {
     "hdr",
     "packaging",
+    "carrier_type",
+    "outer_packaging",
+    "finishes",
+    "steelbook_format",
     "screen_ratios",
     "audio_tracks",
     "subtitles",
@@ -161,11 +185,22 @@ MOVIE_LOCKABLE_FIELDS = {
     "overview",
     "notes",
     "runtime_minutes",
+    # The merge policy already refuses to demote a series to a film, so the
+    # lock's job here is the other direction: it is the one way to say "this
+    # stays a film" to a provider that keeps stating tv. Both the field-set
+    # comment on METADATA_MAIN_FIELDS and apply_movie_series_link's type gate
+    # promise exactly that, and neither could be kept while the name was
+    # missing from this set — a media_type lock was silently normalised away.
+    "media_type",
     "director",
     "studios",
     "distributor",
     "hdr",
     "packaging",
+    "carrier_type",
+    "outer_packaging",
+    "finishes",
+    "steelbook_format",
     "screen_ratios",
     "audio_tracks",
     "subtitles",
@@ -224,11 +259,16 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "overview": ("overview",),
     "notes": ("notes",),
     "runtime_minutes": ("runtimeMinutes",),
+    "media_type": ("mediaType", "media_type", "workType"),
     "director": ("director",),
     "studios": ("studios", "studio"),
     "distributor": ("distributor",),
     "hdr": ("hdr", "hdrFormats"),
     "packaging": ("packaging",),
+    "carrier_type": ("carrierType", "carrier_type"),
+    "outer_packaging": ("outerPackaging", "outer_packaging"),
+    "finishes": ("finishes",),
+    "steelbook_format": ("steelbookFormat", "steelbook_format"),
     "screen_ratios": ("screenRatios", "screen_ratios", "aspectRatios"),
     "audio_tracks": ("audioTracks", "audio_tracks"),
     "subtitles": ("subtitles", "subtitleLanguages"),
@@ -254,6 +294,8 @@ METADATA_LIST_FIELDS = {
     "backdrop_urls",
     "videos",
     "packaging",
+    "outer_packaging",
+    "finishes",
     # Lists since migration 055 - MovieVault publishes both as arrays and a disc
     # genuinely carries more than one of each.
     "hdr",
@@ -885,7 +927,12 @@ def movie_technical_specs(conn, movie_id: UUID) -> dict[str, Any]:
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT hdr, packaging, screen_ratios, audio_tracks, subtitles, regions, content_ratings
+            SELECT hdr, packaging, carrier_type, outer_packaging, finishes, steelbook_format,
+                   screen_ratios, audio_tracks, subtitles, regions, content_ratings,
+                   -- Both are correctable release fields (`RELEASE_FIELD_SOURCES`
+                   -- names them) and neither was selected here, so the reader
+                   -- answered "nobody said" for a value the table was holding.
+                   video_resolution, video_codecs
             FROM movie_technical_specs
             WHERE movie_id=%s
             """,
@@ -958,6 +1005,12 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
                 runtime_minutes,
                 overview,
                 rating,
+                -- media_type and series_id feed the merge's demotion rule:
+                -- without them the stored type reads as empty and any stated
+                -- type wins, which on a linked series disc is not a field
+                -- write but a movies_series_requires_show violation.
+                media_type,
+                series_id,
                 metadata
             FROM movies
             WHERE id=%s
@@ -1080,6 +1133,20 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             }
             if "search_title" in capabilities:
                 add("search_title", title_payload)
+            # And the television namespace, when the source has one. Without this
+            # a title search could only ever return films -- `search_title` is
+            # `/search/movie` at TMDB -- so a television disc added here arrived
+            # as a MOVIE with no series and no identifier, which is precisely the
+            # state that makes a series unenrichable.
+            #
+            # `add` is already a no-op for a capability the source does not
+            # declare, so a movie-only plugin gains no empty step.
+            #
+            # This does not reopen 7b. That rule forbids a *source* identifying a
+            # series by title on its own initiative; here a person typed the title
+            # and picks from what comes back, exactly as they do in the identity
+            # picker on the series page.
+            add("search_series", title_payload)
             add("movie_details", title_payload)
             if query.get("detectBoxSets"):
                 add("box_set_candidates", title_payload)
@@ -1446,6 +1513,8 @@ def normalize_list_field(field: str, value: Any) -> list[Any]:
         "regions",
         "backdrop_urls",
         "packaging",
+        "outer_packaging",
+        "finishes",
         "hdr",
         "screen_ratios",
         "video_codecs",
@@ -2710,6 +2779,38 @@ def should_apply_field(
     return False, "existing value retained"
 
 
+def should_apply_media_type(*, current_value: Any, incoming_value: Any) -> tuple[bool, str]:
+    """Decide a proposed ``media_type`` against the stored one, asymmetrically.
+
+    The generic rules cannot carry this field. The column is NOT NULL DEFAULT
+    'MOVIE', so "current field is empty" never truthfully describes it, and the
+    default is indistinguishable from a stated MOVIE — which cuts both ways:
+
+    - **Promotion (→ SHOW) is allowed.** Nothing infers this field, so a SHOW
+      can only come from a human statement upstream, and it is these updates
+      that let ``apply_movie_series_link`` link the disc afterwards. Blocking
+      it on the at-rest default would make TV enrichment unreachable for every
+      disc that predates the type.
+    - **Demotion (SHOW → MOVIE) is refused.** A stored SHOW was itself stated
+      at some point, and the disc may carry a series link that
+      ``movies_series_requires_show`` ties to the type — so a demoting refresh
+      is not a field write, it is an unlink, and re-pointing a disc is a
+      decision rather than a refresh. "This is a film after all" stays a
+      manual edit, where shedding the link is deliberate.
+    """
+    incoming = normalize_media_type(incoming_value)
+    current = normalize_media_type(current_value)
+    if incoming is None:
+        return False, "incoming value is empty"
+    if incoming == current:
+        return False, "existing value retained"
+    if incoming == MEDIA_TYPE_SHOW:
+        return True, "a stated series type promotes the disc to a series"
+    if current == MEDIA_TYPE_SHOW:
+        return False, "a refresh may not demote a series to a film"
+    return True, "current field is empty"
+
+
 def metadata_decision_initial_value(
     *,
     target: str,
@@ -2764,6 +2865,12 @@ def merge_metadata_results(
     technical_updates: dict[str, Any] = {}
     media_updates: dict[str, dict[str, Any]] = {}
     identifiers: dict[str, str] = {}
+    # The series a television disc belongs to, if any provider states one. First
+    # stater wins, exactly like an identifier: two providers naming different
+    # series for one disc is a disagreement no automatic rule can settle, and
+    # silently preferring the later one would make the outcome depend on source
+    # ordering rather than on anything a reader could reason about.
+    series: dict[str, Any] | None = None
     credits: list[dict[str, Any]] = []
     localizations: list[dict[str, Any]] = []
     credit_keys: set[tuple[str, str, str, str]] = set()
@@ -2860,6 +2967,11 @@ def merge_metadata_results(
             elif field in locked_fields:
                 allowed = False
                 reason = "field is locked by user"
+            elif target == "movie" and field == "media_type":
+                allowed, reason = should_apply_media_type(
+                    current_value=current_value,
+                    incoming_value=value,
+                )
             else:
                 allowed, reason = should_apply_field(
                     field=field,
@@ -3002,6 +3114,26 @@ def merge_metadata_results(
             )
             if accepted_identifier:
                 identifiers[provider] = identifier
+        candidate_series = result.get("series")
+        if isinstance(candidate_series, dict) and clean_text(candidate_series.get("tmdbTvId")):
+            accepted_series = series is None
+            add_decision_candidate(
+                target="series",
+                field="tmdbTvId",
+                result=result,
+                value=clean_text(candidate_series.get("tmdbTvId")) or "",
+                accepted=accepted_series,
+                reason=(
+                    "series identity selected"
+                    if accepted_series
+                    else "series already selected from an earlier provider"
+                ),
+            )
+            if accepted_series:
+                series = {
+                    **candidate_series,
+                    "providerId": candidate_series.get("provider") or result.get("pluginId"),
+                }
         for credit in result.get("credits") or []:
             if not isinstance(credit, dict):
                 continue
@@ -3044,6 +3176,10 @@ def merge_metadata_results(
         "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
         "identifiers": identifiers,
+        # None rather than {} when nobody stated one: absent means "no provider
+        # spoke", which must stay distinguishable from a stated answer. Nothing
+        # downstream may read absence as a reason to unlink a series.
+        "series": series,
         "credits": credits,
         "localizations": localizations,
         "genreKeys": genre_keys,
@@ -3098,6 +3234,13 @@ def summarize_metadata_execution(
         elif format_rejected:
             state = "blocked_by_format_policy"
             reason = "provider result did not match the physical release format"
+        elif any(item.get("releaseCandidates") for item in plugin_executions):
+            # Checked before the miss branches on purpose: a candidates answer
+            # arrives with resultStatus "miss" (nothing was confirmed, so the
+            # merge pipeline must not apply it), but reporting it as "no usable
+            # match" hides the one outcome the user can actually settle.
+            state = "release_candidates"
+            reason = "provider identified the film; the pressing is a choice for the user"
         elif any(str(item.get("resultStatus") or "") in {"miss", "not_found", "no_match"} for item in plugin_executions):
             state = "no_match"
             reason = "provider returned no usable match"
@@ -3857,6 +4000,14 @@ def run_metadata_source_pipeline(
                     execution_item["resolverFallback"] = raw_result["resolverFallback"]
                 if "verificationStatus" in raw_result:
                     execution_item["verificationStatus"] = raw_result["verificationStatus"]
+                # The v2 resolver's `candidates` answer: the film was identified
+                # but no single pressing was confirmed, so the plugin reports a
+                # miss (nothing may be merged) while carrying the list. Forwarded
+                # here for the same reason as `resolverFallback` above - dropping
+                # it turns a resolvable choice into a bare "no usable match",
+                # which the person holding the disc can never act on.
+                if "releaseCandidates" in raw_result:
+                    execution_item["releaseCandidates"] = raw_result["releaseCandidates"]
             if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
                 continue
             normalized_results.append(normalized)
@@ -4044,12 +4195,21 @@ def run_metadata_source_pipeline(
         proposal=merge,
     )
     field_decisions = merge.get("fieldDecisions") or []
+    # The first execution that carried a candidate list wins; there is at most
+    # one, because only the movievault_v2 barcode lookup emits it. Lifted to the
+    # top level so a client does not have to dig through executions to learn
+    # that "no usable match" actually means "pick a pressing".
+    release_candidates = next(
+        (item["releaseCandidates"] for item in executions if item.get("releaseCandidates")),
+        None,
+    )
     return {
         "query": query,
         "settings": {"preferredProviderOverwrite": overwrite_enabled},
         "sourceOrder": [plugin["id"] for plugin in plugins],
         "executions": executions,
         "sourceSummary": source_summary,
+        "releaseCandidates": release_candidates,
         "results": normalized_results,
         "previewEnrichment": preview_enrichment,
         "enrichment": {"tmdb": tmdb_enrichment},
@@ -4253,14 +4413,47 @@ def ensure_remote_media_asset(conn, *, kind: str, source_url: str, provider_id: 
         return row["id"] if isinstance(row, dict) else row[0]
 
 
+# Which table owns an entity that can carry artwork. Everything below differs by
+# nothing but this name and the `entity_type` string, so an entity joins the media
+# path by adding a row here rather than by getting a parallel set of functions that
+# then drift apart.
+#
+# `series_season` has no page of its own -- a season is shown inside its series --
+# but it owns a poster, and `entity_media.entity_type` is unconstrained text
+# (migration 003), so it needed no migration to become storable. That is also why
+# a test is the only thing standing behind the value being spelled correctly.
+ENTITY_ARTWORK_TABLES = {
+    "movie": "movies",
+    "container": "containers",
+    "series": "series",
+    "series_season": "series_seasons",
+}
+
+
 def apply_primary_media_update(
     conn,
     *,
-    movie_id: UUID,
     kind: str,
     source_url: str,
     provider_id: str,
+    entity_type: str = "movie",
+    entity_id: UUID | None = None,
+    movie_id: UUID | None = None,
 ) -> dict[str, Any] | None:
+    """Make one image the entity's primary artwork of its kind.
+
+    Refuses when the current primary was chosen by a person -- an upload, or an
+    explicit "use this one". That refusal is the only protection a series has
+    against a later refresh, because a series has no lock button; for a movie it
+    sits alongside one.
+    """
+    entity_id = entity_id if entity_id is not None else movie_id
+    if entity_id is None:
+        raise ValueError("apply_primary_media_update needs an entity_id")
+    owner_table = ENTITY_ARTWORK_TABLES.get(entity_type)
+    if not owner_table:
+        raise ValueError(f"unknown artwork entity type: {entity_type}")
+    movie_id = entity_id
     media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
     if not media_id or not table_exists(conn, "entity_media"):
         return None
@@ -4271,7 +4464,7 @@ def apply_primary_media_update(
             SELECT ma.id, ma.source_url, ma.storage_key, ma.metadata
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
-            WHERE em.entity_type='movie'
+            WHERE em.entity_type=%s
               AND em.entity_id=%s
               AND em.deleted_at IS NULL
               AND em.hidden_at IS NULL
@@ -4281,7 +4474,7 @@ def apply_primary_media_update(
             ORDER BY em.sort_order, ma.created_at
             LIMIT 1
             """,
-            (movie_id, role, kind),
+            (entity_type, movie_id, role, kind),
         )
         current = cur.fetchone()
         if current and str(current["id"] if isinstance(current, dict) else current[0]) == str(media_id):
@@ -4290,12 +4483,12 @@ def apply_primary_media_update(
             """
             SELECT deleted_at, hidden_at
             FROM entity_media
-            WHERE entity_type='movie'
+            WHERE entity_type=%s
               AND entity_id=%s
               AND media_id=%s
               AND role=%s
             """,
-            (movie_id, media_id, role),
+            (entity_type, movie_id, media_id, role),
         )
         existing_link = cur.fetchone()
         if existing_link and (
@@ -4315,7 +4508,8 @@ def apply_primary_media_update(
         ):
             linked = link_media_option(
                 conn,
-                movie_id=movie_id,
+                entity_type=entity_type,
+                entity_id=movie_id,
                 kind=kind,
                 source_url=source_url,
                 provider_id=provider_id,
@@ -4333,14 +4527,14 @@ def apply_primary_media_update(
             """
             UPDATE entity_media
             SET is_primary=false, sort_order=GREATEST(sort_order, 1)
-            WHERE entity_type='movie'
+            WHERE entity_type=%s
               AND entity_id=%s
               AND deleted_at IS NULL
               AND hidden_at IS NULL
               AND role=%s
               AND is_primary=true
             """,
-            (movie_id, role),
+            (entity_type, movie_id, role),
         )
         cur.execute(
             """
@@ -4352,14 +4546,17 @@ def apply_primary_media_update(
                 is_primary,
                 sort_order
             )
-            VALUES ('movie', %s, %s, %s, true, 0)
+            VALUES (%s, %s, %s, %s, true, 0)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 is_primary=true,
                 sort_order=0
             """,
-            (movie_id, media_id, role),
+            (entity_type, movie_id, media_id, role),
         )
-        cur.execute("UPDATE movies SET updated_at=now() WHERE id=%s", (movie_id,))
+        # The owner table is looked up rather than interpolated from the caller:
+        # this is the one place a table name reaches the SQL text, and a map with
+        # four known keys is what keeps it from ever being caller-controlled.
+        cur.execute(f"UPDATE {owner_table} SET updated_at=now() WHERE id=%s", (movie_id,))
     return {
         "kind": kind,
         "mediaId": str(media_id),
@@ -4502,12 +4699,27 @@ def has_locked_primary_media(conn, *, movie_id: UUID, kind: str) -> bool:
 def link_media_option(
     conn,
     *,
-    movie_id: UUID,
     kind: str,
     source_url: str,
     provider_id: str,
     sort_order: int,
+    entity_type: str = "movie",
+    entity_id: UUID | None = None,
+    movie_id: UUID | None = None,
 ) -> dict[str, Any] | None:
+    """Offer an image as an alternative without making it the primary one.
+
+    This is what fills the Posters and Backdrops tabs with more than one card.
+    A link that is already primary, or that somebody deleted or hid, is left
+    alone -- re-offering a rejected image on every refresh would make the delete
+    button meaningless.
+    """
+    entity_id = entity_id if entity_id is not None else movie_id
+    if entity_id is None:
+        raise ValueError("link_media_option needs an entity_id")
+    if entity_type not in ENTITY_ARTWORK_TABLES:
+        raise ValueError(f"unknown artwork entity type: {entity_type}")
+    movie_id = entity_id
     media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
     if not media_id or not table_exists(conn, "entity_media"):
         return None
@@ -4516,12 +4728,12 @@ def link_media_option(
             """
             SELECT is_primary, deleted_at, hidden_at
             FROM entity_media
-            WHERE entity_type='movie'
+            WHERE entity_type=%s
               AND entity_id=%s
               AND media_id=%s
               AND role=%s
             """,
-            (movie_id, media_id, kind),
+            (entity_type, movie_id, media_id, kind),
         )
         row = cur.fetchone()
         if row and (
@@ -4542,11 +4754,11 @@ def link_media_option(
                 is_primary,
                 sort_order
             )
-            VALUES ('movie', %s, %s, %s, false, %s)
+            VALUES (%s, %s, %s, %s, false, %s)
             ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
                 sort_order=LEAST(entity_media.sort_order, EXCLUDED.sort_order)
             """,
-            (movie_id, media_id, kind, sort_order),
+            (entity_type, movie_id, media_id, kind, sort_order),
         )
     return {
         "kind": kind,
@@ -4755,6 +4967,180 @@ def apply_credit_updates(conn, *, movie_id: UUID, credits: list[dict[str, Any]])
     }
 
 
+def _prune_movie_seasons(cur, movie_uuid: UUID, keep_ids: list[UUID]) -> None:
+    """Drop the season links a refresh no longer names, and only those.
+
+    The twin of ``next_app.prune_movie_seasons``, duplicated rather than
+    imported because ``next_app`` imports this module and the other direction
+    would close the loop -- the same seam ``next_series`` documents for its own
+    resolver. Episodes go first: they cite the season directly, so the season
+    link's cascade does not reach them, and an episode of a season the release
+    no longer covers would otherwise be left behind.
+    """
+    if keep_ids:
+        cur.execute(
+            "DELETE FROM movie_episodes WHERE movie_id = %s AND NOT (season_id = ANY(%s))",
+            (movie_uuid, list(keep_ids)),
+        )
+        cur.execute(
+            "DELETE FROM movie_seasons WHERE movie_id = %s AND NOT (season_id = ANY(%s))",
+            (movie_uuid, list(keep_ids)),
+        )
+        return
+    cur.execute("DELETE FROM movie_episodes WHERE movie_id = %s", (movie_uuid,))
+    cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_uuid,))
+
+
+def apply_movie_disc_enrichment(conn, movie_uuid: UUID, stated: Any) -> dict[str, Any] | None:
+    """Fill a release's disc breakdown from the catalogue, but only if empty.
+
+    The standing precedence rule for discs, and the one place it is enforced: a
+    user's own breakdown of the copy on their shelf outranks the catalogue's.
+    They are holding the box. So this writes only when the release has **no**
+    discs at all -- not "no matching disc", not "fewer discs than the feed
+    says". One disc entered by hand is an answer, and a refresh must not
+    reorganise it.
+
+    Silence is not disagreement either: a feed that states no discs leaves the
+    stored ones alone, the same posture `apply_movie_series_link` takes and for
+    the same reason. A catalogue with nothing to say must never be able to
+    empty something somebody filled in.
+
+    Returns what it did, or None when it did nothing -- which is the common
+    case, because most releases either have discs already or the feed has none.
+    """
+    if not isinstance(stated, list) or not stated:
+        return None
+    if not table_exists(conn, "movie_discs"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT count(*) AS existing FROM movie_discs WHERE movie_id = %s",
+            (movie_uuid,),
+        )
+        row = cur.fetchone()
+        if row and int(dict(row)["existing"]) > 0:
+            return None
+        cur.execute("SELECT media_type FROM movies WHERE id = %s", (movie_uuid,))
+        movie = cur.fetchone()
+        if not movie:
+            return None
+        media_type = str(dict(movie).get("media_type") or "MOVIE")
+        # Deferred, because `next_app` imports this module and the other
+        # direction only works at call time -- the same reason the season
+        # pruner above is duplicated rather than imported. Duplicating the
+        # writer is not an option: it diffs discs by id so their episode links
+        # survive, and a second copy of that would drift.
+        try:  # pragma: no cover - import shape depends on runtime layout
+            from .next_app import apply_movie_discs
+            from .next_discs import discs_payload
+        except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+            from next_app import apply_movie_discs
+            from next_discs import discs_payload
+        # Through the same reader the edit form and the sync route use. The
+        # writer is entitled to a normalised entry -- every key present, ids
+        # stated as null -- and giving it a partial dict from the feed is how a
+        # catalogue disc met a KeyError instead of the writer's own documented
+        # "an entry without an id is a new disc".
+        apply_movie_discs(
+            cur, movie_uuid, discs_payload({"discs": stated}), media_type=media_type
+        )
+    return {"created": len(stated), "source": "catalogue"}
+
+
+def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, Any] | None:
+    """Link a disc to the series a metadata source named, creating it if new.
+
+    Returns what it did, or None when it did nothing -- which is the common case
+    and never an error. Four things stop it, and each is a rule rather than a
+    guard:
+
+    * **The source said nothing.** Silence is not disagreement. A provider with
+      no opinion must never be able to unlink a series somebody established.
+    * **The disc is not a series.** ``movies_series_requires_show`` forbids a
+      ``series_id`` on a MOVIE, so linking one would be writing a constraint
+      violation. This is also what makes a field lock work without any special
+      case here: a user who locked the type to MOVIE keeps it, the type never
+      becomes SHOW, and the link is skipped as a consequence rather than by a
+      second rule that could drift from the first.
+    * **The disc already belongs to a different series.** A stated identity does
+      not outrank a link that is already there; re-pointing a disc is a decision,
+      not a refresh.
+    * **The tables are absent.** Older databases predate migration 063.
+
+    Season links are replaced rather than merged when the series matches, because
+    "these are the seasons on this disc" is a whole statement -- the same reason
+    ``apply_movie_series_assignment`` replaces them wholesale.
+    """
+    payload = provider_series_payload(stated)
+    if payload is None:
+        return None
+    if not table_exists(conn, "series") or not table_exists(conn, "series_identifiers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT media_type, series_id FROM movies WHERE id = %s AND deleted_at IS NULL",
+            (movie_uuid,),
+        )
+        row = cur.fetchone()
+        if not row:
+            return None
+        media_type = row["media_type"] if isinstance(row, dict) else row[0]
+        current_series = row["series_id"] if isinstance(row, dict) else row[1]
+        if media_type != MEDIA_TYPE_SHOW:
+            return None
+        existing_series = series_id_for_identifier(
+            cur, provider_id=payload["provider_id"], identifier=payload["identifier"]
+        )
+        series_uuid = ensure_series(
+            cur,
+            provider_id=payload["provider_id"],
+            identifier=payload["identifier"],
+            title=payload["title"],
+        )
+        if current_series is not None and current_series != series_uuid:
+            return None
+        season_ids = ensure_seasons(cur, series_uuid, payload["seasons"])
+        cur.execute(
+            "UPDATE movies SET series_id = %s WHERE id = %s",
+            (series_uuid, movie_uuid),
+        )
+        # Ordered after the movies update, unlike the edit API's own path: there
+        # the disc may be moving *between* series and the old rows have to go
+        # first, while here the series is either unchanged or newly set, so the
+        # composite key is satisfied the moment series_id lands.
+        #
+        # Only the seasons the feed no longer names are removed. A refresh runs
+        # unattended and re-states the same list almost every time; deleting and
+        # re-inserting it would, since migration 075 hung the per-disc season
+        # links off these rows, quietly erase which disc holds what every time a
+        # metadata job ran. Nothing in the refresh is about discs, so nothing in
+        # it should change them.
+        _prune_movie_seasons(cur, movie_uuid, season_ids)
+        for index, season_id in enumerate(season_ids):
+            cur.execute(
+                """
+                INSERT INTO movie_seasons (movie_id, season_id, series_id, sort_order)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (movie_id, season_id)
+                DO UPDATE SET sort_order = EXCLUDED.sort_order
+                """,
+                (movie_uuid, season_id, series_uuid, index),
+            )
+    if existing_series is None:
+        # Queued only on creation. The row is empty exactly once, and enqueuing
+        # on every sync of every edition would repeat the same lookup per
+        # pressing for a series that is already described. Outside the cursor
+        # block above because the job is a side effect of the link having
+        # happened, not part of writing it.
+        enqueue_series_metadata_refresh(conn, series_uuid)
+    return {
+        "seriesId": str(series_uuid),
+        "created": current_series is None,
+        "seasonCount": len(season_ids),
+    }
+
+
 def apply_metadata_proposal(
     conn,
     movie_id: UUID | str,
@@ -4764,6 +5150,27 @@ def apply_metadata_proposal(
 ) -> dict[str, Any]:
     movie_uuid = UUID(str(movie_id))
     movie_updates = proposal.get("movieUpdates") or {}
+    # The merge already refuses to demote a series to a film, but a proposal can
+    # be built against a different context than the row it lands on — an import,
+    # a box-set parent, an older preview — so the write path re-checks against
+    # the row as stored. A demoting media_type is dropped rather than written:
+    # on a linked disc it is not a field write but a movies_series_requires_show
+    # violation, which would cost the whole refresh. Dropping only this key
+    # keeps the rest.
+    if "media_type" in movie_updates:
+        movie_updates = dict(movie_updates)
+        incoming_media_type = normalize_media_type(movie_updates.pop("media_type"))
+        stored_media_type = None
+        if incoming_media_type is not None:
+            with conn.cursor() as cur:
+                cur.execute("SELECT media_type FROM movies WHERE id=%s", (movie_uuid,))
+                row = cur.fetchone()
+            if row:
+                stored_media_type = row["media_type"] if isinstance(row, dict) else row[0]
+        if incoming_media_type is not None and not (
+            stored_media_type == MEDIA_TYPE_SHOW and incoming_media_type != MEDIA_TYPE_SHOW
+        ):
+            movie_updates["media_type"] = incoming_media_type
     metadata_updates = proposal.get("metadataUpdates") or {}
     technical_updates = proposal.get("technicalUpdates") or {}
     media_updates = proposal.get("mediaUpdates") or {}
@@ -4854,13 +5261,17 @@ def apply_metadata_proposal(
             )
 
         if technical_updates and table_exists(conn, "movie_technical_specs"):
+            _technical_carrier, _technical_outer = split_legacy_packaging(
+                technical_updates.get("packaging") or []
+            )
             cur.execute(
                 """
                 INSERT INTO movie_technical_specs (
-                    movie_id, hdr, packaging, screen_ratios, audio_tracks, subtitles, regions,
+                    movie_id, hdr, packaging, carrier_type, outer_packaging,
+                    screen_ratios, audio_tracks, subtitles, regions,
                     content_ratings, video_resolution, video_codecs, updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
                 ON CONFLICT (movie_id) DO UPDATE SET
                     video_resolution=COALESCE(
                         EXCLUDED.video_resolution, movie_technical_specs.video_resolution
@@ -4880,6 +5291,20 @@ def apply_metadata_proposal(
                     packaging=CASE
                         WHEN EXCLUDED.packaging <> '[]'::jsonb THEN EXCLUDED.packaging
                         ELSE movie_technical_specs.packaging
+                    END,
+                    -- Enrichment still speaks the flat list, so the two axes are
+                    -- derived from it on the way in (next_packaging.split_legacy_
+                    -- packaging). Without this an enriched release would fill only
+                    -- the legacy mirror and the edit form would read as empty.
+                    -- A user edit already stored on the axes outranks a derived
+                    -- guess, hence COALESCE/non-empty rather than overwrite.
+                    carrier_type=COALESCE(
+                        movie_technical_specs.carrier_type, EXCLUDED.carrier_type
+                    ),
+                    outer_packaging=CASE
+                        WHEN movie_technical_specs.outer_packaging <> '[]'::jsonb
+                            THEN movie_technical_specs.outer_packaging
+                        ELSE EXCLUDED.outer_packaging
                     END,
                     audio_tracks=CASE
                         WHEN EXCLUDED.audio_tracks <> '[]'::jsonb THEN EXCLUDED.audio_tracks
@@ -4903,6 +5328,8 @@ def apply_metadata_proposal(
                     movie_uuid,
                     Jsonb(json_ready(technical_updates.get("hdr") or [])),
                     Jsonb(json_ready(technical_updates.get("packaging") or [])),
+                    _technical_carrier,
+                    Jsonb(json_ready(_technical_outer)),
                     Jsonb(json_ready(technical_updates.get("screen_ratios") or [])),
                     Jsonb(json_ready(technical_updates.get("audio_tracks") or [])),
                     Jsonb(json_ready(technical_updates.get("subtitles") or [])),
@@ -4917,6 +5344,24 @@ def apply_metadata_proposal(
             for provider, identifier in identifiers.items():
                 if not identifier:
                     continue
+                if provider in MOVIEVAULT_IDENTIFIER_PROVIDERS:
+                    # A MovieVault id names one *release*, and re-matching a
+                    # movie to a different pressing is routine -- the barcode
+                    # fallback picker exists to do exactly that. The primary key
+                    # includes `identifier`, so plain insert-if-absent would
+                    # accumulate one row per pressing the movie was ever matched
+                    # to, and `movie_identifiers()` reads them ordered by
+                    # identifier: the lexicographically smallest UUID would win,
+                    # which is to say an arbitrary stale one. Superseding keeps
+                    # the row saying what this movie is matched to *now*.
+                    cur.execute(
+                        """
+                        DELETE FROM movie_identifiers
+                        WHERE movie_id=%s AND provider_id=%s AND identifier_type='movie_id'
+                          AND identifier <> %s
+                        """,
+                        (movie_uuid, provider, str(identifier)),
+                    )
                 cur.execute(
                     """
                     INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)
@@ -5016,6 +5461,13 @@ def apply_metadata_proposal(
             else current_genre_keys
         )
 
+    # After the movie updates, because the link is only permitted once the type
+    # is SHOW, and it is those updates that may have made it one.
+    applied_series = apply_movie_series_link(conn, movie_uuid, proposal.get("series"))
+    # After the series link, because a disc may carry season and episode
+    # references and those resolve against a series the link just established.
+    applied_discs = apply_movie_disc_enrichment(conn, movie_uuid, proposal.get("discs"))
+
     revision = record_sync_change(
         conn,
         movie_uuid,
@@ -5040,6 +5492,8 @@ def apply_metadata_proposal(
         "technicalUpdates": technical_updates,
         "mediaUpdates": applied_media_updates,
         "identifiers": identifiers,
+        "series": applied_series,
+        "discs": applied_discs,
         "credits": applied_credit_updates,
         "localizations": applied_localizations,
         "genres": applied_genre_keys,
@@ -5057,6 +5511,788 @@ def apply_metadata_proposal(
     }
 
 
+def enqueue_series_metadata_refresh(conn, series_id: UUID | str) -> None:
+    """Queue the description lookup for a series that has just been created.
+
+    Best effort on purpose. The series and the disc's link to it are already
+    written and correct; the description is an enhancement on top. A queue that
+    is unavailable -- an older database without `background_jobs`, a table the
+    caller has no rights to -- must not undo a link that succeeded.
+
+    The import is deferred because `next_app` imports this module, so naming it
+    at module level would close the cycle. The same pattern is already used in
+    `next_worker` for the person-refresh cascade.
+    """
+    try:
+        try:
+            from .next_app import create_background_job
+        except ImportError:  # pragma: no cover - supports direct module execution
+            from next_app import create_background_job
+
+        create_background_job(
+            conn,
+            job_type=SERIES_METADATA_REFRESH_JOB_TYPE,
+            payload={"seriesId": str(series_id)},
+        )
+    except Exception:
+        logger.warning(
+            "series metadata refresh could not be queued for %s", series_id, exc_info=True
+        )
+
+
+SERIES_DETAILS_CAPABILITY = "series_details"
+SERIES_SEARCH_CAPABILITY = "search_series"
+
+
+def search_series_candidates(conn, title: str, *, year: str = "") -> dict[str, Any]:
+    """Ask every enabled source which series a person might mean.
+
+    Deliberately *not* the same act as `refresh_series_metadata`. That one refuses
+    to search, because a source matching on a title is a guess wearing an answer's
+    clothes -- the same show is titled differently across regions and two unrelated
+    shows can share a name. §7b of the media-type document turns that into a rule.
+
+    The rule is about *automatic* identification. Here a person typed the title and
+    will pick from what comes back, so the guess never becomes an assertion: this
+    function writes nothing, and identity is established only by the choosing.
+
+    Results are not merged across sources. A candidate is an offer from one source
+    in one namespace, and blending two sources' lists would produce rows nobody
+    can act on -- picking one has to yield exactly one identifier.
+    """
+    title = clean_text(title) or ""
+    if not title:
+        return {"status": "skipped", "reason": "no title", "candidates": []}
+
+    plugins = [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if SERIES_SEARCH_CAPABILITY in plugin_capabilities(plugin)
+    ]
+    if not plugins:
+        return {"status": "skipped", "reason": "no series search source", "candidates": []}
+
+    candidates: list[dict[str, Any]] = []
+    # `require_hit=False`: a search that answers `miss` has genuinely found
+    # nothing, which is an answer. Only a detail lookup's `miss` is a failure.
+    results, errors = consult_plugins(
+        conn,
+        plugins,
+        SERIES_SEARCH_CAPABILITY,
+        {"title": title, "year": clean_text(year) or ""},
+        require_hit=False,
+    )
+    for plugin_id, result in results:
+        for item in result.get("items") or []:
+            if not isinstance(item, dict):
+                continue
+            identifier_type = clean_text(item.get("identifierType"))
+            identifier = clean_text(item.get("identifier"))
+            if not identifier_type or not identifier:
+                # A source that names no namespace cannot be stored, and storing it
+                # under a guessed one is how a wrong id becomes indistinguishable
+                # from a right one.
+                continue
+            candidates.append(
+                {
+                    "pluginId": plugin_id,
+                    "provider": clean_text(item.get("provider")) or plugin_id,
+                    "providerLabel": clean_text(item.get("providerLabel")) or plugin_id,
+                    "identifierType": identifier_type,
+                    "identifier": identifier,
+                    "title": clean_text(item.get("title")),
+                    "originalTitle": clean_text(item.get("originalTitle")),
+                    "year": clean_text(item.get("year")),
+                    "overview": clean_text(item.get("overview")),
+                    # Same filter the artwork path uses, so a candidate cannot show
+                    # a thumbnail from a scheme the rest of the app would refuse.
+                    "posterUrl": (image_url_options(item.get("posterUrl")) or [""])[0],
+                }
+            )
+
+    return {
+        "status": "ok" if candidates else "miss",
+        "candidates": candidates,
+        "errors": errors,
+    }
+
+
+def series_detail_source_plugins(conn) -> list[dict[str, Any]]:
+    """The enabled metadata sources that can describe a series, in the user's order.
+
+    Discovery is by declared capability, not by name. That is the whole point:
+    adding TVDB or Fanart later must be a matter of installing a plugin that says
+    `series_details`, not of editing this module. The hard-coded `tmdb` that used
+    to sit here made every future source a code change.
+
+    `metadata_source_plugins` already returns installed and enabled rows ordered
+    by `order_index`, which is the order the user themselves ranked the sources
+    in and the same order the movie pipeline consults them in.
+    """
+    return [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if SERIES_DETAILS_CAPABILITY in plugin_capabilities(plugin)
+    ]
+
+
+def series_identifier_map(conn, series_uuid: UUID) -> dict[str, str]:
+    """Every identifier the series carries, keyed by identifier type.
+
+    All of them travel to every source, and each source picks out the namespace
+    it speaks. A source is the only thing that knows which identifiers it can
+    use, so filtering here on its behalf would just be a second, staler copy of
+    that knowledge.
+    """
+    if not table_exists(conn, "series_identifiers"):
+        return {}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT identifier_type, identifier
+            FROM series_identifiers
+            WHERE series_id = %s
+            ORDER BY provider_id, identifier_type
+            """,
+            (series_uuid,),
+        )
+        rows = cur.fetchall()
+    identifiers: dict[str, str] = {}
+    for row in rows:
+        identifier_type = clean_text(row.get("identifier_type"))
+        identifier = clean_text(row.get("identifier"))
+        # First one wins: two rows for one type is a conflict nobody can resolve
+        # here, and picking the later one at random would make the result depend
+        # on insertion order.
+        if identifier_type and identifier and identifier_type not in identifiers:
+            identifiers[identifier_type] = identifier
+    return identifiers
+
+
+def series_lookup_payload(row: dict[str, Any], identifiers: dict[str, str]) -> dict[str, Any]:
+    """What every series source is asked.
+
+    `tmdbTvId` is repeated outside the map on purpose: the TMDB plugin shipped
+    reading exactly that key, and an installation that has not taken the new
+    plugin version yet must keep working. A consumer tolerating a field before
+    the producer relies on it is the same rule the distribution feed follows.
+    """
+    return {
+        "seriesIdentifiers": dict(identifiers),
+        "tmdbTvId": identifiers.get(SERIES_IDENTIFIER_TYPE, ""),
+        "title": clean_text(row.get("title")),
+        "startYear": clean_text(row.get("start_year")),
+        "endYear": clean_text(row.get("end_year")),
+    }
+
+
+def consult_plugins(
+    conn,
+    plugins: list[dict[str, Any]],
+    entrypoint: str,
+    payload: dict[str, Any],
+    *,
+    require_hit: bool = True,
+) -> tuple[list[tuple[str, dict[str, Any]]], list[dict[str, str]]]:
+    """Run one entrypoint across a set of sources and collect what came back.
+
+    **The one place a series-side plugin context is built.** That is the whole
+    reason this exists. The loop was written out four times, each copy carrying
+    the same warning comment above it, and one copy had it wrong: it passed
+    `plugin_config_from_db`'s output straight through as the context. The config
+    carries `secretsRef` -- the *names* of the secrets -- while
+    `plugin_execution_context` is what resolves them into `secrets`, which is
+    where a plugin reads its API key. So every series lookup on a correctly
+    configured installation failed with "TMDb API key is not configured", the
+    error went into a list nothing displayed, and the page reported that no
+    source had anything to add. The movie path was fine throughout because it
+    used the context builder from the start, and that asymmetry is exactly what
+    made it look like a series problem rather than a wiring one.
+
+    A comment repeated above four copies did not prevent that, and would not
+    prevent the fifth. One function can.
+
+    `require_hit` is the only real difference between the callers. A detail
+    lookup that answers `miss` has nothing to contribute and is reported as a
+    failure; a *search* that answers `miss` has legitimately found nothing and
+    its empty item list is a valid answer, not an error.
+
+    Errors are collected, never raised. One source being unreachable must not
+    cost the answers the others already gave -- and every caller has a reason to
+    tell "no source could answer" apart from "no source has anything", which is
+    a distinction it can only draw if it is handed the failures.
+    """
+    results: list[tuple[str, dict[str, Any]]] = []
+    errors: list[dict[str, str]] = []
+    for plugin in plugins:
+        plugin_id = str(plugin.get("id") or "")
+        if not plugin_id:
+            continue
+        context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
+        try:
+            execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
+        except Exception as exc:  # pragma: no cover - defensive, a source is not the job
+            errors.append({"pluginId": plugin_id, "error": str(exc)})
+            logger.warning("source %s failed on %s", plugin_id, entrypoint, exc_info=True)
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        if execution.get("status") != "ok" or (require_hit and result.get("status") != "hit"):
+            # `state` before the result status, and never a bare "miss" for an
+            # execution that failed. Four runtime states -- `not_found`,
+            # `manifest_only`, `entrypoint_unavailable`, and a load-time
+            # `runtime_error` -- carry no `error` field at all, so the old chain
+            # fell through to the literal word "miss" and reported a
+            # configuration fault in the vocabulary of "this source has never
+            # heard of your series". That sends a reader to check their spelling
+            # instead of their setup, and it hid an unreachable entrypoint on
+            # every series call for the whole of this feature's life.
+            reason = clean_text(execution.get("error"))
+            if not reason and execution.get("status") != "ok":
+                reason = clean_text(execution.get("state")) or "unavailable"
+            errors.append(
+                {"pluginId": plugin_id, "error": reason or result.get("status") or "miss"}
+            )
+            continue
+        results.append((plugin_id, result))
+    return results, errors
+
+
+def consult_series_sources(
+    conn, row: dict[str, Any], identifiers: dict[str, str]
+) -> tuple[list[tuple[str, dict[str, Any]]], list[dict[str, str]]]:
+    """Ask every enabled series source to describe one series, in the user's order.
+
+    The series-shaped wrapper over `consult_plugins`: it owns the payload, which
+    is the part its two callers must agree on. The refresh writes what comes
+    back, the season offer only shows it, and neither may ask a different
+    question than the other.
+    """
+    return consult_plugins(
+        conn,
+        series_detail_source_plugins(conn),
+        SERIES_DETAILS_CAPABILITY,
+        series_lookup_payload(row, identifiers),
+    )
+
+
+def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str, Any]:
+    """Combine what several sources said into one answer, first source wins.
+
+    "First" is the user's own plugin order, so precedence is a setting rather
+    than a rule buried here. Only empty gaps are filled, which means a later
+    source can complete a season the first source knew nothing about without
+    being able to contradict it.
+
+    Attribution travels with the text: `sources` records which plugin supplied
+    the series description and which supplied each season, because "where did
+    this sentence come from" stops being answerable once several sources can
+    write into the same column.
+
+    Each field competes on its own. A source that has a poster but no synopsis
+    still supplies the poster, and a season that only one source has heard of
+    still arrives -- which is the point of consulting more than one source. That
+    is why a season is recorded when it offers *anything*, rather than only when
+    it offers an overview as it did when text was all there was.
+
+    Artwork carries its runner-up URLs along with the winner. The Posters tab
+    shows them as alternatives, so "first source wins" decides the default
+    without deciding the only option.
+    """
+    overview = ""
+    overview_source = ""
+    artwork: dict[str, dict[str, Any]] = {}
+    seasons: dict[int, dict[str, Any]] = {}
+    for plugin_id, result in results:
+        stated = result.get("series") if isinstance(result.get("series"), dict) else {}
+        candidate = clean_text(stated.get("overview"))
+        if candidate and not overview:
+            overview = candidate
+            overview_source = plugin_id
+        for kind, primary_key, options_key in (
+            ("poster", "posterUrl", "posters"),
+            ("backdrop", "backdropUrl", "backdropUrls"),
+        ):
+            if kind in artwork:
+                continue
+            options = image_url_options(stated.get(primary_key), stated.get(options_key))
+            if not options:
+                continue
+            artwork[kind] = {"sourceUrl": options[0], "options": options, "source": plugin_id}
+        for season in result.get("seasons") or []:
+            if not isinstance(season, dict):
+                continue
+            number = season.get("seasonNumber")
+            if not isinstance(number, int) or isinstance(number, bool):
+                continue
+            entry = seasons.setdefault(number, {})
+            season_overview = clean_text(season.get("overview"))
+            if season_overview and "overview" not in entry:
+                entry["overview"] = season_overview
+                entry["source"] = plugin_id
+            poster = image_url_options(season.get("posterUrl"))
+            if poster and "posterUrl" not in entry:
+                entry["posterUrl"] = poster[0]
+                entry["posterSource"] = plugin_id
+            # The label fields, on the same first-source-wins terms as the rest.
+            # They were dropped while the only consumer was the refresh, which
+            # writes overviews and nothing else. The season picker is a second
+            # consumer with a different need: "Season 3" alone is not enough to
+            # choose from, and a title, a year and an episode count are what make
+            # picking the right box an act of recognition rather than counting.
+            for field in ("title", "year"):
+                value = clean_text(season.get(field))
+                if value and field not in entry:
+                    entry[field] = value
+            episode_count = season.get("episodeCount")
+            if (
+                isinstance(episode_count, int)
+                and not isinstance(episode_count, bool)
+                and episode_count >= 0
+                and "episodeCount" not in entry
+            ):
+                entry["episodeCount"] = episode_count
+    # Every season the source reported, including one that offered neither text
+    # nor a poster. When text was all this merged, an empty entry was dropped
+    # because it could only produce a write of zero rows. That stopped being true
+    # once the refresh may *create* seasons: the existence of season 4 is itself
+    # the answer, whether or not anybody wrote a synopsis for it.
+    return {
+        "overview": overview,
+        "overviewSource": overview_source,
+        "artwork": artwork,
+        "seasons": seasons,
+    }
+
+
+SEASON_EPISODES_CAPABILITY = "season_episodes"
+
+EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20}
+
+
+def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
+    """Fill one season's episode list from whichever sources can supply it.
+
+    One season at a time, and on demand. `/tv/{id}/season/{n}` costs a request
+    per season, which is the reason the series refresh deliberately does not
+    reach for it: a ten-season show would turn one call into eleven for every
+    user, most of whom never look at an episode list.
+
+    Asking per season moves that cost onto the person who opened the season --
+    which is also why the surface sits behind Collectors mode. The expensive
+    thing is paid for by whoever wanted it.
+
+    Never overwrites, for the same reason `ensure_seasons` does not: an episode
+    title may have been corrected by hand, and a re-fetch is not a reason to
+    undo that. Only missing episodes are inserted and only empty fields are
+    filled, which also makes this safe to re-run.
+    """
+    season_uuid = UUID(str(season_id))
+    if not table_exists(conn, "series_episodes") or not table_exists(conn, "series_seasons"):
+        return {"status": "unavailable"}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT s.id AS season_id, s.season_number, s.series_id,
+                   sr.title, sr.start_year, sr.end_year
+            FROM series_seasons s
+            JOIN series sr ON sr.id = s.series_id
+            WHERE s.id = %s AND s.deleted_at IS NULL AND sr.deleted_at IS NULL
+            """,
+            (season_uuid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"status": "missing"}
+
+    series_uuid = row["series_id"]
+    identifiers = series_identifier_map(conn, series_uuid)
+    if not identifiers:
+        # The same dead end the series refresh reports, and for the same reason.
+        # Naming it identically is what lets one explanation cover both.
+        return {"status": "skipped", "reason": "no series identifier"}
+
+    plugins = [
+        plugin
+        for plugin in metadata_source_plugins(conn)
+        if SEASON_EPISODES_CAPABILITY in plugin_capabilities(plugin)
+    ]
+    if not plugins:
+        return {"status": "skipped", "reason": "no episode source"}
+
+    payload = {
+        "seriesIdentifiers": dict(identifiers),
+        "tmdbTvId": identifiers.get(SERIES_IDENTIFIER_TYPE, ""),
+        "seasonNumber": row["season_number"],
+        "title": clean_text(row.get("title")),
+    }
+    episodes: dict[int, dict[str, Any]] = {}
+    sources: dict[str, str] = {}
+    results, errors = consult_plugins(conn, plugins, SEASON_EPISODES_CAPABILITY, payload)
+    for plugin_id, result in results:
+        for episode in result.get("episodes") or []:
+            if not isinstance(episode, dict):
+                continue
+            number = episode.get("episodeNumber")
+            if not isinstance(number, int) or isinstance(number, bool) or number < 0:
+                continue
+            # First source wins per episode, same rule as the series merge.
+            if number in episodes:
+                continue
+            episodes[number] = episode
+            sources[str(number)] = plugin_id
+
+    if not episodes:
+        return {"status": "miss", "errors": errors}
+
+    inserted = 0
+    updated = 0
+    with conn.cursor() as cur:
+        for number, episode in sorted(episodes.items()):
+            episode_uuid = uuid.uuid4()
+            cur.execute(
+                """
+                INSERT INTO series_episodes (
+                    id, public_id, series_id, season_id, episode_number,
+                    title, overview, air_date, runtime_minutes
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    episode_uuid,
+                    f"next-episode-{episode_uuid.hex[:12]}",
+                    series_uuid,
+                    season_uuid,
+                    number,
+                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
+                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
+                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                ),
+            )
+            if cur.rowcount:
+                inserted += 1
+                continue
+            # The row already existed. Fill only what is empty -- the check and
+            # the write are one statement, so a second worker cannot land between
+            # them, and a title somebody corrected is left alone.
+            cur.execute(
+                """
+                UPDATE series_episodes
+                SET title = COALESCE(NULLIF(title, ''), %s),
+                    overview = COALESCE(NULLIF(overview, ''), %s),
+                    air_date = COALESCE(NULLIF(air_date, ''), %s),
+                    runtime_minutes = COALESCE(runtime_minutes, %s),
+                    updated_at = now()
+                WHERE season_id = %s AND episode_number = %s AND deleted_at IS NULL
+                """,
+                (
+                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
+                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
+                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                    season_uuid,
+                    number,
+                ),
+            )
+            updated += cur.rowcount or 0
+
+    return {
+        "status": "ok",
+        "seasonId": str(season_uuid),
+        "episodesInserted": inserted,
+        "episodesUpdated": updated,
+        "sources": {"consulted": [str(plugin.get("id")) for plugin in plugins], "episodes": sources},
+        "errors": errors,
+    }
+
+
+def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
+    """Fill a series' description from whichever sources can describe it.
+
+    This is the second half of the division of labour the feed established.
+    MovieVault states *identity and structure* -- which series, which seasons --
+    and stops there, deliberately: it is not licensed to redistribute provider
+    prose and has no reason to. The description therefore comes from sources
+    DiscVault has its own relationship with, which is also why nothing here ever
+    travels back over the feed.
+
+    Several sources rather than one. TMDB, TVDB and Fanart know different things
+    and cover different shows, and a season TMDB has never heard of is exactly
+    the gap a second source closes. They are consulted in the user's own plugin
+    order and the first non-empty answer wins, so precedence is something the
+    user set rather than something decided here.
+
+    Never overwrites. An existing overview may have been written by hand through
+    the series API, and a refresh is not a reason to replace it -- the same
+    posture `ensure_seasons` already takes for a season row somebody edited.
+    Filling only what is empty also makes this safe to re-run, which matters
+    because a failed job is retried.
+
+    A series with no identifiers at all is skipped rather than searched. An id is
+    what makes this exact; falling back to a title search would trade a known
+    answer for a guess, and §7b of the media-type document is explicit that only
+    a source querying a series namespace may speak to series identity. Which of
+    the identifiers a given source can use is that source's own decision, so all
+    of them are offered and a source that recognises none reports a miss.
+    """
+    series_uuid = UUID(str(series_id))
+    if not table_exists(conn, "series") or not table_exists(conn, "series_identifiers"):
+        return {"status": "unavailable"}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, overview, start_year, end_year
+            FROM series
+            WHERE id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"status": "missing"}
+    identifiers = series_identifier_map(conn, series_uuid)
+    if not identifiers:
+        return {"status": "skipped", "reason": "no series identifier"}
+
+    if not series_detail_source_plugins(conn):
+        return {"status": "skipped", "reason": "no series source"}
+
+    results, errors = consult_series_sources(conn, row, identifiers)
+
+    if not results:
+        # Deliberately not raised. The series keeps the title it already has, and
+        # a source being unreachable is not a reason to fail a job that will be
+        # retried.
+        return {"status": "miss", "errors": errors}
+
+    merged = merge_series_details(results)
+    updated_series = False
+    season_sources: dict[str, str] = {}
+    with conn.cursor() as cur:
+        if merged["overview"] and not clean_text(row.get("overview")):
+            cur.execute(
+                "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
+                (merged["overview"][: SERIES_TEXT_LIMITS["overview"]], series_uuid),
+            )
+            updated_series = True
+        updated_seasons = 0
+        for number, season in sorted(merged["seasons"].items()):
+            overview_text = season.get("overview")
+            if not overview_text:
+                # The season exists and was created above; there is simply no
+                # synopsis to write. Running the update anyway would cost a query
+                # that can only ever touch zero rows.
+                continue
+            # `overview IS NULL OR overview = ''` rather than a read-then-write:
+            # the check and the write are one statement, so a second worker
+            # running the same job cannot land between them.
+            cur.execute(
+                """
+                UPDATE series_seasons
+                SET overview = %s, updated_at = now()
+                WHERE series_id = %s AND season_number = %s AND deleted_at IS NULL
+                  AND (overview IS NULL OR overview = '')
+                """,
+                (
+                    overview_text[: SEASON_TEXT_LIMITS["overview"]],
+                    series_uuid,
+                    number,
+                ),
+            )
+            written = cur.rowcount or 0
+            updated_seasons += written
+            if written:
+                season_sources[str(number)] = season.get("source", "")
+
+    # Artwork is applied outside the cursor above because each write is its own
+    # small transaction inside `apply_primary_media_update`, and because a series
+    # with no artwork at all must still keep the text it just gained.
+    applied_artwork = apply_series_artwork(conn, series_uuid, merged)
+
+    return {
+        "status": "ok",
+        "seriesId": str(series_uuid),
+        "seriesUpdated": updated_series,
+        "seasonsUpdated": updated_seasons,
+        "artwork": applied_artwork["series"],
+        "seasonArtwork": applied_artwork["seasons"],
+        "sources": {
+            "consulted": [plugin_id for plugin_id, _ in results],
+            "series": merged["overviewSource"] if updated_series else "",
+            "seasons": season_sources,
+            "artwork": {kind: entry["source"] for kind, entry in merged["artwork"].items()},
+        },
+        "errors": errors,
+    }
+
+
+def available_series_seasons(conn, series_id: UUID | str) -> dict[str, Any]:
+    """Which seasons the sources know about, and which of them already exist here.
+
+    An offer, and nothing else -- the same separation `search_series_candidates`
+    keeps for identity. Searching writes nothing and choosing is a separate act,
+    because a route that both proposed and stored would make a source's guess
+    indistinguishable from the owner's claim the moment somebody clicked.
+
+    That separation is load-bearing here rather than merely tidy.
+    `test_a_season_the_feed_never_recorded_is_not_created` fixes the rule that
+    enrichment does not create seasons nobody owns: the source knows every season
+    the show has, the collection knows the ones a disc covers, and those are
+    different facts. This function serves the first so a person can assert the
+    second; it must never do both.
+
+    `exists` rather than filtering the row out. A season already in the
+    collection stays visible, so the list reads as the whole show with your part
+    of it marked -- a filtered list would silently answer a different question
+    ("what is missing") and make a complete series look like an empty result.
+    """
+    series_uuid = UUID(str(series_id))
+    if not table_exists(conn, "series") or not table_exists(conn, "series_seasons"):
+        return {"status": "unavailable", "seasons": []}
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, overview, start_year, end_year
+            FROM series
+            WHERE id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        return {"status": "missing", "seasons": []}
+    identifiers = series_identifier_map(conn, series_uuid)
+    if not identifiers:
+        # The same dead end the identity picker exists to escape, reported in the
+        # same words so the page can send the reader there instead of leaving
+        # them to conclude the show has no seasons.
+        return {"status": "skipped", "reason": "no series identifier", "seasons": []}
+    if not series_detail_source_plugins(conn):
+        return {"status": "skipped", "reason": "no series source", "seasons": []}
+
+    results, errors = consult_series_sources(conn, row, identifiers)
+    if not results:
+        return {"status": "miss", "seasons": [], "errors": errors}
+
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT season_number FROM series_seasons
+            WHERE series_id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        existing = {row["season_number"] for row in cur.fetchall()}
+
+    merged = merge_series_details(results)
+    seasons = []
+    for number, season in sorted(merged["seasons"].items()):
+        seasons.append(
+            {
+                "seasonNumber": number,
+                "title": clean_text(season.get("title")) or "",
+                "year": clean_text(season.get("year")) or "",
+                "overview": clean_text(season.get("overview")) or "",
+                "episodeCount": season.get("episodeCount"),
+                "posterUrl": clean_text(season.get("posterUrl")) or "",
+                "source": season.get("source") or season.get("posterSource") or "",
+                "exists": number in existing,
+            }
+        )
+    return {
+        "status": "ok" if seasons else "miss",
+        "seriesId": str(series_uuid),
+        "seasons": seasons,
+        "sources": {"consulted": [plugin_id for plugin_id, _ in results]},
+        "errors": errors,
+    }
+
+
+def apply_series_artwork(conn, series_uuid: UUID, merged: dict[str, Any]) -> dict[str, Any]:
+    """Store the merged artwork against the series and its seasons.
+
+    Reuses the movie path's writers rather than a series-shaped copy of them:
+    `apply_primary_media_update` is what already refuses to overwrite a primary
+    somebody chose by hand, and that refusal is the *only* protection a series
+    has -- it has no lock button. Re-implementing the write here would have meant
+    re-implementing that refusal, or quietly not having it.
+
+    Runner-up URLs are linked as options so the Posters and Backdrops tabs offer
+    a choice. `sort_order` starts at 1 because 0 belongs to the primary.
+    """
+    applied: dict[str, Any] = {"series": {}, "seasons": {}}
+    if not table_exists(conn, "media_assets") or not table_exists(conn, "entity_media"):
+        return applied
+
+    for kind, entry in merged.get("artwork", {}).items():
+        provider_id = entry.get("source") or "metadata"
+        primary = apply_primary_media_update(
+            conn,
+            entity_type="series",
+            entity_id=series_uuid,
+            kind=kind,
+            source_url=entry["sourceUrl"],
+            provider_id=provider_id,
+        )
+        options = []
+        for sort_order, option_url in enumerate(entry.get("options") or [], start=1):
+            if option_url == entry["sourceUrl"]:
+                continue
+            linked = link_media_option(
+                conn,
+                entity_type="series",
+                entity_id=series_uuid,
+                kind=kind,
+                source_url=option_url,
+                provider_id=provider_id,
+                sort_order=sort_order,
+            )
+            if linked:
+                options.append(linked)
+        if primary or options:
+            applied["series"][kind] = {"primary": primary, "options": options}
+
+    season_posters = {
+        number: entry for number, entry in merged.get("seasons", {}).items() if entry.get("posterUrl")
+    }
+    if not season_posters or not table_exists(conn, "series_seasons"):
+        return applied
+
+    # One read for every season rather than one per poster: the season row's id
+    # is what the media link points at, and a series with twenty seasons should
+    # not cost twenty lookups.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, season_number
+            FROM series_seasons
+            WHERE series_id = %s AND deleted_at IS NULL
+            """,
+            (series_uuid,),
+        )
+        season_ids = {row["season_number"]: row["id"] for row in cur.fetchall()}
+
+    for number, entry in sorted(season_posters.items()):
+        season_id = season_ids.get(number)
+        if not season_id:
+            # A season the source knows about but this collection has no row for.
+            # `ensure_seasons` owns creating those; inventing one here would let a
+            # poster conjure a season nobody said existed.
+            continue
+        primary = apply_primary_media_update(
+            conn,
+            entity_type="series_season",
+            entity_id=season_id,
+            kind="poster",
+            source_url=entry["posterUrl"],
+            provider_id=entry.get("posterSource") or "metadata",
+        )
+        if primary:
+            applied["seasons"][str(number)] = primary
+    return applied
+
+
 def refresh_movie_metadata(
     conn,
     movie_id: UUID | str,
@@ -5064,6 +6300,16 @@ def refresh_movie_metadata(
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    """Fetch, merge, apply and fan out provider metadata for one movie.
+
+    Owns its transaction boundaries: applying the proposal locks the movie
+    rows and the single global ``sync_state`` row (``record_sync_change``), so
+    the apply is committed *before* the receiver-plugin push runs its network
+    I/O. Holding those locks across a slow plugin call blocks every other
+    writer in the app until the API-side ``lock_timeout`` fires, which used to
+    surface as a bogus "DiscVault is temporarily offline" error. Callers must
+    pass a connection that is not inside an explicit transaction block.
+    """
     preview = preview_movie_metadata(conn, movie_id, actor)
     if dry_run:
         insert_metadata_audit_event(
@@ -5096,6 +6342,7 @@ def refresh_movie_metadata(
             applied=applied,
         ),
     )
+    conn.commit()
     receiver_summary: dict[str, Any]
     if applied.get("changed"):
         receiver_summary = push_metadata_to_receivers(
@@ -5128,4 +6375,5 @@ def refresh_movie_metadata(
             **receiver_summary,
         },
     )
+    conn.commit()
     return {"dryRun": False, "preview": preview, "applied": applied, "receivers": receiver_summary}

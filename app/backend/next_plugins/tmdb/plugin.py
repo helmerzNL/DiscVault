@@ -171,6 +171,30 @@ def _person_localizations(data):
     return rows
 
 
+def _artwork_urls(data, key, fallback_path):
+    """The image URLs a TMDB payload offers for one kind, best first.
+
+    Shared by the movie and the series path deliberately. The two ask `/movie/{id}`
+    and `/tv/{id}`, but TMDB answers both with the same `images` shape, and a second
+    copy of this sorting is how the two would drift into ranking artwork differently
+    for no reason anyone could later explain.
+
+    `vote_average` is TMDB's own community ranking, so "best" is the source's
+    judgement rather than ours. The single `poster_path` / `backdrop_path` is the
+    fallback rather than the primary: it is what TMDB shows by default, but the
+    `images` list is ordered by what people actually preferred.
+    """
+    entries = sorted(
+        (data.get("images") or {}).get(key) or [],
+        key=lambda item: item.get("vote_average") or 0,
+        reverse=True,
+    )
+    urls = [_image(item.get("file_path")) for item in entries[:10] if item.get("file_path")]
+    if not urls and data.get(fallback_path):
+        urls = [_image(data.get(fallback_path))]
+    return [url for url in urls if url]
+
+
 def _normalize_details(data):
     # TMDB genre ids are the source of truth for the canonical genre catalog
     # (see next_genres.py). Returning ids here -- instead of localized names
@@ -185,22 +209,8 @@ def _normalize_details(data):
     directors = [item.get("name") for item in crew if item.get("job") == "Director" and item.get("name")]
     producers = [item.get("name") for item in crew if item.get("job") == "Producer" and item.get("name")]
     actors = [item.get("name") for item in cast[:5] if item.get("name")]
-    backdrops = sorted(
-        (data.get("images") or {}).get("backdrops") or [],
-        key=lambda item: item.get("vote_average") or 0,
-        reverse=True,
-    )
-    posters = sorted(
-        (data.get("images") or {}).get("posters") or [],
-        key=lambda item: item.get("vote_average") or 0,
-        reverse=True,
-    )
-    poster_urls = [_image(item.get("file_path")) for item in posters[:10] if item.get("file_path")]
-    if not poster_urls and data.get("poster_path"):
-        poster_urls = [_image(data.get("poster_path"))]
-    backdrop_urls = [_image(item.get("file_path")) for item in backdrops[:10] if item.get("file_path")]
-    if not backdrop_urls and data.get("backdrop_path"):
-        backdrop_urls = [_image(data.get("backdrop_path"))]
+    poster_urls = _artwork_urls(data, "posters", "poster_path")
+    backdrop_urls = _artwork_urls(data, "backdrops", "backdrop_path")
     trailer, extra_videos = _videos(data)
     ratings = _certifications(data.get("release_dates") or {})
     imdb_id = data.get("imdb_id") or ""
@@ -330,6 +340,78 @@ def search_title(payload, context=None):
     return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
 
 
+def search_series(payload, context=None):
+    """Candidate series for a title a person typed.
+
+    Note who is asking. `series_details` refuses to search because a *source*
+    matching on title is a guess dressed as an answer -- the same show is titled
+    differently across regions and two unrelated shows can share a name. That
+    rule is about automatic identification and it stands.
+
+    This is the other case: a person typed the title and will choose from what
+    comes back. The candidate carries a year, an overview and a poster precisely
+    so the choosing is informed rather than a coin flip on the first row. Nothing
+    here writes anything; identity is established only when the caller picks.
+    """
+    title = str((payload or {}).get("title") or "").strip()
+    if not title:
+        return {"status": "skipped", "provider": "tmdb", "items": []}
+    year = str((payload or {}).get("year") or "").strip()
+    data = _request(
+        context or {},
+        "/search/tv",
+        query=title,
+        first_air_date_year=year,
+        language=_language(context),
+    )
+    items = []
+    for item in data.get("results") or []:
+        identifier = item.get("id")
+        if identifier is None:
+            continue
+        items.append(
+            {
+                "provider": "tmdb",
+                "providerLabel": "TMDb",
+                # The namespace travels with the value. A bare id would have to be
+                # matched to a namespace by whoever stores it, which is exactly the
+                # knowledge a source should not be making the caller reconstruct.
+                "identifierType": "tmdb_tv",
+                "identifier": str(identifier),
+                "title": item.get("name") or "",
+                "originalTitle": item.get("original_name") or "",
+                "year": str(item.get("first_air_date") or "")[:4],
+                "overview": item.get("overview") or "",
+                "posterUrl": _image(item.get("poster_path")),
+                # Two fields that only matter when this answer drives the Add
+                # screen rather than the identity picker.
+                #
+                # `mediaType` lands as the disc's `media_type` through the field
+                # alias map, so a television disc added from here is a SHOW rather
+                # than a MOVIE that nothing will ever recognise as television.
+                "mediaType": "SHOW",
+                # And `series` is the shape `provider_series_payload` already
+                # accepts -- the same contract the MovieVault feed uses to hang a
+                # disc under a series. Answering in it means the linking, the
+                # series row and its `tmdb_tv` identifier all happen through code
+                # that exists, and the series is enrichable from the moment it is
+                # created rather than after somebody links it by hand.
+                #
+                # `seasons` is deliberately empty: TMDB knows every season the show
+                # has and none of them is a statement about what is on *this* disc.
+                # Which seasons a box carries is the owner's to say, which is what
+                # `test_a_season_the_feed_never_recorded_is_not_created` protects.
+                "series": {
+                    "tmdbTvId": str(identifier),
+                    "providerId": "tmdb",
+                    "title": item.get("name") or "",
+                    "seasons": [],
+                },
+            }
+        )
+    return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
+
+
 def _normalized_title(value):
     import re
     import unicodedata
@@ -384,6 +466,179 @@ def movie_details(payload, context=None):
     if not tmdb_id:
         return {"status": "miss", "provider": "tmdb"}
     return _normalize_details(_details(context or {}, tmdb_id))
+
+
+def _series_details_request(context, tmdb_tv_id):
+    """`/tv/{id}`, which carries the season list in the same response.
+
+    That is the reason there is no per-season request here. A `/tv/{id}` payload
+    already contains a `seasons` array with an `overview` on each entry, so one
+    call answers both questions. `/tv/{id}/season/{n}` exists and is richer, but
+    it costs one request *per season* -- a ten-season show turns one call into
+    eleven -- and everything this feature needs is already in the cheap response.
+    Reaching for it should be a deliberate later decision with a reason attached,
+    not a default nobody re-examined.
+    """
+    return _request(
+        context,
+        f"/tv/{tmdb_tv_id}",
+        language=_language(context),
+        # Artwork rides along on the request that was being made anyway. The
+        # argument above is against extra *requests*, not against extra fields,
+        # and `append_to_response` costs neither a round trip nor a rate-limit
+        # slot -- the same reason `_details` asks this way for a movie.
+        append_to_response="images",
+        include_image_language="null,en",
+    )
+
+
+def _normalize_series(data):
+    """Shape a TMDB television payload into the little this feature stores.
+
+    Still deliberately narrow. TMDB returns creators, networks and ratings here
+    and none of that is mapped: `series` has columns for a title and an overview,
+    and inventing a mapping for fields nothing reads would be guessing at a schema
+    that does not exist yet.
+
+    Artwork *is* mapped now, under the same key names `movie` uses -- `posterUrl`
+    / `posters` / `backdropUrl` / `backdropUrls`. Matching names is what lets the
+    merge layer stay free of per-source vocabulary, so a second series source can
+    answer in the shape that already works.
+
+    A season's poster comes from the `seasons` array that is already in this
+    payload, which is the reason it costs nothing. `/tv/{id}/season/{n}` would
+    give a richer season and one request per season with it; the argument above
+    against that still stands.
+
+    Season 0 travels like any other. It is specials on TMDB and specials on the
+    disc, and a box set that includes them is a real thing to own.
+    """
+    seasons = []
+    for season in data.get("seasons") or []:
+        if not isinstance(season, dict):
+            continue
+        number = season.get("season_number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        seasons.append(
+            {
+                "seasonNumber": number,
+                "title": season.get("name") or "",
+                "overview": season.get("overview") or "",
+                "year": str(season.get("air_date") or "")[:4],
+                "episodeCount": season.get("episode_count"),
+                "posterUrl": _image(season.get("poster_path")) if season.get("poster_path") else "",
+            }
+        )
+    poster_urls = _artwork_urls(data, "posters", "poster_path")
+    backdrop_urls = _artwork_urls(data, "backdrops", "backdrop_path")
+    return {
+        "status": "hit",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "sourceRef": f"tmdb:tv:{data.get('id')}",
+        "series": {
+            "title": data.get("name") or "",
+            "originalTitle": data.get("original_name") or "",
+            "overview": data.get("overview") or "",
+            "startYear": str(data.get("first_air_date") or "")[:4],
+            "endYear": str(data.get("last_air_date") or "")[:4],
+            "posterUrl": poster_urls[0] if poster_urls else "",
+            "posters": poster_urls,
+            "backdropUrl": backdrop_urls[0] if backdrop_urls else "",
+            "backdropUrls": backdrop_urls,
+        },
+        "seasons": seasons,
+        "tmdbTvId": data.get("id"),
+    }
+
+
+def series_details(payload, context=None):
+    """Describe a series DiscVault already knows the identity of.
+
+    Unlike `movie_details` this never searches. The caller holds a TMDB
+    television id -- it arrived on the distribution feed and was stored in
+    `series_identifiers` -- so there is an exact answer available, and falling
+    back to a title search would be trading it for a guess. A series without an
+    id is a miss, which is the honest answer: nothing here can establish identity
+    that the feed did not.
+
+    The caller offers every identifier the series carries and each source takes
+    the namespace it speaks; this one reads `tmdb_tv` and ignores the rest. The
+    older top-level `tmdbTvId` is still accepted so a DiscVault that has not been
+    updated yet keeps getting answers from this plugin.
+    """
+    body = payload or {}
+    identifiers = body.get("seriesIdentifiers")
+    tmdb_tv_id = ""
+    if isinstance(identifiers, dict):
+        tmdb_tv_id = str(identifiers.get("tmdb_tv") or "").strip()
+    if not tmdb_tv_id:
+        tmdb_tv_id = str(body.get("tmdbTvId") or "").strip()
+    if not tmdb_tv_id.isdigit():
+        return {"status": "miss", "provider": "tmdb"}
+    return _normalize_series(_series_details_request(context or {}, tmdb_tv_id))
+
+
+def season_episodes(payload, context=None):
+    """The episode list for one season.
+
+    This is the request `_normalize_series` argues against making by default, and
+    the argument still holds: `/tv/{id}/season/{n}` costs one call **per season**,
+    so a ten-season show is ten calls rather than the one that fetches the series.
+
+    What changed is who pays. Episodes are fetched per season, on demand, from a
+    surface that only appears with Collectors mode on -- so the cost falls on
+    somebody who asked for episode detail rather than on every series refresh.
+    That is the "deliberate later decision with a reason attached" the docstring
+    over there asked for.
+
+    Identity is not established here. The caller already holds the series' TMDB
+    id and states which season number it wants; nothing in this function searches
+    or guesses.
+    """
+    body = payload or {}
+    identifiers = body.get("seriesIdentifiers")
+    tmdb_tv_id = ""
+    if isinstance(identifiers, dict):
+        tmdb_tv_id = str(identifiers.get("tmdb_tv") or "").strip()
+    if not tmdb_tv_id:
+        tmdb_tv_id = str(body.get("tmdbTvId") or "").strip()
+    season_number = body.get("seasonNumber")
+    if not tmdb_tv_id.isdigit() or not isinstance(season_number, int) or isinstance(season_number, bool):
+        return {"status": "miss", "provider": "tmdb"}
+    if season_number < 0:
+        return {"status": "miss", "provider": "tmdb"}
+
+    data = _request(
+        context or {},
+        f"/tv/{tmdb_tv_id}/season/{season_number}",
+        language=_language(context),
+    )
+    episodes = []
+    for item in data.get("episodes") or []:
+        if not isinstance(item, dict):
+            continue
+        number = item.get("episode_number")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        episodes.append(
+            {
+                "episodeNumber": number,
+                "title": item.get("name") or "",
+                "overview": item.get("overview") or "",
+                "airDate": item.get("air_date") or "",
+                "runtimeMinutes": item.get("runtime"),
+                "stillUrl": _image(item.get("still_path")) if item.get("still_path") else "",
+            }
+        )
+    return {
+        "status": "hit" if episodes else "miss",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "seasonNumber": season_number,
+        "episodes": episodes,
+    }
 
 
 def _import_wikidata_awards():

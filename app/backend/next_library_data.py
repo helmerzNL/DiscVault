@@ -52,11 +52,17 @@ def parse_page_params(args: Any) -> tuple[int, int]:
 
 
 def library_movie_page(conn, *, user: dict[str, Any] | None, limit: int, offset: int) -> dict[str, Any]:
-    """Build one page of library movies plus the paging metadata."""
+    """Build one page of library movies plus the paging metadata.
+
+    The rows go through the same enrichment helper as the first-paint snapshot,
+    deliberately rather than by listing the steps again here: a page is the rest
+    of the very same list, and a row that arrives shaped differently depending on
+    which side of offset 200 it fell on is a bug the client cannot repair.
+    """
     app = _next_app()
     total = app.collection_movie_total_count(conn, actor=user)
     items = app.collection_movie_preview_entities(conn, limit=limit, offset=offset, actor=user)
-    items = app.attach_personal_list_state(conn, items, user.get("id") if user else None)
+    items = app.attach_library_movie_enrichments(conn, items, user)
     return {
         "items": items,
         "total": total,

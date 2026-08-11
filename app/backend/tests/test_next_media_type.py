@@ -15,6 +15,7 @@ try:
     from ..dedup_identity import (
         MEDIA_TYPE_MOVIE,
         MEDIA_TYPE_SHOW,
+        infer_media_type_from_title,
         media_type_conflicts,
         normalize_media_type,
     )
@@ -24,6 +25,7 @@ except ImportError:  # pragma: no cover - backend working-directory CI imports
     from dedup_identity import (
         MEDIA_TYPE_MOVIE,
         MEDIA_TYPE_SHOW,
+        infer_media_type_from_title,
         media_type_conflicts,
         normalize_media_type,
     )
@@ -66,6 +68,47 @@ class NormalizeMediaTypeTests(unittest.TestCase):
             for value in ("movie", "film", "tv", "show", "series", "junk", None)
         }
         self.assertEqual(seen, {MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, None})
+
+
+class InferMediaTypeFromTitleTests(unittest.TestCase):
+    """Reading a series off the printed title, for sources that cannot say.
+
+    Every source except MovieVault is blind to the distinction, so a barcode
+    scan that resolves elsewhere arrives with no type at all. The disc itself
+    often says what it is; this reads that and nothing more.
+    """
+
+    def test_a_season_or_series_marker_is_recognised(self):
+        for title in (
+            "Yellowstone: Season 1",
+            "Fargo Season Two",
+            "Twin Peaks - Seasons 1-2",
+            "Band of Brothers: The Complete Series",
+            "Het Bureau Seizoen 3",
+            "Friends: De Complete Serie",
+            "Volume 2",
+        ):
+            with self.subTest(title=title):
+                self.assertEqual(infer_media_type_from_title(title), MEDIA_TYPE_SHOW)
+
+    def test_it_never_answers_movie(self):
+        """The half that keeps the contract's rule intact.
+
+        A marker is evidence; its absence is not. Plenty of series boxes carry
+        only the show's name, so answering MOVIE here would turn "no marker" into
+        a confident wrong type -- and this field vetoes the identity ladder, so a
+        wrong value silently makes a record unmergeable with its own duplicate.
+        """
+        for title in ("Dune: Part Two", "Heat", "Yellowstone", "", None, "   "):
+            with self.subTest(title=title):
+                self.assertIsNone(infer_media_type_from_title(title))
+
+    def test_the_output_is_only_ever_show_or_nothing(self):
+        seen = {
+            infer_media_type_from_title(title)
+            for title in ("Season 1", "The Complete Series", "Heat", None)
+        }
+        self.assertEqual(seen, {MEDIA_TYPE_SHOW, None})
 
 
 class MediaTypeConflictTests(unittest.TestCase):
@@ -243,6 +286,87 @@ class MediaTypeProposalNormalisationTests(unittest.TestCase):
             for raw in ("tv", "movie", "Show", "FILM", "miniseries", "", None)
         }
         self.assertEqual(proposed, {MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, None})
+
+
+class MediaTypeMergePolicyTests(unittest.TestCase):
+    """The type merges asymmetrically: promotion to SHOW, never demotion.
+
+    The column is NOT NULL DEFAULT 'MOVIE', so the generic "fill what is
+    empty" rule can never truthfully describe it — and before the lookup
+    context carried the column at all, the stored type read as empty and any
+    stated type won. On a series disc, whose link
+    ``movies_series_requires_show`` ties to the type, a winning MOVIE was not
+    a field write but a constraint violation that cost the whole refresh.
+    """
+
+    @staticmethod
+    def _merged(current, incoming, *, overwrite_enabled=False, metadata=None):
+        return next_metadata.merge_metadata_results(
+            current={"media_type": current, "metadata": metadata or {}},
+            technical_current={},
+            results=[
+                {
+                    "pluginId": "movievault_v2",
+                    "entrypoint": "release.lookup",
+                    "sourceLabel": "MovieVault",
+                    "movieUpdates": {"media_type": incoming},
+                    "metadataUpdates": {},
+                }
+            ],
+            overwrite_enabled=overwrite_enabled,
+            target_format="",
+        )
+
+    def test_a_stated_show_promotes_a_film(self):
+        merged = self._merged(MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW)
+        self.assertEqual(merged["movieUpdates"].get("media_type"), MEDIA_TYPE_SHOW)
+
+    def test_a_stated_movie_never_demotes_a_series(self):
+        merged = self._merged(MEDIA_TYPE_SHOW, MEDIA_TYPE_MOVIE)
+        self.assertNotIn("media_type", merged["movieUpdates"])
+        skipped = next(
+            item for item in merged["skipped"] if item["field"] == "media_type"
+        )
+        self.assertEqual(skipped["reason"], "a refresh may not demote a series to a film")
+
+    def test_preferred_provider_overwrite_does_not_demote_either(self):
+        """Overwrite widens which provider wins a field, not what a field means."""
+        merged = self._merged(MEDIA_TYPE_SHOW, MEDIA_TYPE_MOVIE, overwrite_enabled=True)
+        self.assertNotIn("media_type", merged["movieUpdates"])
+
+    def test_an_absent_current_type_accepts_what_is_stated(self):
+        """Import-time merges carry no row yet; the statement lands unopposed."""
+        merged = self._merged(None, MEDIA_TYPE_MOVIE)
+        self.assertEqual(merged["movieUpdates"].get("media_type"), MEDIA_TYPE_MOVIE)
+
+    def test_a_restated_type_is_retained_not_reapplied(self):
+        merged = self._merged(MEDIA_TYPE_SHOW, MEDIA_TYPE_SHOW)
+        self.assertNotIn("media_type", merged["movieUpdates"])
+
+    def test_a_lock_beats_even_a_promotion(self):
+        merged = self._merged(
+            MEDIA_TYPE_MOVIE,
+            MEDIA_TYPE_SHOW,
+            metadata={next_metadata.MOVIE_METADATA_LOCKS_KEY: ["media_type"]},
+        )
+        self.assertNotIn("media_type", merged["movieUpdates"])
+        skipped = next(
+            item for item in merged["skipped"] if item["field"] == "media_type"
+        )
+        self.assertEqual(skipped["reason"], "field is locked by user")
+
+    def test_the_lookup_context_carries_the_columns_the_rule_reads(self):
+        """The merge can only see what the context SELECT fetches.
+
+        This is the regression that made demotion possible in the first place:
+        media_type was added to movies by migration 063 but never to this
+        query, so every stored type merged as "empty".
+        """
+        import inspect
+
+        source = inspect.getsource(next_metadata.movie_lookup_context)
+        self.assertIn("media_type", source)
+        self.assertIn("series_id", source)
 
 
 V4_FIXTURE_PATH = os.path.join(

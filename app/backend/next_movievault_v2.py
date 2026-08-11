@@ -12,6 +12,7 @@ import os
 import re
 import socket
 import time
+import traceback
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -19,6 +20,27 @@ import uuid
 from contextlib import nullcontext
 from datetime import date, datetime, timezone
 from typing import Any, Callable, ContextManager
+
+try:  # pragma: no cover - supports gunicorn next_app:app
+    from .next_packaging import (
+        LEGACY_PACKAGING_VALUES,
+        ALL_PACKAGING_VALUES,
+        FINISH_VALUES,
+        MAX_FINISHES,
+        MAX_LEGACY_PACKAGING,
+        MAX_PACKAGING_V5,
+        split_legacy_packaging,
+    )
+except ImportError:  # pragma: no cover - supports gunicorn next_app:app
+    from next_packaging import (
+        LEGACY_PACKAGING_VALUES,
+        ALL_PACKAGING_VALUES,
+        FINISH_VALUES,
+        MAX_FINISHES,
+        MAX_LEGACY_PACKAGING,
+        MAX_PACKAGING_V5,
+        split_legacy_packaging,
+    )
 
 try:
     from psycopg.types.json import Jsonb
@@ -32,12 +54,63 @@ MOVIEVAULT_V2_PLUGIN_ID = "movievault_v2"
 MOVIEVAULT_V2_CONTRACT = "distribution-2"
 MOVIEVAULT_V3_CONTRACT = "distribution-3"
 MOVIEVAULT_V4_CONTRACT = "distribution-4"
-SUPPORTED_CONTRACTS = (MOVIEVAULT_V2_CONTRACT, MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT)
+MOVIEVAULT_V5_CONTRACT = "distribution-5"
+MOVIEVAULT_V6_CONTRACT = "distribution-6"
+# Ordered lowest to highest. _negotiated_contract() returns the *maximum* of
+# this plugin's declared range - despite the name it does not negotiate, it
+# never asks the origin what it actually serves. So listing a contract here is
+# inert, but raising the manifest's `distributionContractRange.maximum` is not:
+# DiscVault would immediately request /v<max>, and an origin that has not
+# activated that contract answers 503, which fails the whole sync. Support is
+# added here first; the manifest range is raised only once the origin serves
+# the contract AND has it switched on.
+SUPPORTED_CONTRACTS = (
+    MOVIEVAULT_V2_CONTRACT,
+    MOVIEVAULT_V3_CONTRACT,
+    MOVIEVAULT_V4_CONTRACT,
+    MOVIEVAULT_V5_CONTRACT,
+    MOVIEVAULT_V6_CONTRACT,
+)
 CONTRACT_PATH_VERSIONS = {
     MOVIEVAULT_V2_CONTRACT: "2",
     MOVIEVAULT_V3_CONTRACT: "3",
     MOVIEVAULT_V4_CONTRACT: "4",
+    MOVIEVAULT_V5_CONTRACT: "5",
+    MOVIEVAULT_V6_CONTRACT: "6",
 }
+# Contract feature predicates. Every technical field used to be gated on an
+# equality check against distribution-4, which quietly means "v4 only" - so
+# adding v5 by equality would have had to repeat `or v5` at fourteen sites, and
+# missing one would drop that field on v5 with nothing failing. These say what
+# is actually meant: the field exists from that version onward.
+def _is_v3_or_later(contract_version: str) -> bool:
+    return contract_version in (
+        MOVIEVAULT_V3_CONTRACT,
+        MOVIEVAULT_V4_CONTRACT,
+        MOVIEVAULT_V5_CONTRACT,
+        MOVIEVAULT_V6_CONTRACT,
+    )
+
+
+def _is_v4_or_later(contract_version: str) -> bool:
+    """True for the contracts carrying posters and the technical profile."""
+    return contract_version in (
+        MOVIEVAULT_V4_CONTRACT,
+        MOVIEVAULT_V5_CONTRACT,
+        MOVIEVAULT_V6_CONTRACT,
+    )
+
+
+def _is_v5_or_later(contract_version: str) -> bool:
+    """True for the contracts carrying the full packaging vocabulary and finishes."""
+    return contract_version in (MOVIEVAULT_V5_CONTRACT, MOVIEVAULT_V6_CONTRACT)
+
+
+def _is_v6_or_later(contract_version: str) -> bool:
+    """True for the contracts carrying the per-disc breakdown."""
+    return contract_version == MOVIEVAULT_V6_CONTRACT
+
+
 SYNC_LOCK_KEY = 2_026_261
 DEFAULT_TIMEOUT_SECONDS = 20
 DEFAULT_MAX_MANIFEST_BYTES = 64 * 1024
@@ -68,13 +141,20 @@ MAX_RECORDS = 2_000_000
 MAX_DELTA_HOPS_PER_SYNC = 500
 HASH_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 COUNTRY_PATTERN = re.compile(r"^[A-Z]{2}$")
-# NOTE: MovieVault public asset paths are deliberately `/v2/assets/...` for both
-# distribution-3 and distribution-4 (the producer never versions this path); only
-# the contract envelope itself is versioned.
+# NOTE: MovieVault public asset paths are deliberately `/v2/assets/...` for every
+# contract version (the producer never versions this path); only the contract
+# envelope itself is versioned. Which is exactly why this table is easy to
+# forget when a version is added -- every value is identical, so it reads like
+# a constant and is in fact a required per-version entry: `_asset_variant`
+# indexes it with a bare `[contract_version]`, so a missing key is a KeyError
+# on the first record carrying artwork, and it takes the whole sync with it.
+# distribution-6 shipped without its row and did precisely that.
 ASSET_PATH_PATTERNS = {
     MOVIEVAULT_V2_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V3_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
     MOVIEVAULT_V4_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V5_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
+    MOVIEVAULT_V6_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
 }
 POSTER_ASSET_TYPE = "front_cover"
 POSTER_ATTESTATIONS = {"original", "licensed"}
@@ -102,21 +182,23 @@ MAX_AUDIO_TRACKS = 50
 MAX_SUBTITLE_LANGUAGES = 50
 LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,8}(-[a-z0-9]{1,8})*$")
 
+# The seasons a television release covers. MovieVault caps its own list at 100
+# and season numbers at 0-200; both are mirrored here rather than derived,
+# because this side must stay sane if the producer ever widens its own limits.
+# Season 0 is specials, on TMDB and on the disc, which is why the floor is 0.
+MAX_SEASONS = 100
+MIN_SEASON_NUMBER = 0
+MAX_SEASON_NUMBER = 200
+
 # distribution-4 packaging enum. Same forward-compat leniency as the audio
 # track enums above - an unrecognized value is stored as-is with a logged
 # warning rather than rejecting the whole release record.
-PACKAGING_VALUES = {
-    "keep_case",
-    "amaray",
-    "steelbook",
-    "slipcover",
-    "slipcase",
-    "digibook",
-    "mediabook",
-    "digipak",
-    "box",
-}
-MAX_PACKAGING = 9
+#
+# The vocabulary itself lives in next_packaging, not here: it drives the edit
+# form and the collection views too, so a sync provider is the wrong owner.
+# Re-exported under the original names so existing call sites keep working.
+PACKAGING_VALUES = LEGACY_PACKAGING_VALUES
+MAX_PACKAGING = MAX_LEGACY_PACKAGING
 
 # distribution-4 subtitle variants (MovieVault PR #162). A disc carries several
 # tracks in the same language - a full track, an SDH track that also transcribes
@@ -140,6 +222,11 @@ MAX_DISC_REGIONS = 12
 # MovieVault constrains the whole array to digits, dots and colons; this mirrors
 # that while still refusing anything that is not shaped like a ratio.
 ASPECT_RATIO_PATTERN = re.compile(r"^[0-9]{1,2}(?:\.[0-9]{1,3})?:[0-9]{1,2}(?:\.[0-9]{1,3})?$")
+
+try:
+    from .dedup_identity import MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, normalize_media_type
+except ImportError:  # pragma: no cover - supports running modules directly
+    from dedup_identity import MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, normalize_media_type
 
 logger = logging.getLogger(__name__)
 
@@ -639,14 +726,26 @@ def _release_video_fields(value: dict[str, Any], *, release_id: str) -> dict[str
     }
 
 
-def _packaging(value: Any, *, release_id: str) -> list[str]:
-    if not isinstance(value, list) or len(value) > MAX_PACKAGING:
+def _packaging(value: Any, *, release_id: str, contract_version: str) -> list[str]:
+    """Parse the feed's flat packaging list.
+
+    The cap depends on the contract: v4 publishes at most the nine values it
+    knows, v5 the twelve the catalogue stores. Note the asymmetry in
+    strictness, which is deliberate and long-standing - an unrecognized *value*
+    is logged and kept, because MovieVault may ship vocabulary before this
+    allow-list catches up, but an over-long list or an over-long item raises
+    `record_invalid`, which fails the whole synchronization rather than one
+    record. The caps must therefore match MovieVault's MAX_PACKAGING exactly;
+    they are a contract term, not a local sanity check.
+    """
+    maximum = MAX_PACKAGING_V5 if _is_v5_or_later(contract_version) else MAX_PACKAGING
+    if not isinstance(value, list) or len(value) > maximum:
         raise MovieVaultV2Error("record_invalid")
     result: list[str] = []
     for item in value:
         if not isinstance(item, str) or not item or len(item) > 24:
             raise MovieVaultV2Error("record_invalid")
-        if item not in PACKAGING_VALUES:
+        if item not in ALL_PACKAGING_VALUES:
             logger.warning(
                 "movievault_v2: unrecognized packaging value %r on release %s - storing raw value",
                 item,
@@ -654,6 +753,172 @@ def _packaging(value: Any, *, release_id: str) -> list[str]:
             )
         result.append(item)
     return result
+
+
+def _finishes(value: Any, *, release_id: str) -> list[str]:
+    """Parse the feed's finish list. distribution-5 and later only.
+
+    Same posture as _packaging: lenient about vocabulary, strict about size.
+    """
+    if not isinstance(value, list) or len(value) > MAX_FINISHES:
+        raise MovieVaultV2Error("record_invalid")
+    result: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item or len(item) > 24:
+            raise MovieVaultV2Error("record_invalid")
+        if item not in FINISH_VALUES:
+            logger.warning(
+                "movievault_v2: unrecognized finish value %r on release %s - storing raw value",
+                item,
+                release_id,
+            )
+        result.append(item)
+    return result
+
+
+MAX_FEED_DISCS = 99
+
+
+def _discs(value: Any, *, release_id: str) -> list[dict[str, Any]]:
+    """Parse the per-disc breakdown. distribution-6 and later.
+
+    Same posture as ``_seasons`` directly below, for the same paid-for lesson:
+    skip what cannot be read, log it, keep the rest. A release whose disc list
+    is unusable arrives with no discs, which is exactly the state it was in
+    before this field existed -- while a raise here is not one lost breakdown
+    but a dead catalog for every instance.
+
+    Entries are kept verbatim (the mirror stores what the feed said, enums
+    open), with only shape checks: a dict, an int position 1..99, and the
+    remaining keys strings or lists as published. Order is by position, which
+    is the producer's own ordering rule.
+    """
+    if not isinstance(value, list):
+        logger.warning(
+            "movievault_v2: discs on release %s is not a list - ignoring",
+            release_id,
+        )
+        return []
+    if len(value) > MAX_FEED_DISCS:
+        logger.warning(
+            "movievault_v2: discs on release %s exceeds %d entries - truncating",
+            release_id,
+            MAX_FEED_DISCS,
+        )
+        value = value[:MAX_FEED_DISCS]
+    discs: list[dict[str, Any]] = []
+    seen_positions: set[int] = set()
+    for entry in value:
+        if not isinstance(entry, dict):
+            logger.warning(
+                "movievault_v2: skipping non-object disc on release %s", release_id
+            )
+            continue
+        position = entry.get("position")
+        if (
+            not isinstance(position, int)
+            or isinstance(position, bool)
+            or not 1 <= position <= MAX_FEED_DISCS
+            or position in seen_positions
+        ):
+            logger.warning(
+                "movievault_v2: skipping disc with unusable position %r on release %s",
+                position,
+                release_id,
+            )
+            continue
+        seen_positions.add(position)
+        discs.append(entry)
+    return sorted(discs, key=lambda disc: disc["position"])
+
+
+def _seasons(value: Any, *, release_id: str) -> list[dict[str, Any]]:
+    """Parse the seasons a release covers. distribution-4 and later.
+
+    Unlike every other parser in this file, this one never raises. 563 landed the
+    tolerance for this key precisely because it cannot arrive gradually -- upstream
+    publishes it on *every* release record, so a rejection here is not one lost
+    season list but a dead catalog for every instance. Having just paid for that
+    lesson, refusing a malformed shape one layer deeper would reintroduce it.
+
+    So the posture is: skip what cannot be read, log it, keep the rest. A release
+    whose season list is unusable arrives with no seasons, which is exactly the
+    state it was in before this column existed.
+
+    `[]` and `None` are different answers and both are returned as-is by the
+    caller: `[]` is MovieVault saying the release covers no particular season,
+    while a missing key means it has not said. Only the first is a statement.
+    """
+    if not isinstance(value, list):
+        logger.warning(
+            "movievault_v2: seasons on release %s is not a list - ignoring",
+            release_id,
+        )
+        return []
+    if len(value) > MAX_SEASONS:
+        logger.warning(
+            "movievault_v2: seasons on release %s exceeds %d entries - truncating",
+            release_id,
+            MAX_SEASONS,
+        )
+        value = value[:MAX_SEASONS]
+    seasons: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for item in value:
+        if not isinstance(item, dict):
+            logger.warning(
+                "movievault_v2: season entry on release %s is not an object - skipping",
+                release_id,
+            )
+            continue
+        number = item.get("seasonNumber")
+        # bool is an int in Python, and `True` must not become season 1.
+        if not isinstance(number, int) or isinstance(number, bool):
+            logger.warning(
+                "movievault_v2: season on release %s has no usable seasonNumber - skipping",
+                release_id,
+            )
+            continue
+        if not MIN_SEASON_NUMBER <= number <= MAX_SEASON_NUMBER:
+            logger.warning(
+                "movievault_v2: season %d on release %s is out of range - skipping",
+                number,
+                release_id,
+            )
+            continue
+        if number in seen:
+            # Upstream enforces one row per (film, season number) and rejects a
+            # duplicate before publishing, so this can only be producer drift.
+            # Keeping the first is arbitrary but stable; the alternative is
+            # writing the same season twice into series_seasons, which its own
+            # unique index would then refuse mid-sync.
+            logger.warning(
+                "movievault_v2: duplicate season %d on release %s - keeping the first",
+                number,
+                release_id,
+            )
+            continue
+        seen.add(number)
+        seasons.append(
+            {
+                "seasonNumber": number,
+                "title": item["title"] if isinstance(item.get("title"), str) else None,
+                "releaseYear": (
+                    item["releaseYear"]
+                    if isinstance(item.get("releaseYear"), int)
+                    and not isinstance(item.get("releaseYear"), bool)
+                    else None
+                ),
+                "episodeCount": (
+                    item["episodeCount"]
+                    if isinstance(item.get("episodeCount"), int)
+                    and not isinstance(item.get("episodeCount"), bool)
+                    and item["episodeCount"] >= 0
+                    else None
+                ),
+            }
+        )
+    return seasons
 
 
 def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, Any]:
@@ -680,9 +945,9 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "releaseDate",
         "discCount",
     }
-    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
+    if _is_v3_or_later(contract_version):
         optional.update({"studio", "distributor", "runtimeMinutes"})
-    if contract_version == MOVIEVAULT_V4_CONTRACT:
+    if _is_v4_or_later(contract_version):
         required.add("poster")
         # Optional rather than required, even though MovieVault's own v4 schema
         # marks them required. The live feed serves release records that carry
@@ -706,6 +971,12 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
                 "discRegions",
             }
         )
+    if _is_v5_or_later(contract_version):
+        # distribution-5's one addition. Optional for the same reason as the
+        # eight above: a v5 record projected before the field existed simply
+        # has no key, and a missing key must never cost the record.
+        optional.add("finishes")
+    if _is_v4_or_later(contract_version):
         # Nullable, added after poster/assets (Fanart.tv artwork source, ADR
         # 0008). Not stored - see _backdrop()'s own docstring.
         optional.add("backdrop")
@@ -718,8 +989,25 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # carries it. Listing the field here is what keeps a MovieVault release
         # from taking every DiscVault instance's sync down with it.
         optional.add("workType")
+        # Which seasons a television release covers. Listed here purely so the
+        # key is tolerated; nothing consumes it yet.
+        #
+        # This one is not merely additive-in-principle: MovieVault publishes
+        # `seasons` on *every* v4 release record, including `[]` for a film,
+        # because upstream an empty list is a statement ("the complete series,
+        # or unspecified") rather than an omission. So the moment an origin
+        # ships that change, every record carries a key this allow-list did not
+        # have - and by the rule above that is not a degraded sync but no sync
+        # at all. Tolerating the key has to reach instances before the origin
+        # does, which is why it lands separately from anything that reads it.
+        optional.add("seasons")
+    if _is_v6_or_later(contract_version):
+        # distribution-6's one addition: the per-disc breakdown. Optional
+        # because the producer omits it for a release nobody has broken down,
+        # which is most of the catalogue.
+        optional.add("discs")
     _exact_keys(value, required=required, optional=optional, label="release record")
-    if contract_version == MOVIEVAULT_V4_CONTRACT:
+    if _is_v4_or_later(contract_version):
         _backdrop(value.get("backdrop"), release_id=str(value.get("releaseId")))
     provider_ids = value["providerIds"]
     if not isinstance(provider_ids, dict):
@@ -771,7 +1059,7 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "assets": _assets(value["assets"], contract_version),
         "poster": (
             _poster(value["poster"], contract_version)
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             else None
         ),
         # A pre-v4 contract has no technical fields at all, and a v4 record may
@@ -780,17 +1068,26 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # costing the record.
         "audioTracks": (
             _audio_tracks(value["audioTracks"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT and "audioTracks" in value
+            if _is_v4_or_later(contract_version) and "audioTracks" in value
             else []
         ),
         "subtitles": (
             _subtitles(value["subtitles"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT and "subtitles" in value
+            if _is_v4_or_later(contract_version) and "subtitles" in value
             else []
         ),
         "packaging": (
-            _packaging(value["packaging"], release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT and "packaging" in value
+            _packaging(
+                value["packaging"],
+                release_id=str(value.get("releaseId")),
+                contract_version=contract_version,
+            )
+            if _is_v4_or_later(contract_version) and "packaging" in value
+            else []
+        ),
+        "finishes": (
+            _finishes(value["finishes"], release_id=str(value.get("releaseId")))
+            if _is_v5_or_later(contract_version) and "finishes" in value
             else []
         ),
         # None means "the feed has not said", which must stay distinguishable
@@ -799,13 +1096,31 @@ def _release_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         # than guessed at.
         "workType": (
             value["workType"]
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             and value.get("workType") in ("movie", "tv")
+            else None
+        ),
+        # None and [] are different answers and the difference is load-bearing.
+        # A missing key means the feed has not said - a record projected before
+        # MovieVault carried seasons, or a pre-v4 contract. `[]` means it has
+        # said, and the answer is "no particular season": a film, or a
+        # complete-series set. Only the second may clear an existing season list.
+        "seasons": (
+            _seasons(value["seasons"], release_id=str(value.get("releaseId")))
+            if _is_v4_or_later(contract_version) and "seasons" in value
+            else None
+        ),
+        # Same None-versus-[] rule as seasons: a missing key is "the feed has
+        # not said", an empty list is a statement, and only the second may
+        # clear a stored breakdown.
+        "discs": (
+            _discs(value["discs"], release_id=str(value.get("releaseId")))
+            if _is_v6_or_later(contract_version) and "discs" in value
             else None
         ),
         **(
             _release_video_fields(value, release_id=str(value.get("releaseId")))
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             else {
                 "videoResolution": None,
                 "videoCodecs": [],
@@ -837,7 +1152,7 @@ def _member(value: Any, contract_version: str) -> dict[str, Any]:
         "discFormat",
         "discBarcodeHash",
     }
-    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
+    if _is_v3_or_later(contract_version):
         optional.update({"studio", "distributor", "runtimeMinutes"})
     _exact_keys(value, required=required, optional=optional, label="box-set member")
     if value["relationship"] != "contains":
@@ -879,7 +1194,7 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "members",
     }
     optional = {"edition", "yearRange", "format", "countryCode", "languageCode"}
-    if contract_version == MOVIEVAULT_V4_CONTRACT:
+    if _is_v4_or_later(contract_version):
         required.add("poster")
     _exact_keys(value, required=required, optional=optional, label="box-set record")
     members_value = value["members"]
@@ -910,7 +1225,7 @@ def _box_set_record(value: dict[str, Any], contract_version: str) -> dict[str, A
         "members": sorted(members, key=lambda member: member["position"]),
         "poster": (
             _poster(value["poster"], contract_version)
-            if contract_version == MOVIEVAULT_V4_CONTRACT
+            if _is_v4_or_later(contract_version)
             else None
         ),
     }
@@ -1126,18 +1441,59 @@ def _request(
     return status, content, headers
 
 
+# Unknown release-details keys already logged, as (label, key). Only bounded by
+# MovieVault's own vocabulary, so it cannot grow without a producer change - the
+# point is that a per-scan warning does not become a per-scan log flood.
+_RELEASE_DETAILS_UNKNOWN_KEYS_SEEN: set[tuple[str, str]] = set()
+
+
 def _release_details_object(
     value: Any,
     *,
     required: set[str],
     optional: set[str],
+    label: str = "object",
 ) -> dict[str, Any]:
+    """Read one object out of a release-details answer.
+
+    A missing *required* key is still fatal - it means the object does not
+    describe what this branch claims it describes. An **unknown** key is not:
+    it is logged once and dropped, and the caller gets a copy without it.
+
+    This used to reject the whole response, which inverted the safe direction
+    of change: a purely additive field on MovieVault's side took barcode
+    scanning down on discvault.eu until this repo caught up. It happened with
+    `subtitles` (2026-08-04) and again with `finishes` (2026-08-09), and the
+    remedy recorded after the first one - ship the consumer first - is an
+    ordering convention that nothing enforces. See App-Guidance
+    `docs/apps/discvault/movievault-route-parity.md` §4.
+
+    Dropping rather than passing through is the load-bearing half: every parser
+    in this family builds its result key by key from names it declared, so an
+    ignored key can never reach the database, the picker, or a contribution
+    sent back to MovieVault.
+
+    The bulk sync feed keeps its exact-key reader (`_exact_keys`) on purpose.
+    There a surprise key means the record is not what it claims, and the
+    synchronization can be repeated; a resolve answer cannot.
+    """
     if not isinstance(value, dict):
         raise MovieVaultV2Error("release_details_response_invalid")
     keys = set(value)
-    if not required.issubset(keys) or keys - required - optional:
+    if not required.issubset(keys):
         raise MovieVaultV2Error("release_details_response_invalid")
-    return value
+    unknown = keys - required - optional
+    if not unknown:
+        return value
+    fresh = sorted(key for key in unknown if (label, key) not in _RELEASE_DETAILS_UNKNOWN_KEYS_SEEN)
+    if fresh:
+        _RELEASE_DETAILS_UNKNOWN_KEYS_SEEN.update((label, key) for key in fresh)
+        logger.warning(
+            "movievault_v2: ignoring unknown release-details %s key(s) %s",
+            label,
+            fresh,
+        )
+    return {key: item for key, item in value.items() if key not in unknown}
 
 
 def _release_details_text(
@@ -1186,6 +1542,7 @@ def _release_details_barcode(value: Any, *, scopes: set[str]) -> dict[str, str]:
         value,
         required={"type", "value", "scope"},
         optional=set(),
+        label="barcode",
     )
     barcode = _release_details_barcode_value(
         item["value"],
@@ -1202,6 +1559,7 @@ def _release_details_alias(value: Any) -> dict[str, Any]:
         value,
         required={"title", "kind"},
         optional={"languageCode", "countryCode"},
+        label="alternate title",
     )
     if item["kind"] not in {"alternate", "localized", "packaging", "retailer"}:
         raise MovieVaultV2Error("release_details_response_invalid")
@@ -1249,6 +1607,7 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
         value,
         required=set(),
         optional={"tmdbMovieId", "imdbId"},
+        label="film identifiers",
     )
     result: dict[str, str] = {}
     if item.get("tmdbMovieId") is not None:
@@ -1271,12 +1630,19 @@ def _release_details_film(value: Any) -> dict[str, Any]:
         value,
         required={"title", "identifiers", "links"},
         optional={"year"},
+        label="film",
     )
     identifiers = _release_details_identifiers(item["identifiers"])
+    # A link DiscVault did not derive itself is never rendered, so the two known
+    # links must agree exactly with the identifiers beside them. An *unknown*
+    # link is a different matter: the resolver chain already runs a Wikidata
+    # step, and comparing the whole dict would turn the day it publishes a third
+    # link into an outage. Checked per key, and only the two are kept.
     links = _release_details_object(
         item["links"],
         required=set(),
         optional={"tmdb", "imdb"},
+        label="film links",
     )
     expected_links = {
         "tmdb": (
@@ -1290,8 +1656,10 @@ def _release_details_film(value: Any) -> dict[str, Any]:
             else None
         ),
     }
-    if links != {key: value for key, value in expected_links.items() if value is not None}:
-        raise MovieVaultV2Error("release_details_response_invalid")
+    for key, expected in expected_links.items():
+        if links.get(key) != expected:
+            raise MovieVaultV2Error("release_details_response_invalid")
+    links = {key: value for key, value in expected_links.items() if value is not None}
     result: dict[str, Any] = {
         "title": _release_details_text(item["title"], minimum=1, maximum=500),
         "identifiers": identifiers,
@@ -1361,10 +1729,19 @@ def _release_details_video(value: Any) -> dict[str, Any]:
         value,
         required=set(),
         optional={"resolution", "codecs", "hdrFormats", "aspectRatios"},
+        label="video profile",
     )
     result: dict[str, Any] = {}
+    # `_video_resolution` and `_aspect_ratios` are shared with the sync feed and
+    # raise its `record_invalid`. That code is not in the resolver's failure-kind
+    # table, so it audits a shape DiscVault refused as MovieVault's failure -
+    # the same misattribution this whole path is being fixed for. Re-raise under
+    # the release-details code, as the poster and box-set readers already do.
     if item.get("resolution") is not None:
-        result["resolution"] = _video_resolution(item["resolution"], release_id="<resolver>")
+        try:
+            result["resolution"] = _video_resolution(item["resolution"], release_id="<resolver>")
+        except MovieVaultV2Error as exc:
+            raise MovieVaultV2Error("release_details_response_invalid") from exc
     if "codecs" in item:
         result["codecs"] = _release_details_enum_list(
             item["codecs"],
@@ -1384,7 +1761,10 @@ def _release_details_video(value: Any) -> dict[str, Any]:
         # "4:3" and "1.375:1" - all real, common ratios - and did so by discarding
         # the whole resolve response. ASPECT_RATIO_PATTERN matches what MovieVault
         # actually permits, and an odd value is now logged and kept.
-        result["aspectRatios"] = _aspect_ratios(item["aspectRatios"], release_id="<resolver>")
+        try:
+            result["aspectRatios"] = _aspect_ratios(item["aspectRatios"], release_id="<resolver>")
+        except MovieVaultV2Error as exc:
+            raise MovieVaultV2Error("release_details_response_invalid") from exc
     return result
 
 
@@ -1400,6 +1780,7 @@ def _release_details_subtitle_track(value: Any) -> dict[str, Any]:
         value,
         required={"languageCode", "subtitleType"},
         optional=set(),
+        label="subtitle track",
     )
     subtitle_type = item["subtitleType"]
     if not isinstance(subtitle_type, str) or not subtitle_type or len(subtitle_type) > 24:
@@ -1414,40 +1795,75 @@ def _release_details_subtitle_track(value: Any) -> dict[str, Any]:
     }
 
 
+def _release_details_open_enum(
+    value: Any,
+    *,
+    allowed: set[str],
+    maximum: int,
+    label: str,
+) -> str:
+    """One enum scalar from the resolver: shape strict, vocabulary open.
+
+    A value of the right type and within its bound is kept verbatim; only its
+    membership of the allow-list is advisory, and an unrecognized one is logged.
+    This is the posture `_release_details_enum_list` and
+    `_release_details_subtitle_track` already argue for, and the reason is the
+    same: losing a whole resolve answer over a codec name we have not heard of
+    is worse than carrying the name through. Downstream is ready for it -
+    `next_metadata.normalize_audio_track_entry` validates track *keys*, not
+    their vocabulary.
+
+    Not for values that select a code path (`status`, `verificationStatus`,
+    `source`, `moderation.status`, a barcode's `type`/`scope`). There an
+    unrecognized value has no safe default, so those stay closed.
+    """
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        raise MovieVaultV2Error("release_details_response_invalid")
+    if value not in allowed:
+        logger.warning(
+            "movievault_v2: unrecognized release-details %s value %r - storing raw value",
+            label,
+            value,
+        )
+    return value
+
+
 def _release_details_audio_track(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
         required={"languageCode", "codec"},
         optional={"channels", "immersiveFormat"},
+        label="audio track",
     )
-    if item["codec"] not in {
-        "pcm",
-        "dolby_digital",
-        "dolby_digital_plus",
-        "dolby_truehd",
-        "dts",
-        "dts_hd_hr",
-        "dts_hd_ma",
-        "mpeg_audio",
-        "aac",
-    }:
-        raise MovieVaultV2Error("release_details_response_invalid")
     result: dict[str, Any] = {
         "languageCode": _release_details_text(
             item["languageCode"],
             maximum=35,
             pattern=r"^[a-z]{2,8}(?:-[a-z0-9]{1,8})*$",
         ),
-        "codec": item["codec"],
+        # The bounds mirror what `normalize_audio_track_entry` truncates to, so
+        # a kept-raw value surprises nothing further down.
+        "codec": _release_details_open_enum(
+            item["codec"],
+            allowed=AUDIO_TRACK_CODECS,
+            maximum=64,
+            label="audio codec",
+        ),
     }
     if item.get("channels") is not None:
-        if item["channels"] not in {"1.0", "2.0", "5.1", "6.1", "7.1"}:
-            raise MovieVaultV2Error("release_details_response_invalid")
-        result["channels"] = item["channels"]
+        result["channels"] = _release_details_open_enum(
+            item["channels"],
+            allowed=AUDIO_TRACK_CHANNELS,
+            maximum=16,
+            label="audio channels",
+        )
     if item.get("immersiveFormat") is not None:
-        if item["immersiveFormat"] not in {"dolby_atmos", "dts_x", "auro_3d"}:
-            raise MovieVaultV2Error("release_details_response_invalid")
-        result["immersiveFormat"] = item["immersiveFormat"]
+        result["immersiveFormat"] = _release_details_open_enum(
+            item["immersiveFormat"],
+            allowed=AUDIO_TRACK_IMMERSIVE_FORMATS,
+            maximum=64,
+            label="immersive format",
+        )
     return result
 
 
@@ -1465,14 +1881,15 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             "video",
             "audioTracks",
             "subtitleLanguages",
-            # Structured subtitles, the same shape distribution-4 uses. Accepted
-            # before MovieVault emits it, and that order is not optional: this
-            # reader rejects the *whole* response on an unknown key, so a purely
-            # additive field on the producer side takes barcode resolution down
-            # until this list knows about it. See App-Guidance
-            # `docs/apps/discvault/movievault-route-parity.md` §4.
+            # Structured subtitles, the same shape distribution-4 uses.
             "subtitles",
+            # Surface treatment, the distribution-5 axis. Naming a key here no
+            # longer decides whether the response survives - `_release_details_object`
+            # drops what it does not know - it decides whether the field is
+            # *read*. See App-Guidance `docs/apps/discvault/movievault-route-parity.md` §4.
+            "finishes",
         },
+        label="release",
     )
     barcodes_value = item["barcodes"]
     if not isinstance(barcodes_value, list) or not 1 <= len(barcodes_value) <= 25:
@@ -1509,17 +1926,15 @@ def _release_details_release(value: Any) -> dict[str, Any]:
         result["packaging"] = _release_details_enum_list(
             item["packaging"],
             maximum=MAX_PACKAGING,
-            allowed={
-                "keep_case",
-                "amaray",
-                "steelbook",
-                "slipcover",
-                "slipcase",
-                "digibook",
-                "mediabook",
-                "digipak",
-                "box",
-            },
+            allowed=PACKAGING_VALUES,
+            label="packaging",
+        )
+    if "finishes" in item:
+        result["finishes"] = _release_details_enum_list(
+            item["finishes"],
+            maximum=MAX_FINISHES,
+            allowed=FINISH_VALUES,
+            label="finishes",
         )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
@@ -1576,11 +1991,13 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             "distributor",
             "barcodes",
             "packaging",
+            "finishes",
             "video",
             "audioTracks",
             "subtitles",
             "subtitleLanguages",
         },
+        label="release summary",
     )
     if item["source"] not in {"canonical", "external"}:
         raise MovieVaultV2Error("release_details_response_invalid")
@@ -1646,6 +2063,18 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             allowed=PACKAGING_VALUES,
             label="packaging",
         )
+    # The field that broke this path on 2026-08-09: MovieVault emits it on every
+    # candidate, this list did not name it, and the closed key set turned that
+    # into `release_details_response_invalid` for the whole answer. It is also a
+    # real distinguishing fact between two pressings of one film, which is the
+    # picker's entire job - so it is read, not merely tolerated.
+    if "finishes" in item:
+        result["finishes"] = _release_details_enum_list(
+            item["finishes"],
+            maximum=MAX_FINISHES,
+            allowed=FINISH_VALUES,
+            label="finishes",
+        )
     if "video" in item:
         result["video"] = _release_details_video(item["video"])
     if "audioTracks" in item:
@@ -1682,6 +2111,7 @@ def _release_details_member(value: Any) -> dict[str, Any]:
             "discFormat",
             "identifiers",
         },
+        label="box set member",
     )
     result: dict[str, Any] = {
         "position": _release_details_integer(item["position"], minimum=1, maximum=30),
@@ -1721,6 +2151,7 @@ def _release_details_box_set(value: Any) -> dict[str, Any]:
         value,
         required={"state", "title", "members"},
         optional={"alternateTitles", "format", "barcodes"},
+        label="box set",
     )
     if item["state"] not in {"explicit", "candidate"}:
         raise MovieVaultV2Error("release_details_response_invalid")
@@ -1851,15 +2282,24 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             "retryAfterSeconds",
             "errorCode",
         },
+        label="response",
     )
     if item["contractVersion"] != RELEASE_DETAILS_CONTRACT:
         raise MovieVaultV2Error("release_details_response_invalid")
     status = item["status"]
+    # `release` and `releases` answer the same question in two incompatible
+    # ways - one confirmed pressing, or a choice between several - and `status`
+    # says which was asked. Carrying both is a contradiction, not an additive
+    # field, so this stays a refusal even though unknown keys no longer are. It
+    # used to be enforced only by the per-status key sets below.
+    if "release" in item and "releases" in item:
+        raise MovieVaultV2Error("release_details_response_invalid")
     if status == "pending":
         _release_details_object(
             item,
             required={"contractVersion", "status", "resolutionId", "retryAfterSeconds"},
             optional=set(),
+            label="pending response",
         )
         try:
             resolution_id = str(uuid.UUID(str(item["resolutionId"])))
@@ -1889,7 +2329,12 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required=required,
             optional={"boxSet", "poster", "boxSetPoster"},
+            label="hit response",
         )
+        # A confirmed hit carrying a candidate list is the mirror of the
+        # contradiction guarded above.
+        if "releases" in item:
+            raise MovieVaultV2Error("release_details_response_invalid")
         expected_verification = (
             "canonical" if status == "canonical_hit" else "unreviewed_external"
         )
@@ -1919,6 +2364,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
                 item["moderation"],
                 required={"candidateId", "status"},
                 optional=set(),
+                label="moderation",
             )
             if (
                 re.fullmatch(r"^discovery_[A-Za-z0-9_-]{12,64}$", str(moderation["candidateId"]))
@@ -1940,6 +2386,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required={"contractVersion", "status", "film", "releases"},
             optional={"verificationStatus"},
+            label="candidates response",
         )
         releases_value = item["releases"]
         if not isinstance(releases_value, list) or not 1 <= len(releases_value) <= 50:
@@ -1962,6 +2409,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required={"contractVersion", "status"},
             optional=set(),
+            label=f"{status} response",
         )
         return {"contractVersion": RELEASE_DETAILS_CONTRACT, "status": status}
     if status == "failed":
@@ -1969,6 +2417,7 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             item,
             required={"contractVersion", "status", "errorCode"},
             optional=set(),
+            label="failed response",
         )
         return {
             "contractVersion": RELEASE_DETAILS_CONTRACT,
@@ -2121,7 +2570,23 @@ def _decode_release_details_response(status: int, content: bytes) -> dict[str, A
         value = json.loads(content)
     except (json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise MovieVaultV2Error("release_details_response_invalid") from exc
-    result = validate_release_details_response(value)
+    try:
+        result = validate_release_details_response(value)
+    except MovieVaultV2Error as exc:
+        # Unknown keys are tolerated above, so a refusal here is a genuine
+        # contract violation - but the audit trail still shows one opaque code
+        # for every remaining check. The innermost frame names the check, which
+        # is what the `finishes` incident (2026-08-09) lacked: it was findable
+        # only by replaying the response against the validator by hand.
+        frame = traceback.extract_tb(exc.__traceback__)[-1]
+        logger.warning(
+            "movievault_v2: release-details response rejected (%s) at %s:%s: %s",
+            exc.code,
+            frame.name,
+            frame.lineno,
+            frame.line,
+        )
+        raise
     if status == 202 and result["status"] != "pending":
         raise MovieVaultV2Error("release_details_response_invalid")
     if status == 200 and result["status"] == "pending":
@@ -2269,7 +2734,7 @@ def _verify_digest(
         or not hmac.compare_digest(header_digest, digest)
     ):
         raise MovieVaultV2Error("checksum_invalid")
-    if contract_version in (MOVIEVAULT_V3_CONTRACT, MOVIEVAULT_V4_CONTRACT):
+    if _is_v3_or_later(contract_version):
         content_digest = _content_digest_sha256(headers.get("content-digest"))
         if not hmac.compare_digest(content_digest, bytes.fromhex(digest)):
             raise MovieVaultV2Error("checksum_invalid")
@@ -2388,6 +2853,25 @@ def _mark_error(conn: Any, code: str) -> None:
         )
 
 
+def _record_sync_failure(conn: Any, code: str) -> None:
+    """Persist why a sync failed, without ever becoming the failure itself.
+
+    The caller is already raising. If recording the reason raises too, the
+    original exception is replaced by a bookkeeping error and the diagnosis is
+    lost - which is precisely how a CheckViolation spent an afternoon looking
+    like "current transaction is aborted".
+    """
+    try:
+        conn.rollback()
+        _mark_error(conn, code)
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+
+
 def _insert_lookup(
     cur: Any,
     generation: str,
@@ -2491,15 +2975,15 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             generation, release_id, film_id, canonical_title, release_year,
             provider_ids, release_title, edition, format, region, country_code,
             language_code, release_date, disc_count, studio, distributor,
-            runtime_minutes, assets, revision, poster, packaging,
+            runtime_minutes, assets, revision, poster, packaging, finishes,
             video_resolution, video_codecs, hdr_formats, aspect_ratios,
-            disc_regions, work_type
+            disc_regions, work_type, seasons, discs
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, %s
+            %s, %s, %s, %s, %s, %s
         )
         ON CONFLICT (generation, release_id) DO UPDATE
         SET film_id = EXCLUDED.film_id,
@@ -2521,12 +3005,15 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             revision = EXCLUDED.revision,
             poster = EXCLUDED.poster,
             packaging = EXCLUDED.packaging,
+            finishes = EXCLUDED.finishes,
             video_resolution = EXCLUDED.video_resolution,
             video_codecs = EXCLUDED.video_codecs,
             hdr_formats = EXCLUDED.hdr_formats,
             aspect_ratios = EXCLUDED.aspect_ratios,
             disc_regions = EXCLUDED.disc_regions,
-            work_type = EXCLUDED.work_type
+            work_type = EXCLUDED.work_type,
+            seasons = EXCLUDED.seasons,
+            discs = EXCLUDED.discs
         """,
         (
             generation,
@@ -2550,12 +3037,18 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             record["revision"],
             Jsonb(record["poster"]) if record.get("poster") is not None else None,
             Jsonb(record.get("packaging") or []),
+            Jsonb(record.get("finishes") or []),
             record.get("videoResolution"),
             Jsonb(record.get("videoCodecs") or []),
             Jsonb(record.get("hdrFormats") or []),
             Jsonb(record.get("aspectRatios") or []),
             Jsonb(record.get("discRegions") or []),
             record.get("workType"),
+            # `or []` is wrong here, unlike every list beside it: it would turn
+            # "the feed has not said" into "the feed says no seasons", and the
+            # consuming side is entitled to tell those apart. NULL stays NULL.
+            Jsonb(record["seasons"]) if record.get("seasons") is not None else None,
+            Jsonb(record["discs"]) if record.get("discs") is not None else None,
         ),
     )
     for lookup_hash in record["eanHashes"]:
@@ -2674,6 +3167,13 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any], origin: s
 POSTER_CACHE_JOB_TYPE = "movievault_v2.poster_cache"
 POSTER_CLEANUP_JOB_TYPE = "movievault_v2.poster_cleanup"
 RELEASE_CONTRIBUTION_JOB_TYPE = "movievault_v2.release_contribution"
+FIELD_CORRECTION_JOB_TYPE = "movievault_v2.field_correction"
+# Moderation is a human act that takes days, so this is not a retry ladder for a
+# failure -- it is a poll for an answer that is not written yet. It lives on its
+# own job because the submit job is finished the moment MovieVault has the
+# contribution, and holding that job open for a week to watch it would keep a
+# worker slot busy waiting for a person.
+CONTRIBUTION_STATUS_JOB_TYPE = "movievault_v2.contribution_status"
 
 
 def _enqueue_poster_cache(cur: Any, origin: str, poster: dict[str, Any] | None) -> None:
@@ -3101,14 +3601,30 @@ def run_sync(
                     # chain from here rather than starting over.
                     return result
         except MovieVaultV2Error as exc:
-            conn.rollback()
-            _mark_error(conn, exc.code)
-            conn.commit()
+            _record_sync_failure(conn, exc.code)
+            raise
+        except Exception as exc:
+            # Anything that is not a MovieVaultV2Error used to leave the status
+            # on 'syncing' with no code, because _mark_error was only reachable
+            # from the clause above. Worse, an aborted transaction made the
+            # cleanup below raise its own error on top, so the job recorded
+            # "current transaction is aborted" and the real cause was gone. A
+            # distribution-5 CheckViolation on movievault_v2_sync_state hid
+            # behind exactly that for hours - see migration 073.
+            _record_sync_failure(conn, f"unexpected_error:{type(exc).__name__}")
             raise
         finally:
-            with conn.cursor() as cur:
-                cur.execute("SELECT pg_advisory_unlock(%s)", (SYNC_LOCK_KEY,))
-            conn.commit()
+            # Rolls back first: after a failed statement every command in the
+            # transaction is refused, including this unlock. And it must never
+            # replace the exception on its way out - a bookkeeping failure is
+            # not the diagnosis.
+            try:
+                conn.rollback()
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_unlock(%s)", (SYNC_LOCK_KEY,))
+                conn.commit()
+            except Exception:
+                pass
 
 
 def _bounded_setting(
@@ -3324,12 +3840,21 @@ def _release_payload(conn: Any, row: dict[str, Any]) -> dict[str, Any]:
         "assets": _json_value(row.get("assets") or []),
         "revision": int(row["revision"]),
         "packaging": _json_value(row.get("packaging") or []),
+        "finishes": _json_value(row.get("finishes") or []),
         "videoResolution": row.get("video_resolution"),
         "videoCodecs": _json_value(row.get("video_codecs") or []),
         "hdrFormats": _json_value(row.get("hdr_formats") or []),
         "aspectRatios": _json_value(row.get("aspect_ratios") or []),
         "discRegions": _json_value(row.get("disc_regions") or []),
         "workType": row.get("work_type"),
+        # Carried through as None when the column is NULL, keeping "not said"
+        # distinct from the `[]` that means "no particular season".
+        "seasons": (
+            _json_value(row["seasons"]) if row.get("seasons") is not None else None
+        ),
+        "discs": (
+            _json_value(row["discs"]) if row.get("discs") is not None else None
+        ),
     }
     payload.update(_poster_status_fields(conn, row.get("poster")))
     payload["audioTracks"], payload["subtitles"] = _release_track_fields(
@@ -3943,7 +4468,9 @@ def release_technical_contribution_payload(
     )
     if regions:
         release["regions"] = regions
-    packaging = _contribution_enum_list(source.get("packaging"), PACKAGING_VALUES, 8)
+    packaging = _contribution_enum_list(
+        source.get("packaging"), PACKAGING_VALUES, MAX_PACKAGING
+    )
     if packaging:
         release["packaging"] = packaging
     video = _contribution_video(source.get("video"))
@@ -3978,13 +4505,39 @@ def release_technical_contribution_payload(
         return {}
 
     payload_film: dict[str, Any] = {"title": film_title}
+    # MOVIE/SHOW is DiscVault's vocabulary; MovieVault's is movie/tv. Mapped
+    # through `normalize_media_type` rather than a second lookup table, so the
+    # two spellings of one fact stay one mapping.
+    #
+    # Absence is deliberate and is *not* "movie": it means this side did not
+    # say, and MovieVault leaves whatever it already recorded. A client with no
+    # opinion must not be able to downgrade a series somebody else established.
+    media_type = normalize_media_type(
+        source.get("workType")
+        or source.get("work_type")
+        or film_source.get("workType")
+        or film_source.get("mediaType")
+        or film_source.get("media_type")
+    )
+    if media_type == MEDIA_TYPE_SHOW:
+        payload_film["workType"] = "tv"
+    elif media_type == MEDIA_TYPE_MOVIE:
+        payload_film["workType"] = "movie"
     year = film_source.get("year")
     if isinstance(year, int) and not isinstance(year, bool) and 1870 <= year <= 2200:
         payload_film["year"] = year
     # Digit strings, the spelling MovieVault itself emits and stores. An
     # integer is rejected upstream rather than coerced.
     tmdb_id = str(film_source.get("tmdbMovieId") or film_source.get("tmdb_movie_id") or "").strip()
-    if TMDB_ID_PATTERN.fullmatch(tmdb_id):
+    tmdb_tv_id = str(film_source.get("tmdbTvId") or film_source.get("tmdb_tv_id") or "").strip()
+    # The two TMDB id spaces are separate and mutually exclusive upstream, and
+    # an id that contradicts the stated type is refused there rather than
+    # silently resolved. Send only the one the work type agrees with, so a
+    # mismatch in our own data never becomes a rejected submission.
+    if payload_film.get("workType") == "tv":
+        if TMDB_ID_PATTERN.fullmatch(tmdb_tv_id):
+            payload_film["tmdbTvId"] = tmdb_tv_id
+    elif TMDB_ID_PATTERN.fullmatch(tmdb_id):
         payload_film["tmdbMovieId"] = tmdb_id
     imdb_id = str(film_source.get("imdbId") or film_source.get("imdb_id") or "").strip()
     if IMDB_ID_PATTERN.fullmatch(imdb_id):

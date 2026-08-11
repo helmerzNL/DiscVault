@@ -39,7 +39,10 @@ try:
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
+    from .next_product_identifiers import add_movie_identifiers
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
@@ -50,10 +53,18 @@ try:
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from .next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
+    from .next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
+    from .next_movievault_v2_field_corrections import update_contribution_by_contribution_id
+    from .next_notifications import create_user_notification
+    from .next_movievault_v2_field_corrections import update_contribution_by_job
     from .next_movievault_v2_contributions import (
+        TERMINAL_CONTRIBUTION_STATUSES,
         MovieVaultContributionError,
         disable_after_block,
+        read_contribution,
         record_failure,
+        submit_field_correction,
         submit_release_technical,
     )
     from .next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
@@ -75,7 +86,10 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_plugin_runtime import run_plugin_entrypoint
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
+    from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
+    from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
+    from next_product_identifiers import add_movie_identifiers
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
@@ -86,10 +100,18 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2 import RELEASE_CONTRIBUTION_JOB_TYPE
+    from next_movievault_v2 import CONTRIBUTION_STATUS_JOB_TYPE
+    from next_movievault_v2 import FIELD_CORRECTION_JOB_TYPE
+    from next_movievault_v2_field_corrections import update_contribution_by_contribution_id
+    from next_notifications import create_user_notification
+    from next_movievault_v2_field_corrections import update_contribution_by_job
     from next_movievault_v2_contributions import (
+        TERMINAL_CONTRIBUTION_STATUSES,
         MovieVaultContributionError,
         disable_after_block,
+        read_contribution,
         record_failure,
+        submit_field_correction,
         submit_release_technical,
     )
     from next_movievault_v2_posters import POSTER_CACHE_JOB_TYPE
@@ -535,6 +557,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == PERSON_METADATA_REFRESH_JOB_TYPE:
         return process_person_metadata_refresh(payload, worker_id)
 
+    if job_type == SERIES_METADATA_REFRESH_JOB_TYPE:
+        return process_series_metadata_refresh(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
@@ -544,6 +569,12 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == RELEASE_CONTRIBUTION_JOB_TYPE:
         return process_movievault_v2_release_contribution(job, payload, worker_id)
 
+    if job_type == FIELD_CORRECTION_JOB_TYPE:
+        return process_movievault_v2_field_correction(job, payload, worker_id)
+
+    if job_type == CONTRIBUTION_STATUS_JOB_TYPE:
+        return process_movievault_v2_contribution_status(job, payload, worker_id)
+
     if job_type == POSTER_CACHE_JOB_TYPE:
         return process_movievault_v2_poster_cache(payload, worker_id)
 
@@ -551,6 +582,24 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
         return process_movievault_v2_poster_cleanup(payload, worker_id)
 
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_series_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Fill a series' description, queued when the series was first created.
+
+    Takes no dry-run and no actor, unlike its movie counterpart. Nothing invokes
+    this from a screen: it exists because a series row appeared with nothing in
+    it, and there is no proposal for anyone to preview or approve. The moment a
+    person is choosing what a series says, they are editing it through the series
+    API and this job must not overwrite them - which is why the refresh only ever
+    fills what is empty.
+    """
+    series_id = clean_text(payload.get("seriesId") or payload.get("series_id"))
+    if not series_id:
+        raise RuntimeError("seriesId is required for series metadata refresh jobs")
+    with connect() as conn:
+        result = refresh_series_metadata(conn, series_id)
+    return {"workerId": worker_id, "seriesId": series_id, "result": result}
 
 
 def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
@@ -718,6 +767,213 @@ def process_movievault_v2_release_contribution(
         "status": str(result.get("status") or ""),
         "duplicateOf": result.get("duplicateOf"),
     }
+
+
+# Moderation is a person reading a queue, so the first useful moment to ask is
+# an hour out and the last is weeks later. Deliberately bounded rather than
+# open-ended: a contribution nobody ever decides is a fact about MovieVault,
+# and polling it forever would leave a job pending in every DiscVault that ever
+# corrected a field.
+CONTRIBUTION_STATUS_BACKOFF_MINUTES = (60, 360, 1440, 4320, 10080, 10080, 10080)
+
+
+def process_movievault_v2_field_correction(
+    job: dict[str, Any], payload: dict[str, Any], worker_id: str
+) -> dict[str, Any]:
+    """Send one field correction, then start watching for its verdict.
+
+    The retry classification is `submit_release_technical`'s, because the
+    failures are the transport's rather than the payload's - the one difference
+    is that a rejected payload here is a bug in the eligible-field rules, which
+    live entirely on this side.
+    """
+    correction = payload.get("correction")
+    if not isinstance(correction, dict) or not correction:
+        raise RuntimeError("Field correction job carries no payload")
+    attempts = int(job.get("attempts") or 0)
+    try:
+        with connect() as conn:
+            result = submit_field_correction(conn, correction)
+    except MovieVaultContributionError as exc:
+        retrying = exc.retryable and attempts < len(RELEASE_CONTRIBUTION_BACKOFF_MINUTES)
+        with connect() as conn:
+            if exc.code == "instance_blocked":
+                disable_after_block(conn)
+                update_contribution_by_job(conn, job.get("id"), status="failed", last_error=exc.code)
+                raise RuntimeError("MovieVault blocked this instance: contribution disabled") from exc
+            record_failure(conn, exc.code)
+            # The error is recorded either way; only a final attempt settles
+            # the row. A reader who sees `queued` with a last error knows it is
+            # still being tried, which is the honest state.
+            update_contribution_by_job(
+                conn,
+                job.get("id"),
+                last_error=exc.code,
+                **({} if retrying else {"status": "failed"}),
+            )
+        if retrying:
+            raise JobRetry(
+                exc.code,
+                delay_seconds=RELEASE_CONTRIBUTION_BACKOFF_MINUTES[attempts] * 60,
+                result={"jobType": FIELD_CORRECTION_JOB_TYPE, "attempt": attempts + 1},
+            ) from exc
+        raise RuntimeError(f"MovieVault rejected the correction: {exc.code}") from exc
+
+    contribution_id = str(result.get("contributionId") or "")
+    status = str(result.get("status") or "")
+    with connect() as conn:
+        update_contribution_by_job(
+            conn,
+            job.get("id"),
+            status=status or "pending",
+            contribution_id=contribution_id or None,
+            duplicate_of=result.get("duplicateOf"),
+            last_error=None,
+        )
+    if contribution_id and status not in TERMINAL_CONTRIBUTION_STATUSES:
+        # Only when there is something still to learn. A duplicate is already
+        # final on arrival, and polling it would ask a question with an answer
+        # in hand.
+        _queue_contribution_status_poll(contribution_id, worker_id)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": FIELD_CORRECTION_JOB_TYPE,
+        "contributionId": contribution_id,
+        "status": status,
+        "duplicateOf": result.get("duplicateOf"),
+    }
+
+
+def _queue_contribution_status_poll(contribution_id: str, worker_id: str) -> None:
+    with connect() as conn, conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM background_jobs
+            WHERE job_type = %s
+              AND status IN ('pending', 'running')
+              AND payload ->> 'contributionId' = %s
+            LIMIT 1
+            """,
+            (CONTRIBUTION_STATUS_JOB_TYPE, contribution_id),
+        )
+        if cur.fetchone():
+            return
+        cur.execute(
+            """
+            INSERT INTO background_jobs (job_type, payload, run_after)
+            VALUES (%s, %s, now() + make_interval(mins => %s))
+            """,
+            (
+                CONTRIBUTION_STATUS_JOB_TYPE,
+                Jsonb({"contributionId": contribution_id, "workerId": worker_id}),
+                CONTRIBUTION_STATUS_BACKOFF_MINUTES[0],
+            ),
+        )
+
+
+def process_movievault_v2_contribution_status(
+    job: dict[str, Any], payload: dict[str, Any], worker_id: str
+) -> dict[str, Any]:
+    """Ask what became of one contribution, until there is an answer or a cap.
+
+    Every non-terminal status is a retry, which makes "still pending" and "the
+    request failed" the same handling - correct here, because both mean the same
+    thing to the person waiting: not yet. What separates them is the ladder
+    running out, and that ends the job rather than failing it: nothing is wrong
+    with a contribution a moderator has not reached.
+    """
+    contribution_id = clean_text(payload.get("contributionId"))
+    if not contribution_id:
+        raise RuntimeError("Contribution status job carries no contribution id")
+    attempts = int(job.get("attempts") or 0)
+    try:
+        with connect() as conn:
+            result = read_contribution(conn, contribution_id)
+    except MovieVaultContributionError as exc:
+        if exc.code == "contribution_not_found":
+            # The instance was reset, or the contribution belongs to an identity
+            # this DiscVault no longer holds. Nothing further to learn.
+            raise RuntimeError("MovieVault does not know this contribution") from exc
+        if attempts < len(CONTRIBUTION_STATUS_BACKOFF_MINUTES):
+            raise JobRetry(
+                exc.code,
+                delay_seconds=CONTRIBUTION_STATUS_BACKOFF_MINUTES[attempts] * 60,
+                result={"jobType": CONTRIBUTION_STATUS_JOB_TYPE, "attempt": attempts + 1},
+            ) from exc
+        raise RuntimeError(f"Gave up reading the contribution status: {exc.code}") from exc
+
+    status = str(result.get("status") or "")
+    summary = {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": CONTRIBUTION_STATUS_JOB_TYPE,
+        "contributionId": contribution_id,
+        "status": status,
+        "canonicalTargetType": result.get("canonicalTargetType"),
+        "canonicalTargetId": result.get("canonicalTargetId"),
+        "duplicateOf": result.get("duplicateOf"),
+    }
+    with connect() as conn:
+        settled = update_contribution_by_contribution_id(
+            conn,
+            contribution_id,
+            status=status or "pending",
+            canonical_target_id=result.get("canonicalTargetId"),
+            duplicate_of=result.get("duplicateOf"),
+        )
+        # Only on the transition, and only once - the update guards it. A
+        # verdict arrives days after the person stopped looking, so this is the
+        # difference between a decision they find and one they are told.
+        if settled:
+            notify_contribution_settled(conn, settled)
+    if status in TERMINAL_CONTRIBUTION_STATUSES:
+        return summary
+    if attempts < len(CONTRIBUTION_STATUS_BACKOFF_MINUTES):
+        raise JobRetry(
+            "contribution_pending",
+            delay_seconds=CONTRIBUTION_STATUS_BACKOFF_MINUTES[attempts] * 60,
+            result={**summary, "attempt": attempts + 1},
+        )
+    return {**summary, "gaveUp": True}
+
+
+CONTRIBUTION_VERDICT_TITLES = {
+    "accepted": "Your correction was accepted",
+    "partially_accepted": "Part of your correction was accepted",
+    "rejected": "Your correction was declined",
+}
+
+
+def notify_contribution_settled(conn, settled: dict[str, Any]) -> None:
+    """Tell the contributor what a moderator decided.
+
+    Silent when nobody can be told: a contribution submitted before the log
+    recorded an actor, or by a user since removed, still has to settle. Failing
+    the job over an undeliverable notification would retry a verdict that has
+    already been recorded.
+    """
+    user_id = settled.get("submittedBy")
+    if not user_id:
+        return
+    title = CONTRIBUTION_VERDICT_TITLES.get(settled.get("status") or "")
+    if not title:
+        return
+    fields = ", ".join(settled.get("fields") or [])
+    detail = f" ({fields})" if fields else ""
+    try:
+        create_user_notification(
+            conn,
+            user_id,
+            title=title,
+            body=f"MovieVault reviewed the correction you sent{detail}.",
+            url="/profile",
+            pref_key="contributions",
+            payload={"contributionStatus": settled.get("status")},
+        )
+    except Exception:  # pragma: no cover - delivery is never the job's problem
+        pass
 
 
 def process_movievault_v2_poster_cache(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
@@ -1046,6 +1302,107 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
                 if row_format_matches(row):
                     return row["id"]
     return None
+
+
+# The metadata keys an import writes that describe the FILM. They follow the
+# fill-don't-overwrite rule like any other film field, so a value already stored
+# survives a re-import. Every other key `import_movie_metadata` produces
+# (import_source, source_provider, source_file, source_url) describes the import
+# itself and is deliberately allowed to change: "which import last touched this
+# row" is only a true statement if the newest import may write it.
+IMPORT_METADATA_FILM_KEYS = ("director", "actor", "poster_url", "backdrop_url", "personal")
+
+# Movie columns an import writes, and the review field that can confirm each.
+# `None` means no reviewer decision covers the column, so it is always fill-only.
+# `sort_title` follows `title`: it is derived from it, so protecting one while
+# rewriting the other would leave the film sorted under a name it no longer has.
+IMPORT_MOVIE_COLUMNS: tuple[tuple[str, str | None, bool], ...] = (
+    ("barcode", None, True),
+    ("title", "title", True),
+    ("sort_title", "title", True),
+    ("original_title", None, True),
+    ("year", "year", True),
+    ("release_date", None, False),
+    ("format", "format", True),
+    ("edition", None, True),
+    ("country", None, True),
+    ("language", None, True),
+    ("runtime_minutes", None, False),
+    ("overview", "overview", True),
+    ("rating", None, True),
+)
+
+# Review fields that map onto a metadata key rather than a column.
+IMPORT_REVIEW_METADATA_FIELDS = {"posterUrl": "poster_url", "backdropUrl": "backdrop_url"}
+
+IMPORT_REVIEW_FIELDS = ("title", "year", "format", "overview", "posterUrl", "backdropUrl")
+
+
+def import_product_identifiers(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """The typed product identifiers on an import item, in wire shape.
+
+    Accepts both the list an import plugin emits and the loose per-type keys an
+    older or hand-built payload may carry, so a caller that never heard of
+    `productIdentifiers` still gets its ASIN stored. Validation happens on write.
+    """
+    entries: list[dict[str, Any]] = []
+    raw = item.get("productIdentifiers") or item.get("product_identifiers")
+    if isinstance(raw, list):
+        entries.extend(entry for entry in raw if isinstance(entry, dict))
+    for key, identifier_type in (
+        ("ean", "ean"),
+        ("upc", "upc"),
+        ("isbn", "isbn"),
+        ("asin", "asin"),
+        ("catalogNumber", "catalog_number"),
+        ("catalog_number", "catalog_number"),
+    ):
+        value = clean_text(item.get(key))
+        if value:
+            entries.append({"type": identifier_type, "value": value})
+    return entries
+
+
+def import_review_confirmed_fields(item: dict[str, Any]) -> set[str]:
+    """The fields a human explicitly confirmed in the import review.
+
+    Fill-don't-overwrite protects a film from a *file*. It must not protect it
+    from its owner: picking a metadata match or typing a manual override is a
+    deliberate edit to this film, and silently declining it would report
+    "applied" while changing nothing — a failure that comes back as success.
+
+    Only fields carrying an actual value count. `apply_review_values` skips
+    blank ones, so a key present-but-empty in the match was never applied and
+    must not license an overwrite.
+    """
+    confirmed: set[str] = set()
+    for key in ("importReviewMatch", "importReviewManualOverride"):
+        raw = item.get(key)
+        if not isinstance(raw, dict):
+            continue
+        for field in IMPORT_REVIEW_FIELDS:
+            if clean_text(raw.get(field)):
+                confirmed.add(field)
+    return confirmed
+
+
+def import_movie_conflict_assignments(confirmed_fields: set[str]) -> str:
+    """Build the ON CONFLICT SET list, one rule per column.
+
+    A column the reviewer confirmed reads EXCLUDED-first (the new value wins);
+    every other column reads existing-first, so a value already on the film
+    survives and only a blank one is filled. NULLIF treats '' as blank: a column
+    emptied by an earlier write is not a value worth protecting.
+    """
+    assignments = []
+    for column, review_field, is_text in IMPORT_MOVIE_COLUMNS:
+        if review_field and review_field in confirmed_fields:
+            assignments.append(f"{column}=COALESCE(EXCLUDED.{column}, movies.{column})")
+        elif is_text:
+            assignments.append(f"{column}=COALESCE(NULLIF(movies.{column}, ''), EXCLUDED.{column})")
+        else:
+            assignments.append(f"{column}=COALESCE(movies.{column}, EXCLUDED.{column})")
+    return ",\n                ".join(assignments)
 
 
 def import_movie_metadata(item: dict[str, Any], plugin_id: str) -> dict[str, Any]:
@@ -1453,7 +1810,14 @@ def link_import_movie_to_container(
 
 
 def import_year(value: Any) -> str:
-    raw = clean_text(value)
+    # `clean_text` returns None, not "", for an absent value — so the `or ""` is
+    # load-bearing. Without it every row that carries neither a year nor a
+    # release date died on `len(None)` inside the per-item try, was recorded as
+    # "object of type 'NoneType' has no len()" and never written. That is the
+    # normal shape of a row from a source whose date column describes the disc
+    # rather than the film (see `releaseDateIsEditionDate`), which is exactly
+    # when this function is reached.
+    raw = clean_text(value) or ""
     for idx in range(0, max(len(raw) - 3, 0)):
         candidate = raw[idx : idx + 4]
         if candidate.isdigit() and 1800 <= int(candidate) <= 2200:
@@ -1498,9 +1862,15 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
     movie_id = existing_id or stable_uuid(f"movie:{seed}")
     public_id = proposed_public_id if external_id else source_public_id(f"import-{plugin_id}", str(movie_id), fallback=str(movie_id))
     metadata = import_movie_metadata(item, plugin_id)
+    confirmed_fields = import_review_confirmed_fields(item)
+    protected_metadata_keys = [
+        key
+        for key in IMPORT_METADATA_FILM_KEYS
+        if key not in {IMPORT_REVIEW_METADATA_FIELDS[field] for field in confirmed_fields if field in IMPORT_REVIEW_METADATA_FIELDS}
+    ]
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             INSERT INTO movies (
                 id,
                 public_id,
@@ -1522,21 +1892,28 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            -- An import FILLS a field, it does not OVERWRITE one: the
+            -- assignments below read existing-first, so a value already on the
+            -- film survives and only a blank one is filled from the file. The
+            -- exception is a field a human confirmed in the review queue, which
+            -- reads EXCLUDED-first -- see import_movie_conflict_assignments().
+            --
+            -- The old clause was EXCLUDED-first for every column, which let a
+            -- file rewrite curated data. That is how a Blu-ray.com row retitled
+            -- a film to "Bohemian Rhapsody 4K" and dated Back to the Future to
+            -- 2012, the year of the disc: both fields were already correct. It
+            -- is also what made a bad import unrepairable, because the rollback
+            -- only deletes films the import CREATED -- an overwritten field on
+            -- a film that merely got updated has nothing left to restore from.
             ON CONFLICT (id) DO UPDATE SET
-                barcode=COALESCE(EXCLUDED.barcode, movies.barcode),
-                title=COALESCE(EXCLUDED.title, movies.title),
-                sort_title=COALESCE(EXCLUDED.sort_title, movies.sort_title),
-                original_title=COALESCE(EXCLUDED.original_title, movies.original_title),
-                year=COALESCE(EXCLUDED.year, movies.year),
-                release_date=COALESCE(EXCLUDED.release_date, movies.release_date),
-                format=COALESCE(EXCLUDED.format, movies.format),
-                edition=COALESCE(EXCLUDED.edition, movies.edition),
-                country=COALESCE(EXCLUDED.country, movies.country),
-                language=COALESCE(EXCLUDED.language, movies.language),
-                runtime_minutes=COALESCE(EXCLUDED.runtime_minutes, movies.runtime_minutes),
-                overview=COALESCE(EXCLUDED.overview, movies.overview),
-                rating=COALESCE(EXCLUDED.rating, movies.rating),
-                metadata=movies.metadata || EXCLUDED.metadata,
+                {import_movie_conflict_assignments(confirmed_fields)},
+                -- Same rule inside the metadata blob: existing keys win
+                -- (right-hand side of ||), missing ones are filled. The second
+                -- term puts the provenance keys back on top, because those
+                -- describe *this* import rather than the film -- which import
+                -- last touched a row is only true if it is allowed to change.
+                metadata=(EXCLUDED.metadata || COALESCE(movies.metadata, '{{}}'::jsonb))
+                    || (EXCLUDED.metadata - %s::text[]),
                 updated_at=now()
             """,
             (
@@ -1556,6 +1933,7 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 clean_text(item.get("overview") or item.get("plot")) or None,
                 clean_text(item.get("rating")) or None,
                 Jsonb(json_ready(metadata)),
+                protected_metadata_keys,
             ),
         )
         if table_exists(conn, "movie_identifiers"):
@@ -1573,6 +1951,16 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                     """,
                     (movie_id, provider, identifier),
                 )
+    # The product codes the row carried beside the resolving barcode: the EAN a
+    # European pressing lists next to its UPC, an Amazon ASIN, a catalogue
+    # number. `movies.barcode` holds one value and a scan must resolve to one
+    # film, so without this the others are read and dropped.
+    #
+    # Added, never replaced. The file describes the pressing as one source saw
+    # it and knows nothing of the codes this film already carries from a scan or
+    # an earlier import; replacing the set would delete them. Same rule as every
+    # other import field.
+    add_movie_identifiers(conn, movie_id, import_product_identifiers(item))
     return movie_id, existing_id is None
 
 

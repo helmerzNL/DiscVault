@@ -37,6 +37,32 @@ class NextMovieDetailUiTests(unittest.TestCase):
         with open(TMDB_PLUGIN_PATH, encoding="utf-8") as handle:
             cls.tmdb_plugin_source = handle.read()
 
+    def test_the_contribution_status_stands_under_the_hero_not_in_the_action_row(self):
+        """It answers "what became of the correction I sent", which is still true
+        after a reload -- the same kind of statement as the metadata-refresh
+        notice it now sits beside. Parked in the hero's button row it was easy to
+        miss, and it outlives the button it stood next to.
+
+        Asserted by position because that is the whole change: the id and the
+        renderer are unchanged, and a test on either would have stayed green."""
+        status_index = self.source.index('id="movieContributeStatus"')
+        actions_index = self.source.index('class="movie-detail-hero-actions"')
+        message_index = self.source.index('id="movieDetailMessage"')
+        summary_index = self.source.index('class="movie-detail-summary"')
+
+        self.assertLess(summary_index, status_index, "it should be below the hero")
+        self.assertLess(status_index, message_index, "it should lead the notice line")
+        self.assertLess(actions_index, status_index, "it should have left the action row")
+
+    def test_the_contribution_status_keeps_its_placement_classes(self):
+        """The renderer used to rewrite `className` wholesale, which would strip
+        the placement class off the markup. The movie's node and the container's
+        no longer sit in the same kind of place, so the tone is toggled instead."""
+        start = self.source.index("function renderContributeStatus(")
+        body = self.source[start : self.source.index("function contributeSetMessage(")]
+        self.assertNotIn("node.className =", body)
+        self.assertIn('node.classList.remove("good", "bad")', body)
+
     def test_section_tabs_are_above_personal_lists(self):
         tabs_index = self.source.index(
             'class="detail-submenu movie-detail-section-tabs"'
@@ -126,11 +152,13 @@ class NextMovieDetailUiTests(unittest.TestCase):
             ("movieEditSubtitles", "movieEditSubtitleRows", "movieEditSubtitleAdd"),
         ):
             with self.subTest(container=container):
-                self.assertIn(
-                    f'<div id="{container}" class="movie-edit-track-editor wide" '
-                    'data-lock-container="self">',
-                    self.source,
-                )
+                # Attribute-wise rather than as one literal string: the
+                # wrapper also carries `data-derived-from-discs`, and a test
+                # that pins the whole opening tag breaks every time an
+                # orthogonal attribute is added -- which says nothing about
+                # whether the track editor still works.
+                self.assertIn(f'<div id="{container}" class="movie-edit-track-editor wide"', self.source)
+                self.assertIn('data-lock-container="self"', self.source)
                 self.assertIn(f'id="{rows}"', self.source)
                 self.assertIn(f'id="{add}"', self.source)
         self.assertNotIn('<textarea id="movieEditAudioTracks"', self.source)
@@ -166,12 +194,15 @@ class NextMovieDetailUiTests(unittest.TestCase):
         metadata comparison."""
         self.assertIn("function audioTracksText(value)", self.source)
         self.assertIn("function subtitlesText(value)", self.source)
+        # The row literals carry a leading field-name tag since the derived
+        # rows became droppable, so match the rendering call rather than the
+        # tuple shape -- the tuple shape is not what these tests are about.
         self.assertIn(
-            '[tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],',
+            'tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)',
             self.source,
         )
         self.assertIn(
-            '[tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]',
+            'tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)',
             self.source,
         )
         self.assertIn(
@@ -683,14 +714,23 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn("font-size: .85rem;", mobile_css)
 
     def test_edit_action_preserves_icon_when_label_changes_to_save(self):
-        self.assertIn('id="movieEditToggleLabel"', self.source)
-        self.assertIn('id="movieEditToggleIcon"', self.source)
-        self.assertIn("editLabel.textContent = label;", self.source)
+        # The swap lives in one shared helper: the movie, container and series
+        # heroes all run it, and three hand-written copies is three places for
+        # the label, tooltip, aria-name and glyph to drift apart.
+        self.assertIn("function setDetailEditToggleState(button, labelId, iconId, editing)", self.source)
+        self.assertIn("labelNode.textContent = label;", self.source)
         self.assertIn(
-            'editIcon.setAttribute("d", show ? '
-            "editIcon.dataset.savePath : editIcon.dataset.editPath);",
+            'icon.setAttribute("d", editing ? '
+            "icon.dataset.savePath : icon.dataset.editPath);",
             self.source,
         )
+        for prefix in ("movie", "container", "series"):
+            # Present in the markup, and named at the call site: an id that
+            # exists but is never passed leaves the button frozen on "Edit".
+            self.assertIn(f'id="{prefix}EditToggleLabel"', self.source)
+            self.assertIn(f'id="{prefix}EditToggleIcon"', self.source)
+            self.assertIn(f'"{prefix}EditToggleLabel",', self.source)
+            self.assertIn(f'"{prefix}EditToggleIcon",', self.source)
         self.assertIn(
             "node.className = `detail-message movie-detail-status "
             '${tone || ""}`.trim();',
@@ -839,33 +879,45 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn('data-artwork-hidden="${asset.hidden ? "true" : "false"}"', self.source)
         self.assertIn(".movie-art-option.is-hidden .art-option-preview", self.source)
 
-    def test_packaging_edit_uses_a_checkbox_group_of_all_nine_enum_values(self):
-        self.assertIn('<fieldset id="movieEditPackaging"', self.source)
-        # The old single free-text input must be gone, not just superseded.
+    def test_packaging_is_edited_as_axes_rather_than_one_flat_list(self):
+        """Migrations 067/071 replaced the flat nine-value group with the axes.
+
+        This test and the one below asserted the old group long after it was
+        gone, and stayed red without anyone noticing because neither this module
+        nor the flat list's other guards are named in the smoke workflow.
+        """
+        # A scalar carrier and a scalar generation; two checkbox groups.
+        self.assertIn('<select id="movieEditCarrierType" name="carrierType">', self.source)
+        self.assertIn(
+            '<select id="movieEditSteelbookFormat" name="steelbookFormat">', self.source
+        )
+        self.assertIn('<fieldset id="movieEditOuterPackaging"', self.source)
+        self.assertIn('<fieldset id="movieEditFinishes"', self.source)
+        # The flat list is derived and read-only for clients, so it must not be
+        # editable at all - neither as the old free-text input nor as a group.
+        self.assertNotIn('<fieldset id="movieEditPackaging"', self.source)
         self.assertNotIn(
             '<input id="movieEditPackaging" name="packaging" maxlength="160" autocomplete="off">',
             self.source,
         )
-        for value in (
-            "keep_case",
-            "amaray",
-            "steelbook",
-            "slipcover",
-            "slipcase",
-            "digibook",
-            "mediabook",
-            "digipak",
-            "box",
-        ):
-            with self.subTest(value=value):
-                self.assertIn(f'<input type="checkbox" value="{value}">', self.source)
 
-    def test_packaging_checkbox_fill_and_submit_read_checked_values(self):
+    def test_the_axis_controls_are_filled_and_submitted(self):
+        self.assertIn('fillMovieEditCaseAxes(specs, metadata, specList)', self.source)
         self.assertIn(
-            'fillMovieEditCheckboxGroup("movieEditPackaging", specList("packaging"));',
+            'fillMovieEditCheckboxGroup("movieEditFinishes", specList("finishes"));',
             self.source,
         )
-        self.assertIn(
+        self.assertIn('fillMovieEditCheckboxGroup(\n        "movieEditOuterPackaging"', self.source)
+        # The submit body carries the four axis keys and no `packaging`.
+        for line in (
+            'carrierType: formTextValue("movieEditCarrierType"),',
+            'steelbookFormat: formTextValue("movieEditSteelbookFormat"),',
+            'outerPackaging: collectMovieEditCheckboxGroup("movieEditOuterPackaging"),',
+            'finishes: collectMovieEditCheckboxGroup("movieEditFinishes"),',
+        ):
+            with self.subTest(line=line):
+                self.assertIn(line, self.source)
+        self.assertNotIn(
             'packaging: collectMovieEditCheckboxGroup("movieEditPackaging"),',
             self.source,
         )
@@ -975,7 +1027,7 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
         self.assertIn(
-            '[tNext("movieDetail.format", "Format"), '
+            'tNext("movieDetail.format", "Format"), '
             "physicalFormatLabel(movie.format || specs.format || metadata.format)],",
             self.source,
         )
@@ -1003,6 +1055,101 @@ class NextMovieDetailUiTests(unittest.TestCase):
             "actionLabel || movie.action].filter(Boolean).join(\" / \");",
             self.source,
         )
+
+    def test_series_edit_section_is_its_own_tab_gated_on_the_media_type(self):
+        # A film has nothing to say about series or seasons, and the backend
+        # refuses a series link on one, so the tab is absent rather than empty.
+        self.assertIn(
+            '<button type="button" class="hidden" id="movieEditTabSeries"', self.source
+        )
+        self.assertIn(
+            'aria-controls="movieEditSectionSeries" aria-selected="false" '
+            'data-detail-tab="movieEditSections" '
+            'data-detail-panel="movieEditSectionSeries"',
+            self.source,
+        )
+        # The series link and the seasons moved out of the Release grid, so
+        # neither may be left behind there.
+        release_start = self.source.index('id="movieEditSectionRelease"')
+        release_end = self.source.index('id="movieEditSectionSeries"')
+        release_markup = self.source[release_start:release_end]
+        self.assertNotIn('id="movieEditSeriesRow"', release_markup)
+        self.assertNotIn('id="movieEditSeasonsRow"', release_markup)
+        # Toggling the type drives the tab, and a reader left on a tab that
+        # just disappeared would be looking at a panel with no tab lit.
+        self.assertIn('tab.classList.toggle("hidden", !isShow);', self.source)
+        self.assertIn(
+            'if (!isShow && tab.classList.contains("active")) {\n'
+            '          activateDetailTab("movieEditSections", "movieEditSectionRelease");',
+            self.source,
+        )
+
+    def test_season_picker_cards_carry_cover_title_and_meta(self):
+        self.assertIn("function movieEditSeasonCardHtml(season, checked)", self.source)
+        self.assertIn('<span class="movie-edit-season-cover">${cover}</span>', self.source)
+        self.assertIn(
+            "const cover = season.posterUrl\n"
+            '        ? `<img src="${escapeHtml(season.posterUrl)}" alt="" loading="lazy">`',
+            self.source,
+        )
+        # Season number, year and episode count are three separate facts; the
+        # card states each rather than only the number.
+        self.assertIn('season.title ? number : "",', self.source)
+        self.assertIn('tNext("seriesDetail.episodeCount", "{count} episodes")', self.source)
+        # Responsive by column count, not by a breakpoint per width.
+        self.assertIn(
+            ".movie-edit-seasons-list {\n"
+            "      display: grid;\n"
+            "      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));",
+            self.source,
+        )
+
+    def test_hero_eyebrow_names_a_title_not_a_movie(self):
+        # A record here is a film or a TV series, so the hero says neither.
+        self.assertIn(
+            '<span class="eyebrow" data-next-i18n="movieDetail.titleDetails">'
+            "Title details</span>",
+            self.source,
+        )
+        self.assertNotIn('data-next-i18n="movieDetail.title"', self.source)
+        # The compare table used the same key as a field label, so its title
+        # row was labelled "Movie details".
+        self.assertIn('"movie:title": ["movieDetail.fieldTitle", "Title"],', self.source)
+
+    def test_container_and_series_actions_live_in_their_hero(self):
+        for prefix, aria in (
+            ("container", "containerDetail.actions"),
+            ("series", "seriesDetail.actions"),
+        ):
+            self.assertIn(f'data-next-i18n-aria="{aria}"', self.source)
+            self.assertIn(
+                '<button type="button" class="movie-detail-icon-action hidden" '
+                f'id="{prefix}EditToggleButton"',
+                self.source,
+            )
+        # Refreshing metadata mid-edit re-renders the page under the open form.
+        self.assertIn(
+            ".container-detail-page.container-editing #containerMetadataApplyButton,",
+            self.source,
+        )
+        self.assertIn(
+            ".series-detail-page.series-editing #seriesMetadataRefreshButton,", self.source
+        )
+        # The container's form sits inside the Overview panel, so opening it
+        # from another tab has to bring that panel forward.
+        self.assertIn(
+            'if (editing) activateDetailTab("containerDetail", '
+            '"containerDetailOverviewPanel");',
+            self.source,
+        )
+
+    def test_hint_and_ghost_button_classes_are_actually_styled(self):
+        # Both shipped in the markup with no rule at all: hints rendered at
+        # full body weight, and every add-row button fell back to the browser
+        # default button.
+        self.assertIn("    .hint {\n", self.source)
+        self.assertIn("    .ghost-button {\n", self.source)
+        self.assertNotIn('id="movieEditIdentifierAdd" class="secondary"', self.source)
 
 
 if __name__ == "__main__":

@@ -322,3 +322,44 @@ class GateCompositionTests(unittest.TestCase):
         )
         self.assertIn("share_release_selections", next_preferences.APP_PREFERENCE_DEFAULTS)
         self.assertFalse(next_preferences.APP_PREFERENCE_DEFAULTS["share_release_selections"])
+
+
+class WorkTypeTests(unittest.TestCase):
+    """DiscVault knows whether a disc holds a film or a series; without this
+    the type never crossed the boundary and every series became a film."""
+
+    def test_a_series_is_sent_as_such(self):
+        payload = mapped(candidate(workType="SHOW"))
+        self.assertEqual(payload["film"]["workType"], "tv")
+
+    def test_a_film_is_sent_as_such(self):
+        payload = mapped(candidate(workType="MOVIE"))
+        self.assertEqual(payload["film"]["workType"], "movie")
+
+    def test_discvaults_vocabulary_is_translated_not_copied(self):
+        """MOVIE/SHOW here, movie/tv there. One mapping, via the existing
+        normalizer, so the two spellings cannot drift."""
+        for stated, expected in (("tv", "tv"), ("series", "tv"), ("film", "movie")):
+            self.assertEqual(mapped(candidate(workType=stated))["film"]["workType"], expected)
+
+    def test_silence_stays_silence(self):
+        """Absence is not "movie": it means this side did not say, and
+        MovieVault then leaves whatever it already recorded."""
+        self.assertNotIn("workType", mapped()["film"])
+
+    def test_an_unrecognised_type_is_absent_rather_than_a_guess(self):
+        self.assertNotIn("workType", mapped(candidate(workType="hoerspiel"))["film"])
+
+    def test_a_series_carries_the_tv_id_and_never_the_movie_id(self):
+        """The two TMDB id spaces are mutually exclusive upstream, and an id
+        contradicting the stated type is refused there."""
+        film = {**FILM, "tmdbTvId": "1399"}
+        payload = mapped(candidate(workType="SHOW"), film=film)
+        self.assertEqual(payload["film"]["tmdbTvId"], "1399")
+        self.assertNotIn("tmdbMovieId", payload["film"])
+
+    def test_a_film_carries_the_movie_id_and_never_the_tv_id(self):
+        film = {**FILM, "tmdbTvId": "1399"}
+        payload = mapped(candidate(workType="MOVIE"), film=film)
+        self.assertEqual(payload["film"]["tmdbMovieId"], "123")
+        self.assertNotIn("tmdbTvId", payload["film"])

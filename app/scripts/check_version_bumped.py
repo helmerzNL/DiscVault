@@ -231,9 +231,42 @@ def main() -> int:
         ),
     )
     parser.add_argument("--aggregate", action="store_true", default=False)
+    parser.add_argument(
+        "--forbid-change",
+        action="store_true",
+        default=False,
+        help=(
+            "Invert the check: fail when app/VERSION was modified at all. Used on pull "
+            "requests, where the bump is applied by CI on release/v26-beta after the "
+            "merge. A hand-written bump in a PR reintroduces exactly the collision the "
+            "CI bump exists to remove, so it is refused rather than tolerated."
+        ),
+    )
     args = parser.parse_args()
 
     failures: list[tuple[str, str]] = []
+
+    if args.forbid_change:
+        base = args.base
+        head = args.head
+        if not valid_commit(head):
+            print("DiscVault version guard ok.")
+            return 0
+        files = changed_files_for_range(base, head) if valid_commit(base) else changed_files_for_commit(head)
+        if VERSION_FILE in files:
+            print("DiscVault version guard failed.", file=sys.stderr)
+            print(
+                f"{VERSION_FILE} must not be changed in a pull request: CI bumps it on "
+                f"{args.base_ref or 'release/v26-beta'} after the merge.",
+                file=sys.stderr,
+            )
+            print("", file=sys.stderr)
+            print("To fix:", file=sys.stderr)
+            print(f"  git checkout origin/{args.base_ref or 'release/v26-beta'} -- {VERSION_FILE}", file=sys.stderr)
+            print("  git commit --amend --no-edit   # or add it as a new commit", file=sys.stderr)
+            return 1
+        print("DiscVault version guard ok.")
+        return 0
 
     if args.aggregate:
         base = args.base

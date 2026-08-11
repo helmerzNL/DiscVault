@@ -1,0 +1,55 @@
+{
+  "id": "tvdb",
+  "name": "TheTVDB",
+  "version": "1.0.1",
+  "manifestVersion": 1,
+  "discVaultPluginApi": "next-1",
+  "categories": [
+    "metadata_source"
+  ],
+  "capabilities": [
+    "series_details",
+    "search_series",
+    "season_episodes"
+  ],
+  "attribution": {
+    "statement": "Series and episode data from TheTVDB.",
+    "url": "https://www.thetvdb.com/",
+    "disclaimer": ""
+  },
+  "requiresSecrets": true,
+  "settingsSchemaVersion": 1,
+  "settingsSchema": {
+    "settings": [
+      {
+        "name": "language",
+        "label": "Language",
+        "type": "text",
+        "required": false,
+        "placeholder": "eng",
+        "description": "TheTVDB language code (three letters, e.g. eng or nld) used for episode titles."
+      }
+    ],
+    "secrets": [
+      {
+        "name": "apiKey",
+        "label": "TheTVDB API key",
+        "type": "password",
+        "required": true,
+        "description": "TheTVDB v4 API key from thetvdb.com/dashboard/account/apikey."
+      },
+      {
+        "name": "pin",
+        "label": "Subscriber PIN",
+        "type": "password",
+        "required": false,
+        "description": "Only for a user-supported subscription key. Leave empty for an ordinary project key, which is what most installations use."
+      }
+    ]
+  },
+  "orderIndex": 20,
+  "entitlements": {
+    "source_use": "metadata.source.tvdb.use",
+    "source_bulk": "metadata.source.tvdb.bulk"
+  }
+}

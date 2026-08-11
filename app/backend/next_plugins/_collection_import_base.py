@@ -22,6 +22,16 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "year": ("Year", "Jaar", "Release Year", "Movie Year", "Film Year", "Productiejaar", "Releasejaar", "Year Released"),
     "releaseDate": ("Release Date", "Releasedatum", "Date", "Datum", "ReleaseDate", "Release Datum"),
     "barcode": ("Barcode", "UPC", "EAN", "UPC/EAN", "EAN/UPC", "Streepjescode", "UPC EAN", "EAN UPC"),
+    # One pressing carries several product codes at once: an EAN for Europe, a
+    # UPC for North America, an Amazon ASIN, a catalogue number on the spine.
+    # `barcode` can only hold one of them — it resolves a scan, and a list
+    # cannot promise one film per scan. These aliases keep the rest instead of
+    # dropping them on the floor, each under its own type.
+    "ean": ("EAN", "EAN-13", "EAN13", "Barcode EAN"),
+    "upc": ("UPC", "UPC-A", "UPCA", "Barcode UPC"),
+    "isbn": ("ISBN", "ISBN-13", "ISBN13"),
+    "asin": ("ASIN", "Amazon ASIN", "Amazon ID"),
+    "catalogNumber": ("Catalog Number", "Catalogue Number", "Catalog No", "Catalog #", "Cat No", "Catalogusnummer"),
     "format": ("Format", "Formaat", "Media Type", "Medium", "Type", "Media", "Drager", "Disc Type"),
     "edition": ("Edition", "Editie", "Release", "Version", "Versie", "Uitgave"),
     "country": ("Country", "Land", "Country Code", "Landcode", "Region", "Regio"),
@@ -60,6 +70,51 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "verified": ("Verified", "Verified?", "Geverifieerd", "Confirmed"),
 }
 
+#: The typed product identifiers an export can carry, in DiscVault's storage
+#: vocabulary (`movie_product_identifiers.identifier_type`, itself a copy of
+#: MovieVault's). The import only *reads* columns into these types; whether a
+#: value is a valid one of its type is decided on write, by the same validator
+#: the manual edit surface uses, so a file can never store what a person could
+#: not type.
+PRODUCT_IDENTIFIER_FIELDS: tuple[tuple[str, str], ...] = (
+    ("ean", "ean"),
+    ("upc", "upc"),
+    ("isbn", "isbn"),
+    ("asin", "asin"),
+    ("catalogNumber", "catalog_number"),
+)
+
+#: The three types a barcode symbology names, so their type is read off the
+#: digits rather than off a column header. The other two are text a person
+#: typed and nothing here guesses at them.
+SCANNABLE_IDENTIFIER_TYPES: frozenset[str] = frozenset({"ean", "upc", "isbn"})
+
+
+def classify_scannable_identifier(value: Any) -> tuple[str, str] | None:
+    """`(type, digits)` for a GS1 barcode, or None when the shape says nothing.
+
+    Deliberately the same derivation as `classify_scanned_identifier` in
+    `next_product_identifiers`, minus the check-digit test: a plugin runs
+    sandboxed and cannot import backend modules, and refusing a value here would
+    only hide it from the writer that validates properly. Nothing is rewritten —
+    a leading zero stays, because upstream matches on the literal value.
+    """
+    digits = "".join(character for character in text(value) if character.isdigit())
+    if not digits or len(digits) not in {8, 12, 13, 14}:
+        return None
+    if len(digits) == 12:
+        return ("upc", digits)
+    if len(digits) == 13:
+        if digits.startswith(("978", "979")):
+            return ("isbn", digits)
+        # GS1 made UPC-A a subset of EAN-13 by prefixing a zero, so a leading
+        # zero marks a North American UPC rather than an EAN starting with 0.
+        if digits.startswith("0"):
+            return ("upc", digits)
+        return ("ean", digits)
+    return ("ean", digits)
+
+
 IMPORT_FIELDS = (
     "externalId",
     "title",
@@ -67,6 +122,11 @@ IMPORT_FIELDS = (
     "year",
     "releaseDate",
     "barcode",
+    "ean",
+    "upc",
+    "isbn",
+    "asin",
+    "catalogNumber",
     "format",
     "edition",
     "country",
@@ -436,6 +496,57 @@ class CollectionImportPlugin:
     def field_aliases(self, field: str) -> tuple[str, ...]:
         return merge_aliases(field, self.aliases.get(field, ()))
 
+    def product_identifiers(
+        self,
+        row: dict[str, Any],
+        aliases: dict[str, tuple[str, ...]],
+        column_mapping: dict[str, str],
+        *,
+        barcode: str = "",
+    ) -> list[dict[str, str]]:
+        """Every product code in the row, each under its own type.
+
+        `barcode` answers "which film is this scan?" and can hold exactly one
+        value, so an export listing a UPC *and* an EAN *and* an ASIN loses two
+        of the three the moment it is read as a single barcode. They are not
+        alternatives: they are the codes one pressing is genuinely sold under,
+        and MovieVault models all five.
+
+        The scanned barcode is emitted here too, classified by digit count, so
+        the resolving column and the descriptive rows cannot disagree about a
+        value the file stated once — the same reason migration 069 backfills it.
+
+        Values are reported as the file wrote them. Validity is decided on
+        write, by the same validator the manual edit surface uses: a file must
+        not be able to store what a person could not type.
+        """
+        entries: list[dict[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+
+        def add(identifier_type: str, value: Any) -> None:
+            cleaned = text(value)
+            if not cleaned:
+                return
+            if identifier_type in SCANNABLE_IDENTIFIER_TYPES:
+                # The column header states a type; the digits decide it. Export
+                # headers are loose — Blu-ray.com files a zero-padded UPC-A under
+                # "EAN" — while DiscVault derives the type from the symbology, so
+                # trusting the header would store a value under a type its own
+                # validator rejects, and drop it on write. A value whose shape
+                # says nothing keeps the header's type and is left to the writer.
+                cleaned = classify_scannable_identifier(cleaned) or (identifier_type, cleaned)
+                identifier_type, cleaned = cleaned
+            key = (identifier_type, cleaned.casefold())
+            if key in seen:
+                return
+            seen.add(key)
+            entries.append({"type": identifier_type, "value": cleaned})
+
+        for field, identifier_type in PRODUCT_IDENTIFIER_FIELDS:
+            add(identifier_type, mapped_value(row, aliases[field], column_mapping.get(field)))
+        add("ean", barcode)
+        return entries
+
     def files(self, source_path: Path) -> list[Path]:
         if source_path.is_file() and source_path.suffix.lower() in SUPPORTED_EXTENSIONS:
             return [source_path]
@@ -521,6 +632,7 @@ class CollectionImportPlugin:
             split_title_format_token(source_title) if self.normalize_title_formats else (source_title, "")
         )
         barcode = text(mapped_value(row, aliases["barcode"], column_mapping.get("barcode")))
+        product_identifiers = self.product_identifiers(row, aliases, column_mapping, barcode=barcode)
         explicit_format = text(mapped_value(row, aliases["format"], column_mapping.get("format")))
         # A format named by the source's own column always wins; the title token
         # only beats the plugin's static default (e.g. Blu-ray.com's "Blu-ray").
@@ -573,6 +685,7 @@ class CollectionImportPlugin:
             "editionReleaseDate": edition_release_date,
             "editionReleaseYear": parse_year(edition_release_date),
             "barcode": barcode,
+            "productIdentifiers": product_identifiers,
             "format": media_format,
             "edition": text(mapped_value(row, aliases["edition"], column_mapping.get("edition"))),
             "country": text(mapped_value(row, aliases["country"], column_mapping.get("country"))),
@@ -731,6 +844,11 @@ class CollectionImportPlugin:
             "year": self.field_aliases("year"),
             "releaseDate": self.field_aliases("releaseDate"),
             "barcode": self.field_aliases("barcode"),
+            "ean": self.field_aliases("ean"),
+            "upc": self.field_aliases("upc"),
+            "isbn": self.field_aliases("isbn"),
+            "asin": self.field_aliases("asin"),
+            "catalogNumber": self.field_aliases("catalogNumber"),
             "format": self.field_aliases("format"),
             "edition": self.field_aliases("edition"),
             "country": self.field_aliases("country"),
@@ -846,6 +964,11 @@ class CollectionImportPlugin:
                     "originalTitle",
                     "year",
                     "barcode",
+                    "ean",
+                    "upc",
+                    "isbn",
+                    "asin",
+                    "catalogNumber",
                     "format",
                     "edition",
                     "country",

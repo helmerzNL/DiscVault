@@ -1,14 +1,19 @@
 {
   "id": "tmdb",
   "name": "TMDb",
-  "version": "1.0.2",
+  "version": "1.6.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
-  "categories": ["metadata_source"],
+  "categories": [
+    "metadata_source"
+  ],
   "capabilities": [
     "search_title",
     "lookup_external_id",
     "movie_details",
+    "series_details",
+    "search_series",
+    "season_episodes",
     "people",
     "person_details",
     "person_filmography",
@@ -16,6 +21,14 @@
     "images",
     "videos"
   ],
+  "attribution": {
+    "statementKey": "profile.tmdbDataProvidedBy",
+    "statement": "Data provided by TMDB",
+    "disclaimerKey": "profile.tmdbDisclaimer",
+    "disclaimer": "DiscVault is not endorsed or certified by TMDB.",
+    "logo": "tmdb-logo.svg",
+    "url": "https://www.themoviedb.org/"
+  },
   "requiresSecrets": true,
   "settingsSchemaVersion": 1,
   "settingsSchema": {

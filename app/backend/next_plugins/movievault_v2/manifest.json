@@ -1,13 +1,13 @@
 {
   "id": "movievault_v2",
   "name": "MovieVault v2",
-  "version": "1.5.2",
+  "version": "1.8.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "minimumDiscVaultVersion": "26.4.53",
   "distributionContractRange": {
     "minimum": "distribution-2",
-    "maximum": "distribution-4"
+    "maximum": "distribution-6"
   },
   "categories": ["metadata_source"],
   "capabilities": ["health_check", "sync_index", "search_barcode", "search_title", "movie_details", "box_set_candidates"],

@@ -80,6 +80,107 @@ jobs:
       - name: Test MovieVault v2 release contributions
         run: python -m unittest tests.test_next_movievault_v2_contributions
 
+      # The conversions a field correction makes on the way out - two packaging
+      # axes flattened to one list, free-text ratios filtered to the bounded
+      # form, and the audio/subtitle union refused rather than half-sent. Pure
+      # functions, so they run here rather than after the migrations.
+      - name: Test the field-correction technical conversions
+        run: python -m unittest tests.test_next_movievault_field_correction_technical
+
+      # Another module the hand-written list had simply never been given, in the
+      # same class as the three below. It holds the plugin's own mapping tests -
+      # what a release proposes, and which series a television disc belongs to -
+      # so without it those assertions ran only on a contributor's machine.
+      - name: Test the MovieVault v2 plugin mapping
+        run: python -m unittest tests.test_next_movievault_v2_plugin
+
+      # The per-contract parsing guards, never listed here either. Their cost is
+      # not hypothetical: the v3 module asserts that an unsupported contract is
+      # refused, and when distribution-5 shipped that assertion silently stopped
+      # refusing anything and started reaching the network - for weeks, because
+      # nothing invoked the file. A guard nobody runs is not a guard.
+      - name: Test the MovieVault distribution contract parsers
+        run: >-
+          python -m unittest
+          tests.test_next_movievault_distribution_v3
+          tests.test_next_movievault_distribution_v4
+          tests.test_next_movievault_distribution_v6
+
+      # The barcode resolver's own contract guards - and the clearest case yet of
+      # the same gap. `test_next_release_details_subtitles.py` was written after
+      # an additive MovieVault field took barcode scanning down, and says in its
+      # own docstring that it "exists so that acceptance is provably in place
+      # before the producer changes". It was never named here, so it never ran,
+      # and five days later `finishes` broke the identical path.
+      - name: Test the release-details resolver contract
+        run: >-
+          python -m unittest
+          tests.test_next_release_details_search
+          tests.test_next_release_details_subtitles
+          tests.test_next_release_details_finishes
+
+      # Translations are part of "done" in this repository, and this suite is
+      # what makes that checkable: it holds all 29 locales to the exact key set
+      # of the en-US source. Also never listed, so a PR could add a key to one
+      # file and leave twenty-eight showing the English fallback.
+      - name: Test the i18n catalog completeness
+        run: >-
+          python -m unittest
+          tests.test_next_i18n
+          tests.test_next_i18n_completeness
+
+      # The allowlist that decides whether a declared capability can run at all.
+      # It disagreed with both bundled manifests for the whole life of the series
+      # feature -- six capabilities implemented, declared, and unreachable -- and
+      # no test could have caught it, because every series test replaces either
+      # the plugin function or run_plugin_entrypoint itself. Runs early: if these
+      # two fail, every series assertion below is testing something the
+      # application cannot reach.
+      - name: Test that declared capabilities are runnable
+        run: python -m unittest tests.test_next_plugin_entrypoint_coverage
+
+      # Which release-level fields stop being authored once a release has
+      # discs, held across all three copies of that answer: the server's set,
+      # the browser's constant, and the fields actually tagged in the markup.
+      # No database -- it reads source text -- so it runs up here.
+      - name: Test the derived release-field parity
+        run: python -m unittest tests.test_next_derived_release_fields
+
+      # The TMDB series shaping needs no database, so it runs before the
+      # migrations with the other pure-Python modules.
+      - name: Test the TMDB series mapping
+        run: python -m unittest tests.test_next_tmdb_series
+
+      # TheTVDB, same reason and one more: its API is unreachable from the
+      # environment the plugin was written in, so the URLs and field names came
+      # from TheTVDB's own OpenAPI document rather than from a live call. These
+      # assertions are what keep that reading and the code from drifting apart --
+      # the season-ordering one especially, since a show with a DVD order returns
+      # season 1 twice and nothing else would notice.
+      - name: Test the TheTVDB series mapping
+        run: python -m unittest tests.test_next_tvdb_series
+
+      # Attribution is a licence obligation: the wording belongs to the source
+      # and is rendered as the source's manifest states it. These tests are the
+      # guard against that being "improved" into composed or translated copy,
+      # which would break a licence while every screen still looked fine.
+      - name: Test per-source attribution
+        run: python -m unittest tests.test_next_source_attribution
+
+      # Where the version bump happens. Nothing else in this repository fails when
+      # the bump job stops running: the next image simply keeps carrying the
+      # previous version number, which looks exactly like a build that was not
+      # needed. Only these assertions tell the difference.
+      - name: Test the version bump pipeline
+        run: python -m unittest tests.test_version_bump_pipeline
+
+      # How several sources' artwork becomes one answer. Text is forgiving -- a
+      # missing overview leaves a blank somebody notices. A poster that quietly
+      # did not arrive looks exactly like a series whose source has none, because
+      # the borrowed disc artwork underneath hides the difference.
+      - name: Test series artwork merging
+        run: python -m unittest tests.test_next_series_artwork
+
       - name: Apply Next migrations
         run: python next_database.py migrate
 
@@ -88,6 +189,139 @@ jobs:
 
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
+
+      # Below the migrations, unlike the pure-function conversions near the top:
+      # these read through the real readers, so they need the tables to exist.
+      # Placed above them first, where every case died on a missing relation --
+      # the same trap the parser step set once before.
+      - name: Test the field corrections against the readers
+        run: python -m unittest tests.test_next_movievault_v2_field_corrections_postgres
+
+      # Two more the hand-written list never named, and they cover the rules
+      # migration 063 pushed into the schema rather than into code - a series
+      # only on a SHOW, a season only from its own series, and now filling a
+      # description without overwriting one somebody wrote. None of it was
+      # running anywhere but a contributor's machine.
+      - name: Test the series hierarchy and its description refresh
+        run: >-
+          python -m unittest
+          tests.test_next_series
+          tests.test_next_series_postgres
+
+      # The Library groups by series through the dashboard snapshot rather than
+      # through the sync wire, so nothing else in this list would notice if the
+      # grouping regressed. The PostgreSQL half needs the real schema: whether a
+      # series with no visible disc is listed is a visibility rule, not a mapping.
+      - name: Test the series as a Library grouping
+        run: >-
+          python -m unittest
+          tests.test_next_library_series_ui
+          tests.test_next_library_series_postgres
+
+      # The series detail page. The PostgreSQL half is the one that matters: it
+      # pins that series artwork really is stored with entity_type='series', a
+      # value migration 003 leaves unconstrained and which therefore has nothing
+      # but a test standing behind it.
+      - name: Test the series detail page
+        run: python -m unittest tests.test_next_series_detail_postgres
+
+      # Giving a series the identifier that makes it enrichable at all. The
+      # PostgreSQL half is the one that matters: that one identifier cannot name
+      # two series, and that correcting one replaces rather than accumulates,
+      # are both facts about rows.
+      - name: Test series identity
+        run: python -m unittest tests.test_next_series_identity
+
+      # Layer 4. The PostgreSQL half is what matters: whether the bootstrap and
+      # the delta agree about a disc's seasons is a fact about two SELECT lists,
+      # and the drift they can develop is invisible until somebody reinstalls.
+      - name: Test the series sync wire
+        run: python -m unittest tests.test_next_series_sync_wire
+
+      # Episodes. The two rules that matter are foreign keys rather than code --
+      # an episode cannot be attached under a season it does not belong to, and a
+      # season link must not imply every episode -- so only a real schema can
+      # assert them.
+      - name: Test series episodes
+        run: python -m unittest tests.test_next_series_episodes
+
+      # No database in this one, and it is named here for exactly that reason:
+      # this list is hand-written, so a module nobody adds is a module CI never
+      # runs. What it guards is the route by which a series comes into existence
+      # at all -- the planner asking the television namespace, and the two
+      # candidate rebuilds that each silently dropped the fields making a series
+      # a series.
+      - name: Test adding a series from the title search
+        run: python -m unittest tests.test_next_series_add_flow
+
+      # Where a hand-created series gets its seasons. The PostgreSQL half is the
+      # part that matters: that the offer writes nothing, and that a season
+      # already in the collection comes back marked rather than filtered out --
+      # both are claims about rows, and the second is what keeps a complete
+      # series from looking like an empty answer.
+      - name: Test the season offer
+        run: python -m unittest tests.test_next_series_seasons_available
+
+      # The discs inside a release, for the same reason as episodes above: the
+      # guarantees are foreign keys, not code. A disc cannot carry a season the
+      # release does not cover, and it cannot be named under another release.
+      # The identity assertions belong here too -- a disc is pointed at by its
+      # episode links, so "saving twice keeps the same rows" is a claim only a
+      # real database can settle.
+      - name: Test the discs inside a release
+        run: >-
+          python -m unittest
+          tests.test_next_discs
+          tests.test_next_discs_postgres
+          tests.test_next_discs_ui
+
+      # The last leg of the same subject: the catalogue's breakdown filling a
+      # release that has none. Below the migrations because it writes rows, and
+      # its mapping half is checked against the plugin's real output rather
+      # than a fixture -- the failure mode that cost a day.
+      - name: Test the disc enrichment from the catalogue
+        run: python -m unittest tests.test_next_disc_enrichment
+
+      # The release row as the union of its discs, and the push-down that keeps
+      # a leftover from being deleted by the derivation. Below the migrations:
+      # the interesting assertions are about rows before and after a save.
+      - name: Test the release row derived from the discs
+        run: python -m unittest tests.test_next_disc_union
+
+      # The one-time sweep that converges releases broken down before the
+      # derivation existed. Also below the migrations, and for a sharper reason
+      # than the module above: its whole subject is a release in a state the
+      # ordinary write path cannot produce any more, so every interesting case
+      # needs real rows written around the save path.
+      - name: Test the one-time disc-union backfill
+        run: python -m unittest tests.test_next_disc_union_backfill
+
+      # `clears`, and the presence rule inside a disc entry. Below the
+      # migrations because the acceptance case is a real push against real rows:
+      # the last disc and the last note removed, and the derivation not putting
+      # the removed value straight back.
+      - name: Test the sync clears vocabulary and disc-entry presence
+        run: python -m unittest tests.test_next_sync_clears
+
+      # Who changed a film. The interesting half is the half a real database
+      # settles: that a synced push actually leaves an audit row behind, and
+      # that the two sources -- the audit and the per-field provenance -- merge
+      # into one list in one order. Without a DATABASE_URL those cases skip and
+      # the module looks green while testing only the user-agent mapping.
+      - name: Test the change history of a film
+        run: python -m unittest tests.test_next_movie_history
+
+      # This one has no database at all, but it guards the surface-id and route
+      # registration that a new detail page has to join to be reachable.
+      - name: Test the app surface router
+        run: python -m unittest tests.test_next_app_surface_router
+
+      # No database either. It guards the PWA's one shared scope: the frontend
+      # is a single inline script, so two functions of one name is not an error
+      # but a silent overwrite -- which is how language names stopped being
+      # displayed anywhere, for months, with nothing red.
+      - name: Test the inline script's scope
+        run: python -m unittest tests.test_next_views_ui_scope
 
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as
@@ -99,6 +333,18 @@ jobs:
           tests.test_next_movie_sync_payload_parity
           tests.test_next_technical_profile_sync
           tests.test_next_movie_estimated_value
+
+      # Same gap, same fix. These three guard the packaging axes - the edit
+      # payload, the derived flat mirror, and the PWA form that writes them -
+      # and none of them was invoked here. Two of the movie-detail assertions
+      # had in fact been red since migrations 067/071 replaced the flat
+      # nine-value control with the axes, and nothing reported it.
+      - name: Test the movie edit payload and the packaging axes
+        run: >-
+          python -m unittest
+          tests.test_next_movies
+          tests.test_next_movie_technical_specs_packaging_postgres
+          tests.test_next_movie_detail_ui
 
       - name: Test API and MCP connection grouping
         run: python -m unittest tests.test_next_api_connections

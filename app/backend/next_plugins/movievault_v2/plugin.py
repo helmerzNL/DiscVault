@@ -151,15 +151,21 @@ def _resolver_lookup(payload, context):
         # merged onto a movie. It is also not a miss - the film was identified
         # and its pressings are on offer. The list is carried through so the
         # caller can hand it to the user instead of reporting "not found".
+        candidates = {
+            "film": (result or {}).get("film") or {},
+            "releases": (result or {}).get("releases") or [],
+        }
+        # The provenance rides along: a picker built from this list must keep
+        # the unreviewed-source warning visible through to save, and it cannot
+        # do that if only the hit statuses carry verificationStatus.
+        if (result or {}).get("verificationStatus") in ("canonical", "unreviewed_external"):
+            candidates["verificationStatus"] = result["verificationStatus"]
         return {
             "result": None,
             "attempted": True,
             "outcome": "candidates",
             "errorCode": None,
-            "candidates": {
-                "film": (result or {}).get("film") or {},
-                "releases": (result or {}).get("releases") or [],
-            },
+            "candidates": candidates,
         }
     if status == "ambiguous":
         return {"result": None, "attempted": True, "outcome": "ambiguous", "errorCode": None}
@@ -302,6 +308,131 @@ def _resolved_box_set_record(details):
     return record
 
 
+def _identifiers(record):
+    """Emit the catalog release id as a durable identifier row.
+
+    Only the release id travels. `movie_details` looks a movie up by release
+    (`_release_uuid()` above), so that is the id a refresh can actually use; a
+    `filmId` would occupy the one `movie_id` slot this provider gets without
+    resolving anything. Records that carry no `releaseId` -- resolver hits,
+    which have no local identity for a release DiscVault never synced -- emit
+    nothing rather than an empty row.
+    """
+    release_id = str((record or {}).get("releaseId") or "").strip()
+    if not release_id:
+        return []
+    return [{
+        "provider_id": PROVIDER_ID,
+        "identifier": release_id,
+        "identifier_type": "movie_id",
+    }]
+
+
+def _series(record):
+    """The series a television release belongs to, keyed by its TMDB tv id.
+
+    Emitted only for a release the feed calls `tv` and only when that id is
+    present. Both halves matter. Without the type, a film with a stray id would
+    propose a series link the schema forbids on a MOVIE; without the id there is
+    nothing to resolve a series *by*, and matching on the title instead would
+    mint a fresh series for every release of the same show.
+
+    `tmdb_tv` is its own namespace upstream, separate from the movie id space,
+    which is what lets a work carry both without either being ambiguous. It
+    survives MovieVault's redistribution filter (`content.providers.
+    redistributable`); `tvdb` deliberately does not, so it never arrives here and
+    this plugin never has to decide what to do with it.
+
+    Seasons ride along rather than sitting beside this, because they are only
+    meaningful under a series: `movie_seasons` carries a `series_id` and the
+    schema refuses a season whose series does not match the disc's.
+    """
+    if record.get("workType") != "tv":
+        return None
+    provider_ids = record.get("providerIds")
+    tmdb_tv_id = ""
+    if isinstance(provider_ids, dict):
+        tmdb_tv_id = str(provider_ids.get("tmdb_tv") or "").strip()
+    if not tmdb_tv_id:
+        return None
+    seasons = [
+        {key: value for key, value in {
+            "seasonNumber": season.get("seasonNumber"),
+            "title": season.get("title"),
+            "year": season.get("releaseYear"),
+            "episodeCount": season.get("episodeCount"),
+        }.items() if value is not None}
+        for season in (record.get("seasons") or [])
+        if isinstance(season, dict) and isinstance(season.get("seasonNumber"), int)
+    ]
+    return {key: value for key, value in {
+        "provider": PROVIDER_ID,
+        "tmdbTvId": tmdb_tv_id,
+        # The work's title, not the edition's: a series is named once and the
+        # box it came in is named separately.
+        "title": record.get("canonicalTitle"),
+        # Deliberately omitted when empty rather than sent as []. An empty list
+        # here would read as "this release covers no seasons", which is a
+        # statement the feed is entitled to make but this plugin cannot
+        # distinguish from a release nobody has curated yet. Proposing nothing
+        # matches `mediaType` above: the merge policy only ever sees a field the
+        # feed actually stated, so it can never clear what a user recorded.
+        "seasons": seasons,
+    }.items() if value not in (None, "", [], {})}
+
+
+#: The feed's disc keys against DiscVault's. Three differ, and they differ for
+#: reasons on both sides: MovieVault says `discRegions` because a release record
+#: already carries a scalar `region`, DiscVault says `regions` because a disc
+#: row has no other kind. Restated as a map rather than trusted to memory --
+#: the last time a disc converter guessed at key names it dropped every field
+#: whose spellings differed and looked populated doing it.
+_DISC_KEYS = (
+    ("discType", "discType"),
+    ("discRole", "discRole"),
+    ("discTypeOther", "discTypeOther"),
+    ("label", "label"),
+    ("videoResolution", "videoResolution"),
+    ("videoCodecs", "videoCodecs"),
+    ("hdrFormats", "hdr"),
+    ("aspectRatios", "screenRatios"),
+    ("discRegions", "regions"),
+    ("audioTracks", "audioTracks"),
+    ("subtitles", "subtitles"),
+)
+
+
+def _discs(record):
+    """The catalogue's per-disc breakdown, in DiscVault's own disc shape.
+
+    Outside `movie` for the same reason `series` is: a disc breakdown is not a
+    field of the release, it is a set of rows the host owns. The host decides
+    whether to write them at all -- see `apply_movie_disc_enrichment`, which
+    fills only emptiness.
+
+    `position` is dropped. The feed orders by it and DiscVault orders by list
+    order, so carrying it would state the same thing twice and give the two a
+    way to disagree.
+    """
+    entries = record.get("discs")
+    if not isinstance(entries, list) or not entries:
+        return []
+    ordered = sorted(
+        (entry for entry in entries if isinstance(entry, dict)),
+        key=lambda entry: entry.get("position") or 0,
+    )
+    discs = []
+    for entry in ordered:
+        disc = {}
+        for source, target in _DISC_KEYS:
+            value = entry.get(source)
+            if value not in (None, "", [], {}):
+                disc[target] = value
+        if disc:
+            discs.append(disc)
+    return discs
+
+
 def _release(record):
     movie = {key: value for key, value in {
         "title": record.get("canonicalTitle") or record.get("releaseTitle") or "",
@@ -327,6 +458,23 @@ def _release(record):
         "studio": record.get("studio"), "distributor": record.get("distributor"),
         "runtimeMinutes": record.get("runtimeMinutes"), "format": record.get("format"),
         "edition": record.get("edition"), "sourceRef": f"release:{record.get('releaseId') or ''}",
+        # `releaseId` and `filmId` above are read by the callers that already
+        # hold the whole result dict; nothing persists them, so the link was
+        # lost the moment the refresh finished. Emitting them as identifier rows
+        # is what makes the link durable: the movie then carries the catalog id
+        # it was matched to, and a later refresh can look the release up
+        # directly instead of hoping a barcode still resolves.
+        "identifiers": _identifiers(record),
+        # Outside `movie` on purpose: a series is not a property of this disc,
+        # it is the thing this disc is one edition of. The host resolves it to a
+        # local series row and links the disc to it; nothing about it belongs in
+        # the flat field merge that `movie` feeds.
+        "series": _series(record),
+        # Outside `movie` for the same reason as `series` above: these are rows
+        # the host owns, not a field to merge. Emitted whenever the feed states
+        # them; the host is what refuses to overwrite a breakdown somebody
+        # entered by hand.
+        "discs": _discs(record),
         **_poster_fields(record)}.items()
         if value not in (None, "", [], {})}
 

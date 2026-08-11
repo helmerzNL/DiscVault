@@ -33,8 +33,18 @@ def candidates_result() -> dict:
             },
         },
         "releases": [
-            {"releaseRef": "a", "source": "external", "title": "Example Film"},
-            {"releaseRef": "b", "source": "external", "title": "Example Film"},
+            {
+                "releaseRef": "a",
+                "source": "external",
+                "title": "Example Film",
+                "finishes": [],
+            },
+            {
+                "releaseRef": "b",
+                "source": "external",
+                "title": "Example Film",
+                "finishes": ["holofoil"],
+            },
         ],
     }
 
@@ -125,6 +135,38 @@ class ReleaseDetailsSearchPayloadTests(unittest.TestCase):
                 self.assertFalse(payload["retryable"])
                 self.assertTrue(payload["answered"])
 
+    def test_a_failure_discvault_owns_is_not_reported_as_the_servers(self):
+        """A payload this client refused is a DiscVault defect.
+
+        These four codes are raised on DiscVault's side of the wire, so falling
+        through to the `server` default sent the next investigation at
+        MovieVault - which is what happened for the `finishes` outage, whose
+        barcode MovieVault had resolved correctly. `answered` stays true because
+        MovieVault did reply; nothing here may be phrased as a miss.
+        """
+        for code in (
+            "release_details_response_invalid",
+            "release_details_request_invalid",
+            "release_details_retry_after_invalid",
+            "release_details_response_too_large",
+        ):
+            with self.subTest(code=code):
+                payload = next_app.release_details_search_payload(
+                    {"status": "failed", "errorCode": code},
+                    entrypoint="resolve",
+                )
+                self.assertEqual(payload["failureKind"], "client")
+                self.assertFalse(payload["retryable"])
+                self.assertTrue(payload["answered"])
+
+    def test_an_unclassified_code_still_falls_back_to_server(self):
+        payload = next_app.release_details_search_payload(
+            {"status": "failed", "errorCode": "something_new"},
+            entrypoint="resolve",
+        )
+
+        self.assertEqual(payload["failureKind"], "server")
+
     def test_a_miss_carries_no_releases_and_no_failure(self):
         payload = next_app.release_details_search_payload(
             {"status": "miss"},
@@ -152,6 +194,7 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
                 "runtimeMinutes": 170,
                 "discRegions": ["B"],
                 "packaging": ["steelbook"],
+                "finishes": ["holofoil"],
                 "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
                 "subtitles": [{"languageCode": "nl", "subtitleType": "full"}],
                 "video": {
@@ -173,7 +216,11 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
                 "language": "en",
                 "releaseDate": "2024-05-01",
                 "runtimeMinutes": 170,
-                "packaging": ["steelbook"],
+                # The flat list is split onto the axes here; the mapper never
+                # emits `packaging`, which the movie edit refuses from a caller.
+                "carrierType": "steelbook",
+                "outerPackaging": [],
+                "finishes": ["holofoil"],
                 "discRegions": ["B"],
                 "audioTracks": [{"languageCode": "en", "codec": "dolby_truehd"}],
                 "subtitles": [{"languageCode": "nl", "subtitleType": "full"}],
@@ -226,11 +273,180 @@ class ReleaseCandidateMoviePayloadTests(unittest.TestCase):
         )
 
         self.assertEqual(payload["audioTracks"], [])
-        self.assertEqual(payload["packaging"], [])
+        # The empty flat list splits into an empty carrier and an empty outer
+        # list - both of which clear, rather than being omitted as "no opinion".
+        self.assertEqual(payload["carrierType"], "")
+        self.assertEqual(payload["outerPackaging"], [])
+        self.assertNotIn("packaging", payload)
+
+    def test_a_finish_this_repo_does_not_know_is_dropped_rather_than_refused(self):
+        """`finishes` is the one key here the movie edit validates strictly.
+
+        `_movie_edit_case_axes` answers an unknown value with a 422, while the
+        resolver deliberately keeps vocabulary it has not heard of so that one
+        new finish name cannot cost a whole resolve answer. Unfiltered, the two
+        rules would collide on exactly the discs where MovieVault is ahead of
+        DiscVault, and "Use this edition" would fail outright.
+        """
+        payload = next_app.release_candidate_movie_payload(
+            {"title": "Example Film", "finishes": ["holofoil", "mirror_foil"]}
+        )
+
+        self.assertEqual(payload["finishes"], ["holofoil"])
+
+    def test_an_all_unknown_finish_list_becomes_empty_rather_than_absent(self):
+        # Absent means "no opinion" and an empty list clears, so a candidate
+        # that named only finishes DiscVault cannot represent still says that
+        # it knows of none - it does not leave the previous pick's finish on.
+        payload = next_app.release_candidate_movie_payload(
+            {"title": "Example Film", "finishes": ["mirror_foil"]}
+        )
+
+        self.assertEqual(payload["finishes"], [])
 
     def test_a_missing_candidate_contributes_nothing(self):
         self.assertEqual(next_app.release_candidate_movie_payload({}), {})
         self.assertEqual(next_app.release_candidate_movie_payload(None), {})
+
+
+class ReleaseCandidateOnExistingMovieTests(unittest.TestCase):
+    """A chosen edition must be applicable to a disc that is already on the shelf.
+
+    The movie detail page fills the disc locally through the ordinary edit
+    route - MovieVault has no server-side choice endpoint - so every key the
+    candidate mapper emits has to be one the movie edit payload actually reads.
+    A key that neither `movie_update_payload` nor `movie_technical_edits`
+    consumes would be dropped silently, and the picked edition would only
+    partially land."""
+
+    CANDIDATE = {
+        "releaseRef": "discovery_abcdef123456",
+        "source": "external",
+        "title": "Example Film - Collector's Edition",
+        "edition": "Collector's Edition",
+        "format": "4K UHD",
+        "countryCode": "NL",
+        "languageCode": "en",
+        "releaseDate": "2024-05-01",
+        "discCount": 2,
+        "runtimeMinutes": 148,
+        "discRegions": ["FREE"],
+        "packaging": ["steelbook"],
+        "finishes": ["holofoil"],
+        "video": {
+            "resolution": "2160p",
+            "codecs": ["hevc"],
+            "hdrFormats": ["dolby_vision"],
+            "aspectRatios": ["2.39:1"],
+        },
+        "audioTracks": [
+            {"languageCode": "en", "codec": "dolby_truehd", "channels": "7.1", "immersiveFormat": "dolby_atmos"}
+        ],
+        "subtitles": [{"languageCode": "en", "subtitleType": "sdh"}],
+    }
+
+    def test_candidate_payload_lands_on_movie_columns_and_technical_edits(self):
+        body = next_app.release_candidate_movie_payload(dict(self.CANDIDATE))
+        existing = {"title": "Example Film", "barcode": "4006381333931"}
+
+        payload = next_app.movie_update_payload(body, existing=existing)
+
+        self.assertEqual(payload["title"], "Example Film")
+        self.assertEqual(payload["release_title"], "Example Film - Collector's Edition")
+        self.assertEqual(payload["edition"], "Collector's Edition")
+        self.assertEqual(payload["format"], "4K UHD")
+        self.assertEqual(payload["country"], "NL")
+        self.assertEqual(payload["language"], "en")
+        self.assertEqual(payload["runtime_minutes"], 148)
+        self.assertEqual(str(payload["release_date"]), "2024-05-01")
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["regions"], ["FREE"])
+        # MovieVault's flat list is split onto the axes at the mapper. The flat
+        # column is derived from them at write time, so it is not an edit key.
+        self.assertEqual(technical["carrier_type"], "steelbook")
+        self.assertEqual(technical["outer_packaging"], [])
+        self.assertNotIn("packaging", technical)
+        self.assertTrue(technical["_derive_packaging"])
+        self.assertEqual(technical["video_resolution"], "2160p")
+        self.assertEqual(technical["video_codecs"], ["hevc"])
+        self.assertEqual(technical["hdr"], ["dolby_vision"])
+        self.assertEqual(technical["screen_ratios"], ["2.39:1"])
+        self.assertEqual(technical["audio_tracks"][0]["codec"], "dolby_truehd")
+        self.assertEqual(technical["subtitles"][0]["subtitleType"], "sdh")
+        self.assertEqual(technical["finishes"], ["holofoil"])
+
+    def test_a_finish_does_not_wipe_the_picked_packaging(self):
+        """`finishes` and the case axes are separate axes on the same edit.
+
+        A candidate carrying both must land both: the finish is an orthogonal
+        tag set and must not displace the carrier the same pick supplied. If
+        that ever changes, a picked edition quietly loses its packaging.
+        """
+        body = next_app.release_candidate_movie_payload(dict(self.CANDIDATE))
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["carrier_type"], "steelbook")
+        self.assertEqual(technical["finishes"], ["holofoil"])
+
+    def test_the_finer_vocabulary_survives_a_pick(self):
+        """A distribution-5 candidate names terms the flat nine cannot express.
+
+        Passing the list through used to discard them - only the six legacy
+        carrier aliases were recognised anywhere - so `futurepak` and `fullslip`
+        reached the column as raw text and never reached the axes at all.
+        """
+        candidate = dict(self.CANDIDATE, packaging=["futurepak", "fullslip"])
+        body = next_app.release_candidate_movie_payload(candidate)
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["carrier_type"], "futurepak")
+        self.assertEqual(technical["outer_packaging"], ["fullslip"])
+
+    def test_an_unknown_packaging_term_is_dropped_rather_than_rejected(self):
+        """Lenient from the feed, strict from a client (§4.7a).
+
+        The resolver keeps vocabulary it has not heard of so one new term cannot
+        cost a whole resolve answer. That value must not then reach the strict
+        validation and turn "Use this edition" into a 422.
+        """
+        candidate = dict(self.CANDIDATE, packaging=["steelbook", "shrinkwrapped"])
+        body = next_app.release_candidate_movie_payload(candidate)
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["carrier_type"], "steelbook")
+        self.assertEqual(technical["outer_packaging"], [])
+
+    def test_a_second_pick_reassigns_the_first_picks_tracks(self):
+        # The first pick carried audio and subtitles; the second names none.
+        # An explicit empty list clears them - fill-if-empty would let the
+        # first edition's tracks survive into the second.
+        body = next_app.release_candidate_movie_payload(
+            {"title": "Example Film", "audioTracks": [], "subtitles": [], "packaging": []}
+        )
+
+        payload = next_app.movie_update_payload(
+            body, existing={"title": "Example Film", "barcode": "4006381333931"}
+        )
+
+        technical = payload["technical_edits"]
+        self.assertEqual(technical["audio_tracks"], [])
+        self.assertEqual(technical["subtitles"], [])
+        # The carrier is a scalar, so its clear is a None rather than a []. The
+        # mirror follows from the cleared axes at write time.
+        self.assertIsNone(technical["carrier_type"])
+        self.assertEqual(technical["outer_packaging"], [])
 
 
 if __name__ == "__main__":

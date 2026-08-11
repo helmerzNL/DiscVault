@@ -323,6 +323,28 @@ class BucketFallbackPluginTests(unittest.TestCase):
         )
         self.assertEqual(result["releaseCandidates"]["film"]["title"], "Heat")
         self.assertEqual(len(result["releaseCandidates"]["releases"]), 2)
+        # The resolver stated no provenance, so none is invented.
+        self.assertNotIn("verificationStatus", result["releaseCandidates"])
+
+    def test_resolver_candidates_keep_their_verification_status(self):
+        # A picker built from this list must keep the unreviewed-source warning
+        # visible through to save, so the provenance travels with the list.
+        context = self._context(
+            local=(),
+            bucket=(),
+            resolver={
+                "status": "candidates",
+                "verificationStatus": "unreviewed_external",
+                "film": {"title": "Heat", "year": 1995},
+                "releases": [{"releaseRef": "a", "source": "external", "title": "Heat"}],
+            },
+        )
+        result = self.plugin.search_barcode({"barcode": BARCODE}, context)
+        self.assertEqual(result["status"], "miss")
+        self.assertEqual(
+            result["releaseCandidates"]["verificationStatus"],
+            "unreviewed_external",
+        )
 
     def test_resolver_ambiguous_stays_apart_from_candidates(self):
         # `ambiguous` means the sources did not agree on which film this is -

@@ -117,6 +117,10 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "movie_id",
             "hdr",
             "packaging",
+            "carrier_type",
+            "outer_packaging",
+            "finishes",
+            "steelbook_format",
             "screen_ratios",
             "audio_tracks",
             "subtitles",
@@ -126,8 +130,9 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "video_codecs",
             "updated_at",
         ),
-        # hdr and screen_ratios joined the jsonb set in migration 055. Missing one
-        # here means every backup taken afterwards restores that column corrupt.
+        # hdr and screen_ratios joined the jsonb set in migration 055;
+        # outer_packaging and finishes in 067. Missing one here means every
+        # backup taken afterwards restores that column corrupt.
         frozenset(
             {
                 "audio_tracks",
@@ -135,6 +140,8 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
                 "regions",
                 "content_ratings",
                 "packaging",
+                "outer_packaging",
+                "finishes",
                 "hdr",
                 "screen_ratios",
                 "video_codecs",
