@@ -281,6 +281,14 @@ jobs:
       - name: Test the release row derived from the discs
         run: python -m unittest tests.test_next_disc_union
 
+      # The one-time sweep that converges releases broken down before the
+      # derivation existed. Also below the migrations, and for a sharper reason
+      # than the module above: its whole subject is a release in a state the
+      # ordinary write path cannot produce any more, so every interesting case
+      # needs real rows written around the save path.
+      - name: Test the one-time disc-union backfill
+        run: python -m unittest tests.test_next_disc_union_backfill
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge
