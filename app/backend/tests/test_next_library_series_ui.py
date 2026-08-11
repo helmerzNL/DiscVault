@@ -18,6 +18,7 @@ import unittest
 BACKEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 NEXT_VIEWS_UI_PATH = os.path.join(BACKEND_DIR, "next_views_ui.py")
 NEXT_APP_PATH = os.path.join(BACKEND_DIR, "next_app.py")
+NEXT_LIBRARY_DATA_PATH = os.path.join(BACKEND_DIR, "next_library_data.py")
 I18N_DIR = os.path.abspath(os.path.join(BACKEND_DIR, "..", "frontend", "i18n", "next"))
 
 
@@ -28,6 +29,10 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             cls.source = handle.read()
         with open(NEXT_APP_PATH, encoding="utf-8") as handle:
             cls.app_source = handle.read()
+        # The Library is served from two modules, and the second one falling
+        # behind the first is the bug this file now guards against.
+        with open(NEXT_LIBRARY_DATA_PATH, encoding="utf-8") as handle:
+            cls.library_data_source = handle.read()
 
     def locale(self, name):
         import json
@@ -55,7 +60,34 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             '"seriesSeasonCoverage": collection_series_membership_entities(conn, actor=user)',
             self.app_source,
         )
-        self.assertIn("movies = attach_movie_series_membership(conn, movies)", self.app_source)
+        self.assertIn("movies = attach_library_movie_enrichments(conn, movies, user)", self.app_source)
+
+    def test_both_halves_of_the_library_enrich_a_movie_row_the_same_way(self):
+        """The snapshot serves the first page and `library_movie_page` serves the
+        rest, so a row must not depend on which of the two produced it. It did:
+        paging shipped before series grouping and never gained the attach, so a
+        disc past the boundary arrived with no series, its tile dropped it, and
+        it reappeared beside the tile as a loose disc.
+
+        The previous version of this test asserted the attach appeared in
+        `next_app.py` and nothing more, which the snapshot alone satisfied -- so
+        it passed for the whole life of the bug. Asserting the shared helper is
+        what makes the two paths impossible to enrich differently.
+        """
+        start = self.app_source.index("def attach_library_movie_enrichments(")
+        body = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertIn("attach_personal_list_state(conn, movies, user_id)", body)
+        self.assertIn("attach_movie_series_membership(conn, movies)", body)
+
+        self.assertIn(
+            "items = app.attach_library_movie_enrichments(conn, items, user)",
+            self.library_data_source,
+        )
+        self.assertNotIn(
+            "attach_personal_list_state",
+            self.library_data_source,
+            "the paged path must not enrich rows itself -- that is how it fell behind",
+        )
 
     def test_an_empty_snapshot_declares_the_same_keys(self):
         """A logged-out or pre-migration render must not read `undefined`."""
