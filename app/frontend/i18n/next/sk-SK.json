@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Adresa URL umeleckého diela bola skopírovaná.",
   "movieDetail.audio": "Zvuk",
   "movieDetail.audioVideo": "Zvuk a obraz",
+  "movieDetail.technicalDerivedFromDiscs": "Tieto hodnoty teraz pochádzajú z diskov nižšie. Upravte ich tam.",
   "movieDetail.backToLibrary": "Späť",
   "movieDetail.backdrops": "Pozadia",
   "movieDetail.barcode": "Čiarový kód",

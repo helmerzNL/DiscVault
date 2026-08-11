@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "圖片 URL 已複製。",
   "movieDetail.audio": "音訊",
   "movieDetail.audioVideo": "音訊與影像",
+  "movieDetail.technicalDerivedFromDiscs": "這些值現在來自下方的光碟。請在那裡編輯。",
   "movieDetail.backToLibrary": "返回",
   "movieDetail.backdrops": "背景圖",
   "movieDetail.barcode": "條碼",

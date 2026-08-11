@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Adres URL grafiki został skopiowany.",
   "movieDetail.audio": "Dźwięk",
   "movieDetail.audioVideo": "Audio i wideo",
+  "movieDetail.technicalDerivedFromDiscs": "Te wartości pochodzą teraz z płyt poniżej. Edytuj je tam.",
   "movieDetail.backToLibrary": "Oparcie",
   "movieDetail.backdrops": "Zdjęcia",
   "movieDetail.barcode": "Kod kreskowy",

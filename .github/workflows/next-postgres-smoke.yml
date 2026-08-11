@@ -275,6 +275,12 @@ jobs:
       - name: Test the disc enrichment from the catalogue
         run: python -m unittest tests.test_next_disc_enrichment
 
+      # The release row as the union of its discs, and the push-down that keeps
+      # a leftover from being deleted by the derivation. Below the migrations:
+      # the interesting assertions are about rows before and after a save.
+      - name: Test the release row derived from the discs
+        run: python -m unittest tests.test_next_disc_union
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge

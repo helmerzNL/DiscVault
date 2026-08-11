@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Görsel URL'si kopyalandı.",
   "movieDetail.audio": "Ses",
   "movieDetail.audioVideo": "Ses ve Görüntü",
+  "movieDetail.technicalDerivedFromDiscs": "Bu değerler artık aşağıdaki disklerden geliyor. Onları orada düzenleyin.",
   "movieDetail.backToLibrary": "Geri",
   "movieDetail.backdrops": "Arka planlar",
   "movieDetail.barcode": "Barkod",

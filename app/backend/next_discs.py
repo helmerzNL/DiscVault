@@ -352,3 +352,80 @@ def disc_signature(disc: dict[str, Any]) -> str:
         sort_keys=True,
         default=str,
     )
+
+
+# ---- The release row as the union of its discs ----------------------------
+#
+# Once a release has discs, the release-level technical fields stop being
+# authored and become a summary: a reader asking "what is on this release"
+# means "across all of it". Two people editing the same fact in two places is
+# how they drift, and the disc is the more specific of the two, so the discs
+# win and the release row is derived from them.
+#
+# Only the fields a disc actually has. Packaging, finishes, the carrier and the
+# content ratings describe the *box*, not what is pressed onto a platter --
+# they stay authored at release level and are untouched by any of this.
+
+#: Release column -> disc column, for the fields both levels hold as lists.
+UNION_LIST_COLUMNS: dict[str, str] = {
+    "hdr": "hdr",
+    "screen_ratios": "screen_ratios",
+    "regions": "regions",
+    "video_codecs": "video_codecs",
+    "audio_tracks": "audio_tracks",
+    "subtitles": "subtitles",
+}
+
+#: Highest first. A 4K disc packaged with a Blu-ray is a 2160p release -- the
+#: same reading the format string "4K UHD + Blu-ray" already takes -- so the
+#: scalar resolution is the best a disc in the box offers rather than the
+#: first one listed.
+_RESOLUTION_RANK = ("2160p", "1080p", "1080i", "720p", "576p", "480p")
+
+
+def union_entries(discs: list[dict[str, Any]], column: str) -> list[Any]:
+    """Every distinct entry across the discs, in the order first seen.
+
+    Order is the discs' own: disc 1's English track comes before disc 2's
+    commentary, which is what a reader scanning the release expects. Entries
+    are compared as whole values, so two audio tracks differing only in
+    channels are two tracks -- they are.
+    """
+    seen: list[Any] = []
+    for disc in discs:
+        value = disc.get(column)
+        if not isinstance(value, list):
+            continue
+        for item in value:
+            if item not in seen:
+                seen.append(item)
+    return seen
+
+
+def union_release_technical(discs: list[dict[str, Any]]) -> dict[str, Any]:
+    """What the release-level technical row should say, given these discs.
+
+    Returns only the derived columns; the caller merges. An empty disc list
+    derives nothing -- a release with no discs still authors its own values,
+    which is the state every record was in before discs existed.
+    """
+    if not discs:
+        return {}
+    derived: dict[str, Any] = {
+        release_column: union_entries(discs, disc_column)
+        for release_column, disc_column in UNION_LIST_COLUMNS.items()
+    }
+    resolutions = {
+        str(disc.get("video_resolution") or "").strip()
+        for disc in discs
+        if str(disc.get("video_resolution") or "").strip()
+    }
+    for candidate in _RESOLUTION_RANK:
+        if candidate in resolutions:
+            derived["video_resolution"] = candidate
+            break
+    else:
+        # Nothing recognised. Left out rather than blanked: a resolution the
+        # ranking does not know is still a fact somebody recorded.
+        pass
+    return derived

@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "URL du visuel copiee.",
   "movieDetail.audio": "Audio",
   "movieDetail.audioVideo": "Audio et vidéo",
+  "movieDetail.technicalDerivedFromDiscs": "Ces valeurs proviennent désormais des disques ci-dessous. Modifiez-les là.",
   "movieDetail.backToLibrary": "Retour",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Code-barres",

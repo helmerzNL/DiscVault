@@ -15202,9 +15202,10 @@ def ui_preview_html(
                     </label>
                   </div>
                 </div>
-                <div class="detail-subsection">
+                <div class="detail-subsection" id="movieEditReleaseTechnicalSection">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
-                  <div class="movie-edit-grid">
+                  <p class="hint" id="movieEditReleaseTechnicalDerived" data-next-i18n="movieDetail.technicalDerivedFromDiscs">These values now come from the discs below. Edit them there.</p>
+                  <div class="movie-edit-grid" id="movieEditReleaseTechnicalGrid">
                     <label for="movieEditVideoResolution">
                       <span data-next-i18n="movieDetail.videoResolution">Resolution</span>
                       <select id="movieEditVideoResolution" name="video_resolution">
@@ -18426,8 +18427,15 @@ def ui_preview_html(
           [tNext("movieDetail.discContent", "On this disc"), discSeasonSummaryText(disc)],
           [tNext("movieDetail.fieldNotes", "Notes"), disc.notes]
         ]);
+        // A release with one disc has no "Disc 1" to distinguish it from --
+        // the heading would be a label on the only thing in the room. It comes
+        // back the moment there is a second disc, which is when it starts
+        // telling the reader which one they are looking at.
+        const heading = entries.length > 1
+          ? `<h5 class="movie-detail-disc-title">${escapeHtml(discHeadingText(disc, index))}</h5>`
+          : "";
         return `<div class="movie-detail-disc">
-          <h5 class="movie-detail-disc-title">${escapeHtml(discHeadingText(disc, index))}</h5>
+          ${heading}
           <div class="detail-fields">${rows}</div>
         </div>`;
       }).join("");
@@ -28765,7 +28773,21 @@ def ui_preview_html(
       // that seeded puts it back. Otherwise it would still be sitting there
       // three releases later, explaining nothing.
       document.getElementById("movieEditDiscsSeededHint")?.classList.add("hidden");
+      syncMovieEditReleaseTechnical(list.length);
       syncMovieEditDiscCountWarning();
+    }
+
+    // Once a release has discs, the release-level Audio & Video fields are a
+    // derivation rather than an input: the server recomputes them as the union
+    // of the discs on save. Leaving them editable would offer a second place
+    // to author one fact, and the edit made there would be overwritten by the
+    // save that accepted it -- which is worse than not offering it.
+    function syncMovieEditReleaseTechnical(discCount) {
+      const grid = document.getElementById("movieEditReleaseTechnicalGrid");
+      const note = document.getElementById("movieEditReleaseTechnicalDerived");
+      const derived = discCount > 0;
+      if (grid) grid.classList.toggle("hidden", derived);
+      if (note) note.classList.toggle("hidden", !derived);
     }
 
     function renumberMovieEditDiscs() {

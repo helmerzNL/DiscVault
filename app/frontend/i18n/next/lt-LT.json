@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Iliustracijos URL nukopijuotas.",
   "movieDetail.audio": "Garsas",
   "movieDetail.audioVideo": "Garsas ir vaizdas",
+  "movieDetail.technicalDerivedFromDiscs": "Šios reikšmės dabar gaunamos iš žemiau esančių diskų. Redaguokite jas ten.",
   "movieDetail.backToLibrary": "Atgal",
   "movieDetail.backdrops": "Fonai",
   "movieDetail.barcode": "Brūkšninis kodas",

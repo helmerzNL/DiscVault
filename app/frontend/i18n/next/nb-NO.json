@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Artwork-URL kopiert.",
   "movieDetail.audio": "Lyd",
   "movieDetail.audioVideo": "Lyd og video",
+  "movieDetail.technicalDerivedFromDiscs": "Disse verdiene kommer nå fra platene nedenfor. Rediger dem der.",
   "movieDetail.backToLibrary": "Tilbake",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Strekkode",
