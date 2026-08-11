@@ -4885,6 +4885,32 @@ def attach_movie_series_membership(conn, movies: list[dict[str, Any]]) -> list[d
     return movies
 
 
+def series_poster_url(row: dict[str, Any]) -> str | None:
+    """Fold a series row's joined `poster_asset_*` columns into one URL.
+
+    Series artwork has no column on `series`: it lives in `entity_media` under
+    `entity_type='series'`, which is the only store both write paths share. An
+    upload also mirrors the URL into `series.metadata`, a metadata refresh does
+    not -- so reading the mirror would serve an uploaded poster and silently
+    miss a fetched one.
+
+    `None` rather than `""` for "no poster", matching the other nullable fields
+    on the payloads this feeds: the caller has to be able to tell "none set"
+    from "set to nothing", because that is the difference between falling back
+    to a disc's cover and showing an empty tile.
+    """
+    if not row.get("poster_asset_id"):
+        return None
+    return media_asset_public_url(
+        {
+            "id": row.get("poster_asset_id"),
+            "storage_backend": row.get("poster_asset_storage_backend"),
+            "storage_key": row.get("poster_asset_storage_key"),
+            "source_url": row.get("poster_asset_source_url"),
+        }
+    ) or None
+
+
 def collection_series_preview_entities(
     conn, *, limit: int = 200, actor: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
@@ -4896,6 +4922,10 @@ def collection_series_preview_entities(
 
     A series with no discs the actor may see is left out entirely -- otherwise a
     shared instance would hand every user the titles of every other user's shelf.
+
+    The tile also needs the series' own poster, or it can only borrow one from a
+    disc filed under it -- a season's cover standing in for the show's, and
+    disagreeing with the series page beside it.
     """
     if not series_tables_available(conn):
         return []
@@ -4904,23 +4934,59 @@ def collection_series_preview_entities(
         cur.execute(
             f"""
             SELECT
-                s.id,
-                s.public_id,
-                s.title,
-                s.sort_title,
-                s.start_year,
-                s.end_year,
-                (
-                    SELECT count(*) FROM series_seasons ss
-                    WHERE ss.series_id = s.id AND ss.deleted_at IS NULL
-                ) AS season_count,
-                count(m.id) AS disc_count
-            FROM series s
-            JOIN movies m ON m.series_id = s.id AND {visibility_where}
-            WHERE s.deleted_at IS NULL
-            GROUP BY s.id, s.public_id, s.title, s.sort_title, s.start_year, s.end_year
-            ORDER BY lower(COALESCE(s.sort_title, s.title))
-            LIMIT %s
+                g.id,
+                g.public_id,
+                g.title,
+                g.sort_title,
+                g.start_year,
+                g.end_year,
+                g.season_count,
+                g.disc_count,
+                poster_asset.id AS poster_asset_id,
+                poster_asset.storage_backend AS poster_asset_storage_backend,
+                poster_asset.storage_key AS poster_asset_storage_key,
+                poster_asset.source_url AS poster_asset_source_url
+            FROM (
+                SELECT
+                    s.id,
+                    s.public_id,
+                    s.title,
+                    s.sort_title,
+                    s.start_year,
+                    s.end_year,
+                    (
+                        SELECT count(*) FROM series_seasons ss
+                        WHERE ss.series_id = s.id AND ss.deleted_at IS NULL
+                    ) AS season_count,
+                    count(m.id) AS disc_count
+                FROM series s
+                JOIN movies m ON m.series_id = s.id AND {visibility_where}
+                WHERE s.deleted_at IS NULL
+                GROUP BY s.id, s.public_id, s.title, s.sort_title, s.start_year, s.end_year
+                ORDER BY lower(COALESCE(s.sort_title, s.title))
+                LIMIT %s
+            ) g
+            -- The series' own poster, correlated on the already-aggregated row
+            -- rather than joined beside `JOIN movies`. Two reasons, both about
+            -- the aggregate: there its four columns would have to be repeated
+            -- in the GROUP BY, which couples artwork to the grouping key for
+            -- nothing and is a hard error the day one is forgotten; and it
+            -- would run once per series in the collection instead of once per
+            -- series actually returned. Measured on 50 series with LIMIT 5:
+            -- 5 executions here against 50 there.
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='series'
+                  AND em.entity_id=g.id
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND ma.kind='poster'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) poster_asset ON true
+            ORDER BY lower(COALESCE(g.sort_title, g.title))
             """,
             (*visibility_params, limit),
         )
@@ -4935,6 +5001,7 @@ def collection_series_preview_entities(
             "endYear": row["end_year"],
             "seasonCount": int(row["season_count"] or 0),
             "discCount": int(row["disc_count"] or 0),
+            "posterUrl": series_poster_url(row),
         }
         for row in rows
     ]
@@ -10921,10 +10988,13 @@ def series_entity(conn, series_id: UUID, *, with_seasons: bool = True) -> dict[s
 
 
 def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, Any]]:
-    filters = ["deleted_at IS NULL"]
+    # Qualified with `s.`: the poster join below puts a second relation in the
+    # FROM clause, and an unqualified column there is a future ambiguity error
+    # rather than a present one.
+    filters = ["s.deleted_at IS NULL"]
     params: list[Any] = []
     if query:
-        filters.append("lower(title) LIKE %s")
+        filters.append("lower(s.title) LIKE %s")
         params.append(f"%{query.casefold()}%")
     with conn.cursor() as cur:
         cur.execute(
@@ -10937,8 +11007,27 @@ def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, An
                    (
                        SELECT count(*) FROM movies m
                        WHERE m.series_id = s.id AND m.deleted_at IS NULL
-                   ) AS disc_count
+                   ) AS disc_count,
+                   poster_asset.id AS poster_asset_id,
+                   poster_asset.storage_backend AS poster_asset_storage_backend,
+                   poster_asset.storage_key AS poster_asset_storage_key,
+                   poster_asset.source_url AS poster_asset_source_url
             FROM series s
+            -- The counts above are scalar subqueries rather than an aggregate,
+            -- so there is no GROUP BY for this to disturb -- unlike the Library
+            -- payload, where the same join has to hang off the aggregated row.
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='series'
+                  AND em.entity_id=s.id
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND ma.kind='poster'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) poster_asset ON true
             WHERE {" AND ".join(filters)}
             ORDER BY lower(COALESCE(s.sort_title, s.title))
             LIMIT 500
@@ -10956,6 +11045,7 @@ def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, An
             "endYear": row["end_year"],
             "seasonCount": int(row["season_count"] or 0),
             "discCount": int(row["disc_count"] or 0),
+            "posterUrl": series_poster_url(row),
         }
         for row in rows
     ]

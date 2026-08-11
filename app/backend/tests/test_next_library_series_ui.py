@@ -81,6 +81,41 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         self.assertIn("JOIN movies m ON m.series_id = s.id", body)
         self.assertIn("visible_movie_where_sql", body)
 
+    def test_the_tile_prefers_the_series_own_poster_to_a_disc_s(self):
+        """The tile borrowed a disc's cover because a series had no artwork of
+        its own to borrow instead. That stopped being true when the series page
+        gained upload and refresh, and the Library was the surface that never
+        learned -- so a poster set on a series showed on its page and not on the
+        tile beside it, and the two disagreed about the same show.
+
+        The borrowing stays as the fallback: an empty tile reads as a bug rather
+        than as a gap. What changed is the order, so the order is what this
+        asserts."""
+        body = self._function_body("itemPosterUrl")
+        own = body.index("item.series?.posterUrl")
+        borrowed = body.index("movie?.poster_url).find(Boolean)")
+        self.assertLess(
+            own,
+            borrowed,
+            "a chosen series poster must outrank a borrowed disc poster",
+        )
+
+    def test_the_library_payload_carries_the_series_own_poster(self):
+        """The frontend cannot prefer what it is never given. Artwork lives in
+        `entity_media` under `entity_type='series'`, which is the one store both
+        write paths share -- an upload also mirrors the URL into
+        `series.metadata`, a refresh does not, so reading the mirror would serve
+        an uploaded poster and silently miss a fetched one."""
+        start = self.app_source.index("def collection_series_preview_entities(")
+        body = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertIn("em.entity_type='series'", body)
+        self.assertIn("ma.kind='poster'", body)
+        # Prefer the primary, accept any -- the same order `mediaAssetImage`
+        # applies on the series page. Filtering on is_primary instead would
+        # blank the tile beside a page that shows a picture.
+        self.assertIn("ORDER BY em.is_primary DESC, em.sort_order, ma.created_at", body)
+        self.assertIn('"posterUrl": series_poster_url(row)', body)
+
     def test_the_merge_switch_off_still_returns_a_flat_movie_list(self):
         body = self._function_body("libraryDisplayItems")
         early_return = body.index("if (!mergeEditionsAsTitleEnabled())")

@@ -406,6 +406,54 @@ class SeriesDetailRouteTests(SeriesDetailPostgresTests):
         self.assertEqual(fetched.status_code, 200, "a series poster must be servable, not only storable")
         self.assertTrue(fetched.data, "the response carried no image bytes")
 
+    def test_the_series_list_reports_an_uploaded_poster(self):
+        """`GET /api/next/series` is the picker and every other series list in
+        the app. It had the same hole the Library tile had -- the row carried no
+        artwork, so every list drew a series without its poster while the series
+        page showed one.
+
+        Uploaded through the route rather than inserted, because that is what
+        pins the two ends together: the write path chooses `entity_type='series'`
+        and this read path has to look for the same string, and migration 003
+        leaves the column free text so nothing but a test connects them.
+        """
+        png = _png()
+        if png is None:  # pragma: no cover - Pillow is a backend dependency
+            self.skipTest("Pillow is not installed")
+        with self.connect() as conn:
+            series_id = self._series(conn)
+
+        data_dir = tempfile.mkdtemp(prefix="series-list-poster-")
+        self.addCleanup(shutil.rmtree, data_dir, True)
+        with patch.dict(os.environ, {"DISCVAULT_LEGACY_DATA_DIR": data_dir}):
+            upload = self.client.post(
+                f"/api/next/series/{series_id}/media/upload",
+                data={"kind": "poster", "file": (io.BytesIO(png), "p.png")},
+                content_type="multipart/form-data",
+            )
+            self.assertEqual(upload.status_code, 200, upload.data[:200])
+            media_id = upload.get_json()["media"]["id"]
+
+            with self.connect() as conn:
+                listed = next(
+                    row
+                    for row in next_app.series_list_entities(conn)
+                    if row["id"] == str(series_id)
+                )
+
+        self.assertEqual(listed["posterUrl"], f"/api/next/media/assets/{media_id}")
+
+    def test_a_series_without_artwork_lists_a_null_poster(self):
+        """The key is always present, so a client never has to tell an absent
+        key from a null one -- the same rule the season coverage array follows."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            listed = next(
+                row for row in next_app.series_list_entities(conn) if row["id"] == str(series_id)
+            )
+
+        self.assertIsNone(listed["posterUrl"])
+
     def test_the_refresh_route_runs_the_multi_source_fill(self):
         """A miss is a 200 with a status, not an error: nothing was damaged and
         the existing text stands."""
