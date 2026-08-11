@@ -18766,12 +18766,13 @@ def ui_preview_html(
       const text = String(raw || "").trim();
       if (!text) return "";
       if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(text)) return `${text} (not a UUID)`;
-      // App-Guidance `movievault-identity-routing-and-media-formats.md` §1: an
-      // import-derived id is a UUIDv5 and will never resolve against the
-      // catalog, while a real release id is a v4.
+      // App-Guidance `movievault-identity-routing-and-media-formats.md` §1
+      // warns the version nibble is a property of today's implementations,
+      // not a contract -- and the catalog itself keys releases by v5 UUIDs
+      // (observed 2026-08-11: A Minecraft Movie, releaseId 0f417582-...-52a9-...),
+      // so claiming "v5 will not resolve" answered the question wrongly. Print
+      // the version as a plain fact and claim nothing about resolvability.
       const version = Number.parseInt(text.split("-")[2][0], 16);
-      if (version === 4) return `${text} (v4 — catalog release id)`;
-      if (version === 5) return `${text} (v5 — import-derived, will not resolve)`;
       return `${text} (v${version})`;
     }
     function movieIdentityLadderRows(ladder) {
@@ -18800,7 +18801,7 @@ def ui_preview_html(
       const movie = (detail && detail.movie) || {};
       const metadata = movie.metadata || {};
       const identity = (detail && detail.identityDebug) || {};
-      const mvIds = movieVaultExternalIds(movie, metadata);
+      const mvIds = movieVaultExternalIds(movie, metadata, detail && detail.identifiers);
       const rows = [
         movieIdentityDebugRow("surface", `PWA / server (${window.DISCVAULT_APP_VERSION || "unknown"})`),
         movieIdentityDebugRow("id (server movie entity)", movie.id),
@@ -18816,7 +18817,7 @@ def ui_preview_html(
         movieIdentityDebugRow("title (raw)", movie.title),
         movieIdentityDebugRow("title (normalized, tier 4)", identity.normalizedTitle),
         movieIdentityDebugRow("releaseYear (tier 4)", movie.year),
-        movieIdentityDebugRow("movieVaultId", mvIds.movieId ? movieIdentityUuidVersionNote(mvIds.movieId) : "", mvIds.movieId && /\\(v5 /.test(movieIdentityUuidVersionNote(mvIds.movieId)) ? "alert" : undefined),
+        movieIdentityDebugRow("movieVaultId", mvIds.movieId ? movieIdentityUuidVersionNote(mvIds.movieId) : ""),
         movieIdentityDebugRow("movieVaultReleaseId", mvIds.releaseId ? movieIdentityUuidVersionNote(mvIds.releaseId) : ""),
         movieIdentityDebugRow("imdbId", identity.imdbId),
         movieIdentityDebugRow("deleted_at (tombstone)", movie.deleted_at, movie.deleted_at ? "alert" : "normal"),
@@ -27037,17 +27038,32 @@ def ui_preview_html(
       const hhmm = `${hours}:${String(mins).padStart(2, "0")}`;
       return `${hhmm} (${total} ${tNext("movieDetail.minutesShort", "min")})`;
     }
-    function movieVaultExternalIds(movie, metadata) {
+    function movieVaultExternalIds(movie, metadata, identifiers) {
       const meta = metadata || {};
+      // The link the current pipeline writes is an identifier row, not a
+      // metadata key: the movievault_v2 plugin emits the catalog release id as
+      // a `movie_identifiers` row and deliberately stores nothing in
+      // `metadata` (only the legacy movievault_26 plugin ever wrote
+      // `remoteRef`-style keys there). Reading metadata alone therefore calls
+      // a linked movie "not linked" -- the metadata keys stay first only
+      // because they are the authored/legacy value when both exist.
+      const rows = Array.isArray(identifiers) ? identifiers : [];
+      const identifierFor = (provider) => {
+        const hit = rows.find((row) => row
+          && String(row.provider_id || "").toLowerCase() === provider
+          && String(row.identifier_type || "movie_id").toLowerCase() === "movie_id"
+          && String(row.identifier || "").trim());
+        return hit ? String(hit.identifier).trim() : "";
+      };
       const movieId = String(
         meta.movievault_movie_id || meta.movievaultMovieId
         || meta.movievault_id || meta.movieVaultId || meta.movievaultId
         || meta.remoteRef || meta.remote_ref || ""
-      ).trim();
+      ).trim() || identifierFor("movievault_26") || identifierFor("movievault");
       const releaseId = String(
         meta.movievault_release_id || meta.movievaultReleaseId
         || meta.movievault_release || meta.releaseRef || meta.release_ref || ""
-      ).trim();
+      ).trim() || identifierFor("movievault_v2");
       return { movieId, releaseId };
     }
     function containerLinksHtml(containers) {
@@ -30679,7 +30695,7 @@ def ui_preview_html(
       ]);
       fillMovieEditForm(detail);
       renderMovieListState(detail);
-      const mvIds = movieVaultExternalIds(movie, metadata);
+      const mvIds = movieVaultExternalIds(movie, metadata, detail.identifiers);
       const releaseContainers = (detail.containers || []).filter((container) => container && container.title);
       const releaseContainerText = releaseContainers.map((container) => container.title).join(", ");
       const releaseContainerHtml = containerLinksHtml(releaseContainers);
