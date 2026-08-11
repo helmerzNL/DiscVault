@@ -35,6 +35,28 @@ def read(path):
         return handle.read()
 
 
+class WorkflowsParseTests(unittest.TestCase):
+    """Every workflow file must be loadable YAML.
+
+    The tests below read the workflows as text, which proves the wiring is
+    written but says nothing about whether GitHub can load the file. It cannot
+    load one whose `if:` expression is an unquoted scalar containing
+    "chore: bump app/VERSION" -- a colon followed by a space turns the rest into
+    a nested mapping. GitHub reports that as a run with **zero jobs**, named
+    after the file path rather than the workflow, so it reads like an
+    infrastructure hiccup rather than a syntax error in the diff that caused it.
+    """
+
+    def test_every_workflow_is_valid_yaml(self):
+        import yaml
+
+        names = sorted(n for n in os.listdir(WORKFLOW_DIR) if n.endswith((".yml", ".yaml")))
+        self.assertTrue(names, "no workflow files found")
+        for name in names:
+            with self.subTest(workflow=name):
+                yaml.safe_load(read(os.path.join(WORKFLOW_DIR, name)))
+
+
 class DockerPublishWiringTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -45,7 +67,7 @@ class DockerPublishWiringTests(unittest.TestCase):
         bump commits, and a second bump there would make the two branches diverge
         on the one file promotions conflict on."""
         self.assertIn(
-            "if: github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta'",
+            "if: \"github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta'",
             self.source,
         )
 
@@ -60,7 +82,7 @@ class DockerPublishWiringTests(unittest.TestCase):
         """`version-guard` and `version-bump` are mutually exclusive by event, so
         the default all-must-succeed rule would skip the build on every event."""
         self.assertIn(
-            "if: ${{ !cancelled() && needs.version-guard.result != 'failure' "
+            "if: \"${{ !cancelled() && needs.version-guard.result != 'failure' "
             "&& needs.version-bump.result != 'failure' "
             "&& !(github.event_name == 'push' "
             "&& startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')) }}",
@@ -104,7 +126,7 @@ class DockerPublishWiringTests(unittest.TestCase):
         """It asks whether the push bumped. On beta nothing does any more, so
         leaving it enabled would fail every merge by construction."""
         self.assertIn(
-            "if: (github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push')",
+            "if: \"(github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push')",
             self.source,
         )
 

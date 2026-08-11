@@ -30,7 +30,10 @@ jobs:
     # Not on a beta push: there the bump is applied by version-bump below, so asking
     # "did this push already bump?" would fail every merge by construction.
     # Not on a replayed bump commit either -- see `replaying a bump` below.
-    if: (github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push') && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: bump app/VERSION'))
+    # Double-quoted because the expression contains "chore: bump app/VERSION": a colon
+    # followed by a space makes an unquoted YAML scalar parse as a nested mapping, and
+    # GitHub then reports the whole file as unloadable rather than failing a job.
+    if: "(github.ref != 'refs/heads/release/v26-beta' || github.event_name != 'push') && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: bump app/VERSION'))"
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,7 +74,7 @@ jobs:
   # handled where it belongs: an explicit condition on the jobs of this workflow, which
   # cannot leak into the checks of an unrelated pull request.
   version-bump:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta' && !startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')
+    if: "github.event_name == 'push' && github.ref == 'refs/heads/release/v26-beta' && !startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')"
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -133,7 +136,7 @@ jobs:
     # The bump-commit clause repeats here on purpose: both jobs above *skip* on a replayed
     # bump commit, and a skipped need is not a failed one, so without it the build would
     # publish the replay anyway.
-    if: ${{ !cancelled() && needs.version-guard.result != 'failure' && needs.version-bump.result != 'failure' && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')) }}
+    if: "${{ !cancelled() && needs.version-guard.result != 'failure' && needs.version-bump.result != 'failure' && !(github.event_name == 'push' && startsWith(github.event.head_commit.message, 'chore: bump app/VERSION')) }}"
     runs-on: ubuntu-latest
     permissions:
       contents: read
