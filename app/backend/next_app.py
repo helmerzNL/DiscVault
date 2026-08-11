@@ -4887,6 +4887,27 @@ def attach_movie_series_membership(conn, movies: list[dict[str, Any]]) -> list[d
     return movies
 
 
+def attach_library_movie_enrichments(
+    conn, movies: list[dict[str, Any]], user: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """Everything a Library movie row needs on top of the preview query.
+
+    One helper because the Library has two entry points that must agree: the
+    first-paint snapshot, and the paged hydration that loads everything behind
+    it. They did not agree. Paging shipped first and the series grouping came
+    later, teaching only the snapshot -- so every disc past the first page
+    arrived without `series`, its tile dropped it, and the disc reappeared
+    beside the tile as a loose one because nothing had claimed it.
+
+    A list of enrichments written out at each call site is what let that happen,
+    and it would let the next one happen too. Adding one here now reaches both.
+    """
+    user_id = user.get("id") if user else None
+    movies = attach_personal_list_state(conn, movies, user_id)
+    movies = attach_movie_series_membership(conn, movies)
+    return movies
+
+
 def series_poster_url(row: dict[str, Any]) -> str | None:
     """Fold a series row's joined `poster_asset_*` columns into one URL.
 
@@ -5389,8 +5410,7 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
     counts["personalLists"] = personal_list_counts(conn, user_id)
     counts["notifications"] = notification_counts(conn, user_id)
     movies = collection_movie_preview_entities(conn, limit=COLLECTION_MOVIE_PAGE_SIZE, actor=user)
-    movies = attach_personal_list_state(conn, movies, user_id)
-    movies = attach_movie_series_membership(conn, movies)
+    movies = attach_library_movie_enrichments(conn, movies, user)
     movies_total = collection_movie_total_count(conn, actor=user)
     return {
         "counts": counts,

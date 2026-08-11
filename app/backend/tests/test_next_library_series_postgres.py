@@ -27,6 +27,7 @@ except ModuleNotFoundError:
     dict_row = None
 
 from app.backend import next_app
+from app.backend import next_library_data
 
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
@@ -362,6 +363,66 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
             rows = next_app.attach_movie_series_membership(conn, [{"id": self._disc(conn)}])
         self.assertIn("series", rows[0])
         self.assertIsNone(rows[0]["series"])
+
+    # --- the paged half of the same list --------------------------------------
+
+    def test_a_disc_past_the_first_page_still_carries_its_series(self):
+        """The Library is served twice: a small first-paint snapshot, and the
+        paged hydration that loads everything behind it. Only the snapshot
+        attached the series, so a disc sitting past the page boundary arrived
+        without one -- its tile could not see it, and because nothing else had
+        claimed the disc it reappeared beside the tile as a loose one.
+
+        Sort titles decide which side of the boundary a disc lands on, and a
+        series' discs sort adjacently, so in practice a whole show fell out at
+        once and its tile vanished. The offset here is what reproduces that; a
+        page starting at zero passes with the bug live.
+        """
+        with self.connect() as conn:
+            series_id = self._series(conn, "Zulu Show")
+            # Three films sorting ahead of the discs, so the discs are only
+            # reachable at a non-zero offset.
+            for index in range(3):
+                self._disc(conn, title=f"Aaa Film {index}")
+            self._disc(conn, series_id=series_id, title="Zulu Show S1")
+
+            page = next_library_data.library_movie_page(conn, user=None, limit=50, offset=3)
+
+        discs = [row for row in page["items"] if row["title"] == "Zulu Show S1"]
+        self.assertEqual(len(discs), 1, "the disc must be on this page for the test to mean anything")
+        self.assertIsNotNone(discs[0]["series"], "a paged disc lost its series")
+        self.assertEqual(discs[0]["series"]["id"], str(series_id))
+
+    def test_a_page_and_the_snapshot_shape_a_row_identically(self):
+        """The invariant, rather than the implementation: a page is the rest of
+        the very same list, so a row must not depend on which side of the page
+        boundary it happened to fall. Stated this way it survives a later
+        refactor of how the two paths share their enrichment."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            self._disc(conn, series_id=series_id, title="Fargo S1")
+            self._disc(conn, title="A Loose Film")
+
+            page = next_library_data.library_movie_page(conn, user=None, limit=500, offset=0)
+            snapshot = next_app.collection_dashboard_snapshot(conn)
+
+        paged = {str(row["id"]): row["series"] for row in page["items"]}
+        for row in snapshot["movies"]:
+            movie_id = str(row["id"])
+            if movie_id in paged:
+                self.assertEqual(paged[movie_id], row["series"], f"row {movie_id} differs between the two paths")
+
+    def test_a_paged_film_reports_a_null_series_rather_than_no_key(self):
+        """Same contract the snapshot keeps: the frontend reads
+        `movie.series?.id`, so an absent key and a null one must not differ."""
+        with self.connect() as conn:
+            self._disc(conn, title="A Loose Film")
+            page = next_library_data.library_movie_page(conn, user=None, limit=500, offset=0)
+
+        loose = [row for row in page["items"] if row["title"] == "A Loose Film"]
+        self.assertEqual(len(loose), 1)
+        self.assertIn("series", loose[0])
+        self.assertIsNone(loose[0]["series"])
 
     # --- season coverage -----------------------------------------------------
 
