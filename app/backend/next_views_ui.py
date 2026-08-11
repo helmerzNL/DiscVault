@@ -3509,14 +3509,32 @@ def ui_preview_html(
     .contribute-history-row .contribute-status {
       white-space: nowrap;
     }
-    /* Sits beside the Contribute button and outlives it: after an accepted
-       correction there is nothing left to send, so the button goes and this is
-       the only thing that still answers what happened. */
+    /* Outlives the Contribute button: after an accepted correction there is
+       nothing left to send, so the button goes and this is the only thing that
+       still answers what happened. On the container detail it still sits in the
+       button row; on the movie detail it moved out of it -- see
+       .contribute-status-standing. */
     .contribute-status {
       font-size: .85rem;
       color: var(--muted, #888);
       align-self: center;
       overflow-wrap: anywhere;
+    }
+    /* The standing half of the contribute UI, on the notice line under the hero
+       rather than in the action row.
+
+       It answers "what became of the correction I sent", which stays true across
+       reloads -- the same kind of statement as the metadata-refresh notice it now
+       sits beside, and not the same kind as "Sent for review", which answers a
+       click and belongs next to the button that was clicked.
+
+       Its own element rather than a second message through
+       setMovieDetailMessage: that writes textContent and would have a refresh
+       notice and a correction status silently overwrite each other, and a movie
+       can hold both at once. */
+    .contribute-status-standing {
+      display: block;
+      margin: 0 0 6px;
     }
     .contribute-status.good {
       color: var(--success, #30a46c);
@@ -15094,7 +15112,6 @@ def ui_preview_html(
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
               <span class="button-label" data-next-i18n="contribute.action">Contribute</span>
             </button>
-            <span class="contribute-status hidden" id="movieContributeStatus"></span>
             <button type="button" class="movie-detail-icon-action danger hidden" id="movieDeleteButton" aria-label="Delete movie" title="Delete movie" data-next-i18n-aria="movieDetail.deleteMovie" data-next-i18n-title="movieDetail.deleteMovie">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
               <span class="button-label" data-next-i18n="movieDetail.deleteMovie">Delete movie</span>
@@ -15110,6 +15127,7 @@ def ui_preview_html(
             </div>
           </div>
         </section>
+        <div class="contribute-status contribute-status-standing hidden" id="movieContributeStatus"></div>
         <div class="detail-message movie-detail-status" id="movieDetailMessage"></div>
         <div id="movieDetailReleaseCandidates"></div>
         <section class="movie-detail-body">
@@ -30206,6 +30224,12 @@ def ui_preview_html(
         entity === "container" ? "containerContributeStatus" : "movieContributeStatus"
       );
       if (!node) return;
+      // Tone classes toggled rather than the whole className rewritten. The two
+      // nodes this renders into no longer sit in the same kind of place -- the
+      // movie's is a standing line under the hero, the container's is still in
+      // the button row -- so their placement classes live in the markup and
+      // this must not clobber them.
+      node.classList.remove("good", "bad");
       if (!contribution || !contribution.status) {
         node.classList.add("hidden");
         node.textContent = "";
@@ -30216,7 +30240,9 @@ def ui_preview_html(
       // An unrecognised status is shown verbatim rather than swallowed: a new
       // state upstream should read as something unfamiliar, not as nothing.
       const label = entry ? tNext(entry[0], entry[1]) : contribution.status;
-      node.className = `contribute-status ${contributeStatusTone(contribution.status)}`.trim();
+      const tone = contributeStatusTone(contribution.status);
+      node.classList.remove("hidden");
+      if (tone) node.classList.add(tone);
       node.textContent = `${tNext("contribute.statusPrefix", "Your correction")}: ${label}`;
       const detail = [];
       if ((contribution.fields || []).length) {
