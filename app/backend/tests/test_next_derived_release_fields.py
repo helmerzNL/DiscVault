@@ -33,7 +33,7 @@ repo_root = os.path.abspath(os.path.join(BACKEND_DIR, "..", ".."))
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
-from app.backend import next_discs, next_views_ui
+from app.backend import next_discs, next_technical_specs, next_views_ui
 
 SOURCE = next_views_ui.__file__
 
@@ -111,6 +111,16 @@ class DerivedReleaseFieldParityTests(unittest.TestCase):
             "MOVIE_DERIVED_RELEASE_FIELDS.includes(field)",
             source,
             "the detail view should filter on the shared constant",
+        )
+
+    def test_the_guard_drops_exactly_what_the_server_derives(self):
+        """A fourth copy, and the only one with teeth for a client that never
+        loads the page. `drop_disc_derived_edits` refuses these columns once a
+        release has discs; if it and the derivation disagreed, the gap would be
+        either a field nobody may edit and nothing derives, or one the server
+        silently overwrites while still accepting the write."""
+        self.assertEqual(
+            set(next_technical_specs.DISC_DERIVED_RELEASE_COLUMNS), self.server_set()
         )
 
     def test_the_note_starts_hidden(self):

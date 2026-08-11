@@ -324,6 +324,7 @@ try:
     from .next_static import register_next_static_routes
     from .next_technical_specs import derive_release_technical_from_discs
     from .next_technical_specs import disc_union_snapshot
+    from .next_technical_specs import drop_disc_derived_edits
     from .next_technical_specs import upsert_movie_technical_edits
     from .next_packaging import STEELBOOK_CARRIERS
     from .next_packaging import derive_legacy_packaging
@@ -609,6 +610,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_static import register_next_static_routes
     from next_technical_specs import derive_release_technical_from_discs
     from next_technical_specs import disc_union_snapshot
+    from next_technical_specs import drop_disc_derived_edits
     from next_technical_specs import upsert_movie_technical_edits
     from next_packaging import STEELBOOK_CARRIERS
     from next_packaging import derive_legacy_packaging
@@ -10866,7 +10868,11 @@ def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> N
             movie_uuid,
         ),
     )
-    upsert_movie_technical_edits(cur, movie_uuid, payload.get("technical_edits") or {})
+    upsert_movie_technical_edits(
+        cur,
+        movie_uuid,
+        drop_disc_derived_edits(cur, movie_uuid, payload.get("technical_edits") or {}),
+    )
     apply_movie_series_assignment(
         cur,
         movie_uuid,
@@ -19962,7 +19968,11 @@ def apply_movie_upsert(
     # `technical_edits` is empty and this is a no-op — which is what makes it
     # safe to ship the server ahead of the clients.
     with conn.cursor() as cur:
-        upsert_movie_technical_edits(cur, entity_id, fields.get("technical_edits") or {})
+        upsert_movie_technical_edits(
+            cur,
+            entity_id,
+            drop_disc_derived_edits(cur, entity_id, fields.get("technical_edits") or {}),
+        )
         apply_movie_location_assignment(cur, entity_id, fields.get("location_assignment") or {})
         # The discs, through the same writer the edit API uses -- one validator,
         # one diff-by-id, one blank-list rule (sync-contract §4.9). Validated

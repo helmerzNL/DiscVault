@@ -37,6 +37,32 @@ class NextMovieDetailUiTests(unittest.TestCase):
         with open(TMDB_PLUGIN_PATH, encoding="utf-8") as handle:
             cls.tmdb_plugin_source = handle.read()
 
+    def test_the_contribution_status_stands_under_the_hero_not_in_the_action_row(self):
+        """It answers "what became of the correction I sent", which is still true
+        after a reload -- the same kind of statement as the metadata-refresh
+        notice it now sits beside. Parked in the hero's button row it was easy to
+        miss, and it outlives the button it stood next to.
+
+        Asserted by position because that is the whole change: the id and the
+        renderer are unchanged, and a test on either would have stayed green."""
+        status_index = self.source.index('id="movieContributeStatus"')
+        actions_index = self.source.index('class="movie-detail-hero-actions"')
+        message_index = self.source.index('id="movieDetailMessage"')
+        summary_index = self.source.index('class="movie-detail-summary"')
+
+        self.assertLess(summary_index, status_index, "it should be below the hero")
+        self.assertLess(status_index, message_index, "it should lead the notice line")
+        self.assertLess(actions_index, status_index, "it should have left the action row")
+
+    def test_the_contribution_status_keeps_its_placement_classes(self):
+        """The renderer used to rewrite `className` wholesale, which would strip
+        the placement class off the markup. The movie's node and the container's
+        no longer sit in the same kind of place, so the tone is toggled instead."""
+        start = self.source.index("function renderContributeStatus(")
+        body = self.source[start : self.source.index("function contributeSetMessage(")]
+        self.assertNotIn("node.className =", body)
+        self.assertIn('node.classList.remove("good", "bad")', body)
+
     def test_section_tabs_are_above_personal_lists(self):
         tabs_index = self.source.index(
             'class="detail-submenu movie-detail-section-tabs"'
