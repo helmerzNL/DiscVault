@@ -26,6 +26,7 @@ script share them instead of copying them.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 from uuid import UUID
 
@@ -39,6 +40,63 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import json_ready
     from next_discs import UNION_LIST_COLUMNS, union_entries, union_release_technical
     from next_packaging import derive_legacy_packaging
+
+
+logger = logging.getLogger(__name__)
+
+#: The release columns a disc owns once the release has any. Derived from the
+#: union rule rather than retyped: this *is* `union_release_technical`'s output
+#: shape, so the two cannot drift into disagreeing about what is derived.
+DISC_DERIVED_RELEASE_COLUMNS: frozenset[str] = frozenset(UNION_LIST_COLUMNS) | {"video_resolution"}
+
+
+def drop_disc_derived_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> dict[str, Any]:
+    """Client edits to the derived columns, removed once the release has discs.
+
+    The PWA hides these seven fields as soon as a release names discs
+    (sync-contract §4.7), but hiding is a client courtesy and the server was
+    accepting the write from anyone who did not know the rule -- the iOS app
+    being exactly such a client today. Neither outcome was a plain overwrite:
+
+    * Without a disc list in the same body nothing derives, so the value was
+      stored verbatim and the release quietly contradicted its own discs until
+      some later save happened to carry discs.
+    * With one, `derive_release_technical_from_discs` could not tell a fresh
+      client edit from a value stranded on the release from before the discs
+      existed -- both read as "held here, on no disc" -- and pushed it down
+      onto disc 1, where it then looked like an authored disc fact forever.
+
+    Dropped rather than refused, mirroring `packaging` in next_app: a 422 would
+    break every client that sends these fields today, and breaking them is not
+    worth it to reject a value we can simply decline to store. The same
+    caveat applies as there -- the client gets a 200 and no complaint -- so the
+    warning is the only trace, and it names the fields.
+
+    Read from the database, not from the payload. A body that creates a
+    release's *first* discs still holds its release-level values legitimately:
+    at this point the movie has no discs, nothing is dropped, and
+    `apply_movie_discs` goes on to seed disc 1 from them exactly as before.
+    """
+    if not edits:
+        return edits
+    submitted = sorted(column for column in DISC_DERIVED_RELEASE_COLUMNS if column in edits)
+    if not submitted:
+        return edits
+    cur.execute("SELECT 1 FROM movie_discs WHERE movie_id=%s LIMIT 1", (movie_uuid,))
+    if cur.fetchone() is None:
+        return edits
+    logger.warning(
+        "technical: ignoring client-sent %s for movie %s - this release has discs, so "
+        "those columns are the union of them and read-only for clients "
+        "(sync-contract 4.7). The client should edit the discs instead.",
+        ", ".join(submitted),
+        movie_uuid,
+    )
+    return {
+        column: value
+        for column, value in edits.items()
+        if column not in DISC_DERIVED_RELEASE_COLUMNS
+    }
 
 
 def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> None:
