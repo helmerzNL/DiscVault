@@ -322,6 +322,8 @@ try:
     from .next_export import register_next_export_routes
     from .next_static import NEXT_SCRIPT_URL_PREFIX
     from .next_static import register_next_static_routes
+    from .next_technical_specs import derive_release_technical_from_discs
+    from .next_technical_specs import upsert_movie_technical_edits
     from .next_packaging import STEELBOOK_CARRIERS
     from .next_packaging import derive_legacy_packaging
     from .next_packaging import normalize_carrier
@@ -604,6 +606,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_export import register_next_export_routes
     from next_static import NEXT_SCRIPT_URL_PREFIX
     from next_static import register_next_static_routes
+    from next_technical_specs import derive_release_technical_from_discs
+    from next_technical_specs import upsert_movie_technical_edits
     from next_packaging import STEELBOOK_CARRIERS
     from next_packaging import derive_legacy_packaging
     from next_packaging import normalize_carrier
@@ -10650,66 +10654,6 @@ def movie_effective_field_locks(body: dict[str, Any], existing: dict[str, Any]) 
     return normalize_movie_field_locks(body.get("fieldLocks", body.get("field_locks")))
 
 
-def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -> None:
-    if not edits:
-        return
-    edits = dict(edits)
-    derive_packaging = bool(edits.pop("_derive_packaging", False))
-    cur.execute(
-        "INSERT INTO movie_technical_specs (movie_id, updated_at) VALUES (%s, now()) ON CONFLICT (movie_id) DO NOTHING",
-        (movie_uuid,),
-    )
-    if derive_packaging:
-        # Merge the submitted axes over the stored ones before rebuilding the
-        # flat `packaging` mirror, so a body carrying only one axis keeps the
-        # other. See _movie_edit_case_axes.
-        cur.execute(
-            "SELECT carrier_type, outer_packaging FROM movie_technical_specs WHERE movie_id=%s",
-            (movie_uuid,),
-        )
-        stored = cur.fetchone() or {}
-        if not isinstance(stored, dict):
-            stored = {"carrier_type": stored[0], "outer_packaging": stored[1]}
-        carrier = edits["carrier_type"] if "carrier_type" in edits else stored.get("carrier_type")
-        outer = (
-            edits["outer_packaging"]
-            if "outer_packaging" in edits
-            else (stored.get("outer_packaging") or [])
-        )
-        edits["packaging"] = derive_legacy_packaging(carrier, outer)
-    assignments: list[str] = []
-    values: list[Any] = []
-    for col in ("video_resolution", "carrier_type", "steelbook_format"):
-        if col in edits:
-            assignments.append(f"{col}=%s")
-            values.append(edits[col])
-    for col in (
-        "audio_tracks",
-        "subtitles",
-        "packaging",
-        "outer_packaging",
-        "finishes",
-        "hdr",
-        "screen_ratios",
-        "regions",
-        "video_codecs",
-    ):
-        if col in edits:
-            assignments.append(f"{col}=%s")
-            values.append(Jsonb(json_ready(edits[col] or [])))
-    if "content_ratings" in edits:
-        assignments.append("content_ratings = COALESCE(content_ratings, '{}'::jsonb) || %s")
-        values.append(Jsonb(json_ready(edits["content_ratings"] or {})))
-    if not assignments:
-        return
-    assignments.append("updated_at=now()")
-    values.append(movie_uuid)
-    cur.execute(
-        f"UPDATE movie_technical_specs SET {', '.join(assignments)} WHERE movie_id=%s",
-        values,
-    )
-
-
 def write_movie_edit_record(cur, movie_uuid: UUID, payload: dict[str, Any]) -> None:
     """Persist movie columns, runtime, editable metadata fields and field locks."""
     metadata_patch: dict[str, Any] = dict(payload.get("metadata_edits") or {})
@@ -11187,70 +11131,7 @@ def apply_movie_discs(
             "UPDATE movies SET disc_count = %s WHERE id = %s AND disc_count IS NULL",
             (len(discs), movie_uuid),
         )
-        _derive_release_technical_from_discs(cur, movie_uuid)
-
-
-def _derive_release_technical_from_discs(cur, movie_uuid: UUID) -> None:
-    """Make the release row the union of its discs, losing nothing on the way.
-
-    Once a release has discs, the release-level technical fields stop being
-    authored and become a summary of them: a reader asking what is on this
-    release means "across all of it", and the disc is the more specific of the
-    two places the same fact could live. Two authored copies of one fact is how
-    they drift.
-
-    **A leftover is pushed down before the union is taken.** A release may hold
-    a value no disc does -- recorded before discs existed, or written by a sync
-    client that predates them -- and deriving straight over it would delete a
-    fact nobody retracted. So it is appended to disc 1 first, where it becomes
-    an authored value again, and only then does the union include it. After one
-    save the release row is a pure derivation; before it, nothing is lost.
-
-    Only the columns a disc actually has. Packaging, finishes, the carrier and
-    the content ratings describe the box rather than what is pressed onto a
-    platter, and stay authored at release level.
-    """
-    columns = ", ".join(UNION_LIST_COLUMNS)
-    cur.execute(
-        f"SELECT {columns}, video_resolution FROM movie_technical_specs WHERE movie_id=%s",
-        (movie_uuid,),
-    )
-    stored = cur.fetchone()
-    cur.execute(
-        "SELECT id, " + ", ".join(UNION_LIST_COLUMNS.values()) + ", video_resolution "
-        "FROM movie_discs WHERE movie_id=%s ORDER BY sort_order, created_at",
-        (movie_uuid,),
-    )
-    discs = [dict(row) for row in cur.fetchall()]
-    if not discs:
-        return
-
-    if stored:
-        stored = dict(stored)
-        leftovers: dict[str, list[Any]] = {}
-        for release_column, disc_column in UNION_LIST_COLUMNS.items():
-            held = stored.get(release_column)
-            if not isinstance(held, list) or not held:
-                continue
-            on_discs = union_entries(discs, disc_column)
-            missing = [item for item in held if item not in on_discs]
-            if missing:
-                leftovers[disc_column] = missing
-        if leftovers:
-            first = discs[0]
-            for disc_column, missing in leftovers.items():
-                current = first.get(disc_column)
-                first[disc_column] = (current if isinstance(current, list) else []) + missing
-            cur.execute(
-                "UPDATE movie_discs SET "
-                + ", ".join(f"{column}=%s" for column in leftovers)
-                + " WHERE id=%s",
-                (*(Jsonb(json_ready(first[column])) for column in leftovers), first["id"]),
-            )
-
-    derived = union_release_technical(discs)
-    if derived:
-        upsert_movie_technical_edits(cur, movie_uuid, derived)
+        derive_release_technical_from_discs(cur, movie_uuid)
 
 
 def _upsert_movie_disc(cur, movie_uuid: UUID, disc: dict[str, Any], *, sort_order: int) -> UUID:
