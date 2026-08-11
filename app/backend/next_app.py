@@ -19905,8 +19905,16 @@ def apply_movie_upsert(
                 -- the inserted row was already coalesced to the default above,
                 -- so reading it back here would let a client that stated no
                 -- type reset a stored SHOW to MOVIE. Only what this client
-                -- actually said may overwrite what is stored.
-                media_type=COALESCE(%s, movies.media_type),
+                -- actually said may overwrite what is stored — and while a
+                -- series link exists, not even that: no v26 client models the
+                -- link, so a stated MOVIE cannot be a decision to unlink, and
+                -- writing it would trip movies_series_requires_show and lose
+                -- the whole upsert. The response echoes the stored row, so
+                -- the client reconciles to SHOW.
+                media_type=CASE
+                    WHEN movies.series_id IS NOT NULL THEN movies.media_type
+                    ELSE COALESCE(%s, movies.media_type)
+                END,
                 edition=COALESCE(EXCLUDED.edition, movies.edition),
                 edition_type=COALESCE(EXCLUDED.edition_type, movies.edition_type),
                 country=COALESCE(EXCLUDED.country, movies.country),

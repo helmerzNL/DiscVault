@@ -288,6 +288,87 @@ class MediaTypeProposalNormalisationTests(unittest.TestCase):
         self.assertEqual(proposed, {MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW, None})
 
 
+class MediaTypeMergePolicyTests(unittest.TestCase):
+    """The type merges asymmetrically: promotion to SHOW, never demotion.
+
+    The column is NOT NULL DEFAULT 'MOVIE', so the generic "fill what is
+    empty" rule can never truthfully describe it — and before the lookup
+    context carried the column at all, the stored type read as empty and any
+    stated type won. On a series disc, whose link
+    ``movies_series_requires_show`` ties to the type, a winning MOVIE was not
+    a field write but a constraint violation that cost the whole refresh.
+    """
+
+    @staticmethod
+    def _merged(current, incoming, *, overwrite_enabled=False, metadata=None):
+        return next_metadata.merge_metadata_results(
+            current={"media_type": current, "metadata": metadata or {}},
+            technical_current={},
+            results=[
+                {
+                    "pluginId": "movievault_v2",
+                    "entrypoint": "release.lookup",
+                    "sourceLabel": "MovieVault",
+                    "movieUpdates": {"media_type": incoming},
+                    "metadataUpdates": {},
+                }
+            ],
+            overwrite_enabled=overwrite_enabled,
+            target_format="",
+        )
+
+    def test_a_stated_show_promotes_a_film(self):
+        merged = self._merged(MEDIA_TYPE_MOVIE, MEDIA_TYPE_SHOW)
+        self.assertEqual(merged["movieUpdates"].get("media_type"), MEDIA_TYPE_SHOW)
+
+    def test_a_stated_movie_never_demotes_a_series(self):
+        merged = self._merged(MEDIA_TYPE_SHOW, MEDIA_TYPE_MOVIE)
+        self.assertNotIn("media_type", merged["movieUpdates"])
+        skipped = next(
+            item for item in merged["skipped"] if item["field"] == "media_type"
+        )
+        self.assertEqual(skipped["reason"], "a refresh may not demote a series to a film")
+
+    def test_preferred_provider_overwrite_does_not_demote_either(self):
+        """Overwrite widens which provider wins a field, not what a field means."""
+        merged = self._merged(MEDIA_TYPE_SHOW, MEDIA_TYPE_MOVIE, overwrite_enabled=True)
+        self.assertNotIn("media_type", merged["movieUpdates"])
+
+    def test_an_absent_current_type_accepts_what_is_stated(self):
+        """Import-time merges carry no row yet; the statement lands unopposed."""
+        merged = self._merged(None, MEDIA_TYPE_MOVIE)
+        self.assertEqual(merged["movieUpdates"].get("media_type"), MEDIA_TYPE_MOVIE)
+
+    def test_a_restated_type_is_retained_not_reapplied(self):
+        merged = self._merged(MEDIA_TYPE_SHOW, MEDIA_TYPE_SHOW)
+        self.assertNotIn("media_type", merged["movieUpdates"])
+
+    def test_a_lock_beats_even_a_promotion(self):
+        merged = self._merged(
+            MEDIA_TYPE_MOVIE,
+            MEDIA_TYPE_SHOW,
+            metadata={next_metadata.MOVIE_METADATA_LOCKS_KEY: ["media_type"]},
+        )
+        self.assertNotIn("media_type", merged["movieUpdates"])
+        skipped = next(
+            item for item in merged["skipped"] if item["field"] == "media_type"
+        )
+        self.assertEqual(skipped["reason"], "field is locked by user")
+
+    def test_the_lookup_context_carries_the_columns_the_rule_reads(self):
+        """The merge can only see what the context SELECT fetches.
+
+        This is the regression that made demotion possible in the first place:
+        media_type was added to movies by migration 063 but never to this
+        query, so every stored type merged as "empty".
+        """
+        import inspect
+
+        source = inspect.getsource(next_metadata.movie_lookup_context)
+        self.assertIn("media_type", source)
+        self.assertIn("series_id", source)
+
+
 V4_FIXTURE_PATH = os.path.join(
     os.path.dirname(__file__), "fixtures", "distribution-v4-full.ndjson"
 )

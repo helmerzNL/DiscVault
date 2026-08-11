@@ -185,6 +185,13 @@ MOVIE_LOCKABLE_FIELDS = {
     "overview",
     "notes",
     "runtime_minutes",
+    # The merge policy already refuses to demote a series to a film, so the
+    # lock's job here is the other direction: it is the one way to say "this
+    # stays a film" to a provider that keeps stating tv. Both the field-set
+    # comment on METADATA_MAIN_FIELDS and apply_movie_series_link's type gate
+    # promise exactly that, and neither could be kept while the name was
+    # missing from this set — a media_type lock was silently normalised away.
+    "media_type",
     "director",
     "studios",
     "distributor",
@@ -252,6 +259,7 @@ MOVIE_LOCK_RECEIVER_KEYS: dict[str, tuple[str, ...]] = {
     "overview": ("overview",),
     "notes": ("notes",),
     "runtime_minutes": ("runtimeMinutes",),
+    "media_type": ("mediaType", "media_type", "workType"),
     "director": ("director",),
     "studios": ("studios", "studio"),
     "distributor": ("distributor",),
@@ -997,6 +1005,12 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
                 runtime_minutes,
                 overview,
                 rating,
+                -- media_type and series_id feed the merge's demotion rule:
+                -- without them the stored type reads as empty and any stated
+                -- type wins, which on a linked series disc is not a field
+                -- write but a movies_series_requires_show violation.
+                media_type,
+                series_id,
                 metadata
             FROM movies
             WHERE id=%s
@@ -2765,6 +2779,38 @@ def should_apply_field(
     return False, "existing value retained"
 
 
+def should_apply_media_type(*, current_value: Any, incoming_value: Any) -> tuple[bool, str]:
+    """Decide a proposed ``media_type`` against the stored one, asymmetrically.
+
+    The generic rules cannot carry this field. The column is NOT NULL DEFAULT
+    'MOVIE', so "current field is empty" never truthfully describes it, and the
+    default is indistinguishable from a stated MOVIE — which cuts both ways:
+
+    - **Promotion (→ SHOW) is allowed.** Nothing infers this field, so a SHOW
+      can only come from a human statement upstream, and it is these updates
+      that let ``apply_movie_series_link`` link the disc afterwards. Blocking
+      it on the at-rest default would make TV enrichment unreachable for every
+      disc that predates the type.
+    - **Demotion (SHOW → MOVIE) is refused.** A stored SHOW was itself stated
+      at some point, and the disc may carry a series link that
+      ``movies_series_requires_show`` ties to the type — so a demoting refresh
+      is not a field write, it is an unlink, and re-pointing a disc is a
+      decision rather than a refresh. "This is a film after all" stays a
+      manual edit, where shedding the link is deliberate.
+    """
+    incoming = normalize_media_type(incoming_value)
+    current = normalize_media_type(current_value)
+    if incoming is None:
+        return False, "incoming value is empty"
+    if incoming == current:
+        return False, "existing value retained"
+    if incoming == MEDIA_TYPE_SHOW:
+        return True, "a stated series type promotes the disc to a series"
+    if current == MEDIA_TYPE_SHOW:
+        return False, "a refresh may not demote a series to a film"
+    return True, "current field is empty"
+
+
 def metadata_decision_initial_value(
     *,
     target: str,
@@ -2921,6 +2967,11 @@ def merge_metadata_results(
             elif field in locked_fields:
                 allowed = False
                 reason = "field is locked by user"
+            elif target == "movie" and field == "media_type":
+                allowed, reason = should_apply_media_type(
+                    current_value=current_value,
+                    incoming_value=value,
+                )
             else:
                 allowed, reason = should_apply_field(
                     field=field,
@@ -5099,6 +5150,27 @@ def apply_metadata_proposal(
 ) -> dict[str, Any]:
     movie_uuid = UUID(str(movie_id))
     movie_updates = proposal.get("movieUpdates") or {}
+    # The merge already refuses to demote a series to a film, but a proposal can
+    # be built against a different context than the row it lands on — an import,
+    # a box-set parent, an older preview — so the write path re-checks against
+    # the row as stored. A demoting media_type is dropped rather than written:
+    # on a linked disc it is not a field write but a movies_series_requires_show
+    # violation, which would cost the whole refresh. Dropping only this key
+    # keeps the rest.
+    if "media_type" in movie_updates:
+        movie_updates = dict(movie_updates)
+        incoming_media_type = normalize_media_type(movie_updates.pop("media_type"))
+        stored_media_type = None
+        if incoming_media_type is not None:
+            with conn.cursor() as cur:
+                cur.execute("SELECT media_type FROM movies WHERE id=%s", (movie_uuid,))
+                row = cur.fetchone()
+            if row:
+                stored_media_type = row["media_type"] if isinstance(row, dict) else row[0]
+        if incoming_media_type is not None and not (
+            stored_media_type == MEDIA_TYPE_SHOW and incoming_media_type != MEDIA_TYPE_SHOW
+        ):
+            movie_updates["media_type"] = incoming_media_type
     metadata_updates = proposal.get("metadataUpdates") or {}
     technical_updates = proposal.get("technicalUpdates") or {}
     media_updates = proposal.get("mediaUpdates") or {}

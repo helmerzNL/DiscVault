@@ -576,5 +576,143 @@ class SeriesMetadataRefreshPostgresTests(unittest.TestCase):
                 self.assertEqual(cur.fetchone()["n"], 1)
 
 
+@unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
+class MediaTypeDemotionPostgresTests(unittest.TestCase):
+    """No unattended write may demote a linked series disc back to a film.
+
+    ``movies_series_requires_show`` ties the series link to the type, so a
+    write that lands MOVIE on a linked disc is not a field update — it is a
+    constraint violation that kills the whole statement. Exactly that shipped
+    twice: a metadata refresh whose merge could not see the stored type, and a
+    sync upsert honouring a client that cannot model the link. Both surfaced
+    as a Postgres CheckViolation on an ordinary "update the metadata" action.
+    Only a real database proves the fix, because the rule under test *is* the
+    constraint.
+    """
+
+    def connect(self):
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
+
+    def tearDown(self):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM movies WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+                cur.execute("DELETE FROM series WHERE public_id LIKE %s", (f"{PREFIX}-%",))
+            conn.commit()
+
+    def _linked_show(self, conn):
+        series_id = uuid.uuid4()
+        movie_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO series (id, public_id, title, sort_title) VALUES (%s, %s, %s, %s)",
+                (series_id, f"{PREFIX}-{series_id}", "A Show", "A Show"),
+            )
+            cur.execute(
+                """
+                INSERT INTO movies (id, public_id, title, sort_title, media_type, series_id, format)
+                VALUES (%s, %s, 'A Disc', 'A Disc', 'SHOW', %s, 'DVD')
+                """,
+                (movie_id, f"{PREFIX}-{movie_id}", series_id),
+            )
+        conn.commit()
+        return movie_id, series_id
+
+    def _row(self, conn, movie_id):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT media_type, series_id, overview, notes FROM movies WHERE id=%s",
+                (movie_id,),
+            )
+            return cur.fetchone()
+
+    def test_a_demoting_refresh_keeps_the_type_and_the_rest_of_itself(self):
+        """The user's action was "update the metadata", not "unlink the series".
+
+        Dropping only the demoting key is the point: before the guard, the one
+        offending field cost every other field in the same refresh.
+        """
+        with self.connect() as conn:
+            movie_id, series_id = self._linked_show(conn)
+            next_metadata.apply_metadata_proposal(
+                conn,
+                movie_id,
+                {"movieUpdates": {"media_type": "MOVIE", "overview": "Filled in."}},
+            )
+            conn.commit()
+            row = self._row(conn, movie_id)
+        self.assertEqual(row["media_type"], "SHOW")
+        self.assertEqual(row["series_id"], series_id)
+        self.assertEqual(row["overview"], "Filled in.")
+
+    def test_a_syncing_client_cannot_demote_a_linked_disc(self):
+        """No v26 client models the link, so its MOVIE is state, not a decision."""
+        with self.connect() as conn:
+            movie_id, series_id = self._linked_show(conn)
+            next_app.apply_movie_upsert(
+                conn,
+                client_id=f"{PREFIX}-client",
+                idem_key=f"{PREFIX}:{uuid.uuid4()}",
+                mutation={
+                    "clientMutationId": str(uuid.uuid4()),
+                    "entityId": str(movie_id),
+                    "entityType": "movie",
+                    "operation": "upsert",
+                    "payload": {
+                        "title": "A Disc",
+                        "mediaType": "MOVIE",
+                        "notes": "From the app",
+                    },
+                },
+            )
+            conn.commit()
+            row = self._row(conn, movie_id)
+        self.assertEqual(row["media_type"], "SHOW")
+        self.assertEqual(row["series_id"], series_id)
+        self.assertEqual(row["notes"], "From the app")
+
+    def test_an_unlinked_show_still_honours_a_client_statement(self):
+        """The upsert guard is about the link, not about the type as such.
+
+        Without a link there is nothing structural to protect, and a client
+        statement outranks a stored value on this path by design.
+        """
+        movie_id = uuid.uuid4()
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO movies (id, public_id, title, sort_title, media_type)
+                    VALUES (%s, %s, 'A Disc', 'A Disc', 'SHOW')
+                    """,
+                    (movie_id, f"{PREFIX}-{movie_id}"),
+                )
+            conn.commit()
+            next_app.apply_movie_upsert(
+                conn,
+                client_id=f"{PREFIX}-client",
+                idem_key=f"{PREFIX}:{uuid.uuid4()}",
+                mutation={
+                    "clientMutationId": str(uuid.uuid4()),
+                    "entityId": str(movie_id),
+                    "entityType": "movie",
+                    "operation": "upsert",
+                    "payload": {"title": "A Disc", "mediaType": "MOVIE"},
+                },
+            )
+            conn.commit()
+            row = self._row(conn, movie_id)
+        self.assertEqual(row["media_type"], "MOVIE")
+
+    def test_the_lookup_context_reads_the_type_and_the_link(self):
+        """The merge decides from this context; a column it misses reads as
+        empty, which is how the stored type lost to every stated one."""
+        with self.connect() as conn:
+            movie_id, series_id = self._linked_show(conn)
+            context = next_metadata.movie_lookup_context(conn, movie_id)
+        self.assertEqual(context["movie"]["media_type"], "SHOW")
+        self.assertEqual(context["movie"]["series_id"], series_id)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
