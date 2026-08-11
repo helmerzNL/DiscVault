@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Sunet",
   "movieDetail.audioVideo": "Audio și video",
   "movieDetail.technicalDerivedFromDiscs": "Aceste valori provin acum de la discurile de mai jos. Editați-le acolo.",
+  "movieDetail.technicalSummarisedByDiscs": "Rezoluția, HDR, codecurile, rapoartele de aspect, regiunile, audio și subtitrările sunt listate mai jos pentru fiecare disc.",
   "movieDetail.backToLibrary": "Înapoi",
   "movieDetail.backdrops": "Fundalurilor",
   "movieDetail.barcode": "Cod de bare",

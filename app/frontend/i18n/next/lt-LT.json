@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Garsas",
   "movieDetail.audioVideo": "Garsas ir vaizdas",
   "movieDetail.technicalDerivedFromDiscs": "Šios reikšmės dabar gaunamos iš žemiau esančių diskų. Redaguokite jas ten.",
+  "movieDetail.technicalSummarisedByDiscs": "Raiška, HDR, kodekai, kraštinių santykiai, regionai, garsas ir subtitrai nurodyti žemiau kiekvienam diskui.",
   "movieDetail.backToLibrary": "Atgal",
   "movieDetail.backdrops": "Fonai",
   "movieDetail.barcode": "Brūkšninis kodas",

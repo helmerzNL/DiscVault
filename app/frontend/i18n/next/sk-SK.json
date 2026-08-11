@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Zvuk",
   "movieDetail.audioVideo": "Zvuk a obraz",
   "movieDetail.technicalDerivedFromDiscs": "Tieto hodnoty teraz pochádzajú z diskov nižšie. Upravte ich tam.",
+  "movieDetail.technicalSummarisedByDiscs": "Rozlíšenie, HDR, kodeky, pomery strán, regióny, zvuk a titulky sú uvedené nižšie pri jednotlivých diskoch.",
   "movieDetail.backToLibrary": "Späť",
   "movieDetail.backdrops": "Pozadia",
   "movieDetail.barcode": "Čiarový kód",

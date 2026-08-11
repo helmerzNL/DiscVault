@@ -126,11 +126,13 @@ class NextMovieDetailUiTests(unittest.TestCase):
             ("movieEditSubtitles", "movieEditSubtitleRows", "movieEditSubtitleAdd"),
         ):
             with self.subTest(container=container):
-                self.assertIn(
-                    f'<div id="{container}" class="movie-edit-track-editor wide" '
-                    'data-lock-container="self">',
-                    self.source,
-                )
+                # Attribute-wise rather than as one literal string: the
+                # wrapper also carries `data-derived-from-discs`, and a test
+                # that pins the whole opening tag breaks every time an
+                # orthogonal attribute is added -- which says nothing about
+                # whether the track editor still works.
+                self.assertIn(f'<div id="{container}" class="movie-edit-track-editor wide"', self.source)
+                self.assertIn('data-lock-container="self"', self.source)
                 self.assertIn(f'id="{rows}"', self.source)
                 self.assertIn(f'id="{add}"', self.source)
         self.assertNotIn('<textarea id="movieEditAudioTracks"', self.source)
@@ -166,12 +168,15 @@ class NextMovieDetailUiTests(unittest.TestCase):
         metadata comparison."""
         self.assertIn("function audioTracksText(value)", self.source)
         self.assertIn("function subtitlesText(value)", self.source)
+        # The row literals carry a leading field-name tag since the derived
+        # rows became droppable, so match the rendering call rather than the
+        # tuple shape -- the tuple shape is not what these tests are about.
         self.assertIn(
-            '[tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)],',
+            'tNext("movieDetail.audio", "Audio"), audioTracksText(specs.audio_tracks || metadata.audio_tracks)',
             self.source,
         )
         self.assertIn(
-            '[tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)]',
+            'tNext("movieDetail.subtitles", "Subtitles"), subtitlesText(specs.subtitles || metadata.subtitles)',
             self.source,
         )
         self.assertIn(
@@ -987,7 +992,7 @@ class NextMovieDetailUiTests(unittest.TestCase):
             self.source,
         )
         self.assertIn(
-            '[tNext("movieDetail.format", "Format"), '
+            'tNext("movieDetail.format", "Format"), '
             "physicalFormatLabel(movie.format || specs.format || metadata.format)],",
             self.source,
         )

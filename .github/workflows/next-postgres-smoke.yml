@@ -139,6 +139,13 @@ jobs:
       - name: Test that declared capabilities are runnable
         run: python -m unittest tests.test_next_plugin_entrypoint_coverage
 
+      # Which release-level fields stop being authored once a release has
+      # discs, held across all three copies of that answer: the server's set,
+      # the browser's constant, and the fields actually tagged in the markup.
+      # No database -- it reads source text -- so it runs up here.
+      - name: Test the derived release-field parity
+        run: python -m unittest tests.test_next_derived_release_fields
+
       # The TMDB series shaping needs no database, so it runs before the
       # migrations with the other pure-Python modules.
       - name: Test the TMDB series mapping

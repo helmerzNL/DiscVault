@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Skaņa",
   "movieDetail.audioVideo": "Audio un video",
   "movieDetail.technicalDerivedFromDiscs": "Šīs vērtības tagad nāk no zemāk esošajiem diskiem. Rediģējiet tās tur.",
+  "movieDetail.technicalSummarisedByDiscs": "Izšķirtspēja, HDR, kodeki, malu attiecības, reģioni, audio un subtitri ir norādīti zemāk katram diskam.",
   "movieDetail.backToLibrary": "Atpakaļ",
   "movieDetail.backdrops": "Foni",
   "movieDetail.barcode": "Svītrkods",

@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "екрана",
   "movieDetail.audioVideo": "Аудио и видео",
   "movieDetail.technicalDerivedFromDiscs": "Тези стойности вече идват от дисковете по-долу. Редактирайте ги там.",
+  "movieDetail.technicalSummarisedByDiscs": "Резолюцията, HDR, кодеците, съотношенията, регионите, аудиото и субтитрите са изброени по-долу за всеки диск.",
   "movieDetail.backToLibrary": "Назад",
   "movieDetail.backdrops": "Декоративни декори",
   "movieDetail.barcode": "Баркод",

@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Audio",
   "movieDetail.audioVideo": "Audio & Video",
   "movieDetail.technicalDerivedFromDiscs": "These values now come from the discs below. Edit them there.",
+  "movieDetail.technicalSummarisedByDiscs": "Resolution, HDR, codecs, ratios, regions, audio and subtitles are listed per disc below.",
   "movieDetail.backToLibrary": "Back",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Barcode",

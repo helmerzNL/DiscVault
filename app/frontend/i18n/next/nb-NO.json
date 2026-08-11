@@ -1770,6 +1770,7 @@
   "movieDetail.audio": "Lyd",
   "movieDetail.audioVideo": "Lyd og video",
   "movieDetail.technicalDerivedFromDiscs": "Disse verdiene kommer nå fra platene nedenfor. Rediger dem der.",
+  "movieDetail.technicalSummarisedByDiscs": "Oppløsning, HDR, kodeker, bildeformater, regioner, lyd og undertekster står nedenfor per plate.",
   "movieDetail.backToLibrary": "Tilbake",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Strekkode",
