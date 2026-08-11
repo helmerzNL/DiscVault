@@ -101,7 +101,33 @@ def upsert_movie_technical_edits(cur, movie_uuid: UUID, edits: dict[str, Any]) -
     )
 
 
-def derive_release_technical_from_discs(cur, movie_uuid: UUID) -> None:
+def disc_union_snapshot(cur, movie_uuid: UUID) -> dict[str, list[Any]]:
+    """What the discs hold *now*, per column. Taken before a save overwrites it.
+
+    The push-down below needs to tell two things apart that look identical once
+    the write has happened: a value the release has always held and no disc ever
+    did (a genuine leftover, which must survive), and a value the user has just
+    removed from the last disc that had it (a deletion, which must land). Both
+    end up as "on the release, not on any disc".
+
+    The difference is entirely in the past tense, so it has to be read before
+    the discs are written.
+    """
+    cur.execute(
+        "SELECT " + ", ".join(UNION_LIST_COLUMNS.values()) + " "
+        "FROM movie_discs WHERE movie_id=%s",
+        (movie_uuid,),
+    )
+    discs = [dict(row) for row in cur.fetchall()]
+    return {
+        disc_column: union_entries(discs, disc_column)
+        for disc_column in UNION_LIST_COLUMNS.values()
+    }
+
+
+def derive_release_technical_from_discs(
+    cur, movie_uuid: UUID, *, previously_on_discs: dict[str, list[Any]] | None = None
+) -> None:
     """Make the release row the union of its discs, losing nothing on the way.
 
     Once a release has discs, the release-level technical fields stop being
@@ -116,6 +142,18 @@ def derive_release_technical_from_discs(cur, movie_uuid: UUID) -> None:
     fact nobody retracted. So it is appended to disc 1 first, where it becomes
     an authored value again, and only then does the union include it. After one
     save the release row is a pure derivation; before it, nothing is lost.
+
+    **But only a value the discs never held.** Pass `previously_on_discs` — the
+    union as it stood before this save — and a value the user has just removed
+    from the last disc that carried it is recognised as a deletion rather than
+    as a leftover. Without it the push-down puts it straight back, so removing
+    an HDR format, an audio track or a region from a disc silently could not be
+    done at all: the derivation restored it in the same transaction, and the
+    only symptom was that the edit did not stick.
+
+    Omitting the argument keeps the old, broader behaviour, which is right for a
+    caller that genuinely has no before-state — the one-time backfill converges
+    releases nobody is editing, and for those every difference *is* historical.
 
     Only the columns a disc actually has. Packaging, finishes, the carrier and
     the content ratings describe the box rather than what is pressed onto a
@@ -144,7 +182,12 @@ def derive_release_technical_from_discs(cur, movie_uuid: UUID) -> None:
             if not isinstance(held, list) or not held:
                 continue
             on_discs = union_entries(discs, disc_column)
-            missing = [item for item in held if item not in on_discs]
+            was_on_discs = (previously_on_discs or {}).get(disc_column) or []
+            missing = [
+                item
+                for item in held
+                if item not in on_discs and item not in was_on_discs
+            ]
             if missing:
                 leftovers[disc_column] = missing
         if leftovers:

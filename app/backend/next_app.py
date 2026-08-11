@@ -323,6 +323,7 @@ try:
     from .next_static import NEXT_SCRIPT_URL_PREFIX
     from .next_static import register_next_static_routes
     from .next_technical_specs import derive_release_technical_from_discs
+    from .next_technical_specs import disc_union_snapshot
     from .next_technical_specs import upsert_movie_technical_edits
     from .next_packaging import STEELBOOK_CARRIERS
     from .next_packaging import derive_legacy_packaging
@@ -607,6 +608,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_static import NEXT_SCRIPT_URL_PREFIX
     from next_static import register_next_static_routes
     from next_technical_specs import derive_release_technical_from_discs
+    from next_technical_specs import disc_union_snapshot
     from next_technical_specs import upsert_movie_technical_edits
     from next_packaging import STEELBOOK_CARRIERS
     from next_packaging import derive_legacy_packaging
@@ -10164,6 +10166,76 @@ def apply_movie_location_assignment(cur, movie_uuid: UUID, assignment: dict[str,
     )
 
 
+#: Field name on the wire -> (every payload spelling of it, its empty value).
+#:
+#: A closed vocabulary on purpose. `clears` exists to stop a removal from being
+#: silently lost, so a name this map does not know is refused rather than
+#: treated as nothing to clear -- a typo that no-ops would reproduce the exact
+#: failure the mechanism is here to fix.
+#:
+#: `contentRating` is deliberately absent. Clearing it cannot go over sync at
+#: all (the `||` merge cannot remove a key -- sync-contract §4.8), and a
+#: `clears` entry could not say *which country's* rating it meant.
+MOVIE_CLEARABLE_FIELDS: dict[str, tuple[tuple[str, ...], Any]] = {
+    "discs": (("discs",), []),
+    "audioTracks": (("audioTracks", "audio_tracks"), []),
+    "subtitles": (("subtitles",), []),
+    "notes": (("notes",), ""),
+    "location": (("location",), ""),
+    "releaseTitle": (("releaseTitle", "release_title"), ""),
+    "sortTitle": (("sortTitle", "sort_title"), ""),
+}
+
+
+def movie_clears(mutation: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
+    """Fold a mutation's `clears` list into the payload it travels with.
+
+    Presence-keying carries two rules on one key -- absent keeps, empty clears --
+    and that leaves no way to say "I have none" separately from "I have not seen
+    yours yet". A client that has not bootstrapped a field must not send `[]`,
+    because push runs before pull and it would wipe a list it never saw. So it
+    sends absent, the key is spent, and **removing the last disc, the last audio
+    track or the last note never propagates**. Sync-contract §4.10.
+
+    Naming the field instead makes the removal a deliberate act. This translates
+    each name into the empty value under the payload spellings the writers
+    already read, so nothing downstream changes: `clears` is a front door, not a
+    second write path.
+
+    Two refusals, both there to make a silent no-op impossible:
+
+    * an unknown name is refused **by name**, because a typo that quietly
+      clears nothing is the failure this exists to fix, wearing a new hat;
+    * a field named in `clears` *and* carrying a value in `payload` is refused
+      as contradictory. Either winner leaves the other instruction silently
+      ignored, and the caller cannot tell which they got.
+
+    `clears` is itself presence-keyed: a client that does not know it changes
+    nothing.
+    """
+    raw = mutation.get("clears")
+    if raw is None:
+        return payload
+    if isinstance(raw, (str, bytes)) or not isinstance(raw, (list, tuple)):
+        raise NextApiError("clears must be a list of field names", 400)
+
+    updated = dict(payload)
+    for entry in raw:
+        name = str(entry or "").strip()
+        if name not in MOVIE_CLEARABLE_FIELDS:
+            raise NextApiError(f"clears: {name!r} is not a clearable field", 400)
+        spellings, empty = MOVIE_CLEARABLE_FIELDS[name]
+        stated = [key for key in spellings if key in payload]
+        if stated:
+            raise NextApiError(
+                f"clears: {name!r} is also set in the payload as {stated[0]!r}; "
+                "a mutation may clear a field or state it, not both",
+                400,
+            )
+        updated[spellings[0]] = empty
+    return updated
+
+
 def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -11074,6 +11146,12 @@ def apply_movie_discs(
         return
     discs = drop_blank_discs(discs)
 
+    # Read before anything is written: the derivation at the end needs to tell a
+    # value the user just removed from a disc apart from one the release has
+    # always held and no disc ever did. Once the write has happened the two are
+    # indistinguishable, and the push-down puts the removed one straight back.
+    previously_on_discs = disc_union_snapshot(cur, movie_uuid)
+
     cur.execute("SELECT id FROM movie_discs WHERE movie_id = %s", (movie_uuid,))
     stored = {row["id"] for row in cur.fetchall()}
     named = {disc["id"] for disc in discs if disc["id"] is not None}
@@ -11131,7 +11209,9 @@ def apply_movie_discs(
             "UPDATE movies SET disc_count = %s WHERE id = %s AND disc_count IS NULL",
             (len(discs), movie_uuid),
         )
-        derive_release_technical_from_discs(cur, movie_uuid)
+        derive_release_technical_from_discs(
+            cur, movie_uuid, previously_on_discs=previously_on_discs
+        )
 
 
 def _upsert_movie_disc(cur, movie_uuid: UUID, disc: dict[str, Any], *, sort_order: int) -> UUID:
@@ -19464,6 +19544,10 @@ def apply_movie_upsert(
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
         raise NextApiError("Movie upsert payload must be an object", 400)
+    # Folded in before anything reads the payload, so every writer below sees an
+    # ordinary explicit empty value and none of them learns a second way to be
+    # told "clear this" -- sync-contract §4.10.
+    payload = movie_clears(mutation, payload)
 
     client_entity_id = str(mutation.get("clientEntityId") or "").strip() or None
     provided_entity_id = parse_uuid(mutation.get("entityId"), "entityId")

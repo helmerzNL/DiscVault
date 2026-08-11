@@ -289,6 +289,13 @@ jobs:
       - name: Test the one-time disc-union backfill
         run: python -m unittest tests.test_next_disc_union_backfill
 
+      # `clears`, and the presence rule inside a disc entry. Below the
+      # migrations because the acceptance case is a real push against real rows:
+      # the last disc and the last note removed, and the derivation not putting
+      # the removed value straight back.
+      - name: Test the sync clears vocabulary and disc-entry presence
+        run: python -m unittest tests.test_next_sync_clears
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge
