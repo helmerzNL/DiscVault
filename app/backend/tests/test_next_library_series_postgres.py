@@ -8,6 +8,7 @@ an empty one, and every read is a no-op on an instance that has not run
 migration 063.
 """
 
+import hashlib
 import os
 import sys
 import unittest
@@ -51,6 +52,20 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
                     """,
                     (f"{PREFIX}-%",),
                 )
+                # Artwork before the series it hangs off. `entity_media.media_id`
+                # cascades from `media_assets`, but `entity_id` has no foreign
+                # key to `series` at all -- migration 003 leaves `entity_type`
+                # free text -- so a link deleted in the other order is an orphan
+                # that outlives the run and is counted by the next one.
+                cur.execute(
+                    """
+                    DELETE FROM entity_media WHERE entity_type='series' AND entity_id IN (
+                        SELECT id FROM series WHERE public_id LIKE %s
+                    )
+                    """,
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute("DELETE FROM media_assets WHERE provider_id LIKE %s", (f"{PREFIX}-%",))
                 cur.execute("DELETE FROM movies WHERE public_id LIKE %s", (f"{PREFIX}-%",))
                 cur.execute("DELETE FROM series_seasons WHERE public_id LIKE %s", (f"{PREFIX}-%",))
                 cur.execute("DELETE FROM series WHERE public_id LIKE %s", (f"{PREFIX}-%",))
@@ -107,6 +122,44 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
                 (movie_id, series_id, season_id),
             )
         conn.commit()
+
+    def _poster(self, conn, series_id, *, is_primary=True, sort_order=0, local=True, source_url=None):
+        """Give a series a poster the way both write paths do: an asset plus a
+        link under `entity_type='series'`.
+
+        `local=True` is the uploaded case, which is served from DiscVault's own
+        media route; `local=False` is the fetched case, which keeps the source's
+        URL. The two take different branches of `media_asset_public_url`, and a
+        test using only one of them would not notice the other breaking.
+        """
+        media_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO media_assets (id, kind, variant, storage_backend, storage_key,
+                                          source_url, provider_id, sha256)
+                VALUES (%s, 'poster', 'display', %s, %s, %s, %s, %s)
+                """,
+                (
+                    media_id,
+                    "local" if local else "remote",
+                    # Both keys are unique per asset: `media_assets` constrains
+                    # (storage_backend, storage_key) and (kind, variant, sha256).
+                    f"media/{PREFIX}/{media_id}.png" if local else f"remote/{media_id}",
+                    source_url,
+                    f"{PREFIX}-{media_id}",
+                    hashlib.sha256(str(media_id).encode()).hexdigest(),
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO entity_media (entity_type, entity_id, media_id, role, is_primary, sort_order)
+                VALUES ('series', %s, %s, 'poster', %s, %s)
+                """,
+                (series_id, media_id, is_primary, sort_order),
+            )
+        conn.commit()
+        return media_id
 
     def _listed(self, conn, series_id, **kwargs):
         rows = next_app.collection_series_preview_entities(conn, **kwargs)
@@ -166,6 +219,124 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
 
         self.assertEqual(row["discCount"], 1)
         self.assertEqual(row["seasonCount"], 4)
+
+    # --- the tile's poster ---------------------------------------------------
+
+    def test_a_series_reports_its_own_uploaded_poster(self):
+        """The Library tile could only borrow a disc's cover, because the row it
+        is given carried no artwork at all -- so a poster set on a series showed
+        on the series page and not on its tile, and the two disagreed about the
+        same show."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            self._disc(conn, series_id=series_id)
+            media_id = self._poster(conn, series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertEqual(row["posterUrl"], f"/api/next/media/assets/{media_id}")
+
+    def test_a_fetched_poster_is_reported_as_its_source(self):
+        """The other write path. A refresh stores only the `entity_media` link
+        and never mirrors the URL into `series.metadata`, so a fix reading the
+        mirror would pass the upload test above and still fail here."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Yellowstone")
+            self._disc(conn, series_id=series_id)
+            self._poster(conn, series_id, local=False, source_url="https://example.invalid/p.jpg")
+
+            row = self._listed(conn, series_id)
+
+        self.assertEqual(row["posterUrl"], "https://example.invalid/p.jpg")
+
+    def test_a_series_without_its_own_poster_reports_none(self):
+        """The backend does not borrow. Falling back to a disc's cover is the
+        frontend's job, where the disc rows already are -- and it stays the right
+        answer for a series nobody has given artwork to, because an empty tile
+        reads as a bug rather than as a gap."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Deadwood")
+            self._disc(conn, series_id=series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row["posterUrl"])
+
+    def test_the_chosen_poster_beats_one_merely_offered(self):
+        """A refresh links every artwork it found as an option and marks one
+        primary. Reporting whichever sorted first would hand the tile an image
+        the user rejected."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Justified")
+            self._disc(conn, series_id=series_id)
+            self._poster(conn, series_id, is_primary=False, sort_order=1)
+            chosen = self._poster(conn, series_id, is_primary=True, sort_order=0)
+
+            row = self._listed(conn, series_id)
+
+        self.assertEqual(row["posterUrl"], f"/api/next/media/assets/{chosen}")
+
+    def test_an_option_is_still_shown_when_nothing_is_primary(self):
+        """Matches `mediaAssetImage` on the series page, which prefers the
+        primary and accepts any. Filtering on `is_primary` instead would leave
+        the tile blank next to a page showing a picture."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Rectify")
+            self._disc(conn, series_id=series_id)
+            offered = self._poster(conn, series_id, is_primary=False, sort_order=1)
+
+            row = self._listed(conn, series_id)
+
+        self.assertEqual(row["posterUrl"], f"/api/next/media/assets/{offered}")
+
+    def test_artwork_does_not_multiply_a_series_or_its_counts(self):
+        """One tile per series, whatever its artwork.
+
+        Several artwork rows joined to an aggregate is the shape that inflates a
+        count or splits a row, so it is worth pinning even though the current
+        query cannot do either -- the join is correlated on the aggregated row
+        and returns at most one asset. This holds the outcome, not the
+        implementation: a later rewrite that moves the join is free to, and this
+        is what tells it whether it got away with it."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "The Wire")
+            for number in (1, 2, 3):
+                self._disc(conn, series_id=series_id, title=f"Season {number}")
+                self._season(conn, series_id, number)
+            self._poster(conn, series_id, is_primary=False, sort_order=0)
+            self._poster(conn, series_id, is_primary=False, sort_order=0)
+
+            rows = [
+                row
+                for row in next_app.collection_series_preview_entities(conn)
+                if row["id"] == str(series_id)
+            ]
+
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["discCount"], 3)
+        self.assertEqual(rows[0]["seasonCount"], 3)
+
+    def test_a_deleted_or_hidden_link_is_not_a_poster(self):
+        """Both filters the lateral carries. Deleting a series' artwork leaves
+        the link behind with a `deleted_at`, so ignoring it would keep showing
+        the picture the user removed."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Carnivale")
+            self._disc(conn, series_id=series_id)
+            removed = self._poster(conn, series_id)
+            hidden = self._poster(conn, series_id, is_primary=False, sort_order=1)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE entity_media SET deleted_at = now() WHERE media_id = %s", (removed,)
+                )
+                cur.execute(
+                    "UPDATE entity_media SET hidden_at = now() WHERE media_id = %s", (hidden,)
+                )
+            conn.commit()
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row["posterUrl"])
 
     # --- the per-movie reference --------------------------------------------
 

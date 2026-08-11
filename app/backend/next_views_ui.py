@@ -26137,10 +26137,23 @@ def ui_preview_html(
     }
     function itemPosterUrl(item) {
       if (item?.kind === "container") return usableImage(item.container?.poster_url || item.container?.backdrop_url);
-      // A series has no artwork of its own yet, so it borrows the first disc that
-      // has one. Deliberate: series artwork is its own piece of work, and an
-      // empty tile would read as a bug rather than as a gap.
-      if (item?.kind === "series") return usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
+      // The series' own poster first; a disc's only when it has none. Borrowing
+      // is still right for a series nobody has given artwork to -- an empty tile
+      // reads as a bug rather than as a gap -- but it must not outrank a poster
+      // somebody chose, which is what it did while a series had no artwork of
+      // its own to outrank it. That stopped being true, and only this surface
+      // never learned: the series page showed the chosen poster and the tile
+      // beside it showed a disc's, so the two disagreed about the same show.
+      // Two `usableImage` calls, not `usableImage(a || b)`: the latter
+      // short-circuits on a truthy-but-unusable `a` and drops a good disc
+      // poster on the floor.
+      // `posterUrl` is camelCase because the series payload is hand-built that
+      // way; `poster_url` beside it is snake_case because a movie row is a raw
+      // database row.
+      if (item?.kind === "series") {
+        return usableImage(item.series?.posterUrl)
+          || usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
+      }
       return usableImage(item?.movie?.poster_url);
     }
     function itemMembersHtml(item, limit = 6) {
