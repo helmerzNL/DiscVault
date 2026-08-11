@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "URL-адресу художнього твору скопійовано.",
   "movieDetail.audio": "Аудіо",
   "movieDetail.audioVideo": "Аудіо та відео",
+  "movieDetail.technicalDerivedFromDiscs": "Ці значення тепер походять із дисків нижче. Редагуйте їх там.",
   "movieDetail.backToLibrary": "Назад",
   "movieDetail.backdrops": "Фонові зображення",
   "movieDetail.barcode": "Штрих-код",

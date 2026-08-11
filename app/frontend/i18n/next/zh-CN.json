@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "图片 URL 已复制。",
   "movieDetail.audio": "音频",
   "movieDetail.audioVideo": "音频和视频",
+  "movieDetail.technicalDerivedFromDiscs": "这些值现在来自下方的碟片。请在那里编辑。",
   "movieDetail.backToLibrary": "返回",
   "movieDetail.backdrops": "背景图",
   "movieDetail.barcode": "条形码",

@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "URL umjetničkog djela je kopiran.",
   "movieDetail.audio": "Zvuk",
   "movieDetail.audioVideo": "Zvuk i slika",
+  "movieDetail.technicalDerivedFromDiscs": "Ove vrijednosti sada dolaze s diskova u nastavku. Uredite ih ondje.",
   "movieDetail.backToLibrary": "Natrag",
   "movieDetail.backdrops": "Pozadine",
   "movieDetail.barcode": "Barkod",

@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "URL de arte copiado.",
   "movieDetail.audio": "Audio",
   "movieDetail.audioVideo": "Áudio e vídeo",
+  "movieDetail.technicalDerivedFromDiscs": "Estes valores vêm agora dos discos abaixo. Edite-os aí.",
   "movieDetail.backToLibrary": "Voltar",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Codigo de barras",

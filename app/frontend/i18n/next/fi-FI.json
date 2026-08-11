@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Kuvituksen URL kopioitu.",
   "movieDetail.audio": "Aani",
   "movieDetail.audioVideo": "Ääni ja kuva",
+  "movieDetail.technicalDerivedFromDiscs": "Nämä arvot tulevat nyt alla olevista levyistä. Muokkaa niitä siellä.",
   "movieDetail.backToLibrary": "Takaisin",
   "movieDetail.backdrops": "Taustakuvat",
   "movieDetail.barcode": "Viivakoodi",

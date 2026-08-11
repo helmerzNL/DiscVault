@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Url адресът на произведението е копиран.",
   "movieDetail.audio": "екрана",
   "movieDetail.audioVideo": "Аудио и видео",
+  "movieDetail.technicalDerivedFromDiscs": "Тези стойности вече идват от дисковете по-долу. Редактирайте ги там.",
   "movieDetail.backToLibrary": "Назад",
   "movieDetail.backdrops": "Декоративни декори",
   "movieDetail.barcode": "Баркод",

@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Attēla URL nokopēts.",
   "movieDetail.audio": "Skaņa",
   "movieDetail.audioVideo": "Audio un video",
+  "movieDetail.technicalDerivedFromDiscs": "Šīs vērtības tagad nāk no zemāk esošajiem diskiem. Rediģējiet tās tur.",
   "movieDetail.backToLibrary": "Atpakaļ",
   "movieDetail.backdrops": "Foni",
   "movieDetail.barcode": "Svītrkods",

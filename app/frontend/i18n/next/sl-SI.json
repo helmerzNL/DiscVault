@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "URL umetniškega dela je kopiran.",
   "movieDetail.audio": "Zvok",
   "movieDetail.audioVideo": "Zvok in slika",
+  "movieDetail.technicalDerivedFromDiscs": "Te vrednosti zdaj izhajajo iz spodnjih diskov. Uredite jih tam.",
   "movieDetail.backToLibrary": "Nazaj",
   "movieDetail.backdrops": "Ozadja",
   "movieDetail.barcode": "Črtna koda",

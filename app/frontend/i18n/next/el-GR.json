@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Η διεύθυνση URL του έργου τέχνης αντιγράφηκε.",
   "movieDetail.audio": "Ήχος",
   "movieDetail.audioVideo": "Ήχος και βίντεο",
+  "movieDetail.technicalDerivedFromDiscs": "Αυτές οι τιμές προέρχονται πλέον από τους δίσκους παρακάτω. Επεξεργαστείτε τις εκεί.",
   "movieDetail.backToLibrary": "Πίσω",
   "movieDetail.backdrops": "Σκηνικά",
   "movieDetail.barcode": "Γραμμικός κώδικας",

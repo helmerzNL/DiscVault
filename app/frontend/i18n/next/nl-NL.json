@@ -1767,6 +1767,7 @@
   "movieDetail.artworkUrlCopied": "Artwork-URL gekopieerd.",
   "movieDetail.audio": "Audio",
   "movieDetail.audioVideo": "Audio & Video",
+  "movieDetail.technicalDerivedFromDiscs": "Deze waarden komen nu van de discs hieronder. Pas ze daar aan.",
   "movieDetail.backToLibrary": "Terug",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Barcode",

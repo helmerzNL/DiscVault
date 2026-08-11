@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Artwork-URL kopierad.",
   "movieDetail.audio": "Ljud",
   "movieDetail.audioVideo": "Ljud och video",
+  "movieDetail.technicalDerivedFromDiscs": "De här värdena kommer nu från skivorna nedan. Redigera dem där.",
   "movieDetail.backToLibrary": "Tillbaka",
   "movieDetail.backdrops": "Backdrops",
   "movieDetail.barcode": "Streckkod",

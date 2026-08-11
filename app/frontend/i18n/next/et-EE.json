@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Kujunduse URL kopeeritud.",
   "movieDetail.audio": "Heli",
   "movieDetail.audioVideo": "Heli ja video",
+  "movieDetail.technicalDerivedFromDiscs": "Need väärtused tulevad nüüd allolevatelt plaatidelt. Muuda neid seal.",
   "movieDetail.backToLibrary": "Tagasi",
   "movieDetail.backdrops": "Taustapildid",
   "movieDetail.barcode": "Vöötkood",

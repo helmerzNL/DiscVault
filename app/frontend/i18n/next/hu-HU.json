@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "Mű URL-címe másolva.",
   "movieDetail.audio": "Audió",
   "movieDetail.audioVideo": "Hang és kép",
+  "movieDetail.technicalDerivedFromDiscs": "Ezek az értékek most az alábbi lemezekből származnak. Ott szerkessze őket.",
   "movieDetail.backToLibrary": "Vissza",
   "movieDetail.backdrops": "Kulisszanyílások",
   "movieDetail.barcode": "Vonalkód",

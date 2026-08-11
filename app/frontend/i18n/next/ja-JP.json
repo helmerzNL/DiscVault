@@ -1769,6 +1769,7 @@
   "movieDetail.artworkUrlCopied": "アートワークのURLをコピーしました。",
   "movieDetail.audio": "音声",
   "movieDetail.audioVideo": "オーディオと映像",
+  "movieDetail.technicalDerivedFromDiscs": "これらの値は下のディスクから算出されます。編集はそちらで行ってください。",
   "movieDetail.backToLibrary": "戻る",
   "movieDetail.backdrops": "背景",
   "movieDetail.barcode": "バーコード",
