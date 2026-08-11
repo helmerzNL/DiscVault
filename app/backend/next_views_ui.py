@@ -6717,19 +6717,22 @@ def ui_preview_html(
        settings-style section menu on the left, one section on screen at a
        time on the right, and a floating action bar that keeps Save/Cancel
        reachable however long a section grows. On small screens the menu
-       becomes a horizontal pill rail, like the read-mode section tabs. */
-    .movie-edit-layout {
+       becomes a horizontal pill rail, like the read-mode section tabs.
+
+       The selectors are compounded with the base classes they override
+       (.profile-form, .detail-submenu): those base blocks appear LATER in
+       this stylesheet, and at equal specificity the later rule wins — a
+       plain .movie-edit-nav lost to .detail-submenu and collapsed the
+       sidebar into one inline pill. The profile navigation only escapes
+       that by being declared after the base block; these rules must not
+       depend on their position. */
+    .profile-form.movie-edit-layout {
       display: grid;
       grid-template-columns: minmax(190px, 230px) minmax(0, 1fr);
       gap: 14px 18px;
       align-items: start;
     }
-    .movie-edit-head p {
-      margin: 4px 0 0;
-      color: var(--muted);
-      line-height: 1.45;
-    }
-    .movie-edit-nav {
+    .detail-submenu.movie-edit-nav {
       position: sticky;
       top: 18px;
       display: grid;
@@ -6740,7 +6743,7 @@ def ui_preview_html(
       border-radius: 16px;
       overflow: visible;
     }
-    .movie-edit-nav button {
+    .detail-submenu.movie-edit-nav button {
       display: flex;
       align-items: center;
       justify-content: flex-start;
@@ -6755,29 +6758,29 @@ def ui_preview_html(
       text-overflow: ellipsis;
       text-align: left;
     }
-    .movie-edit-nav button:hover {
+    .detail-submenu.movie-edit-nav button:hover {
       color: var(--text);
       background: color-mix(in srgb, var(--accent) 10%, var(--bg-solid));
     }
-    .movie-edit-nav button:focus-visible {
+    .detail-submenu.movie-edit-nav button:focus-visible {
       outline: 2px solid var(--accent-bright);
       outline-offset: 2px;
     }
-    .movie-edit-nav button.active {
+    .detail-submenu.movie-edit-nav button.active {
       color: var(--accent-bright);
       background: color-mix(in srgb, var(--accent) 18%, var(--bg-solid));
       box-shadow:
         0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent),
         0 10px 24px color-mix(in srgb, var(--accent) 16%, transparent);
     }
-    html[data-profile-menu-style="icon_only"] .movie-edit-layout {
+    html[data-profile-menu-style="icon_only"] .profile-form.movie-edit-layout {
       grid-template-columns: 72px minmax(0, 1fr);
     }
-    html[data-profile-menu-style="icon_only"] .movie-edit-nav button {
+    html[data-profile-menu-style="icon_only"] .detail-submenu.movie-edit-nav button {
       justify-content: center;
       padding-inline: 0;
     }
-    html[data-profile-menu-style="icon_only"] .movie-edit-nav .profile-tab-label {
+    html[data-profile-menu-style="icon_only"] .detail-submenu.movie-edit-nav .profile-tab-label {
       display: none;
     }
     .movie-edit-sections {
@@ -6813,6 +6816,9 @@ def ui_preview_html(
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
+      /* Rows share the height of their tallest cell; without this the other
+         cells stretch and hand the surplus to their input or select. */
+      align-items: start;
     }
     .movie-edit-grid label.wide,
     .movie-edit-grid .wide {
@@ -6828,6 +6834,10 @@ def ui_preview_html(
       border-radius: 12px;
       background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
       min-width: 0;
+      /* Chips keep their own height; stretched flex lines turned them into
+         tall ovals whenever a neighbouring fieldset was taller. */
+      align-items: flex-start;
+      align-content: flex-start;
     }
     .movie-edit-checkbox-group legend {
       display: flex;
@@ -6842,8 +6852,10 @@ def ui_preview_html(
     }
     /* Options render as selectable chips: the native checkbox still carries
        the state (and stays the click target, stretched across the chip) but
-       the pill itself shows it, so a 12-option fieldset reads at a glance. */
-    .movie-edit-checkbox-group label {
+       the pill itself shows it, so a 12-option fieldset reads at a glance.
+       Prefixed with .profile-form to outrank its later `label` rule, which
+       would otherwise flip the chips back to display:grid in muted ink. */
+    .profile-form .movie-edit-checkbox-group label {
       position: relative;
       display: inline-flex;
       align-items: center;
@@ -6853,6 +6865,7 @@ def ui_preview_html(
       border: 1px solid var(--line);
       border-radius: 999px;
       background: var(--bg-solid);
+      color: var(--text);
       font-size: .88rem;
       white-space: nowrap;
       cursor: pointer;
@@ -13246,8 +13259,8 @@ def ui_preview_html(
       .movie-edit-track-row.movie-edit-subtitle-row {
         grid-template-columns: 1fr;
       }
-      .movie-edit-layout,
-      html[data-profile-menu-style="icon_only"] .movie-edit-layout {
+      .profile-form.movie-edit-layout,
+      html[data-profile-menu-style="icon_only"] .profile-form.movie-edit-layout {
         grid-template-columns: 1fr;
         gap: 12px;
       }
@@ -15411,7 +15424,7 @@ def ui_preview_html(
                     <div id="movieEditIdentifiersRow" class="movie-edit-identifiers">
                       <span data-next-i18n="movieDetail.productIdentifiers">Other product codes</span>
                       <div id="movieEditIdentifiers" class="movie-edit-identifiers-list"></div>
-                      <button type="button" id="movieEditIdentifierAdd" class="secondary" data-next-i18n="movieDetail.productIdentifierAdd">Add a code</button>
+                      <button type="button" id="movieEditIdentifierAdd" class="ghost-button" data-next-i18n="movieDetail.productIdentifierAdd">Add a code</button>
                       <p class="hint" data-next-i18n="movieDetail.productIdentifiersHint">The barcode above is what a scan resolves to. These are the same product's other codes: an EAN for Europe, a UPC for North America, an ISBN, an Amazon ASIN, or the distributor's catalogue number.</p>
                     </div>
                     <label for="movieEditMediaType">
