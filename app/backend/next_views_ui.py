@@ -218,6 +218,7 @@ def ui_preview_html(
         "edit_discs": "M12 11A1 1 0 0 0 11 12A1 1 0 0 0 12 13A1 1 0 0 0 13 12A1 1 0 0 0 12 11M12 16.5C9.5 16.5 7.5 14.5 7.5 12S9.5 7.5 12 7.5 16.5 9.5 16.5 12 14.5 16.5 12 16.5M12 2A10 10 0 0 0 2 12A10 10 0 0 0 12 22A10 10 0 0 0 22 12A10 10 0 0 0 12 2Z",
         "edit_collectors": "M16 9H19L14 16M10 9H14L12 17M5 9H8L10 16M15 4H17L19 7H16M11 4H13L14 7H10M7 4H9L8 7H5M6 2L2 8L12 22L22 8L18 2H6Z",
         "edit_notes": "M14 10H19.5L14 4.5V10M5 3H15L21 9V19A2 2 0 0 1 19 21H5C3.89 21 3 20.1 3 19V5C3 3.89 3.89 3 5 3M5 12V14H19V12H5M5 16V18H14V16H5Z",
+        "edit_series": "M8.16 3L6.75 4.41L9.34 7H4C2.89 7 2 7.89 2 9V19C2 20.11 2.89 21 4 21H20C21.11 21 22 20.11 22 19V9C22 7.89 21.11 7 20 7H14.66L17.25 4.41L15.84 3L12 6.84L8.16 3M4 9H20V19H4V9Z",
     }
 
     def nav_icon(name: str) -> str:
@@ -6898,6 +6899,127 @@ def ui_preview_html(
       opacity: .55;
       cursor: not-allowed;
     }
+    /* Season picker. Cards rather than a checkbox list: choosing which seasons
+       a box set covers is recognition work, and a column of bare numbers makes
+       the reader do it from memory. Prefixed with .profile-form throughout,
+       since its later `label` rule would otherwise reclaim these. */
+    .movie-edit-seasons {
+      display: grid;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .movie-edit-seasons-head {
+      display: grid;
+      gap: 2px;
+    }
+    .movie-edit-seasons-head > span {
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .movie-edit-seasons-head .hint {
+      margin: 0;
+    }
+    .movie-edit-seasons-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .profile-form .movie-edit-season-card {
+      position: relative;
+      display: grid;
+      grid-template-columns: 46px minmax(0, 1fr);
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      color: var(--text);
+      cursor: pointer;
+      user-select: none;
+      transition: background .15s ease, border-color .15s ease;
+    }
+    .profile-form .movie-edit-season-card input[type="checkbox"] {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      opacity: 0;
+      cursor: pointer;
+    }
+    .profile-form .movie-edit-season-card:hover {
+      border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+    }
+    .profile-form .movie-edit-season-card:has(input[type="checkbox"]:checked) {
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+      background: color-mix(in srgb, var(--accent) 14%, var(--bg-solid));
+    }
+    .profile-form .movie-edit-season-card:has(input[type="checkbox"]:focus-visible) {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 2px;
+    }
+    /* Reserved whether or not the season resolved a poster, so the titles stay
+       on one vertical line instead of stepping in as artwork arrives. */
+    .movie-edit-season-cover {
+      width: 46px;
+      aspect-ratio: 2 / 3;
+      display: block;
+      border-radius: 7px;
+      overflow: hidden;
+      background: color-mix(in srgb, var(--text) 10%, transparent);
+    }
+    .movie-edit-season-cover img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .movie-edit-season-copy {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .movie-edit-season-copy strong {
+      font-size: .92rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* The meta line wraps rather than truncating: season, year and episode
+       count are three separate facts, and an ellipsis drops whichever one
+       happens to sit last. */
+    .movie-edit-season-copy > span {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 600;
+      line-height: 1.35;
+    }
+    .profile-form .movie-edit-season-card:has(input[type="checkbox"]:checked) .movie-edit-season-copy strong {
+      color: var(--accent-bright);
+    }
+    /* The plain season toggle, used per disc and in the series-season offer.
+       It also shipped without a rule, so it inherited .profile-form's label
+       styling and stacked the checkbox above its own text. */
+    .profile-form .movie-edit-season,
+    .profile-form .movie-edit-disc-episode {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+      font-size: .88rem;
+      font-weight: 620;
+      cursor: pointer;
+    }
+    .profile-form .movie-edit-season em,
+    .profile-form .movie-edit-disc-episode em {
+      color: var(--muted);
+      font-style: normal;
+      font-weight: 600;
+    }
     .movie-edit-track-editor {
       display: flex;
       flex-direction: column;
@@ -7338,10 +7460,16 @@ def ui_preview_html(
     }
     /* Refresh metadata re-renders the detail view and would silently discard
        an open form; Contribute and Delete are equally out of place mid-edit.
-       Save and Cancel are the only verbs edit mode offers. */
+       Save and Cancel are the only verbs edit mode offers. The container and
+       series heroes carry the same rule, now that their actions live there. */
     .movie-detail-page.movie-editing #movieMetadataApplyButton,
     .movie-detail-page.movie-editing #movieContributeButton,
-    .movie-detail-page.movie-editing #movieDeleteButton {
+    .movie-detail-page.movie-editing #movieDeleteButton,
+    .container-detail-page.container-editing #containerMetadataApplyButton,
+    .container-detail-page.container-editing #containerContributeField,
+    .container-detail-page.container-editing #containerDeleteButton,
+    .series-detail-page.series-editing #seriesMetadataRefreshButton,
+    .series-detail-page.series-editing #seriesDeleteButton {
       display: none;
     }
     .detail-card {
@@ -7533,6 +7661,17 @@ def ui_preview_html(
       letter-spacing: .06em;
       text-transform: uppercase;
       color: var(--muted);
+    }
+    /* Explanatory copy under a field or section. The class has been in the
+       markup since the edit form was written but never had a rule, so every
+       hint rendered at full body weight and competed with the fields it was
+       meant to annotate. */
+    .hint {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 600;
+      line-height: 1.45;
     }
     .detail-fields {
       display: grid;
@@ -8228,15 +8367,27 @@ def ui_preview_html(
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
+    /* One card per season, laid out responsively rather than as a single
+       column: a long-running show is twenty rows of mostly empty width, and
+       the covers are what make a season recognisable at a glance. */
     .series-season-list {
       display: grid;
-      gap: 8px;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
     }
     .series-season-row {
       display: grid;
       grid-template-columns: 46px minmax(0, 1fr);
       align-items: center;
       gap: 12px;
+      padding: 9px 11px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
+    }
+    .series-season-row.is-owned {
+      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+      background: color-mix(in srgb, var(--accent) 9%, var(--bg-solid));
     }
     /* Reserved whether or not the season resolved a poster, so the labels stay on
        one vertical line instead of stepping in and out as artwork arrives. */
@@ -8262,13 +8413,34 @@ def ui_preview_html(
       color: var(--muted);
       font-size: 12px;
     }
+    /* The episode button sits under the text rather than beside it: inline, it
+       took the width the season title needed and every card wrapped to three
+       lines. Column 2 keeps it aligned with the copy, not the cover. */
     .series-season-row {
-      grid-template-columns: 46px minmax(0, 1fr) auto;
+      grid-template-columns: 46px minmax(0, 1fr);
+      align-items: start;
+    }
+    .series-season-episodes-toggle {
+      grid-column: 2;
+      min-height: 32px;
+      padding: 0 12px;
+      font-size: .84rem;
+    }
+    .series-season-thumb {
+      grid-row: span 2;
+      align-self: center;
+    }
+    /* The grid cell is the season and its episodes together. */
+    .series-season-item {
+      display: grid;
+      gap: 6px;
+      align-content: start;
+      min-width: 0;
     }
     .series-episode-list {
       display: grid;
       gap: 4px;
-      margin: 2px 0 10px 58px;
+      margin: 0 0 4px 10px;
     }
     .series-episode-list.hidden {
       display: none;
@@ -15342,7 +15514,7 @@ def ui_preview_html(
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 16.58 10.83 12 15.41 7.41 14 6 8 12 14 18 15.41 16.58Z"></path></svg>
             <span class="button-label" data-next-i18n="movieDetail.backToLibrary">Back</span>
           </button>
-          <div class="movie-detail-hero-actions" aria-label="Movie actions" data-next-i18n-aria="movieDetail.title">
+          <div class="movie-detail-hero-actions" aria-label="Title actions" data-next-i18n-aria="movieDetail.titleActions">
             <button type="button" class="movie-detail-icon-action hidden" id="movieEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path id="movieEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
               <span class="button-label" id="movieEditToggleLabel" data-next-i18n="common.edit">Edit</span>
@@ -15367,7 +15539,7 @@ def ui_preview_html(
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="movieDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
             <div class="movie-detail-copy">
-              <span class="eyebrow" data-next-i18n="movieDetail.title">Movie details</span>
+              <span class="eyebrow" data-next-i18n="movieDetail.titleDetails">Title details</span>
               <h2 class="movie-detail-title" id="movieDetailTitle">-</h2>
               <div class="hero-meta" id="movieDetailTags"></div>
               <p class="movie-detail-overview" id="movieDetailOverview"></p>
@@ -15388,6 +15560,7 @@ def ui_preview_html(
             <form class="profile-form movie-edit-layout" id="movieEditForm">
               <nav class="detail-submenu movie-edit-nav" role="tablist" aria-label="Edit details" data-next-i18n-aria="movieDetail.editDetails">
                 <button type="button" class="active" id="movieEditTabRelease" role="tab" aria-controls="movieEditSectionRelease" aria-selected="true" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionRelease" aria-label="Release" title="Release" data-next-i18n-aria="movieDetail.release" data-next-i18n-title="movieDetail.release">""" + nav_icon("edit_release") + """<span class="profile-tab-label" data-next-i18n="movieDetail.release">Release</span></button>
+                <button type="button" class="hidden" id="movieEditTabSeries" role="tab" aria-controls="movieEditSectionSeries" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionSeries" aria-label="Series" title="Series" data-next-i18n-aria="movieDetail.series" data-next-i18n-title="movieDetail.series">""" + nav_icon("edit_series") + """<span class="profile-tab-label" data-next-i18n="movieDetail.series">Series</span></button>
                 <button type="button" id="movieEditTabTechnical" role="tab" aria-controls="movieEditReleaseTechnicalSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditReleaseTechnicalSection" aria-label="Technical" title="Technical" data-next-i18n-aria="movieDetail.technical" data-next-i18n-title="movieDetail.technical">""" + nav_icon("edit_technical") + """<span class="profile-tab-label" data-next-i18n="movieDetail.technical">Technical</span></button>
                 <button type="button" id="movieEditTabDiscs" role="tab" aria-controls="movieEditDiscsSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditDiscsSection" aria-label="Discs" title="Discs" data-next-i18n-aria="movieDetail.discs" data-next-i18n-title="movieDetail.discs">""" + nav_icon("edit_discs") + """<span class="profile-tab-label" data-next-i18n="movieDetail.discs">Discs</span></button>
                 <button type="button" id="movieEditTabCollectors" role="tab" aria-controls="movieEditSectionCollectors" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionCollectors" aria-label="Collectors" title="Collectors" data-next-i18n-aria="movieDetail.collectors" data-next-i18n-title="movieDetail.collectors">""" + nav_icon("edit_collectors") + """<span class="profile-tab-label" data-next-i18n="movieDetail.collectors">Collectors</span></button>
@@ -15434,19 +15607,6 @@ def ui_preview_html(
                         <option value="SHOW" data-next-i18n="movieDetail.mediaTypeShow">TV series</option>
                       </select>
                     </label>
-                    <label for="movieEditSeries" id="movieEditSeriesRow" hidden>
-                      <span data-next-i18n="movieDetail.series">Series</span>
-                      <select id="movieEditSeries" name="series_id"></select>
-                    </label>
-                    <label id="movieEditSeriesNewRow" hidden>
-                      <span data-next-i18n="movieDetail.seriesNewTitle">New series title</span>
-                      <input id="movieEditSeriesNew" maxlength="300" autocomplete="off">
-                    </label>
-                    <div id="movieEditSeasonsRow" class="movie-edit-seasons" hidden>
-                      <span data-next-i18n="movieDetail.seasons">Seasons</span>
-                      <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
-                      <p class="hint" data-next-i18n="movieDetail.seasonsHint">Leave every season unticked for a complete-series set.</p>
-                    </div>
                     <label for="movieEditFormat">
                       <span data-next-i18n="movieDetail.format">Format</span>
                       <select id="movieEditFormat" name="format"></select>
@@ -15476,6 +15636,31 @@ def ui_preview_html(
                       <input id="movieEditContentRating" name="content_rating" maxlength="40" autocomplete="off">
                     </label>
                   </div>
+                </div>
+                <!-- Only reachable while the type is a TV series: on a film the
+                     tab is hidden and the backend refuses a series link anyway.
+                     Its own section rather than three rows inside Release,
+                     because the seasons list is as long as the show is old. -->
+                <div class="detail-subsection hidden" id="movieEditSectionSeries" role="tabpanel" aria-labelledby="movieEditTabSeries" data-detail-panel-group="movieEditSections">
+                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.series">Series</h4>
+                  <div class="movie-edit-grid">
+                    <label for="movieEditSeries" id="movieEditSeriesRow">
+                      <span data-next-i18n="movieDetail.series">Series</span>
+                      <select id="movieEditSeries" name="series_id"></select>
+                    </label>
+                    <label id="movieEditSeriesNewRow" hidden>
+                      <span data-next-i18n="movieDetail.seriesNewTitle">New series title</span>
+                      <input id="movieEditSeriesNew" maxlength="300" autocomplete="off">
+                    </label>
+                  </div>
+                  <div id="movieEditSeasonsRow" class="movie-edit-seasons" hidden>
+                    <div class="movie-edit-seasons-head">
+                      <span data-next-i18n="movieDetail.seasons">Seasons</span>
+                      <p class="hint" data-next-i18n="movieDetail.seasonsHint">Leave every season unticked for a complete-series set.</p>
+                    </div>
+                    <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
+                  </div>
+                  <p class="hint" id="movieEditSeriesEmptyHint" hidden data-next-i18n="movieDetail.seriesPickFirst">Pick a series above to choose which seasons this release covers.</p>
                 </div>
                 <div class="detail-subsection hidden" id="movieEditReleaseTechnicalSection" role="tabpanel" aria-labelledby="movieEditTabTechnical" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
@@ -15661,7 +15846,7 @@ def ui_preview_html(
               </div>
             </form>
           </div>
-          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Movie details" data-next-i18n-aria="movieDetail.title">
+          <nav class="detail-submenu movie-detail-section-tabs" role="tablist" aria-label="Title details" data-next-i18n-aria="movieDetail.titleDetails">
             <button type="button" class="active" id="movieDetailReleaseTab" role="tab" aria-controls="movieDetailReleasePanel" aria-selected="true" data-detail-tab="movieSections" data-detail-panel="movieDetailReleasePanel" data-next-i18n="movieDetail.release">Release</button>
             <button type="button" id="movieDetailTechnicalTab" role="tab" aria-controls="movieDetailTechnicalPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailTechnicalPanel" data-next-i18n="movieDetail.technical">Technical</button>
             <button type="button" id="movieDetailCollectorsTab" role="tab" aria-controls="movieDetailCollectorsPanel" aria-selected="false" data-detail-tab="movieSections" data-detail-panel="movieDetailCollectorsPanel" data-next-i18n="movieDetail.collectors">Collectors</button>
@@ -15876,22 +16061,19 @@ def ui_preview_html(
         <section class="movie-detail-hero" id="containerDetailHero">
           <img id="containerDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back</button>
-          <div class="movie-detail-summary">
-            <div class="movie-detail-poster" id="containerDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
-            <div>
-              <span class="eyebrow" id="containerDetailType" data-next-i18n="containerDetail.title">Container details</span>
-              <h2 class="movie-detail-title" id="containerDetailTitle">-</h2>
-              <div class="hero-meta" id="containerDetailTags"></div>
-              <p class="movie-detail-overview" id="containerDetailDescription"></p>
-              <div class="container-detail-stats" id="containerDetailStats"></div>
-            </div>
-          </div>
-        </section>
-        <div class="movie-detail-action-strip">
-          <div class="movie-detail-actions">
-            <button type="button" class="action secondary hidden" id="containerEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action secondary hidden" id="containerEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
-            <button type="button" class="action secondary hidden" id="containerMetadataApplyButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
+          <div class="movie-detail-hero-actions" aria-label="Container actions" data-next-i18n-aria="containerDetail.actions">
+            <button type="button" class="movie-detail-icon-action hidden" id="containerEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="containerEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
+              <span class="button-label" id="containerEditToggleLabel" data-next-i18n="common.edit">Edit</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="containerEditCancelTopButton" aria-label="Cancel" title="Cancel" data-next-i18n-aria="common.cancel" data-next-i18n-title="common.cancel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"></path></svg>
+              <span class="button-label" data-next-i18n="common.cancel">Cancel</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action metadata hidden" id="containerMetadataApplyButton" aria-label="Refresh metadata" title="Refresh metadata" data-next-i18n-aria="movieDetail.applyMetadata" data-next-i18n-title="movieDetail.applyMetadata">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
+            </button>
             <!--
               Two gates that must not fight over one class. The wrapper carries
               `container-value-field`, so `syncContainerValueFieldVisibility()`
@@ -15900,13 +16082,29 @@ def ui_preview_html(
               the button would have each mechanism undo the other's decision.
             -->
             <span class="container-value-field hidden" id="containerContributeField">
-              <button type="button" class="action secondary hidden" id="containerContributeButton" data-next-i18n="contribute.action">Contribute</button>
-              <span class="contribute-status hidden" id="containerContributeStatus"></span>
+              <button type="button" class="movie-detail-icon-action hidden" id="containerContributeButton" aria-label="Contribute" title="Contribute" data-next-i18n-aria="contribute.action" data-next-i18n-title="contribute.action">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 16V10H5L12 3L19 10H15V16H9M5 20V18H19V20H5Z"></path></svg>
+              <span class="button-label" data-next-i18n="contribute.action">Contribute</span>
+            </button>
             </span>
-            <button type="button" class="action danger hidden" id="containerDeleteButton" data-next-i18n="containerDetail.deleteContainer">Delete container</button>
+            <button type="button" class="movie-detail-icon-action danger hidden" id="containerDeleteButton" aria-label="Delete container" title="Delete container" data-next-i18n-aria="containerDetail.deleteContainer" data-next-i18n-title="containerDetail.deleteContainer">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
+              <span class="button-label" data-next-i18n="containerDetail.deleteContainer">Delete container</span>
+            </button>
           </div>
-          <div class="detail-message" id="containerDetailMessage"></div>
-        </div>
+          <div class="movie-detail-summary">
+            <div class="movie-detail-poster" id="containerDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
+            <div class="movie-detail-copy">
+              <span class="eyebrow" id="containerDetailType" data-next-i18n="containerDetail.title">Container details</span>
+              <h2 class="movie-detail-title" id="containerDetailTitle">-</h2>
+              <div class="hero-meta" id="containerDetailTags"></div>
+              <p class="movie-detail-overview" id="containerDetailDescription"></p>
+              <div class="container-detail-stats" id="containerDetailStats"></div>
+            </div>
+          </div>
+        </section>
+        <div class="contribute-status contribute-status-standing hidden" id="containerContributeStatus"></div>
+        <div class="detail-message movie-detail-status" id="containerDetailMessage"></div>
         <section class="movie-detail-body">
           <nav class="detail-submenu container-detail-submenu" aria-label="Container sections" data-next-i18n-aria="containerDetail.sections">
             <button type="button" class="active" data-detail-tab="containerDetail" data-detail-panel="containerDetailFilmsPanel" data-next-i18n="containerDetail.memberMovies">Movies</button>
@@ -16121,9 +16319,27 @@ def ui_preview_html(
         <section class="movie-detail-hero" id="seriesDetailHero">
           <img id="seriesDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="seriesDetailBackButton" data-next-i18n="seriesDetail.backToLibrary">Back</button>
+          <div class="movie-detail-hero-actions" aria-label="Series actions" data-next-i18n-aria="seriesDetail.actions">
+            <button type="button" class="movie-detail-icon-action hidden" id="seriesEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path id="seriesEditToggleIcon" data-edit-path="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z" data-save-path="M17 3H5C3.89 3 3 3.9 3 5V19C3 20.1 3.9 21 5 21H19C20.1 21 21 20.1 21 19V7L17 3M19 19H5V5H16.17L19 7.83V19M12 6C10.34 6 9 7.34 9 9S10.34 12 12 12 15 10.66 15 9 13.66 6 12 6M6 14H18V18H6V14Z" d="M20.71 7.04C21.1 6.65 21.1 6 20.71 5.63L18.37 3.29C18 2.9 17.35 2.9 16.96 3.29L15.12 5.12L18.88 8.88M3 17.25V21H6.75L17.81 9.94L14.06 6.19L3 17.25Z"></path></svg>
+              <span class="button-label" id="seriesEditToggleLabel" data-next-i18n="common.edit">Edit</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action hidden" id="seriesEditCancelTopButton" aria-label="Cancel" title="Cancel" data-next-i18n-aria="common.cancel" data-next-i18n-title="common.cancel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"></path></svg>
+              <span class="button-label" data-next-i18n="common.cancel">Cancel</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action metadata hidden" id="seriesMetadataRefreshButton" aria-label="Refresh metadata" title="Refresh metadata" data-next-i18n-aria="movieDetail.applyMetadata" data-next-i18n-title="movieDetail.applyMetadata">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4 7.58 4 4 7.58 4 12S7.58 20 12 20C15.73 20 18.84 17.45 19.73 14H17.65C16.83 16.33 14.61 18 12 18 8.69 18 6 15.31 6 12S8.69 6 12 6C13.66 6 15.14 6.69 16.22 7.78L13 11H20V4L17.65 6.35Z"></path></svg>
+              <span class="button-label" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</span>
+            </button>
+            <button type="button" class="movie-detail-icon-action danger hidden" id="seriesDeleteButton" aria-label="Delete series" title="Delete series" data-next-i18n-aria="seriesDetail.deleteSeries" data-next-i18n-title="seriesDetail.deleteSeries">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 19C6 20.1 6.9 21 8 21H16C17.1 21 18 20.1 18 19V7H6V19M8 9H16V19H8V9M15.5 4 14.5 3H9.5L8.5 4H5V6H19V4H15.5Z"></path></svg>
+              <span class="button-label" data-next-i18n="seriesDetail.deleteSeries">Delete series</span>
+            </button>
+          </div>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="seriesDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
-            <div>
+            <div class="movie-detail-copy">
               <span class="eyebrow" data-next-i18n="seriesDetail.title">Series details</span>
               <h2 class="movie-detail-title" id="seriesDetailTitle">-</h2>
               <div class="hero-meta" id="seriesDetailTags"></div>
@@ -16132,15 +16348,7 @@ def ui_preview_html(
             </div>
           </div>
         </section>
-        <div class="movie-detail-action-strip">
-          <div class="movie-detail-actions">
-            <button type="button" class="action secondary hidden" id="seriesEditToggleButton" data-next-i18n="common.edit">Edit</button>
-            <button type="button" class="action secondary hidden" id="seriesEditCancelTopButton" data-next-i18n="common.cancel">Cancel</button>
-            <button type="button" class="action secondary hidden" id="seriesMetadataRefreshButton" data-next-i18n="movieDetail.applyMetadata">Refresh metadata</button>
-            <button type="button" class="action danger hidden" id="seriesDeleteButton" data-next-i18n="seriesDetail.deleteSeries">Delete series</button>
-          </div>
-          <div class="detail-message" id="seriesDetailMessage"></div>
-        </div>
+        <div class="detail-message movie-detail-status" id="seriesDetailMessage"></div>
         <section class="movie-detail-body">
           <nav class="detail-submenu series-detail-submenu" aria-label="Series sections" data-next-i18n-aria="seriesDetail.sections">
             <button type="button" class="active" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailDiscsPanel" data-next-i18n="seriesDetail.discs">Discs</button>
@@ -28138,7 +28346,7 @@ def ui_preview_html(
     }
     let movieMetadataComparison = {movieId: null, decisions: null, loading: false, error: "", collapsed: false};
     const MOVIE_COMPARE_FIELD_LABELS = {
-      "movie:title": ["movieDetail.title", "Title"],
+      "movie:title": ["movieDetail.fieldTitle", "Title"],
       "movie:original_title": ["movieDetail.originalTitle", "Original title"],
       "movie:sort_title": ["movieDetail.fieldSortTitle", "Sort title"],
       "movie:year": ["movieDetail.fieldYear", "Year"],
@@ -28219,7 +28427,7 @@ def ui_preview_html(
       const identifiers = detail.identifiers || [];
       const technical = detail.technicalSpecs || {};
       const rows = [
-        [tNext("movieDetail.title", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
+        [tNext("movieDetail.fieldTitle", "Title"), movie.title || metadata.title, metadata.title_source || metadata.source || "collection"],
         [tNext("movieDetail.originalTitle", "Original title"), movie.original_title || metadata.original_title || metadata.originalTitle, metadata.original_title_source || metadata.source || "collection"],
         [tNext("movieDetail.releaseTitle", "Release title"), movie.release_title || metadata.release_title || metadata.releaseTitle, metadata.release_title_source || metadata.source || "collection"],
         [tNext("movieDetail.fieldOverview", "Overview"), movie.overview || metadata.overview, metadata.overview_source || metadata.source || "collection"],
@@ -28561,30 +28769,35 @@ def ui_preview_html(
       // an error nobody sees is an edit nobody knows was rejected.
       if (message && tone === "bad") node.scrollIntoView({block: "nearest"});
     }
+    // Shared by the movie, container and series heroes: their Edit button turns
+    // into Save while the panel is open. Written once because three copies of a
+    // label/icon/aria swap is three places for them to drift apart.
+    function setDetailEditToggleState(button, labelId, iconId, editing) {
+      if (!button) return;
+      const labelKey = editing ? "common.save" : "common.edit";
+      const label = editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
+      button.dataset.nextI18nAria = labelKey;
+      button.dataset.nextI18nTitle = labelKey;
+      button.setAttribute("aria-label", label);
+      button.setAttribute("title", label);
+      button.classList.toggle("is-editing", editing);
+      const labelNode = labelId ? document.getElementById(labelId) : null;
+      if (labelNode) {
+        labelNode.dataset.nextI18n = labelKey;
+        labelNode.textContent = label;
+      }
+      const icon = iconId ? document.getElementById(iconId) : null;
+      if (icon) icon.setAttribute("d", editing ? icon.dataset.savePath : icon.dataset.editPath);
+    }
     function setMovieEditPanelVisible(show) {
       const panel = document.getElementById("movieEditPanel");
       const editButton = document.getElementById("movieEditToggleButton");
-      const editLabel = document.getElementById("movieEditToggleLabel");
-      const editIcon = document.getElementById("movieEditToggleIcon");
       const cancelButton = document.getElementById("movieEditCancelTopButton");
       if (!panel) return;
       panel.classList.toggle("hidden", !show);
       document.getElementById("movieDetailPage")?.classList.toggle("movie-editing", show);
       if (show) activateDetailTab("movieEditSections", "movieEditSectionRelease");
-      if (editButton) {
-        const labelKey = show ? "common.save" : "common.edit";
-        const label = show ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
-        editButton.dataset.nextI18nAria = labelKey;
-        editButton.dataset.nextI18nTitle = labelKey;
-        editButton.setAttribute("aria-label", label);
-        editButton.setAttribute("title", label);
-        editButton.classList.toggle("is-editing", show);
-        if (editLabel) {
-          editLabel.dataset.nextI18n = labelKey;
-          editLabel.textContent = label;
-        }
-        if (editIcon) editIcon.setAttribute("d", show ? editIcon.dataset.savePath : editIcon.dataset.editPath);
-      }
+      setDetailEditToggleState(editButton, "movieEditToggleLabel", "movieEditToggleIcon", show);
       if (cancelButton) cancelButton.classList.toggle("hidden", !show);
       if (show) document.getElementById("movieEditTitle")?.focus();
     }
@@ -29462,6 +29675,35 @@ def ui_preview_html(
       };
     }
 
+    // A season is a card with its own cover, title and episode count, not a bare
+    // number: picking which seasons a box set covers is a recognition task, and a
+    // list of "1 2 3 4 5" makes the reader do it from memory. The poster is the
+    // one already published on the season (season_entities.posterUrl); a season
+    // without artwork keeps the reserved frame so the grid stays on one baseline.
+    function movieEditSeasonCardHtml(season, checked) {
+      const number = tNext("collection.seasonNumber", "Season {number}")
+        .replace("{number}", season.seasonNumber);
+      const title = season.title || number;
+      const meta = [
+        season.title ? number : "",
+        season.year || "",
+        season.episodeCount
+          ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount)
+          : ""
+      ].filter(Boolean).join(" · ");
+      const cover = season.posterUrl
+        ? `<img src="${escapeHtml(season.posterUrl)}" alt="" loading="lazy">`
+        : "";
+      return `
+        <label class="movie-edit-season-card">
+          <input type="checkbox" value="${escapeHtml(season.id)}"${checked ? " checked" : ""}>
+          <span class="movie-edit-season-cover">${cover}</span>
+          <span class="movie-edit-season-copy">
+            <strong>${escapeHtml(title)}</strong>
+            <span>${escapeHtml(meta)}</span>
+          </span>
+        </label>`;
+    }
     function renderMovieEditSeasons(seriesId, selectedIds) {
       const {seasons} = movieEditSeriesElements();
       if (!seasons) return;
@@ -29472,13 +29714,9 @@ def ui_preview_html(
         return;
       }
       const chosen = new Set(selectedIds || []);
-      seasons.innerHTML = list.map((season) => {
-        const label = season.title
-          ? `${season.seasonNumber} — ${escapeHtml(season.title)}`
-          : `${tNext("movieDetail.seasonNumber", "Season")} ${season.seasonNumber}`;
-        const checked = chosen.has(season.id) ? " checked" : "";
-        return `<label class="movie-edit-season"><input type="checkbox" value="${escapeHtml(season.id)}"${checked}> <span>${label}</span></label>`;
-      }).join("");
+      seasons.innerHTML = list
+        .map((season) => movieEditSeasonCardHtml(season, chosen.has(season.id)))
+        .join("");
     }
 
     function syncMovieEditSeriesVisibility(selectedSeasonIds) {
@@ -29489,9 +29727,23 @@ def ui_preview_html(
       // Only offered while the type is a series, because the backend refuses a
       // series on a film rather than silently accepting one.
       if (newRow) newRow.hidden = !isShow || seriesId !== "__new__";
-      if (seasonsRow) {
-        const hasSeasons = !!(movieEditSeriesCatalog.find((entry) => entry.id === seriesId)?.seasons || []).length;
-        seasonsRow.hidden = !isShow || !hasSeasons;
+      const hasSeasons = !!(movieEditSeriesCatalog.find((entry) => entry.id === seriesId)?.seasons || []).length;
+      if (seasonsRow) seasonsRow.hidden = !isShow || !hasSeasons;
+      // Says why the seasons are absent instead of showing an empty section:
+      // "no series picked yet" and "this series has no seasons recorded" are
+      // different answers, and a blank panel gives neither.
+      const emptyHint = document.getElementById("movieEditSeriesEmptyHint");
+      if (emptyHint) emptyHint.hidden = !isShow || hasSeasons;
+      // The whole section only exists for a series. Hiding the tab rather than
+      // disabling it: a film has nothing to say here at all.
+      const tab = document.getElementById("movieEditTabSeries");
+      if (tab) {
+        tab.classList.toggle("hidden", !isShow);
+        // Leaving the reader on a tab that just disappeared would show a panel
+        // with no tab lit; send them back to the section every release has.
+        if (!isShow && tab.classList.contains("active")) {
+          activateDetailTab("movieEditSections", "movieEditSectionRelease");
+        }
       }
       if (isShow && seriesId && seriesId !== "__new__") {
         renderMovieEditSeasons(seriesId, selectedSeasonIds);
@@ -30519,11 +30771,9 @@ def ui_preview_html(
         entity === "container" ? "containerContributeStatus" : "movieContributeStatus"
       );
       if (!node) return;
-      // Tone classes toggled rather than the whole className rewritten. The two
-      // nodes this renders into no longer sit in the same kind of place -- the
-      // movie's is a standing line under the hero, the container's is still in
-      // the button row -- so their placement classes live in the markup and
-      // this must not clobber them.
+      // Tone classes toggled rather than the whole className rewritten: both
+      // nodes are standing lines under their hero, and their placement classes
+      // live in the markup where this must not clobber them.
       node.classList.remove("good", "bad");
       if (!contribution || !contribution.status) {
         node.classList.add("hidden");
@@ -31335,7 +31585,7 @@ def ui_preview_html(
       const node = document.getElementById("containerDetailMessage");
       if (!node) return;
       node.textContent = message || "";
-      node.className = `detail-message ${tone || ""}`.trim();
+      node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
     }
     function setContainerEditPanelVisible(show) {
       const panel = document.getElementById("containerEditPanel");
@@ -31349,11 +31599,11 @@ def ui_preview_html(
       panel.classList.toggle("hidden", !editing);
       if (addPanel) addPanel.classList.toggle("hidden", !editing);
       if (page) page.classList.toggle("container-editing", editing);
-      if (editButton) {
-        editButton.dataset.nextI18n = editing ? "common.save" : "common.edit";
-        editButton.textContent = editing ? tNext("common.save", "Save") : tNext("common.edit", "Edit");
-        editButton.classList.toggle("secondary", !editing);
-      }
+      // The form lives inside the Overview panel: pressing Edit from the Movies
+      // tab used to open a panel the reader could not see, which reads as the
+      // button doing nothing at all.
+      if (editing) activateDetailTab("containerDetail", "containerDetailOverviewPanel");
+      setDetailEditToggleState(editButton, "containerEditToggleLabel", "containerEditToggleIcon", editing);
       if (cancelButton) cancelButton.classList.toggle("hidden", !editing);
       if (editing) document.getElementById("containerEditTitle")?.focus();
     }
@@ -31669,11 +31919,18 @@ def ui_preview_html(
       const node = document.getElementById("seriesDetailMessage");
       if (!node) return;
       node.textContent = message || "";
-      node.className = `detail-message ${tone || ""}`.trim();
+      node.className = `detail-message movie-detail-status ${tone || ""}`.trim();
     }
     function setSeriesEditPanelVisible(show) {
       const card = document.getElementById("seriesEditCard");
       if (card) card.hidden = !show;
+      document.getElementById("seriesDetailPage")?.classList.toggle("series-editing", !!show);
+      setDetailEditToggleState(
+        document.getElementById("seriesEditToggleButton"),
+        "seriesEditToggleLabel",
+        "seriesEditToggleIcon",
+        !!show
+      );
       setElementVisible(document.getElementById("seriesEditCancelTopButton"), show);
     }
     function seriesDiscSeasonLabel(detail, movieId) {
@@ -31778,7 +32035,7 @@ def ui_preview_html(
           season.year || "",
           season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
         ].filter(Boolean);
-        return {season, label, meta: parts.join(" / ")};
+        return {season, label, owned, meta: parts.join(" / ")};
       });
       // Said once, under the list, and after the shape split above so both the
       // plain rows and the card list carry it. Absence explains nothing: without
@@ -31804,8 +32061,12 @@ def ui_preview_html(
       const episodes = collectorsModeEnabled()
         ? `<button type="button" class="secondary-button series-season-episodes-toggle" data-season-episodes="${escapeHtml(row.season.id || "")}">${escapeHtml(tNext("seriesDetail.episodes", "Episodes"))}</button>`
         : "";
+      // `is-owned` marks a season a disc in the collection covers. Stated as a
+      // border and a badge rather than only in the meta line, because the one
+      // question this list answers at a glance is which seasons are missing.
       return `
-        <div class="series-season-row">
+        <div class="series-season-item">
+        <div class="series-season-row${row.owned ? " is-owned" : ""}">
           <div class="series-season-thumb">${row.season.posterUrl
             ? `<img src="${escapeHtml(row.season.posterUrl)}" alt="${escapeHtml(row.label)}" loading="lazy">`
             : ""}</div>
@@ -31815,7 +32076,8 @@ def ui_preview_html(
           </div>
           ${episodes}
         </div>
-        <div class="series-episode-list hidden" data-season-episode-list="${escapeHtml(row.season.id || "")}"></div>`;
+        <div class="series-episode-list hidden" data-season-episode-list="${escapeHtml(row.season.id || "")}"></div>
+        </div>`;
     }
     function seriesEpisodeRowsHtml(episodes) {
       if (!episodes.length) {
@@ -42060,7 +42322,7 @@ def ui_preview_html(
     }
     async function shareMovieArtwork(url, kind) {
       if (!url) return;
-      const movieTitle = activeDetailPayload?.movie?.title || tNext("movieDetail.title", "Movie details");
+      const movieTitle = activeDetailPayload?.movie?.title || tNext("movieDetail.titleDetails", "Title details");
       const kindLabel = kind === "backdrop"
         ? tNext("movieDetail.backdrops", "Backdrops")
         : tNext("movieDetail.posters", "Posters");
