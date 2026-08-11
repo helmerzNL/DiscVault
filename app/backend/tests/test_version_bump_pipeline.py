@@ -35,22 +35,56 @@ def read(path):
         return handle.read()
 
 
+def workflow_names():
+    return sorted(n for n in os.listdir(WORKFLOW_DIR) if n.endswith((".yml", ".yaml")))
+
+
 class WorkflowsParseTests(unittest.TestCase):
-    """Every workflow file must be loadable YAML.
+    """Every workflow file must be loadable by GitHub.
 
     The tests below read the workflows as text, which proves the wiring is
-    written but says nothing about whether GitHub can load the file. It cannot
-    load one whose `if:` expression is an unquoted scalar containing
-    "chore: bump app/VERSION" -- a colon followed by a space turns the rest into
-    a nested mapping. GitHub reports that as a run with **zero jobs**, named
-    after the file path rather than the workflow, so it reads like an
-    infrastructure hiccup rather than a syntax error in the diff that caused it.
+    written but says nothing about whether the file can be parsed. It cannot be
+    when an `if:` expression is an unquoted scalar containing
+    "chore: bump app/VERSION": in YAML a colon followed by a space turns the
+    rest of a plain scalar into a nested mapping.
+
+    That failure is worth pinning because of how it surfaces. GitHub does not
+    fail a job -- it creates a run with **zero jobs**, named after the file path
+    rather than the workflow, which reads like an infrastructure hiccup rather
+    than a syntax error in the diff that caused it.
+
+    The colon-space check carries the weight here: it needs no parser, so it
+    runs everywhere, including the postgres smoke, where PyYAML is deliberately
+    absent (it is not an app dependency and does not belong in the runtime
+    image). The full parse runs wherever PyYAML happens to be available.
     """
 
-    def test_every_workflow_is_valid_yaml(self):
-        import yaml
+    def test_a_condition_containing_a_colon_space_is_quoted(self):
+        for name in workflow_names():
+            text = read(os.path.join(WORKFLOW_DIR, name))
+            for lineno, line in enumerate(text.splitlines(), 1):
+                stripped = line.strip()
+                if not stripped.startswith("if:"):
+                    continue
+                value = stripped[len("if:"):].strip()
+                # Quoted, or the opening of a block scalar: YAML is not reading
+                # a colon in there as a mapping key either way.
+                if not value or value[0] in "\"'|>":
+                    continue
+                with self.subTest(workflow=name, line=lineno):
+                    self.assertNotIn(
+                        ": ",
+                        value,
+                        f"{name}:{lineno}: an unquoted `if:` containing a colon-space "
+                        f"makes the whole workflow unloadable -- wrap it in double quotes",
+                    )
 
-        names = sorted(n for n in os.listdir(WORKFLOW_DIR) if n.endswith((".yml", ".yaml")))
+    def test_every_workflow_is_valid_yaml(self):
+        try:
+            import yaml
+        except ModuleNotFoundError:
+            self.skipTest("PyYAML is not installed; the colon-space check covers this file")
+        names = workflow_names()
         self.assertTrue(names, "no workflow files found")
         for name in names:
             with self.subTest(workflow=name):
