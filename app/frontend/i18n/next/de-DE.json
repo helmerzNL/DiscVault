@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Regie",
   "movieDetail.distributor": "Vertrieb",
   "movieDetail.editDetails": "Details bearbeiten",
+  "movieDetail.editDetailsHelp": "Alle Angaben zu dieser Veröffentlichung, in Abschnitte gegliedert. Änderungen werden erst beim Speichern übernommen.",
+  "movieDetail.editSectionText": "Übersicht & Notizen",
   "movieDetail.edition": "Edition",
   "movieDetail.errorLabel": "Fehler",
   "movieDetail.fieldNotes": "Notizen",

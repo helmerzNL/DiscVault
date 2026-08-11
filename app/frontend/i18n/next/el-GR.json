@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Διευθυντής",
   "movieDetail.distributor": "Διανομέας",
   "movieDetail.editDetails": "Επεξεργασία στοιχείων",
+  "movieDetail.editDetailsHelp": "Όλα τα στοιχεία αυτής της έκδοσης, ομαδοποιημένα σε ενότητες. Οι αλλαγές αποθηκεύονται μόνο όταν αποθηκεύσετε.",
+  "movieDetail.editSectionText": "Επισκόπηση & σημειώσεις",
   "movieDetail.edition": "Έκδοση",
   "movieDetail.errorLabel": "Σφάλμα",
   "movieDetail.fieldNotes": "Σημειώσεις",

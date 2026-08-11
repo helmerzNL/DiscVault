@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Regista",
   "movieDetail.distributor": "Distributore",
   "movieDetail.editDetails": "Modifica dettagli",
+  "movieDetail.editDetailsHelp": "Tutti i dettagli di questa edizione, raggruppati in sezioni. Le modifiche vengono salvate solo al momento del salvataggio.",
+  "movieDetail.editSectionText": "Panoramica e note",
   "movieDetail.edition": "Edizione",
   "movieDetail.errorLabel": "Errore",
   "movieDetail.fieldNotes": "Note",

@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Igazgató",
   "movieDetail.distributor": "Forgalmazó",
   "movieDetail.editDetails": "További adatok szerkesztése",
+  "movieDetail.editDetailsHelp": "A kiadás minden adata szakaszokba rendezve. A módosítások csak mentéskor tárolódnak.",
+  "movieDetail.editSectionText": "Áttekintés és megjegyzések",
   "movieDetail.edition": "Kiadás",
   "movieDetail.errorLabel": "Hiba",
   "movieDetail.fieldNotes": "Megjegyzések",

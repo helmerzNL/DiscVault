@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Režisors",
   "movieDetail.distributor": "Izplatītājs",
   "movieDetail.editDetails": "Rediģēt informāciju",
+  "movieDetail.editDetailsHelp": "Visa šī izdevuma informācija, sagrupēta sadaļās. Izmaiņas tiek saglabātas tikai saglabājot.",
+  "movieDetail.editSectionText": "Pārskats un piezīmes",
   "movieDetail.edition": "Izdevums",
   "movieDetail.errorLabel": "Kļūda",
   "movieDetail.fieldNotes": "Piezīmes",

@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Instruktor",
   "movieDetail.distributor": "Distributør",
   "movieDetail.editDetails": "Rediger detaljer",
+  "movieDetail.editDetailsHelp": "Alle detaljer om denne udgivelse, grupperet i sektioner. Ændringer gemmes først, når du gemmer.",
+  "movieDetail.editSectionText": "Overblik & noter",
   "movieDetail.edition": "Udgave",
   "movieDetail.errorLabel": "Fejl",
   "movieDetail.fieldNotes": "Noter",

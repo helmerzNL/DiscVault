@@ -1875,6 +1875,8 @@
   "movieDetail.director": "Директор",
   "movieDetail.distributor": "Дистрибутор",
   "movieDetail.editDetails": "РЕДАКТИРАНЕ НА ДЕТАЙЛИ",
+  "movieDetail.editDetailsHelp": "Всички данни за това издание, групирани в раздели. Промените се запазват едва при запазване.",
+  "movieDetail.editSectionText": "Преглед и бележки",
   "movieDetail.edition": "Издание",
   "movieDetail.errorLabel": "Грешка",
   "movieDetail.fieldNotes": "Бележки",

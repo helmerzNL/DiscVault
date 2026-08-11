@@ -1875,6 +1875,8 @@
   "movieDetail.director": "導演",
   "movieDetail.distributor": "發行商",
   "movieDetail.editDetails": "編輯詳細資料",
+  "movieDetail.editDetailsHelp": "此版本的所有資訊按區塊分組。變更僅在儲存後生效。",
+  "movieDetail.editSectionText": "簡介與備註",
   "movieDetail.edition": "版本",
   "movieDetail.errorLabel": "錯誤",
   "movieDetail.fieldNotes": "備註",
