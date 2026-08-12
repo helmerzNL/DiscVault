@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Katsottu uudelleen",
   "lists.watchedDate": "Katselup?iv?",
   "lists.watchedDateUnknown": "Tuntematon paiva",
-  "lists.watchedEntries": "katsottua elokuvaa",
-  "lists.watchedEntry": "katsottu elokuva",
+  "lists.watchedEntries": "katsottu",
+  "lists.watchedEntry": "katsottu",
   "lists.watchedToday": "Katsottu tänään",
   "lists.watchedYesterday": "Katsottu eilen",
   "lists.watchlist": "Katselulista",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Ääniraidat",
   "contribute.field.subtitles": "Tekstitykset",
   "contribute.field.alternateTitles": "Vaihtoehtoiset nimet",
-  "contribute.field.discs": "Levyt"
+  "contribute.field.discs": "Levyt",
+  "seriesDetail.markSeasonWatched": "Merkitse kausi katsotuksi",
+  "seriesDetail.clearSeasonWatched": "Poista kauden katsottu-merkintä",
+  "seriesDetail.addSeasonToWatchlist": "Lisää kausi katselulistalle",
+  "seriesDetail.removeSeasonFromWatchlist": "Poista kausi katselulistalta",
+  "seriesDetail.seasonBulkHint": "Koskee kaikkia tässä lueteltuja jaksoja.",
+  "seriesDetail.episodeImageFromSeason": "Kauden kuva",
+  "seriesDetail.episodeImageFromSeries": "Sarjan kuva"
 }

@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "再次觀看",
   "lists.watchedDate": "觀看日期",
   "lists.watchedDateUnknown": "未知日期",
-  "lists.watchedEntries": "部已觀看電影",
-  "lists.watchedEntry": "部已觀看電影",
+  "lists.watchedEntries": "部已觀看",
+  "lists.watchedEntry": "部已觀看",
   "lists.watchedToday": "今天已觀看",
   "lists.watchedYesterday": "昨天已觀看",
   "lists.watchlist": "待看清單",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "音軌",
   "contribute.field.subtitles": "字幕",
   "contribute.field.alternateTitles": "其他標題",
-  "contribute.field.discs": "光碟"
+  "contribute.field.discs": "光碟",
+  "seriesDetail.markSeasonWatched": "將本季標記為已觀看",
+  "seriesDetail.clearSeasonWatched": "取消本季已觀看標記",
+  "seriesDetail.addSeasonToWatchlist": "將本季加入待看清單",
+  "seriesDetail.removeSeasonFromWatchlist": "將本季從待看清單移除",
+  "seriesDetail.seasonBulkHint": "適用於此處列出的所有集數。",
+  "seriesDetail.episodeImageFromSeason": "本季圖片",
+  "seriesDetail.episodeImageFromSeries": "本劇圖片"
 }

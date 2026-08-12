@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Žiūrėta dar kartą",
   "lists.watchedDate": "Žiūrėjimo data",
   "lists.watchedDateUnknown": "Nežinoma data",
-  "lists.watchedEntries": "peržiūrėti filmai",
-  "lists.watchedEntry": "peržiūrėtas filmas",
+  "lists.watchedEntries": "peržiūrėta",
+  "lists.watchedEntry": "peržiūrėta",
   "lists.watchedToday": "Žiūrėta šiandien",
   "lists.watchedYesterday": "Žiūrėta vakar",
   "lists.watchlist": "Žiūrėjimo sąrašas",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Garso takeliai",
   "contribute.field.subtitles": "Subtitrai",
   "contribute.field.alternateTitles": "Alternatyvūs pavadinimai",
-  "contribute.field.discs": "Diskai"
+  "contribute.field.discs": "Diskai",
+  "seriesDetail.markSeasonWatched": "Žymėti sezoną kaip peržiūrėtą",
+  "seriesDetail.clearSeasonWatched": "Panaikinti sezono peržiūros žymą",
+  "seriesDetail.addSeasonToWatchlist": "Pridėti sezoną į žiūrėjimo sąrašą",
+  "seriesDetail.removeSeasonFromWatchlist": "Pašalinti sezoną iš žiūrėjimo sąrašo",
+  "seriesDetail.seasonBulkHint": "Taikoma visiems čia išvardytiems epizodams.",
+  "seriesDetail.episodeImageFromSeason": "Sezono paveikslėlis",
+  "seriesDetail.episodeImageFromSeries": "Serialo paveikslėlis"
 }

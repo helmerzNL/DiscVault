@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "再視聴",
   "lists.watchedDate": "視聴日",
   "lists.watchedDateUnknown": "不明な日付",
-  "lists.watchedEntries": "視聴済み映画",
-  "lists.watchedEntry": "視聴済み映画",
+  "lists.watchedEntries": "視聴済み",
+  "lists.watchedEntry": "視聴済み",
   "lists.watchedToday": "今日視聴",
   "lists.watchedYesterday": "昨日視聴",
   "lists.watchlist": "ウォッチリスト",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "音声トラック",
   "contribute.field.subtitles": "字幕",
   "contribute.field.alternateTitles": "別題",
-  "contribute.field.discs": "ディスク"
+  "contribute.field.discs": "ディスク",
+  "seriesDetail.markSeasonWatched": "シーズンを視聴済みにする",
+  "seriesDetail.clearSeasonWatched": "シーズンの視聴済みを解除",
+  "seriesDetail.addSeasonToWatchlist": "シーズンをウォッチリストに追加",
+  "seriesDetail.removeSeasonFromWatchlist": "シーズンをウォッチリストから削除",
+  "seriesDetail.seasonBulkHint": "ここに表示されているすべてのエピソードに適用されます。",
+  "seriesDetail.episodeImageFromSeason": "シーズンの画像",
+  "seriesDetail.episodeImageFromSeries": "シリーズの画像"
 }

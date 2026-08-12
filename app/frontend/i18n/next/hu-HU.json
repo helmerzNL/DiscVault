@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Újra megnézve",
   "lists.watchedDate": "Megtekintés dátuma",
   "lists.watchedDateUnknown": "Ismeretlen dátum",
-  "lists.watchedEntries": "megnézett filmek",
-  "lists.watchedEntry": "megnézett film",
+  "lists.watchedEntries": "megnézve",
+  "lists.watchedEntry": "megnézve",
   "lists.watchedToday": "Ma megnézve",
   "lists.watchedYesterday": "Tegnap megnézve",
   "lists.watchlist": "Néznivalólista",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Hangsávok",
   "contribute.field.subtitles": "Feliratok",
   "contribute.field.alternateTitles": "Alternatív címek",
-  "contribute.field.discs": "Lemezek"
+  "contribute.field.discs": "Lemezek",
+  "seriesDetail.markSeasonWatched": "Évad megjelölése megnézettként",
+  "seriesDetail.clearSeasonWatched": "Évad megnézett jelölésének törlése",
+  "seriesDetail.addSeasonToWatchlist": "Évad hozzáadása a néznivalólistához",
+  "seriesDetail.removeSeasonFromWatchlist": "Évad eltávolítása a néznivalólistáról",
+  "seriesDetail.seasonBulkHint": "Az itt felsorolt összes epizódra vonatkozik.",
+  "seriesDetail.episodeImageFromSeason": "Évad képe",
+  "seriesDetail.episodeImageFromSeries": "Sorozat képe"
 }

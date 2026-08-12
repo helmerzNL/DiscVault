@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Ogledano znova",
   "lists.watchedDate": "Datum ogleda",
   "lists.watchedDateUnknown": "Neznan datum",
-  "lists.watchedEntries": "ogledani filmi",
-  "lists.watchedEntry": "ogledan film",
+  "lists.watchedEntries": "ogledano",
+  "lists.watchedEntry": "ogledano",
   "lists.watchedToday": "Ogledano danes",
   "lists.watchedYesterday": "Ogledano včeraj",
   "lists.watchlist": "Seznam za ogled",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Zvočni zapisi",
   "contribute.field.subtitles": "Podnapisi",
   "contribute.field.alternateTitles": "Nadomestni naslovi",
-  "contribute.field.discs": "Diski"
+  "contribute.field.discs": "Diski",
+  "seriesDetail.markSeasonWatched": "Označi sezono kot ogledano",
+  "seriesDetail.clearSeasonWatched": "Odstrani oznako ogledane sezone",
+  "seriesDetail.addSeasonToWatchlist": "Dodaj sezono na seznam za ogled",
+  "seriesDetail.removeSeasonFromWatchlist": "Odstrani sezono s seznama za ogled",
+  "seriesDetail.seasonBulkHint": "Velja za vse epizode na tem seznamu.",
+  "seriesDetail.episodeImageFromSeason": "Slika sezone",
+  "seriesDetail.episodeImageFromSeries": "Slika serije"
 }

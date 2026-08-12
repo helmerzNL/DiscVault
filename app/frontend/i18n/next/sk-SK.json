@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Pozreté znova",
   "lists.watchedDate": "Dátum pozretia",
   "lists.watchedDateUnknown": "Neznámy dátum",
-  "lists.watchedEntries": "pozreté filmy",
-  "lists.watchedEntry": "pozretý film",
+  "lists.watchedEntries": "pozreté",
+  "lists.watchedEntry": "pozreté",
   "lists.watchedToday": "Pozreté dnes",
   "lists.watchedYesterday": "Pozreté včera",
   "lists.watchlist": "Na pozretie",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Zvukové stopy",
   "contribute.field.subtitles": "Titulky",
   "contribute.field.alternateTitles": "Alternatívne názvy",
-  "contribute.field.discs": "Disky"
+  "contribute.field.discs": "Disky",
+  "seriesDetail.markSeasonWatched": "Označiť sériu ako videnú",
+  "seriesDetail.clearSeasonWatched": "Zrušiť označenie videnej série",
+  "seriesDetail.addSeasonToWatchlist": "Pridať sériu do zoznamu na pozretie",
+  "seriesDetail.removeSeasonFromWatchlist": "Odobrať sériu zo zoznamu na pozretie",
+  "seriesDetail.seasonBulkHint": "Platí pre všetky epizódy v tomto zozname.",
+  "seriesDetail.episodeImageFromSeason": "Obrázok série",
+  "seriesDetail.episodeImageFromSeries": "Obrázok seriálu"
 }

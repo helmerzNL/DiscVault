@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Vaadatud uuesti",
   "lists.watchedDate": "Vaatamise kuupäev",
   "lists.watchedDateUnknown": "Tundmatu kuupäev",
-  "lists.watchedEntries": "vaadatud filmid",
-  "lists.watchedEntry": "vaadatud film",
+  "lists.watchedEntries": "vaadatud",
+  "lists.watchedEntry": "vaadatud",
   "lists.watchedToday": "Vaadatud täna",
   "lists.watchedYesterday": "Vaadatud eile",
   "lists.watchlist": "Vaatamisloend",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Heliribad",
   "contribute.field.subtitles": "Subtiitrid",
   "contribute.field.alternateTitles": "Alternatiivsed pealkirjad",
-  "contribute.field.discs": "Plaadid"
+  "contribute.field.discs": "Plaadid",
+  "seriesDetail.markSeasonWatched": "Märgi hooaeg vaadatuks",
+  "seriesDetail.clearSeasonWatched": "Eemalda hooaja vaatamismärge",
+  "seriesDetail.addSeasonToWatchlist": "Lisa hooaeg vaatamisloendisse",
+  "seriesDetail.removeSeasonFromWatchlist": "Eemalda hooaeg vaatamisloendist",
+  "seriesDetail.seasonBulkHint": "Kehtib kõigi siin loetletud osade kohta.",
+  "seriesDetail.episodeImageFromSeason": "Hooaja pilt",
+  "seriesDetail.episodeImageFromSeries": "Sarja pilt"
 }

@@ -1538,8 +1538,8 @@
   "lists.watchedAgain": "Opnieuw bekeken",
   "lists.watchedDate": "Bekekendatum",
   "lists.watchedDateUnknown": "Onbekende datum",
-  "lists.watchedEntries": "films bekeken",
-  "lists.watchedEntry": "film bekeken",
+  "lists.watchedEntries": "bekeken",
+  "lists.watchedEntry": "bekeken",
   "lists.watchedToday": "Vandaag bekeken",
   "lists.watchedYesterday": "Gisteren bekeken",
   "lists.watchlist": "Watchlist",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Audiotracks",
   "contribute.field.subtitles": "Ondertitels",
   "contribute.field.alternateTitles": "Alternatieve titels",
-  "contribute.field.discs": "Schijfjes"
+  "contribute.field.discs": "Schijfjes",
+  "seriesDetail.markSeasonWatched": "Markeer seizoen als bekeken",
+  "seriesDetail.clearSeasonWatched": "Wis bekeken voor seizoen",
+  "seriesDetail.addSeasonToWatchlist": "Seizoen toevoegen aan Watchlist",
+  "seriesDetail.removeSeasonFromWatchlist": "Seizoen verwijderen uit Watchlist",
+  "seriesDetail.seasonBulkHint": "Geldt voor elke aflevering in deze lijst.",
+  "seriesDetail.episodeImageFromSeason": "Seizoensafbeelding",
+  "seriesDetail.episodeImageFromSeries": "Serieafbeelding"
 }

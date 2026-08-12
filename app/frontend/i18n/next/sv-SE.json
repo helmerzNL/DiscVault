@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Sedd igen",
   "lists.watchedDate": "Sedd datum",
   "lists.watchedDateUnknown": "Okant datum",
-  "lists.watchedEntries": "filmer sedda",
-  "lists.watchedEntry": "film sedd",
+  "lists.watchedEntries": "sedda",
+  "lists.watchedEntry": "sedda",
   "lists.watchedToday": "Sedd i dag",
   "lists.watchedYesterday": "Sedd i går",
   "lists.watchlist": "Watchlist",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Ljudspår",
   "contribute.field.subtitles": "Undertexter",
   "contribute.field.alternateTitles": "Alternativa titlar",
-  "contribute.field.discs": "Skivor"
+  "contribute.field.discs": "Skivor",
+  "seriesDetail.markSeasonWatched": "Markera säsong som sedd",
+  "seriesDetail.clearSeasonWatched": "Ta bort säsong som sedd",
+  "seriesDetail.addSeasonToWatchlist": "Lägg till säsong i Watchlist",
+  "seriesDetail.removeSeasonFromWatchlist": "Ta bort säsong från Watchlist",
+  "seriesDetail.seasonBulkHint": "Gäller alla avsnitt som visas här.",
+  "seriesDetail.episodeImageFromSeason": "Säsongsbild",
+  "seriesDetail.episodeImageFromSeries": "Seriebild"
 }

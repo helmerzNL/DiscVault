@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Set igen",
   "lists.watchedDate": "Set dato",
   "lists.watchedDateUnknown": "Ukendt dato",
-  "lists.watchedEntries": "film set",
-  "lists.watchedEntry": "film set",
+  "lists.watchedEntries": "set",
+  "lists.watchedEntry": "set",
   "lists.watchedToday": "Set i dag",
   "lists.watchedYesterday": "Set i går",
   "lists.watchlist": "Watchlist",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Lydspor",
   "contribute.field.subtitles": "Undertekster",
   "contribute.field.alternateTitles": "Alternative titler",
-  "contribute.field.discs": "Discs"
+  "contribute.field.discs": "Discs",
+  "seriesDetail.markSeasonWatched": "Markér sæson som set",
+  "seriesDetail.clearSeasonWatched": "Ryd sæson som set",
+  "seriesDetail.addSeasonToWatchlist": "Tilføj sæson til Watchlist",
+  "seriesDetail.removeSeasonFromWatchlist": "Fjern sæson fra Watchlist",
+  "seriesDetail.seasonBulkHint": "Gælder for alle episoder på denne liste.",
+  "seriesDetail.episodeImageFromSeason": "Sæsonbillede",
+  "seriesDetail.episodeImageFromSeries": "Seriebillede"
 }

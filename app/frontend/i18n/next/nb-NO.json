@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Sett igjen",
   "lists.watchedDate": "Sett dato",
   "lists.watchedDateUnknown": "Ukjent dato",
-  "lists.watchedEntries": "filmer sett",
-  "lists.watchedEntry": "film sett",
+  "lists.watchedEntries": "sett",
+  "lists.watchedEntry": "sett",
   "lists.watchedToday": "Sett i dag",
   "lists.watchedYesterday": "Sett i går",
   "lists.watchlist": "Watchlist",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Lydspor",
   "contribute.field.subtitles": "Undertekster",
   "contribute.field.alternateTitles": "Alternative titler",
-  "contribute.field.discs": "Plater"
+  "contribute.field.discs": "Plater",
+  "seriesDetail.markSeasonWatched": "Merk sesong som sett",
+  "seriesDetail.clearSeasonWatched": "Fjern sesong som sett",
+  "seriesDetail.addSeasonToWatchlist": "Legg sesong til i Watchlist",
+  "seriesDetail.removeSeasonFromWatchlist": "Fjern sesong fra Watchlist",
+  "seriesDetail.seasonBulkHint": "Gjelder alle episodene som vises her.",
+  "seriesDetail.episodeImageFromSeason": "Sesongbilde",
+  "seriesDetail.episodeImageFromSeries": "Seriebilde"
 }

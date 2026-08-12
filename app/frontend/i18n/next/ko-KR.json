@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "다시 시청함",
   "lists.watchedDate": "시청 날짜",
   "lists.watchedDateUnknown": "알 수 없는 날짜",
-  "lists.watchedEntries": "시청한 영화",
-  "lists.watchedEntry": "시청한 영화",
+  "lists.watchedEntries": "시청함",
+  "lists.watchedEntry": "시청함",
   "lists.watchedToday": "오늘 시청함",
   "lists.watchedYesterday": "어제 시청함",
   "lists.watchlist": "시청 목록",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "오디오 트랙",
   "contribute.field.subtitles": "자막",
   "contribute.field.alternateTitles": "대체 제목",
-  "contribute.field.discs": "디스크"
+  "contribute.field.discs": "디스크",
+  "seriesDetail.markSeasonWatched": "시즌을 시청함으로 표시",
+  "seriesDetail.clearSeasonWatched": "시즌 시청 표시 해제",
+  "seriesDetail.addSeasonToWatchlist": "시즌을 시청 목록에 추가",
+  "seriesDetail.removeSeasonFromWatchlist": "시즌을 시청 목록에서 제거",
+  "seriesDetail.seasonBulkHint": "여기에 표시된 모든 에피소드에 적용됩니다.",
+  "seriesDetail.episodeImageFromSeason": "시즌 이미지",
+  "seriesDetail.episodeImageFromSeries": "시리즈 이미지"
 }

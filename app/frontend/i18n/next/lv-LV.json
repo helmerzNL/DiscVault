@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Skatīts vēlreiz",
   "lists.watchedDate": "Skatīšanās datums",
   "lists.watchedDateUnknown": "Nezināms datums",
-  "lists.watchedEntries": "skatītas filmas",
-  "lists.watchedEntry": "skatīta filma",
+  "lists.watchedEntries": "noskatīts",
+  "lists.watchedEntry": "noskatīts",
   "lists.watchedToday": "Skatīts šodien",
   "lists.watchedYesterday": "Skatīts vakar",
   "lists.watchlist": "Skatāmais saraksts",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Audio celiņi",
   "contribute.field.subtitles": "Subtitri",
   "contribute.field.alternateTitles": "Alternatīvie nosaukumi",
-  "contribute.field.discs": "Diski"
+  "contribute.field.discs": "Diski",
+  "seriesDetail.markSeasonWatched": "Atzīmēt sezonu kā noskatītu",
+  "seriesDetail.clearSeasonWatched": "Noņemt sezonas noskatīšanās atzīmi",
+  "seriesDetail.addSeasonToWatchlist": "Pievienot sezonu skatāmajam sarakstam",
+  "seriesDetail.removeSeasonFromWatchlist": "Noņemt sezonu no skatāmā saraksta",
+  "seriesDetail.seasonBulkHint": "Attiecas uz visām šeit uzskaitītajām sērijām.",
+  "seriesDetail.episodeImageFromSeason": "Sezonas attēls",
+  "seriesDetail.episodeImageFromSeries": "Seriāla attēls"
 }
