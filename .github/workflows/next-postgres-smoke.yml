@@ -71,6 +71,47 @@ jobs:
       - name: Test runtime secret configuration
         run: python -m unittest tests.test_next_runtime_secrets
 
+      # Listed by hand like every module above it. The throttles these cover sit
+      # on endpoints that had none, so a silent drop here restores the gap
+      # without anything failing to say so.
+      - name: Test authentication throttling
+        run: >-
+          python -m unittest
+          tests.test_next_auth_throttle
+          tests.test_next_legacy_auth
+          tests.test_next_mobile_auth
+          tests.test_next_review_login
+
+      # The passkey ceremony itself. On a passkey-only instance this is the
+      # entire front door, and both defects it covers were invisible in normal
+      # single-user testing: the challenge race needs two people at once, and
+      # the counter check needs an authenticator that actually counts.
+      - name: Test the passkey login ceremony
+        run: python -m unittest tests.test_next_passkey_ceremony
+
+      # Reads the routing table out of the source and checks that the token the
+      # server hands its own native clients can actually pass every gate the
+      # advertised contract sends them through. Tightening a route's permission
+      # without widening the tuple is meant to fail here -- today it would fail
+      # silently in the field instead, and only once token scopes are binding.
+      - name: Test token scope sufficiency
+        run: >-
+          python -m unittest
+          tests.test_next_token_scope_sufficiency
+          tests.test_next_api_token
+          tests.test_next_api_tokens
+
+      # A token's scope is only a limit if both halves have to agree, and only
+      # honestly a limit if the gates that consult no permission at all -- role
+      # management, user deletion, the auth toggle, ownership transfer -- refuse
+      # a token too. Losing either half silently restores an "advisory" scope,
+      # which looks identical from the outside to an enforced one.
+      - name: Test that token scopes bind
+        run: >-
+          python -m unittest
+          tests.test_next_token_binding
+          tests.test_next_plugin_authorization
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 
@@ -254,6 +295,15 @@ jobs:
       - name: Test adding a series from the title search
         run: python -m unittest tests.test_next_series_add_flow
 
+      # Named here for the same reason as the module above it. The database ids
+      # a record is known by live in two different tables -- a film's in
+      # `movie_identifiers`, a show's on the series -- and the edit surface has
+      # to keep them apart. It also holds the guard on the merge that used to
+      # blank an id the sources had found, which is a pure-function claim and
+      # needs no database.
+      - name: Test the database ids and where each one is stored
+        run: python -m unittest tests.test_next_movie_source_ids
+
       # Where a hand-created series gets its seasons. The PostgreSQL half is the
       # part that matters: that the offer writes nothing, and that a season
       # already in the collection comes back marked rather than filtered out --
@@ -349,6 +399,34 @@ jobs:
       - name: Test API and MCP connection grouping
         run: python -m unittest tests.test_next_api_connections
 
+      # Same hand-listed gap as the modules above: the container policy tests
+      # had never been added here, and the reorder module guards the member
+      # routes against requiring links the client was never shown (a container
+      # holding a tombstoned movie was permanently un-reorderable).
+      - name: Test container member routes and reordering
+        run: >-
+          python -m unittest
+          tests.test_next_containers
+          tests.test_next_container_reorder
+
+      # A MovieVault poster is served by its own route; the generic media route
+      # refuses it. This pins that every reader of a box-set's linked cover
+      # builds the URL that will actually serve it.
+      - name: Test the poster URL a linked MovieVault cover resolves to
+        run: python -m unittest tests.test_next_container_poster_url
+
+      # Two cuts of one film share an IMDb id, so a box set holding both lost a
+      # member to the dedupe. This guards that a collision only collapses two
+      # members when nothing distinguishes them.
+      - name: Test box-set member deduplication
+        run: python -m unittest tests.test_next_box_set_member_dedupe
+
+      # A vault and a collection showed a cover on their page and an empty tile
+      # in the library. This guards that every container surface resolves the
+      # cover through the one shared chain.
+      - name: Test the container tile's poster resolution
+        run: python -m unittest tests.test_next_container_tile_poster
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'
@@ -392,6 +470,11 @@ jobs:
               "/api/next/metadata/plugins",
               "/api/next/movies",
               "/api/next/containers",
+              # The library's own payload. It was never smoked, so a SQL error
+              # in the snapshot broke the whole library page with nothing red --
+              # and the container queries behind it are the ones that grew a
+              # borrowed-cover join.
+              "/api/next/app/snapshot",
               "/api/next/sync/state",
               "/api/next/sync/bootstrap",
               "/api/next/sync/delta?since=0",

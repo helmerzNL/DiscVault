@@ -15,6 +15,7 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 from app.backend.next_plugins.tmdb import plugin as tmdb
+from app.backend.next_series import provider_series_payload
 
 
 def _payload(**overrides):
@@ -230,6 +231,134 @@ class SeriesDetailsEntrypointTests(unittest.TestCase):
                     tmdb.series_details({"tmdbTvId": value}, {}),
                     {"status": "miss", "provider": "tmdb"},
                 )
+
+
+class LookupExternalSeriesIdTests(unittest.TestCase):
+    """A number a person typed, asked of the television namespace.
+
+    The film namespace has always been asked -- `lookup_external_id` is
+    `/movie/{id}` -- and a bare number does not say which namespace issued it.
+    TMDB's 1516 is a film and a television series with nothing to do with each
+    other, so answering from the film namespace alone tells somebody searching
+    for the show that no such thing exists.
+    """
+
+    def _lookup(self, payload, response=None, raises=None):
+        captured = {}
+
+        def fake_request(context, path, **params):
+            captured["path"] = path
+            if raises is not None:
+                raise raises
+            return response
+
+        original = tmdb._request
+        tmdb._request = fake_request
+        try:
+            return tmdb.lookup_external_series_id(payload, {}), captured
+        finally:
+            tmdb._request = original
+
+    def _show(self):
+        return {
+            "id": 1516,
+            "name": "The A-Team",
+            "original_name": "The A-Team",
+            "first_air_date": "1983-01-23",
+            "overview": "Soldiers of fortune.",
+            "poster_path": "/p.jpg",
+        }
+
+    def test_the_television_namespace_is_the_one_asked(self):
+        _result, captured = self._lookup({"tmdbId": "1516"}, response=self._show())
+        self.assertEqual(captured["path"], "/tv/1516")
+
+    def test_the_answer_is_a_candidate_to_choose_from(self):
+        """`items`, not a detail block: this runs beside `lookup_external_id`
+        and both offers land in the one list the person picks from."""
+        result, _ = self._lookup({"tmdbId": "1516"}, response=self._show())
+        self.assertEqual(result["status"], "hit")
+        item = result["items"][0]
+        self.assertEqual(item["identifierType"], "tmdb_tv")
+        self.assertEqual(item["identifier"], "1516")
+        self.assertEqual(item["title"], "The A-Team")
+        self.assertEqual(item["year"], "1983")
+
+    def test_the_candidate_is_the_one_the_add_screen_already_understands(self):
+        """Checked against the parser that will actually read it rather than
+        against a shape written down twice -- the same assertion the title
+        search carries, because both answers travel the same route."""
+        result, _ = self._lookup({"tmdbId": "1516"}, response=self._show())
+        item = result["items"][0]
+        self.assertEqual(item["mediaType"], "SHOW")
+        payload = provider_series_payload(item["series"])
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["identifier"], "1516")
+        self.assertEqual(payload["provider_id"], "tmdb")
+
+    def test_a_number_that_names_no_series_is_a_miss_not_an_error(self):
+        """The ordinary case, not a fault: every id typed for a film reaches
+        this too, and reporting each one as a failure would put a red message
+        on a search that worked."""
+        import requests
+
+        response = requests.Response()
+        response.status_code = 404
+        result, _ = self._lookup(
+            {"tmdbId": "10195"}, raises=requests.HTTPError(response=response)
+        )
+        self.assertEqual(result, {"status": "miss", "provider": "tmdb", "items": []})
+
+    def test_a_real_failure_is_still_a_failure(self):
+        """A 500 or a rejected key must not be reported as "no such series" --
+        that is the distinction `sourceErrorText` exists to draw."""
+        import requests
+
+        response = requests.Response()
+        response.status_code = 500
+        with self.assertRaises(requests.HTTPError):
+            self._lookup({"tmdbId": "1516"}, raises=requests.HTTPError(response=response))
+
+    def test_an_id_from_another_namespace_is_never_sent(self):
+        """An IMDb id reaches this whenever somebody searches by one. Pasting
+        it into a TMDB path would be a request that can only fail, and a slug
+        would be worse: it can succeed and name a different show."""
+        for value in ("tt0084967", "the-a-team", "1516a", ""):
+            with self.subTest(value=value):
+                result, captured = self._lookup({"tmdbId": value}, response=self._show())
+                self.assertEqual(result["items"], [])
+                self.assertNotIn("path", captured)
+
+    def test_the_series_identifier_map_wins_when_it_is_offered(self):
+        """The richer form, same precedence `series_details` gives it."""
+        _result, captured = self._lookup(
+            {"tmdbId": "1", "seriesIdentifiers": {"tmdb_tv": "1516"}}, response=self._show()
+        )
+        self.assertEqual(captured["path"], "/tv/1516")
+
+    def test_the_film_namespace_answers_a_miss_on_the_same_terms(self):
+        """The other half of asking both. A television id reaching the film
+        lookup used to raise, so a search that found the series still reported
+        a failed request beside it -- and `movie_details`, which calls that
+        first and falls back to a title search, raised instead of falling
+        back."""
+        import requests
+
+        response = requests.Response()
+        response.status_code = 404
+
+        def fake_request(context, path, **params):
+            raise requests.HTTPError(response=response)
+
+        original = tmdb._request
+        tmdb._request = fake_request
+        try:
+            self.assertEqual(
+                tmdb.lookup_external_id({"tmdbId": "1516"}, {}),
+                {"status": "miss", "provider": "tmdb"},
+            )
+        finally:
+            tmdb._request = original
 
 
 if __name__ == "__main__":

@@ -11,11 +11,20 @@ series were being created.
 What is pinned here is the route, not the wording: the television namespace is
 planned only for a source that has one, and the candidate a person picks travels
 to the import in the shape the existing linking code already accepts.
+
+The route reached one source. Planning the television namespace is not the same
+as asking anybody: a preview runs the identity sources and then TMDB by name,
+and a source outside both -- TheTVDB, which is where a great many series are
+described at all -- was never consulted however high the user had ranked it. So
+`search_series` was planned for TMDB and for nothing else, and a title search
+was TMDB's answer wearing the plural. `PreviewAsksEverySearchableSourceTests`
+below is that half.
 """
 
 import os
 import sys
 import unittest
+from unittest import mock
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -24,7 +33,11 @@ if repo_root not in sys.path:
 
 from app.backend import next_app
 from app.backend.next_metadata import plugin_execution_plan
+from app.backend.next_metadata import preview_title_search_plan
+from app.backend.next_metadata import query_from_payload
+from app.backend.next_metadata import run_metadata_source_pipeline
 from app.backend.next_plugins.tmdb import plugin as tmdb
+from app.backend.next_plugins.tvdb import plugin as tvdb
 from app.backend.next_series import provider_series_payload
 
 
@@ -60,6 +73,347 @@ class TitleSearchReachesTelevisionTests(unittest.TestCase):
             )
         ]
         self.assertEqual(plan, ["search_barcode"])
+
+
+class PreviewAsksEverySearchableSourceTests(unittest.TestCase):
+    """Which sources a title search reaches, and with which questions.
+
+    Membership is by declared capability rather than by id, which is the whole
+    point: installing a source that says it can search is enough, and no future
+    one is a code change here.
+    """
+
+    def _search_plan(self, capabilities, **query):
+        return [
+            step["entrypoint"]
+            for step in preview_title_search_plan(
+                {"capabilities": list(capabilities)},
+                {"previewMode": True, **query},
+            )
+        ]
+
+    def test_a_television_only_source_is_asked(self):
+        """TheTVDB's shape: a series namespace and no film one."""
+        self.assertEqual(
+            self._search_plan(["series_details", "search_series", "season_episodes"], title="Fargo"),
+            ["search_series"],
+        )
+
+    def test_enrichment_is_not_part_of_the_question(self):
+        """A preview has identified nothing yet, so a source is asked what the
+        typed text might mean and nothing else. Details, specs and box-set
+        detection belong to the movie that was picked."""
+        self.assertEqual(
+            self._search_plan(
+                ["search_title", "movie_details", "technical_specs", "box_set_candidates"],
+                title="Fargo",
+                detectBoxSets=True,
+            ),
+            ["search_title"],
+        )
+
+    def test_a_barcode_reaches_no_supporting_source(self):
+        """A source that never claimed to read this barcode must not acquire a
+        call that can only fail -- and answering a barcode with a title match is
+        the source identifying a release on its own initiative, which §7b
+        forbids."""
+        self.assertEqual(
+            self._search_plan(["search_title", "search_barcode"], externalBarcode="5051892123457"),
+            [],
+        )
+
+    def test_a_source_with_nothing_to_search_is_left_alone(self):
+        self.assertEqual(self._search_plan(["movie_details", "images"], title="Fargo"), [])
+
+
+class ATitleSearchReachesTheTelevisionSourceTests(unittest.TestCase):
+    """The pipeline half. The plan above decides what to ask; this decides who
+    is asked, and it is the half that was missing."""
+
+    PLUGINS = [
+        {
+            "id": "tmdb",
+            "name": "TMDb",
+            "categories": ["metadata_source"],
+            "capabilities": ["search_title", "search_series", "movie_details"],
+            "manifest": {"capabilities": ["search_title", "search_series", "movie_details"]},
+            "order_index": 10,
+        },
+        {
+            "id": "tvdb",
+            "name": "TheTVDB",
+            "categories": ["metadata_source"],
+            "capabilities": ["series_details", "search_series", "season_episodes"],
+            "manifest": {"capabilities": ["series_details", "search_series", "season_episodes"]},
+            "order_index": 20,
+        },
+    ]
+
+    def _answer(self, plugin_id, entrypoint, _payload, _context):
+        if plugin_id == "tvdb":
+            return {
+                "status": "ok",
+                "state": "available",
+                "elapsedMs": 1,
+                "result": {
+                    "status": "hit",
+                    "provider": "tvdb",
+                    "items": [
+                        {
+                            "provider": "tvdb",
+                            "providerLabel": "TheTVDB",
+                            "identifierType": "tvdb",
+                            "identifier": "305288",
+                            "title": "Stranger Things",
+                            "year": "2016",
+                            "mediaType": "SHOW",
+                            "series": {
+                                "providerId": "tvdb",
+                                "identifier": "305288",
+                                "identifierType": "tvdb",
+                                "title": "Stranger Things",
+                                "seasons": [],
+                            },
+                        }
+                    ],
+                },
+            }
+        return {
+            "status": "ok",
+            "state": "available",
+            "elapsedMs": 1,
+            "result": {
+                "status": "hit",
+                "provider": "tmdb",
+                "items": [
+                    {
+                        "provider": "tmdb",
+                        "providerLabel": "TMDb",
+                        "title": "Stranger Things",
+                        "year": "2016",
+                        "tmdbId": "66732",
+                    }
+                ],
+            },
+        }
+
+    def _run(self, payload):
+        with mock.patch("app.backend.next_metadata.metadata_source_plugins", return_value=self.PLUGINS), \
+             mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False), \
+             mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False), \
+             mock.patch("app.backend.next_metadata.run_plugin_entrypoint", side_effect=self._answer):
+            return run_metadata_source_pipeline(
+                object(),
+                query=query_from_payload(payload),
+                current={"metadata": {}},
+                technical_current={},
+            )
+
+    def _executions(self, result):
+        return {(item["pluginId"], item["entrypoint"]) for item in result["executions"]}
+
+    def test_the_television_source_is_consulted(self):
+        result = self._run({"title": "Stranger Things", "previewMode": True})
+        self.assertIn(("tvdb", "search_series"), self._executions(result))
+
+    def test_its_candidates_reach_the_picker(self):
+        """Being called is not the same as being offered. The candidate list is
+        what the Add screen draws, so a result the merge quietly dropped would
+        look exactly like a source that was never asked."""
+        result = self._run({"title": "Stranger Things", "previewMode": True})
+        titles = [
+            candidate.get("title")
+            for item in result["results"]
+            if item.get("pluginId") == "tvdb"
+            for candidate in item.get("candidates") or []
+        ]
+        self.assertEqual(titles, ["Stranger Things"])
+
+    def test_tmdb_still_answers_first(self):
+        """The pre-selected candidate is whichever comes first, so the new
+        source is appended rather than inserted: a film search must not start
+        defaulting to a series because a second source was added."""
+        result = self._run({"title": "Stranger Things", "previewMode": True})
+        plugin_order = [item.get("pluginId") for item in result["results"]]
+        self.assertLess(plugin_order.index("tmdb"), plugin_order.index("tvdb"))
+
+    def test_a_barcode_scan_asks_it_nothing(self):
+        result = self._run({"barcode": "5051892123457", "previewMode": True})
+        self.assertNotIn("tvdb", {plugin_id for plugin_id, _ in self._executions(result)})
+
+
+class AnIdentifierIsAskedOfBothNamespacesTests(unittest.TestCase):
+    """A bare number does not say which namespace issued it.
+
+    `lookup_external_id` is `/movie/{id}` at TMDB, so searching by an id could
+    only ever find a film. TMDB's 1516 is a film and a television series with
+    nothing to do with each other, and somebody searching for the series was
+    told there is no such thing.
+    """
+
+    CAPABILITIES = ["search_title", "search_series", "movie_details",
+                    "lookup_external_id", "lookup_external_series_id"]
+
+    def _plan(self, **query):
+        return [
+            step["entrypoint"]
+            for step in plugin_execution_plan(
+                {"capabilities": list(self.CAPABILITIES)},
+                {"previewMode": True, **query},
+            )
+        ]
+
+    def test_a_typed_id_reaches_the_television_namespace(self):
+        self.assertEqual(
+            self._plan(tmdbId="1516"),
+            ["lookup_external_id", "lookup_external_series_id"],
+        )
+
+    def test_a_source_without_the_capability_gains_no_empty_step(self):
+        plan = [
+            step["entrypoint"]
+            for step in plugin_execution_plan(
+                {"capabilities": ["lookup_external_id"]},
+                {"previewMode": True, "tmdbId": "1516"},
+            )
+        ]
+        self.assertEqual(plan, ["lookup_external_id"])
+
+    def test_an_id_another_source_resolved_asks_only_the_film_namespace(self):
+        """A barcode MovieVault matched to a film has settled the namespace
+        already. Asking the television one with that number would offer an
+        unrelated show beside the right film, with nobody having asked about
+        television at all -- §7b's failure mode wearing a candidate card."""
+        self.assertEqual(
+            self._plan(tmdbId="10195", resolvedIdentity=True),
+            ["lookup_external_id"],
+        )
+
+
+class ATitleSearchIsNotReplacedByAResolvedIdTests(unittest.TestCase):
+    """Why "The A-Team" returned one film and no series.
+
+    An identity source recognises the title and hands over the film's TMDB id.
+    That id was copied into the query TMDB is then asked, and the preview plan
+    for a query carrying an id is `lookup_external_id` and nothing else -- so
+    both the film search and the television search disappeared, and the answer
+    was the single film that source happened to match.
+
+    The id is borrowed, not typed. The person typed a title.
+    """
+
+    TMDB = {
+        "id": "tmdb", "name": "TMDb", "categories": ["metadata_source"],
+        "capabilities": ["search_title", "search_series", "movie_details",
+                         "lookup_external_id", "lookup_external_series_id"],
+        "manifest": {}, "order_index": 10,
+    }
+    IDENTITY = {
+        "id": "movievault_v2", "name": "MovieVault", "categories": ["metadata_source"],
+        "capabilities": ["search_barcode", "search_title"], "manifest": {}, "order_index": 45,
+    }
+
+    def _tmdb_entrypoints(self, payload, identity_result):
+        seen = []
+
+        def answer(plugin_id, entrypoint, _payload, _context):
+            seen.append((plugin_id, entrypoint))
+            if plugin_id == "movievault_v2":
+                return {"status": "ok", "state": "available", "elapsedMs": 1, "result": identity_result}
+            return {"status": "ok", "state": "available", "elapsedMs": 1,
+                    "result": {"status": "hit", "provider": "tmdb", "items": []}}
+
+        with mock.patch("app.backend.next_metadata.metadata_source_plugins",
+                        return_value=[self.TMDB, self.IDENTITY]), \
+             mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False), \
+             mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False), \
+             mock.patch("app.backend.next_metadata.run_plugin_entrypoint", side_effect=answer):
+            run_metadata_source_pipeline(
+                object(),
+                query=query_from_payload(payload),
+                current={"metadata": {}},
+                technical_current={},
+            )
+        return [entrypoint for plugin_id, entrypoint in seen if plugin_id == "tmdb"]
+
+    TITLE_HIT = {
+        "status": "hit", "provider": "movievault_v2",
+        "items": [{"title": "The A-Team", "year": "2010", "tmdbId": "10195"}],
+    }
+    BARCODE_HIT = {
+        "status": "hit", "provider": "movievault_v2",
+        "movie": {"title": "The A-Team", "year": "2010"}, "tmdbId": "10195",
+    }
+
+    def test_the_title_still_decides_what_tmdb_is_asked(self):
+        self.assertEqual(
+            self._tmdb_entrypoints({"title": "The A-Team", "previewMode": True}, self.TITLE_HIT),
+            ["search_title", "search_series"],
+        )
+
+    def test_a_barcode_still_uses_the_id_the_source_resolved(self):
+        """The case the borrowing was built for, and the one that must not
+        regress: on a scan there is no title to search, and the resolved id is
+        all TMDB has to go on."""
+        self.assertEqual(
+            self._tmdb_entrypoints({"barcode": "5051892123457", "previewMode": True}, self.BARCODE_HIT),
+            ["lookup_external_id"],
+        )
+
+
+class ATvdbCandidateCarriesItsSeriesTests(unittest.TestCase):
+    """The same contract `ACandidateCarriesItsSeriesTests` pins for TMDB, on the
+    source that has no film namespace at all -- so every result it offers is a
+    series, and a candidate that failed to say so would arrive as a film."""
+
+    def _items(self):
+        def fake_request(context, path, **params):
+            return [
+                {
+                    "tvdb_id": "305288",
+                    "name": "Stranger Things",
+                    "year": "2016",
+                    "overview": "Examples.",
+                    "image_url": "https://artworks.thetvdb.com/p.jpg",
+                }
+            ]
+
+        original = tvdb._request
+        tvdb._request = fake_request
+        try:
+            return tvdb.search_series({"title": "Stranger Things"}, {})["items"]
+        finally:
+            tvdb._request = original
+
+    def test_the_candidate_states_it_is_television(self):
+        self.assertEqual(self._items()[0]["mediaType"], "SHOW")
+
+    def test_the_series_block_fits_the_existing_linking_contract(self):
+        payload = provider_series_payload(self._items()[0]["series"])
+        self.assertIsNotNone(payload)
+        self.assertEqual(payload["identifier"], "305288")
+        self.assertEqual(payload["provider_id"], "tvdb")
+        self.assertEqual(payload["title"], "Stranger Things")
+
+    def test_the_identifier_stays_in_its_own_namespace(self):
+        """The assertion that matters. Stored as `tmdb_tv`, a TheTVDB id would be
+        an id in a namespace that never issued it: the series refresh hands
+        `seriesIdentifiers` to each source and every one of them reads the entry
+        it recognises, so the number would go to TMDB, name a different show or
+        none, and the series would be described as something it is not."""
+        self.assertEqual(provider_series_payload(self._items()[0]["series"])["identifier_type"], "tvdb")
+
+    def test_a_source_that_names_no_namespace_still_means_tmdb(self):
+        """The MovieVault feed has always sent a bare `tmdbTvId`. Reading that
+        silence as anything else would re-file every series it ever placed."""
+        payload = provider_series_payload(
+            {"tmdbTvId": "1399", "providerId": "tmdb", "title": "Fargo", "seasons": []}
+        )
+        self.assertEqual(payload["identifier_type"], "tmdb_tv")
 
 
 class ACandidateCarriesItsSeriesTests(unittest.TestCase):
@@ -193,7 +547,27 @@ class TheFrontendCarriesItTooTests(unittest.TestCase):
         television namespace -- so without the television id in the key, "Fargo
         (2014)" the series and "Fargo" the film collapse onto one entry and
         selecting either selects the other."""
-        self.assertIn("tmdbtv:${seriesRef}", self._normalizer())
+        self.assertIn("seriesKey", self._normalizer())
+
+    def test_the_key_carries_the_namespace_the_id_was_issued_in(self):
+        """Two sources answer the same search now, and their ids are unrelated
+        numbers: TheTVDB's 305288 and TMDB's 305288 are different shows. A key
+        built from the number alone would collapse them onto one card, so the
+        namespace is part of it -- and an id stated without one still reads as
+        `tmdb_tv`, which is what the MovieVault feed has always sent."""
+        body = self._normalizer()
+        self.assertIn("${seriesRefType || \"tmdb_tv\"}:${seriesRef}", body)
+        self.assertIn("series?.identifierType", body)
+
+    def test_the_deduplication_uses_the_same_namespaced_reference(self):
+        """`lookupMovieCandidates` drops a candidate whose identity it has
+        already seen. Comparing only `tmdbTvId` there made every TheTVDB result
+        identity-less, so two different series with one title deduplicated onto
+        the first."""
+        start = self.source.index("function lookupMovieCandidates(")
+        body = self.source[start:self.source.index("\n    function ", start + 1)]
+        self.assertIn("normalized.seriesKey", body)
+        self.assertNotIn("normalized.series?.tmdbTvId", body)
 
     def test_the_card_says_which_it_is(self):
         self.assertIn("importCenter.candidateSeries", self.source)

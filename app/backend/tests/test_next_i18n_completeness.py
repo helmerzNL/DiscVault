@@ -112,6 +112,43 @@ class NextI18nCompletenessTests(unittest.TestCase):
         ):
             self.assertIn(key, self.source)
 
+    def test_the_detail_page_saves_a_title_not_a_movie(self):
+        """The page holds films and series discs alike -- a disc of a show is a
+        `movies` row with `media_type='SHOW'` and is edited here -- so saving one
+        said "Movie saved." over a series. The noun has to be the neutral one the
+        page already uses for the record itself."""
+        source = _load(os.path.join(I18N_DIR, SOURCE_LOCALE))
+        self.assertEqual(source["movieDetail.saved"], "Title saved.")
+        self.assertEqual(source["movieDetail.saving"], "Saving title...")
+        for path in sorted(glob.glob(os.path.join(I18N_DIR, "*.json"))):
+            locale = os.path.basename(path)
+            if locale == SOURCE_LOCALE:
+                continue
+            catalog = _load(path)
+            for key in ("movieDetail.saved", "movieDetail.saving"):
+                # Every locale must carry its own wording. An untranslated locale
+                # would pass the completeness check above by echoing English,
+                # which is exactly how a half-finished sweep survives review.
+                self.assertNotEqual(
+                    catalog[key],
+                    source[key],
+                    f"{locale} still shows the English {key}",
+                )
+
+    def test_the_inline_fallback_matches_the_source_catalog(self):
+        """`tNext(key, fallback)` renders the fallback whenever the catalog has
+        not loaded. Leaving it behind when the wording changes puts the old text
+        on a slow connection only -- the one condition nobody checks."""
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            ui_source = handle.read()
+        catalog = _load(os.path.join(I18N_DIR, SOURCE_LOCALE))
+        for key in ("movieDetail.saved", "movieDetail.saving"):
+            self.assertIn(
+                f'tNext("{key}", "{catalog[key]}")',
+                ui_source,
+                f"the inline fallback for {key} disagrees with en-US.json",
+            )
+
     def test_locale_files_discovered(self):
         self.assertGreater(len(self.locale_files), 0)
 

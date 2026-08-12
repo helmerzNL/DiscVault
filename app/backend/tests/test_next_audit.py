@@ -135,6 +135,7 @@ class NextAuditHelperTests(unittest.TestCase):
         self.assertEqual(sql, "(false)")
         self.assertEqual(params, [])
 
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
     def test_public_request_ip_prefers_forwarded_public_client_ip(self):
         app = Flask(__name__)
 
@@ -150,6 +151,7 @@ class NextAuditHelperTests(unittest.TestCase):
         self.assertEqual(details["ip"], "8.8.8.8")
         self.assertEqual(details["source"], "X-Forwarded-For[0]")
 
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
     def test_public_request_ip_prefers_discvault_forwarded_client_ip(self):
         app = Flask(__name__)
 
@@ -164,6 +166,27 @@ class NextAuditHelperTests(unittest.TestCase):
         self.assertEqual(selected, "8.8.4.4")
         self.assertEqual(details["ip"], "8.8.4.4")
         self.assertEqual(details["source"], "X-DiscVault-Client-IP")
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_forwarded_client_ip_is_ignored_without_a_trusted_proxy(self):
+        # Deliberate contract change. Both tests above used to pass with no
+        # configuration at all, which is precisely the defect: the address
+        # written into the audit trail was whatever the audited party claimed.
+        # Honouring a forwarded header now requires the operator to name the hop
+        # allowed to make that claim.
+        app = Flask(__name__)
+
+        with app.test_request_context(
+            "/api/next/mcp/catalog",
+            headers={"X-Forwarded-For": "8.8.8.8", "X-DiscVault-Client-IP": "8.8.4.4"},
+            environ_base={"REMOTE_ADDR": "9.9.9.9"},
+        ):
+            details = next_audit.request_ip_details()
+            selected = next_audit.public_request_ip()
+
+        self.assertEqual(selected, "9.9.9.9")
+        self.assertEqual(details["source"], "remote_addr")
+        self.assertFalse(details["forwardingTrusted"])
 
     def test_api_audit_metadata_includes_command_and_request_ip(self):
         app = Flask(__name__)

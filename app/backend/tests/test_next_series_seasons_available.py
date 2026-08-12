@@ -354,22 +354,42 @@ class TheEpisodeGateExplainsItselfTests(unittest.TestCase):
         self.assertIn("episodesCollectorsHint", body)
         self.assertIn("collectorsModeEnabled()", body)
 
-    def test_both_row_shapes_carry_it(self):
-        """`seriesSeasonRowsHtml` returns plain field rows when no season has a
-        poster and Collectors mode is off, and cards otherwise. A hint added to
-        only one branch would be missing in exactly the case it is for."""
+    def test_the_browser_carries_it_on_its_one_rendering_path(self):
+        """The season browser has a single shape.
+
+        It used to have two -- plain field rows when no season had a poster,
+        cards otherwise -- and the hint had to be attached to both or it went
+        missing in exactly the case it exists for. One rail and one stage is
+        one place to attach it, which is the point of collapsing the split.
+        """
         body = self._rows_function()
-        plain = body.index("return detailFieldRows(")
-        cards = body.index('return `<div class="series-season-list">')
-        self.assertIn("episodesHint", body[plain:body.index("\n", plain)])
-        self.assertIn("episodesHint", body[cards:body.index("\n", cards)])
+        browser = body.index('return `<div class="series-season-browser">')
+        self.assertIn("episodesHint", body[browser:body.index("\n", browser)])
+        self.assertNotIn("return detailFieldRows(", body)
 
     def test_it_is_said_once_rather_than_per_season(self):
         """Eight seasons must not carry the same sentence eight times -- the
         statement is about the page, not about a season."""
-        row = self.source.index("function seriesSeasonRowHtml(")
-        body = self.source[row:self.source.index("\n    function ", row + 1)]
-        self.assertNotIn("episodesCollectorsHint", body)
+        for name in ("function seriesSeasonRailHtml(", "function seriesSeasonStageHtml("):
+            start = self.source.index(name)
+            body = self.source[start:self.source.index("\n    function ", start + 1)]
+            self.assertNotIn("episodesCollectorsHint", body)
+
+    def test_a_season_that_fetched_nothing_is_not_re_fetched_on_every_visit(self):
+        """Stepping back to a season must not ask the source again.
+
+        The Collectors switch exists because opening a season costs one request
+        per season upstream. A cache that only remembers the seasons that
+        answered would make the empty and failed ones free to re-ask -- and a
+        reader stepping along the rail would hit the source once per step.
+        """
+        start = self.source.index("async function loadSeasonEpisodes(")
+        body = self.source[start:self.source.index("\n    function ", start + 1)]
+        self.assertIn("seriesSeasonEpisodeCache.set(seasonId, {message:", body)
+        self.assertIn("seriesSeasonEpisodeCache.set(seasonId, {episodes:", body)
+        # The failed request is the one outcome deliberately left uncached.
+        catch = body.index("} catch (error) {")
+        self.assertNotIn("seriesSeasonEpisodeCache.set", body[catch:])
 
 
 if __name__ == "__main__":  # pragma: no cover

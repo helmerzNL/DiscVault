@@ -68,8 +68,10 @@ try:
         hash_recovery_code,
         identity_digest,
         ip_digest,
+        ip_only_attempt_is_throttled,
         legacy_auth_env_enabled,
         safe_audit_metadata,
+        secret_digest,
         totp_qr_data_uri,
         totp_uri,
         validate_password,
@@ -77,7 +79,7 @@ try:
         verify_recovery_code,
         verify_totp,
     )
-    from .next_audit import request_ip_details
+    from .next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
     from .next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -115,8 +117,10 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         hash_recovery_code,
         identity_digest,
         ip_digest,
+        ip_only_attempt_is_throttled,
         legacy_auth_env_enabled,
         safe_audit_metadata,
+        secret_digest,
         totp_qr_data_uri,
         totp_uri,
         validate_password,
@@ -124,7 +128,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_recovery_code,
         verify_totp,
     )
-    from next_audit import request_ip_details
+    from next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
     from next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -154,24 +158,73 @@ RECOVERY_CODE_GROUP_LENGTH = 4
 MOBILE_AUTH_FLOW_TTL_SECONDS = 5 * 60
 MOBILE_AUTH_CODE_TTL_SECONDS = 60
 MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES = {"discvault"}
+# What a review login's token may do.
+#
+# The review flow assigns exactly one role -- `media_viewer` (see review_login),
+# whose grants are collection.view, containers.view, groups.view,
+# watchlist.manage and lending.request. That role exists, in its own migration's
+# words, so an account "can view group media and use personal watchlist or
+# borrowing features"; the token was missing both halves of that second clause,
+# so a reviewer could browse and nothing else. Neither key grants anything the
+# assigned role does not already carry.
+#
+# The metadata.* keys below are not in `media_viewer`. They are left in place
+# because removing them would narrow the token today, and this tuple only ever
+# widens; once a token's keys must also be held by the role, they stop having
+# any effect on their own.
 REVIEW_LOGIN_TOKEN_PERMISSIONS = (
     "api.read",
     "collection.view",
     "containers.view",
     "groups.view",
+    "lending.request",
     "metadata.search",
     "metadata.refresh_one",
     "metadata.refresh_bulk",
+    "watchlist.manage",
 )
+# What a native client's token may do.
+#
+# The guiding rule is that this tuple must cover what the server itself tells
+# its clients to call -- no more. `mobile_endpoint_contract_payload` is that
+# instruction, and three of its groups had no key here at all: locations and
+# their QR codes (containers.view), the two metadata-refresh routes and the job
+# list (metadata.refresh_one), and every loan-request route (lending.request).
+#
+# collection.view is not in the advertised contract; it is here because its
+# absence was incoherent. The tuple already grants collection.add and
+# collection.edit_all, so it described a client permitted to change a movie but
+# not to read one. That went unnoticed while a token's keys were merely added to
+# the role's; it stops being harmless the moment they have to agree.
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
     "metadata.search",
+    "metadata.refresh_one",
+    "collection.view",
     "collection.add",
     "collection.add_own",
     "collection.import",
     "collection.edit_all",
+    "containers.view",
+    "lending.request",
     "watchlist.manage",
 )
+
+# What a throttled request is told, per throttle scope.
+#
+# Each entry repeats verbatim what its endpoint already answers when the
+# credential is simply wrong -- same message, same status. A distinct "you are
+# rate limited" reply would confirm to an attacker that they found a real
+# account and are being counted, and would tell a legitimate user nothing they
+# can act on. The legacy password flow has answered this way since it was
+# written; these follow it.
+SCOPED_THROTTLE_RESPONSES: dict[str, tuple[str, int]] = {
+    "recovery": ("Invalid username or recovery code", 401),
+    "invite": ("Invalid or expired invite code", 403),
+    "review": ("Invalid credentials", 401),
+    "mobile-exchange": ("Mobile auth code is expired or already used", 400),
+    "passkey-verify": ("Unknown credential", 400),
+}
 
 # Native clients that may mint their own API token by logging in. The mobile
 # PKCE exchange and the deep-link scheme are shared between platforms, so the
@@ -957,6 +1010,53 @@ def _observed_request_ip() -> dict[str, str]:
     return {"ip": details.get("ip") or "", "source": details.get("source") or ""}
 
 
+def _peer_ip_address() -> str:
+    """The address a throttle may attribute this request to.
+
+    A direct connection answers with the peer. Behind a proxy the operator has
+    configured as trusted, it answers with the client address recovered from the
+    forwarded chain -- so each real client gets its own bucket instead of the
+    whole instance sharing the proxy's.
+
+    What it never does is believe a forwarding header from an unvouched hop.
+    Counting failures against a value the caller sets for itself would hand the
+    caller a reset button. A private address is kept rather than discarded: on a
+    self-hosted instance the LAN address is frequently the only one there is,
+    and collapsing every LAN client into one empty bucket is worse than useless.
+    """
+
+    try:
+        return trusted_client_ip()
+    except RuntimeError:  # pragma: no cover - no request context (workers, tests)
+        return ""
+
+
+def _throttle_address_is_per_client() -> bool:
+    """Whether the throttle address identifies one client rather than a crowd.
+
+    True for a direct connection, and for a trusted-proxy topology where the
+    real client address was recovered. False for the unconfigured proxy case,
+    where every caller shares the proxy's address and a tight ceiling would lock
+    everyone out at once.
+    """
+
+    try:
+        if request_is_behind_trusted_proxy():
+            return True
+        peer = str(request.remote_addr or "").strip()
+    except RuntimeError:  # pragma: no cover - no request context
+        return False
+    if not peer:
+        return False
+    # No trusted proxy is configured. The address is per-client only if nothing
+    # is forwarding on the caller's behalf; a forwarding header arriving from an
+    # unvouched hop is exactly the case we must not tighten for.
+    return not any(
+        request.headers.get(header)
+        for header in ("X-Forwarded-For", "X-Original-Forwarded-For", "Forwarded")
+    )
+
+
 def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
     if not _auth_table_exists(conn, "api_access_tokens") or not _auth_table_exists(conn, "users"):
         return None
@@ -975,6 +1075,7 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
                 t.id AS api_token_id,
                 t.name AS api_token_name,
                 t.scopes AS api_token_scopes,
+                t.client_kind AS api_token_client_kind,
                 t.permission_keys AS api_token_permission_keys
             FROM api_access_tokens t
             JOIN users u ON u.id = t.user_id
@@ -992,16 +1093,28 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
         # answer "is this one mine?". Always the address the server observed —
         # a client-supplied one would be a claim rather than evidence.
         observed = _observed_request_ip()
+        stored_keys = [str(item) for item in (row["api_token_permission_keys"] or [])]
+        reconciled = _reconciled_native_token_permissions(
+            row.pop("api_token_client_kind"), stored_keys
+        )
         cur.execute(
             """
             UPDATE api_access_tokens
             SET last_used_at=now(),
                 last_seen_ip=COALESCE(NULLIF(%s, ''), last_seen_ip),
-                last_seen_ip_source=COALESCE(NULLIF(%s, ''), last_seen_ip_source)
+                last_seen_ip_source=COALESCE(NULLIF(%s, ''), last_seen_ip_source),
+                permission_keys=COALESCE(%s::jsonb, permission_keys)
             WHERE id=%s
             """,
-            (observed.get("ip"), observed.get("source"), row["api_token_id"]),
+            (
+                observed.get("ip"),
+                observed.get("source"),
+                json.dumps(reconciled) if reconciled is not None else None,
+                row["api_token_id"],
+            ),
         )
+        if reconciled is not None:
+            row["api_token_permission_keys"] = reconciled
     row["apiToken"] = {
         "id": row.pop("api_token_id"),
         "name": row.pop("api_token_name"),
@@ -1009,6 +1122,42 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
         "permissionKeys": row.pop("api_token_permission_keys") or [],
     }
     return row
+
+
+def _reconciled_native_token_permissions(
+    client_kind: Any, stored_keys: list[str]
+) -> list[str] | None:
+    """Bring a native client's stored scope up to what login would issue today.
+
+    A native client has no refresh endpoint (see issue_mobile_api_token): the
+    tuple it was given is fixed until the user signs in again, and it only signs
+    in again once its token stops working. So widening the tuple leaves every
+    already-installed app on the old, narrower one -- and once a token's keys
+    have to agree with the role, "narrower" means routes that worked yesterday
+    answer 403 until someone re-authenticates. Reconciling on use removes that
+    window without asking anyone to log in again.
+
+    Only native rows are touched. A user-created token is a scope its owner
+    chose, and rewriting that would be the opposite of taking it seriously; a
+    native token is not a chosen scope but "this app, on this device", which the
+    server already re-decides at every login. This applies the same decision
+    without waiting for one.
+
+    This cannot escalate: the role is required independently, so a key added
+    here that the holder's role lacks stays inert. Returns None when there is
+    nothing to change, which is the case from the second request onwards.
+    """
+    if str(client_kind or "") not in NATIVE_CLIENT_KINDS:
+        return None
+    if not stored_keys:
+        # An empty list is grandfathered as unscoped rather than reconciled --
+        # rewriting it would narrow a token that currently has full role
+        # authority, which is a revocation, not a repair.
+        return None
+    missing = [key for key in MOBILE_AUTH_TOKEN_PERMISSIONS if key not in stored_keys]
+    if not missing:
+        return None
+    return stored_keys + missing
 
 
 def _parse_uuid(value: Any) -> UUID | None:
@@ -1487,7 +1636,13 @@ def register_next_auth_routes(
                     str(target_id) if target_id is not None else None,
                     summary,
                     Jsonb(_json_ready(metadata or {})),
-                    request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
+                    # The address the server resolved, not the one the caller
+                    # claimed. This writer kept its own inline copy of the old
+                    # "first X-Forwarded-For hop" rule and so was missed when
+                    # forwarded headers stopped being believed on their own --
+                    # which left the auth events, the ones that most need a
+                    # truthful address, choosable by the caller.
+                    trusted_client_ip(),
                     request.headers.get("User-Agent"),
                 ),
             )
@@ -1873,6 +2028,103 @@ def register_next_auth_routes(
                 WHERE occurred_at < now() - interval '24 hours'
                 """
             )
+
+    # --- Throttling for the endpoints outside the legacy password flow --------
+    #
+    # These reuse the legacy_auth_attempts table rather than adding one. The
+    # table has no column saying which endpoint an attempt belongs to, and it
+    # does not need one: the digests are namespaced, so a failed recovery
+    # attempt and a failed invite redemption for the same username land in
+    # different buckets and cannot exhaust each other's budget. Nothing here
+    # touches the buckets the legacy password flow already uses.
+
+    def scoped_attempt_digests(scope: str, identity: Any = None) -> tuple[str, str]:
+        """Return (identity_digest, ip_digest) for a throttle scope.
+
+        When ``identity`` is None the endpoint has no name to key on -- the
+        caller proves possession of a credential and nothing else -- so both
+        dimensions collapse onto the peer address and the caller is expected to
+        use the IP-only threshold.
+        """
+
+        ip_hash = secret_digest(f"{scope}-ip", _peer_ip_address())
+        if identity is None:
+            return ip_hash, ip_hash
+        normalized = str(identity or "").strip().casefold()
+        return secret_digest(f"{scope}-identity", normalized), ip_hash
+
+    def scoped_attempt_failures(conn, identity_hash: str, ip_hash: str) -> tuple[int, int]:
+        if not table_exists(conn, "legacy_auth_attempts"):
+            return (0, 0)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    COUNT(*) FILTER (WHERE identity_digest=%s AND NOT succeeded)::int AS identity_failures,
+                    COUNT(*) FILTER (WHERE ip_digest=%s AND NOT succeeded)::int AS ip_failures
+                FROM legacy_auth_attempts
+                WHERE occurred_at >= now() - interval '15 minutes'
+                """,
+                (identity_hash, ip_hash),
+            )
+            row = cur.fetchone() or {}
+        return (
+            int(row.get("identity_failures") or 0),
+            int(row.get("ip_failures") or 0),
+        )
+
+    def record_scoped_attempt(identity_hash: str, ip_hash: str, *, succeeded: bool) -> None:
+        """Record an attempt on a connection of its own.
+
+        Every endpoint below rejects from inside ``with conn.transaction():``,
+        where raising rolls the transaction back -- and a rejection that erases
+        its own evidence is a throttle that never counts past one. A separate
+        short-lived connection commits independently of whatever the caller's
+        transaction decides to do.
+
+        Failures here are swallowed: a throttle that cannot write must not be
+        able to reject a legitimate login.
+        """
+
+        try:
+            with connect() as attempt_conn:
+                if not table_exists(attempt_conn, "legacy_auth_attempts"):
+                    return
+                record_legacy_attempt(attempt_conn, identity_hash, ip_hash, succeeded=succeeded)
+                attempt_conn.commit()
+        except Exception:  # pragma: no cover - defensive
+            app.logger.exception("Failed to record authentication attempt")
+
+    def enforce_scoped_throttle(
+        conn,
+        scope: str,
+        identity: Any = None,
+        *,
+        ip_only: bool = False,
+    ) -> tuple[str, str]:
+        """Reject when this scope is over budget, else return its digests.
+
+        The rejection is deliberately the same generic 401 the endpoint gives
+        for a wrong credential: a distinct "you are rate limited" answer tells an
+        attacker their probing is working and tells a legitimate user nothing
+        they can act on.
+        """
+
+        identity_hash, ip_hash = scoped_attempt_digests(scope, identity)
+        identity_failures, ip_failures = scoped_attempt_failures(conn, identity_hash, ip_hash)
+        throttled = (
+            ip_only_attempt_is_throttled(
+                ip_failures,
+                address_is_per_client=_throttle_address_is_per_client(),
+            )
+            if ip_only
+            else attempt_is_throttled(identity_failures, ip_failures)
+        )
+        if throttled:
+            record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
+            message, status = SCOPED_THROTTLE_RESPONSES[scope]
+            raise next_api_error(message, status)
+        return identity_hash, ip_hash
 
     def reconcile_review_legacy_user(conn) -> None:
         if not (
@@ -2355,6 +2607,56 @@ def register_next_auth_routes(
                 cur.execute("UPDATE users SET updated_at=now() WHERE id=%s", (user_id,))
         return user_admin_row(conn, user_id)
 
+    def deny_api_token_actor(conn, actor: dict[str, Any]) -> None:
+        """Refuse an actor that arrived on a bearer token, whatever its scope.
+
+        The gates below ask "is this an owner or an admin" and stop. That is the
+        right question for a session and the wrong one for a token: a token
+        inherits its holder's role, so these routes -- roles, users, invites,
+        switching authentication off, RBAC mode, ownership transfer, legacy
+        credentials -- stood open to any token belonging to an admin, however
+        narrowly it was scoped. Making the permission gates an intersection does
+        not reach them, because they consult no permission at all.
+
+        Nothing legitimate is lost: no route in the advertised native contract
+        needs an admin role, and administrative permissions are not grantable to
+        a token in the first place.
+        """
+        if not isinstance(actor.get("apiToken"), dict):
+            return
+        token = actor.get("apiToken") or {}
+        message = "API tokens cannot be used for administrative actions"
+        try:
+            audit_event(
+                conn,
+                event_type="security.permission_denied",
+                category="security",
+                actor=actor,
+                target_type="permission",
+                target_id="administrative:session",
+                summary=message,
+                metadata={
+                    "reason": "api_token_barred_from_role_only_gate",
+                    "authMethod": "api_token",
+                    "userRole": actor.get("role"),
+                    "tokenPermissions": sorted(
+                        str(item) for item in (token.get("permissionKeys") or [])
+                    ),
+                    "apiToken": {
+                        "id": str(token.get("id")) if token.get("id") is not None else None,
+                        "name": token.get("name"),
+                        "scopes": token.get("scopes") or [],
+                    },
+                },
+            )
+            # Authorisation runs before the route mutates anything, so this
+            # commits the denial on its own -- the raise below would otherwise
+            # roll it back and leave the refusal unrecorded.
+            conn.commit()
+        except Exception:
+            app.logger.exception("Failed to persist the token permission-denied audit event")
+        raise next_api_error(message, 403)
+
     def require_admin(conn) -> dict[str, Any]:
         if not auth_enabled(conn):
             return {"id": None, "username": "system", "role": "owner"}
@@ -2365,6 +2667,7 @@ def register_next_auth_routes(
         if role not in {"owner", "admin"}:
             raise next_api_error("Admin access required", 403)
         user["role"] = role
+        deny_api_token_actor(conn, user)
         return user
 
     def require_authenticated_admin(conn) -> dict[str, Any]:
@@ -2381,6 +2684,7 @@ def register_next_auth_routes(
         if role != "owner":
             raise next_api_error("Owner access required", 403)
         user["role"] = role
+        deny_api_token_actor(conn, user)
         return user
 
     def ownership_transfer_target(conn, owner: dict[str, Any], target_user_id: UUID) -> dict[str, Any]:
@@ -2501,9 +2805,24 @@ def register_next_auth_routes(
             row = cur.fetchone()
         return bytes(row["challenge"]) if row else None
 
+    def login_challenge_key(challenge: bytes) -> str:
+        """One row per login ceremony, addressed by the challenge itself.
+
+        The challenge already makes the round trip inside clientDataJSON, so
+        keying on it needs nothing new from any client -- which matters,
+        because the iOS and Android apps live in other repositories and
+        cannot be changed in step with the server.
+        """
+
+        return f"login:{_b64url_encode(challenge)}"
+
     def validate_invite(conn, username: str, invite_code: str) -> dict[str, Any] | None:
         if not invite_code:
             return None
+        # Throttled here rather than at the four call sites: every path that
+        # redeems an invite goes through this function, and a guard that has to
+        # be remembered in four places is a guard that will be forgotten in one.
+        identity_hash, ip_hash = enforce_scoped_throttle(conn, "invite", username)
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -2516,7 +2835,9 @@ def register_next_auth_routes(
                 """,
                 (_hash_invite_code(invite_code), username),
             )
-            return cur.fetchone()
+            invite = cur.fetchone()
+        record_scoped_attempt(identity_hash, ip_hash, succeeded=bool(invite))
+        return invite
 
     def auth_status_payload(conn) -> dict[str, Any]:
         user_count = count_table(conn, "users")
@@ -3821,11 +4142,21 @@ def register_next_auth_routes(
         password = str(body.get("password") or "")
         if not username or not password:
             raise next_api_error("username and password are required", 400)
+        # Only this branch needs its own throttle. When LEGACY_AUTH_ENABLED is
+        # set, the route returned through legacy_login() above and was counted
+        # there; this is the fallback that compares against environment values
+        # and never opens a connection of its own, so it opens one here.
+        with connect() as throttle_conn:
+            identity_hash, ip_hash = enforce_scoped_throttle(
+                throttle_conn, "review", configured_username
+            )
         if not (
             constant_time_text_equal(username, configured_username)
             and constant_time_text_equal(password, configured_password)
         ):
+            record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
             raise next_api_error("Invalid credentials", 401)
+        record_scoped_attempt(identity_hash, ip_hash, succeeded=True)
 
         mobile_flow_raw = body.get("mobile_flow") or body.get("mobileFlow")
         mobile_flow = _parse_uuid(mobile_flow_raw)
@@ -4020,7 +4351,13 @@ def register_next_auth_routes(
                     credentials = cur.fetchall()
             challenge = _make_challenge()
             with conn.transaction():
-                store_challenge(conn, "login", challenge)
+                # Keyed by the challenge itself rather than a fixed "login"
+                # slot. One slot meant one pending login for the whole
+                # instance: two people signing in at the same moment
+                # overwrote each other, and the first to finish failed on a
+                # challenge that no longer existed. On a passkey-only
+                # instance that is the entire front door.
+                store_challenge(conn, login_challenge_key(challenge), challenge)
 
         options = {
             "challenge": _b64url_encode(challenge),
@@ -4069,8 +4406,38 @@ def register_next_auth_routes(
             raise next_api_error("Credential id is required", 400)
 
         with connect() as conn:
-            challenge = pop_challenge(conn, "login")
+            # A passkey assertion names a credential, not a user, so this scope
+            # counts on the peer address alone under the IP-only ceiling. The
+            # point is not to make guessing a signature harder -- that is already
+            # infeasible -- but to bound how cheaply this route can be driven,
+            # since each call consumes a stored challenge row.
+            identity_hash, ip_hash = enforce_scoped_throttle(
+                conn, "passkey-verify", ip_only=True
+            )
+            # The challenge is read out of clientDataJSON before anything is
+            # trusted, purely to address the row it belongs to. Nothing is
+            # believed on its say-so: a value we never issued finds no row, and
+            # a value we did issue is consumed here so it cannot be replayed.
+            try:
+                presented_challenge = _b64url_decode(
+                    str(
+                        (json.loads(_b64url_decode(credential["response"]["clientDataJSON"])) or {})
+                        .get("challenge")
+                        or ""
+                    )
+                )
+            except Exception:
+                presented_challenge = b""
+            # Decoded to bytes and re-encoded through the same helper the store
+            # side uses, so padding differences between clients cannot turn a
+            # valid challenge into a missing row.
+            challenge = (
+                pop_challenge(conn, login_challenge_key(presented_challenge))
+                if presented_challenge
+                else None
+            )
             if not challenge:
+                record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                 raise next_api_error("No pending challenge", 400)
             with conn.cursor() as cur:
                 cur.execute(
@@ -4084,6 +4451,7 @@ def register_next_auth_routes(
                 )
                 stored = cur.fetchone()
             if not stored:
+                record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                 raise next_api_error("Unknown credential", 400)
             if stored["user_status"] != "active":
                 raise next_api_error("User is disabled", 403)
@@ -4108,7 +4476,39 @@ def register_next_auth_routes(
                 _verify_signature(bytes(stored["public_key"]), auth_data, client_data_hash, signature)
                 _, _, new_sign_count = _parse_auth_data(auth_data)
             except Exception as exc:
+                record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                 raise next_api_error(f"Verification failed: {exc}", 400) from exc
+
+            # The signature counter was written on every login and compared on
+            # none, so the one thing it exists to reveal -- the same credential
+            # in two places -- went unnoticed.
+            #
+            # Only meaningful when both sides count. Passkeys synced through
+            # iCloud Keychain or a password manager report 0 forever by design,
+            # and treating a permanent 0 as a regression would reject every
+            # login from the authenticators most people actually use.
+            stored_sign_count = int(stored.get("sign_count") or 0)
+            if new_sign_count and stored_sign_count and new_sign_count <= stored_sign_count:
+                audit_event(
+                    conn,
+                    event_type="auth.passkey_sign_count_regressed",
+                    category="security",
+                    actor={
+                        "id": stored["user_id"],
+                        "username": stored["username"],
+                        "role": None,
+                    },
+                    target_type="passkey_credential",
+                    target_id=str(credential_id),
+                    summary="Passkey signature counter did not advance",
+                    metadata={
+                        "storedSignCount": stored_sign_count,
+                        "presentedSignCount": int(new_sign_count),
+                    },
+                )
+                conn.commit()
+                record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
+                raise next_api_error("Verification failed: signature counter did not advance", 400)
 
             with conn.transaction():
                 with conn.cursor() as cur:
@@ -4217,6 +4617,11 @@ def register_next_auth_routes(
         with connect() as conn:
             if not table_exists(conn, "mobile_auth_codes"):
                 raise next_api_error("Mobile auth tables are not available", 503)
+            # No username is known until the code resolves, so this scope counts
+            # on the peer address alone and uses the wider IP-only ceiling.
+            identity_hash, ip_hash = enforce_scoped_throttle(
+                conn, "mobile-exchange", ip_only=True
+            )
             with conn.transaction():
                 mobile_cleanup(conn)
                 with conn.cursor() as cur:
@@ -4232,10 +4637,12 @@ def register_next_auth_routes(
                     )
                     row = cur.fetchone()
                     if not row or row.get("used_at") is not None or row["expires_at"] <= _utcnow():
+                        record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                         raise next_api_error("Mobile auth code is expired or already used", 400)
                     if row["user_status"] != "active":
                         raise next_api_error("User is disabled", 403)
                     if not secrets.compare_digest(str(row["code_challenge"]), expected_challenge):
+                        record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                         raise next_api_error("PKCE verification failed", 400)
                     cur.execute("UPDATE mobile_auth_codes SET used_at=now() WHERE id=%s", (row["id"],))
                     token_payload = issue_mobile_api_token(
@@ -4311,6 +4718,7 @@ def register_next_auth_routes(
         with connect() as conn:
             if not table_exists(conn, "users") or not table_exists(conn, "recovery_codes"):
                 raise next_api_error("Recovery is not available yet", 503)
+            identity_hash, ip_hash = enforce_scoped_throttle(conn, "recovery", username)
             with conn.transaction():
                 with conn.cursor() as cur:
                     cur.execute(
@@ -4323,11 +4731,22 @@ def register_next_auth_routes(
                     )
                     row = cur.fetchone()
                     if not row:
+                        record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
+                        raise next_api_error("Invalid username or recovery code", 401)
+                    # The status check deliberately sits *after* the code is
+                    # consumed. Ahead of it, "User is disabled" answered anyone
+                    # who guessed a username with a wrong code, which is a
+                    # membership oracle: 403 meant the account exists, 401 meant
+                    # it does not. Behind it, the caller has already proven they
+                    # hold a valid recovery code for that account, so telling
+                    # them why they still cannot get in reveals nothing they did
+                    # not already know.
+                    if not next_consume_recovery_code(cur, row["user_id"], recovery_code):
+                        record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                         raise next_api_error("Invalid username or recovery code", 401)
                     if row["user_status"] != "active":
                         raise next_api_error("User is disabled", 403)
-                    if not next_consume_recovery_code(cur, row["user_id"], recovery_code):
-                        raise next_api_error("Invalid username or recovery code", 401)
+                    record_scoped_attempt(identity_hash, ip_hash, succeeded=True)
                     cur.execute(
                         """
                         SELECT COUNT(*) AS count

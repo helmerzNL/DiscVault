@@ -48,6 +48,9 @@ services:
       RP_NAME: ${RP_NAME}
       RP_ORIGINS: ${RP_ORIGINS}
       LEGACY_AUTH_ENABLED: ${LEGACY_AUTH_ENABLED:-false}
+      # Only next-api terminates HTTP, so only next-api needs to know which hop
+      # may speak for a client. Empty means no forwarding header is believed.
+      DISCVAULT_TRUSTED_PROXIES: ${DISCVAULT_TRUSTED_PROXIES:-}
       DISCVAULT_NEXT_ENABLE_TEST_RESET: ${DISCVAULT_NEXT_ENABLE_TEST_RESET:-false}
       DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED: ${DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED:-false}
       DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS: ${DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS:-10000}

@@ -4662,6 +4662,18 @@ def ui_preview_html(
     .personal-list-version-badges {
       display: contents;
     }
+    /* Which show and which episode. It sits under the title in every view mode,
+       so an episode entry is never a bare title with no way to tell it apart
+       from the film of the same name. */
+    .personal-list-episode-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .mode-list-poster .digital-source-badges {
       left: 5px;
       top: 5px;
@@ -4778,7 +4790,14 @@ def ui_preview_html(
       gap: 12px;
       align-items: center;
     }
-    .movie-list-primary-action {
+    /* The one personal-list button in this app. A film's Log rewatch, an
+       episode's Watched and a season's bulk actions are the same three gestures
+       -- save it, say you saw it, say when -- and giving each surface its own
+       button is how they end up different sizes, different shapes, and
+       eventually different colours for the same meaning.
+       Colour carries state, not surface: green is watched, blue is the
+       watchlist, and the solid fill is the "on" version of each. */
+    .list-action-button {
       min-height: 42px;
       max-width: 100%;
       border: 1px solid transparent;
@@ -4797,46 +4816,89 @@ def ui_preview_html(
       cursor: pointer;
       transition: transform .15s ease, filter .15s ease, background .15s ease;
     }
-    .movie-list-primary-action:hover {
+    .list-action-button:hover {
       filter: brightness(1.08);
       transform: translateY(-1px);
     }
-    .movie-list-primary-action:focus-visible {
+    .list-action-button:focus-visible {
       outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
       outline-offset: 3px;
     }
-    .movie-list-primary-action svg {
+    .list-action-button:disabled {
+      opacity: .55;
+      cursor: default;
+      transform: none;
+      filter: none;
+    }
+    .list-action-button svg {
       width: 20px;
       height: 20px;
       flex: 0 0 auto;
       fill: currentColor;
     }
-    .movie-list-primary-action.rewatch {
+    /* A stroked icon rather than a filled one, because this button has two
+       states: a check punched out of a filled disc is invisible on the tinted
+       variant, where disc and check would both be the same green. Stroke
+       inherits the text colour, so it reads on either fill.
+       It is a class and not an attribute because the rule above sets `fill` and
+       a CSS declaration beats a presentation attribute. */
+    .list-action-button svg.icon-outline {
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 2.1;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    /* Same button, less of it. A season of 24 episodes carries 48 of these, and
+       at full size they are the page rather than the episodes. Only the metrics
+       shrink -- shape, weight and colour stay, which is what keeps it reading as
+       the same control as the one on a film. */
+    .list-action-button.compact {
+      min-height: 32px;
+      padding: 5px 12px;
+      gap: 6px;
+      font-size: .82rem;
+    }
+    .list-action-button.compact svg {
+      width: 16px;
+      height: 16px;
+    }
+    .list-action-button.rewatch {
       background: #28c95b;
       border-color: #28c95b;
       color: #fff;
     }
-    .movie-list-primary-action.watchlist {
+    .list-action-button.watched {
+      background: color-mix(in srgb, #28c95b 20%, var(--bg-solid));
+      border-color: color-mix(in srgb, #28c95b 40%, transparent);
+      color: #4fce77;
+    }
+    .list-action-button.watched.active {
+      background: #28c95b;
+      border-color: #28c95b;
+      color: #fff;
+    }
+    .list-action-button.watchlist {
       background: color-mix(in srgb, #1264d8 24%, var(--bg-solid));
       border-color: color-mix(in srgb, #2f80ed 38%, transparent);
       color: #5a97f5;
     }
-    .movie-list-primary-action.watchlist.active {
+    .list-action-button.watchlist.active {
       background: color-mix(in srgb, #1264d8 34%, var(--bg-solid));
       border-color: color-mix(in srgb, #5a97f5 68%, transparent);
       color: #7aabff;
     }
-    .movie-rewatch-date {
+    .watched-date-field {
       display: grid;
       gap: 8px;
       margin-top: 4px;
     }
-    .movie-rewatch-date span {
+    .watched-date-field span {
       color: var(--muted);
       font-size: .82rem;
       font-weight: 700;
     }
-    .movie-rewatch-date input {
+    .watched-date-field input {
       width: 100%;
       min-height: 46px;
       border: 1px solid var(--line);
@@ -7171,6 +7233,16 @@ def ui_preview_html(
       align-items: center;
       gap: 6px;
     }
+    /* The database-id pairs. Their own two-column grid rather than cells of the
+       edit grid, because the pair is one statement -- what this record is called
+       in somebody else's catalogue -- and splitting it across a row boundary
+       reads as two unrelated fields. */
+    .movie-edit-source-id-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 6px 0 4px;
+    }
     .movie-edit-lock {
       margin-left: auto;
       border: 1px solid var(--line);
@@ -8370,109 +8442,323 @@ def ui_preview_html(
     /* One card per season, laid out responsively rather than as a single
        column: a long-running show is twenty rows of mostly empty width, and
        the covers are what make a season recognisable at a glance. */
-    .series-season-list {
+    /* ---- Seasons tab: a rail that picks, a stage that shows ---------------- */
+    .series-season-browser {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 10px;
+      gap: 14px;
+      min-width: 0;
     }
-    .series-season-row {
+    /* The arrows sit outside the scroller rather than floating over it: over a
+       poster they land on artwork half the time and are unreadable on the rest. */
+    .series-season-rail-wrap {
       display: grid;
-      grid-template-columns: 46px minmax(0, 1fr);
+      grid-template-columns: auto minmax(0, 1fr) auto;
       align-items: center;
-      gap: 12px;
-      padding: 9px 11px;
+      gap: 8px;
+    }
+    .series-season-step {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-solid) 70%, transparent);
+      color: var(--text);
+      cursor: pointer;
+      padding: 0;
+    }
+    .series-season-step svg {
+      width: 20px;
+      height: 20px;
+      fill: currentColor;
+    }
+    .series-season-step:disabled {
+      opacity: .35;
+      cursor: default;
+    }
+    .series-season-step:not(:disabled):hover {
+      border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    .series-season-rail {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scroll-snap-type: x proximity;
+      padding: 2px 2px 6px;
+      /* The rail is the one place on this page that scrolls sideways; the panel
+         around it must not, which is what a min-width of 0 on a grid child buys. */
+      min-width: 0;
+      scrollbar-width: thin;
+    }
+    .series-season-chip {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+      display: grid;
+      gap: 5px;
+      justify-items: center;
+      width: 74px;
+      padding: 6px 6px 7px;
       border: 1px solid var(--line);
       border-radius: 12px;
       background: color-mix(in srgb, var(--bg-solid) 60%, transparent);
+      color: var(--muted);
+      font: inherit;
+      font-size: .78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
     }
-    .series-season-row.is-owned {
-      border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-      background: color-mix(in srgb, var(--accent) 9%, var(--bg-solid));
+    .series-season-chip:hover {
+      transform: translateY(-1px);
     }
-    /* Reserved whether or not the season resolved a poster, so the labels stay on
-       one vertical line instead of stepping in and out as artwork arrives. */
-    .series-season-thumb {
-      width: 46px;
+    /* Ownership is a border, the selection is a fill. Two different questions --
+       "do I have this season" and "am I looking at it" -- so they must not share
+       one visual, or a selected season you do not own reads as owned. */
+    .series-season-chip.is-owned {
+      border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    }
+    .series-season-chip.is-active {
+      background: color-mix(in srgb, var(--accent) 20%, var(--bg-solid));
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .series-season-chip:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
+      outline-offset: 2px;
+    }
+    .series-season-chip-thumb {
+      width: 100%;
       aspect-ratio: 2 / 3;
-      border-radius: 6px;
+      border-radius: 7px;
       overflow: hidden;
       background: var(--surface-2, rgba(127, 127, 127, 0.12));
+      display: grid;
+      place-items: center;
+      font-size: .8rem;
     }
-    .series-season-thumb img {
+    .series-season-chip-thumb img {
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
     }
-    .series-season-text {
+    .series-season-chip-label {
+      font-variant-numeric: tabular-nums;
+    }
+    .series-season-stage {
       display: grid;
-      gap: 2px;
+      gap: 12px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: color-mix(in srgb, var(--bg-solid) 55%, transparent);
       min-width: 0;
     }
-    .series-season-text span {
+    .series-season-stage.is-owned {
+      border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+      background: color-mix(in srgb, var(--accent) 7%, var(--bg-solid));
+    }
+    .series-season-stage-head {
+      display: grid;
+      grid-template-columns: 84px minmax(0, 1fr);
+      gap: 14px;
+      align-items: start;
+    }
+    .series-season-stage-poster {
+      width: 84px;
+      aspect-ratio: 2 / 3;
+      border-radius: 9px;
+      overflow: hidden;
+      background: var(--surface-2, rgba(127, 127, 127, 0.12));
+    }
+    .series-season-stage-poster img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .series-season-stage-copy {
+      display: grid;
+      gap: 4px;
+      min-width: 0;
+      align-content: start;
+    }
+    .series-season-stage-copy h4 {
+      margin: 0;
+      font-size: 1.06rem;
+    }
+    .series-season-stage-eyebrow {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+    }
+    .series-season-stage-meta {
       color: var(--muted);
       font-size: 12px;
     }
-    /* The episode button sits under the text rather than beside it: inline, it
-       took the width the season title needed and every card wrapped to three
-       lines. Column 2 keeps it aligned with the copy, not the cover. */
-    .series-season-row {
-      grid-template-columns: 46px minmax(0, 1fr);
-      align-items: start;
+    .series-season-stage-overview {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
     }
-    .series-season-episodes-toggle {
-      grid-column: 2;
-      min-height: 32px;
-      padding: 0 12px;
-      font-size: .84rem;
+    .series-season-progress {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
     }
-    .series-season-thumb {
-      grid-row: span 2;
-      align-self: center;
+    /* The season-wide row sits above the episodes and is visibly a header for
+       them rather than a first episode. */
+    .series-season-bulk {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      padding: 2px 0 2px;
     }
-    /* The grid cell is the season and its episodes together. */
-    .series-season-item {
-      display: grid;
-      gap: 6px;
-      align-content: start;
-      min-width: 0;
+    .series-season-bulk .import-source-meta {
+      margin: 0;
+      flex: 1 1 auto;
     }
     .series-episode-list {
       display: grid;
-      gap: 4px;
-      margin: 0 0 4px 10px;
-    }
-    .series-episode-list.hidden {
-      display: none;
-    }
-    .series-episode-row {
-      display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) auto;
-      align-items: center;
       gap: 10px;
-      padding: 6px 8px;
-      border-radius: 6px;
-      border: 1px solid var(--line-strong);
-    }
-    /* An episode the collection does not carry is the reason to show this list at
-       all, so it is marked rather than hidden. */
-    .series-episode-row.is-missing {
-      border-style: dashed;
-      opacity: 0.72;
-    }
-    .series-episode-number {
-      color: var(--muted);
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-    }
-    .series-episode-text {
-      display: grid;
-      gap: 1px;
       min-width: 0;
     }
-    .series-episode-text span {
+    .series-episode-grid {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    /* Three columns: still, copy, actions. The still is what turns a list of
+       numbered titles into something recognisable at a glance; the number moved
+       into the copy as an S01E04 code, which is the form a reader already knows
+       from everywhere else and which the personal lists show too. */
+    .series-episode-card {
+      display: grid;
+      grid-template-columns: 132px minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 12px;
+      padding: 9px;
+      border: 1px solid var(--line-strong);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--bg-solid) 45%, transparent);
+    }
+    /* An episode the collection does not carry is the reason to show this list
+       at all, so it is marked rather than hidden. */
+    .series-episode-card.is-missing {
+      border-style: dashed;
+      opacity: 0.75;
+    }
+    .series-episode-card.is-watched {
+      border-color: color-mix(in srgb, #28c95b 34%, transparent);
+    }
+    .series-episode-thumb {
+      width: 132px;
+      aspect-ratio: 16 / 9;
+      border-radius: 7px;
+      overflow: hidden;
+      background: var(--surface-2);
+      display: grid;
+      place-items: center;
+      padding: 0;
+      border: 0;
+    }
+    .series-episode-thumb.is-linked {
+      cursor: pointer;
+    }
+    .series-episode-thumb.is-linked:hover img {
+      transform: scale(1.04);
+    }
+    .series-episode-thumb.is-linked:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 48%, transparent);
+      outline-offset: 2px;
+    }
+    .series-episode-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform .18s ease;
+    }
+    /* A borrowed image is letterboxed rather than cropped. A season or series
+       poster is portrait, and filling a 16:9 box with it crops exactly the part
+       that makes it recognisable. */
+    .series-episode-thumb.is-borrowed img {
+      object-fit: contain;
+      background: var(--surface-2);
+    }
+    .series-episode-body {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+    .series-episode-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 8px;
+      min-width: 0;
+    }
+    .series-episode-code {
+      color: var(--muted);
+      font-size: .74rem;
+      font-weight: 800;
+      letter-spacing: .04em;
+      font-variant-numeric: tabular-nums;
+      padding: 1px 6px;
+      border-radius: 5px;
+      background: color-mix(in srgb, var(--text) 10%, transparent);
+    }
+    .series-episode-title {
+      min-width: 0;
+    }
+    .series-episode-meta {
       color: var(--muted);
       font-size: 12px;
+    }
+    /* Clamped rather than truncated to one line: three lines of synopsis is
+       usually the sentence that says which episode this is, and a season of
+       thirteen full paragraphs is a wall nobody reads. */
+    .series-episode-overview {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .series-episode-actions {
+      display: grid;
+      gap: 5px;
+      justify-items: stretch;
+    }
+    @media (max-width: 720px) {
+      /* The still leaves the grid before the actions do: on a narrow screen the
+         buttons are the part you came to press. */
+      .series-episode-card {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .series-episode-thumb {
+        display: none;
+      }
+      .series-episode-actions {
+        grid-auto-flow: column;
+        justify-content: start;
+      }
+      .series-season-stage-head {
+        grid-template-columns: 62px minmax(0, 1fr);
+        gap: 10px;
+      }
+      .series-season-stage-poster {
+        width: 62px;
+      }
     }
     .container-member-grid {
       display: grid;
@@ -13226,15 +13512,20 @@ def ui_preview_html(
       .movie-list-primary-actions {
         gap: 8px;
       }
-      .movie-list-primary-action {
+      .list-action-button {
         min-height: 38px;
         padding: 7px 14px;
         gap: 7px;
         font-size: .85rem;
       }
-      .movie-list-primary-action svg {
+      .list-action-button svg {
         width: 18px;
         height: 18px;
+      }
+      .list-action-button.compact {
+        min-height: 30px;
+        padding: 5px 11px;
+        font-size: .8rem;
       }
       .movie-detail-body {
         grid-template-columns: 1fr;
@@ -13425,6 +13716,9 @@ def ui_preview_html(
         grid-template-columns: 1fr;
       }
       .movie-edit-grid {
+        grid-template-columns: 1fr;
+      }
+      .movie-edit-source-id-grid {
         grid-template-columns: 1fr;
       }
       .movie-edit-track-row,
@@ -15600,6 +15894,25 @@ def ui_preview_html(
                       <button type="button" id="movieEditIdentifierAdd" class="ghost-button" data-next-i18n="movieDetail.productIdentifierAdd">Add a code</button>
                       <p class="hint" data-next-i18n="movieDetail.productIdentifiersHint">The barcode above is what a scan resolves to. These are the same product's other codes: an EAN for Europe, a UPC for North America, an ISBN, an Amazon ASIN, or the distributor's catalogue number.</p>
                     </div>
+                    <!-- The database ids, beside the product codes and not among
+                         them: a code is printed on the box, an id is a record in
+                         somebody else's catalogue. Editable because a source can
+                         only supply one for a film it recognised, and the film it
+                         did not is exactly the one a person has to identify. -->
+                    <div id="movieEditSourceIdsRow" class="movie-edit-identifiers wide">
+                      <span data-next-i18n="movieDetail.sourceIds">Database ids</span>
+                      <div class="movie-edit-source-id-grid">
+                        <label for="movieEditTmdbId">
+                          <span data-next-i18n="movieDetail.tmdbId">TMDb id</span>
+                          <input id="movieEditTmdbId" maxlength="160" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                        </label>
+                        <label for="movieEditImdbId">
+                          <span data-next-i18n="movieDetail.imdbId">IMDb id</span>
+                          <input id="movieEditImdbId" maxlength="160" autocomplete="off" data-next-i18n-placeholder="importCenter.imdbIdPlaceholder" placeholder="tt0123456">
+                        </label>
+                      </div>
+                      <p class="hint" data-next-i18n="movieDetail.sourceIdsHint">What TMDb and IMDb call this film. Filling one in lets the metadata sources find it; pasting the page's address works too, the id is taken from it.</p>
+                    </div>
                     <label for="movieEditMediaType">
                       <span data-next-i18n="movieDetail.mediaType">Type</span>
                       <select id="movieEditMediaType" name="media_type">
@@ -15661,6 +15974,26 @@ def ui_preview_html(
                     <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
                   </div>
                   <p class="hint" id="movieEditSeriesEmptyHint" hidden data-next-i18n="movieDetail.seriesPickFirst">Pick a series above to choose which seasons this release covers.</p>
+                  <!-- A television id names the show, not this pressing, so it
+                       is stored on the series and edited here rather than beside
+                       the film's own ids. Without one no source can be asked
+                       about the series at all, which is why it is worth typing
+                       by hand when no source recognised the title. -->
+                  <div id="movieEditSeriesIdsRow" class="movie-edit-identifiers">
+                    <span data-next-i18n="movieDetail.seriesIds">Series ids</span>
+                    <div class="movie-edit-source-id-grid">
+                      <label for="movieEditSeriesTvdbId">
+                        <span data-next-i18n="movieDetail.tvdbId">TheTVDB id</span>
+                        <input id="movieEditSeriesTvdbId" maxlength="160" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                      </label>
+                      <label for="movieEditSeriesTmdbId">
+                        <span data-next-i18n="movieDetail.tmdbTvId">TMDb series id</span>
+                        <input id="movieEditSeriesTmdbId" maxlength="160" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                      </label>
+                    </div>
+                    <p class="hint" data-next-i18n="movieDetail.seriesIdsHint">These belong to the series, not to this disc, so every release of the show shares them. Without one no source can be asked about the series and it stays without a synopsis or artwork.</p>
+                    <p class="hint hidden" id="movieEditSeriesIdsLinkFirst" data-next-i18n="movieDetail.seriesIdsLinkFirst">Save the series link first, then its ids can be filled in here.</p>
+                  </div>
                 </div>
                 <div class="detail-subsection hidden" id="movieEditReleaseTechnicalSection" role="tabpanel" aria-labelledby="movieEditTabTechnical" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
@@ -15899,14 +16232,14 @@ def ui_preview_html(
               </summary>
               <div class="movie-list-card-body">
                 <div class="movie-list-primary-actions">
-                  <button type="button" class="movie-list-primary-action rewatch" id="movieLogRewatchButton" aria-haspopup="dialog">
+                  <button type="button" class="list-action-button rewatch" id="movieLogRewatchButton" aria-haspopup="dialog">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <circle cx="12" cy="12" r="10"></circle>
                       <path d="M10.2 16.2 6.5 12.5l1.4-1.4 2.3 2.3 5.9-5.9 1.4 1.4z" fill="#28c95b"></path>
                     </svg>
                     <span data-next-i18n="lists.logRewatch">Log rewatch</span>
                   </button>
-                  <button type="button" class="movie-list-primary-action watchlist" id="movieWatchlistToggleButton" aria-pressed="false">
+                  <button type="button" class="list-action-button watchlist" id="movieWatchlistToggleButton" aria-pressed="false">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"></path></svg>
                     <span id="movieWatchlistToggleLabel" data-next-i18n="lists.addToWatchlist">Add to Watchlist</span>
                   </button>
@@ -26279,6 +26612,71 @@ def ui_preview_html(
     function containerPosterValue(container) {
       return container?.poster_url || container?.metadata?.poster_url || container?.metadata?.poster || container?.poster || "";
     }
+    function childContainersOf(containerId) {
+      const id = String(containerId || "");
+      if (!id) return [];
+      const childIds = new Set();
+      containerMembershipRows().forEach((row) => {
+        if (String(row?.container_id || "") !== id) return;
+        const childId = String(row?.child_container_id || "");
+        if (childId) childIds.add(childId);
+      });
+      if (!childIds.size) return [];
+      return (containers || []).filter((entry) => childIds.has(String(entry?.id || "")));
+    }
+    // What a container's tile shows, resolved through the same chain the
+    // container page uses. A vault and a collection showed a cover on their own
+    // page and an empty tile in the library, because the page falls back to the
+    // artwork aggregated from its members and the tile read only the container's
+    // own `poster_url` column. Two surfaces disagreeing about the same
+    // container, and the empty one reads as a bug rather than as a gap.
+    //
+    // The rungs, and why they are in this order:
+    //
+    //  - the container's own artwork first, column then metadata. A cover
+    //    somebody chose, or the one a refresh stored for it, must outrank
+    //    anything borrowed.
+    //  - then a member film's poster. Borrowing is only right for a container
+    //    nobody has given artwork to, which is exactly what the first rung
+    //    settles before this one is reached.
+    //  - then a child container's *own* cover, for a collection whose members
+    //    are box sets and which therefore has no member films to borrow from.
+    //    Deliberately one hop and non-recursive: cycles predating the write
+    //    guard are known to be possible, and one hop is enough to fill a tile.
+    //  - the container's backdrop last. It is the wrong shape for a poster
+    //    slot, so it stands in only when nothing else does -- which is what
+    //    the tile did before, and no tile that shows something today should
+    //    fall back to an empty one.
+    //
+    // Each rung is its own `usableImage` call rather than `usableImage(a || b)`,
+    // and the member scan maps through `usableImage` before `find`, for the
+    // reason `itemPosterUrl` records for series: `||` short-circuits on a
+    // truthy-but-unusable value and drops a good poster on the floor.
+    function containerTilePosterUrl(container) {
+      const metadata = container?.metadata || {};
+      const own = usableImage(container?.poster_url)
+        || usableImage(metadata.poster_url)
+        || usableImage(metadata.posterUrl)
+        || usableImage(metadata.poster);
+      if (own) return own;
+      // The server resolves the borrowed cover per container, because `movies`
+      // arrives a page at a time: a member outside the loaded page is not there
+      // to borrow from, and the tile would stay empty for exactly the largest
+      // collections. The client scan stays as a second reading -- it costs
+      // nothing, it follows the library's own ordering, and it still answers for
+      // a payload built before the column existed.
+      const servedPoster = usableImage(container?.member_poster_url);
+      if (servedPoster) return servedPoster;
+      const memberPoster = containerMemberMovies(container?.id)
+        .map((movie) => usableImage(movie?.poster_url) || usableImage(movie?.metadata?.poster_url))
+        .find(Boolean);
+      if (memberPoster) return memberPoster;
+      const childPoster = childContainersOf(container?.id)
+        .map((child) => usableImage(child?.poster_url) || usableImage(child?.metadata?.poster_url))
+        .find(Boolean);
+      if (childPoster) return childPoster;
+      return usableImage(container?.backdrop_url) || usableImage(metadata.backdrop_url) || "";
+    }
     function containerBackdropValue(container) {
       return container?.backdrop_url || container?.metadata?.backdrop_url || container?.metadata?.backdrop || container?.backdrop || "";
     }
@@ -26624,7 +27022,7 @@ def ui_preview_html(
       return containerTypeLabel(item.container?.container_type);
     }
     function itemPosterUrl(item) {
-      if (item?.kind === "container") return usableImage(item.container?.poster_url || item.container?.backdrop_url);
+      if (item?.kind === "container") return containerTilePosterUrl(item.container);
       // The series' own poster first; a disc's only when it has none. Borrowing
       // is still right for a series nobody has given artwork to -- an empty tile
       // reads as a bug rather than as a gap -- but it must not outrank a poster
@@ -26638,8 +27036,15 @@ def ui_preview_html(
       // `posterUrl` is camelCase because the series payload is hand-built that
       // way; `poster_url` beside it is snake_case because a movie row is a raw
       // database row.
+      // A season's poster sits between the two. It is artwork *of the show*,
+      // published as such; a disc cover is a photograph of a package, carrying a
+      // studio's slipcase text and a format badge. Both are stand-ins for a
+      // series nobody has given artwork to, but only one is a picture of the
+      // thing the tile names. The disc stays last, so no tile that shows
+      // something today falls back to an empty one.
       if (item?.kind === "series") {
         return usableImage(item.series?.posterUrl)
+          || usableImage(item.series?.seasonPosterUrl)
           || usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
       }
       return usableImage(item?.movie?.poster_url);
@@ -27387,7 +27792,7 @@ def ui_preview_html(
       `;
     }
     function containerPosterCardHtml(container, index) {
-      const poster = usableImage(container.poster_url || container.backdrop_url);
+      const poster = containerTilePosterUrl(container);
       const typeLabel = containerTypeLabel(container.container_type);
       const showFormatBadge = String(container.container_type || "") !== "collection" && preferences.show_container_format_badges !== false;
       const showMemberBadge = preferences.show_container_member_badges !== false;
@@ -29900,6 +30305,201 @@ def ui_preview_html(
       }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
       loadMovieEditIdentifiers();
+      fillMovieEditSourceIds(detail);
+    }
+    // The database ids: what TMDb, IMDb and TheTVDB call this record.
+    //
+    // Separate from the product codes above them, and stored somewhere else
+    // again. A product code is printed on the box and describes the pressing; a
+    // database id is a row in somebody else's catalogue and is what lets a
+    // source be asked about the film at all. They are editable for one reason:
+    // a source supplies an id only for a title it recognised, and the title it
+    // did not recognise is exactly the one that needs identifying by hand.
+    //
+    // Which store each id belongs to is not a detail. `tmdb`/`imdb` name the
+    // film and live in `movie_identifiers`; a television id names the *show*,
+    // is shared by every release of it, and lives on the series -- so the two
+    // pairs are edited in the tabs that own them and saved through different
+    // routes.
+    const MOVIE_SOURCE_ID_FIELDS = [
+      {
+        inputId: "movieEditTmdbId",
+        provider: "tmdb",
+        // Accepts a pasted page address as well as a bare id. Somebody looking
+        // an id up has the page open, and copying the address is one action
+        // where reading the number out of it is three.
+        patterns: [/themoviedb\\.org\\/(?:movie|tv)\\/(\\d+)/i],
+        valid: /^\\d+$/,
+        invalidKey: "movieDetail.idDigitsOnly",
+        invalidText: "This id is a number, with no letters or punctuation."
+      },
+      {
+        inputId: "movieEditImdbId",
+        provider: "imdb",
+        patterns: [/imdb\\.com\\/title\\/(tt\\d+)/i],
+        valid: /^tt\\d{7,10}$/,
+        invalidKey: "movieDetail.idImdbFormat",
+        invalidText: "An IMDb id looks like tt0123456."
+      }
+    ];
+    const MOVIE_SERIES_ID_FIELDS = [
+      {
+        inputId: "movieEditSeriesTvdbId",
+        identifierType: "tvdb",
+        provider: "tvdb",
+        patterns: [/thetvdb\\.com\\/.*[?&]id=(\\d+)/i],
+        valid: /^\\d+$/,
+        invalidKey: "movieDetail.idDigitsOnly",
+        invalidText: "This id is a number, with no letters or punctuation."
+      },
+      {
+        inputId: "movieEditSeriesTmdbId",
+        identifierType: "tmdb_tv",
+        provider: "tmdb",
+        patterns: [/themoviedb\\.org\\/tv\\/(\\d+)/i],
+        valid: /^\\d+$/,
+        invalidKey: "movieDetail.idDigitsOnly",
+        invalidText: "This id is a number, with no letters or punctuation."
+      }
+    ];
+    function normalizedSourceId(field, raw) {
+      const value = String(raw || "").trim();
+      if (!value) return "";
+      for (const pattern of field.patterns || []) {
+        const match = value.match(pattern);
+        if (match) return match[1];
+      }
+      return value;
+    }
+    function storedIdentifierValue(entries, matches) {
+      const hit = (entries || []).filter(Boolean).find(matches);
+      return hit ? String(hit.identifier || "").trim() : "";
+    }
+    // What was on screen when the panel opened, so a save can tell "left alone"
+    // from "cleared". Without it every save would re-send both ids, and an
+    // emptied field would be indistinguishable from one that was never touched.
+    let movieEditSourceIdBaseline = {};
+    let movieEditSeriesIdBaseline = {};
+    let movieEditSeriesIdTarget = "";
+    function fillMovieEditSourceIds(detail) {
+      const entries = (detail || {}).identifiers || [];
+      movieEditSourceIdBaseline = {};
+      MOVIE_SOURCE_ID_FIELDS.forEach((field) => {
+        const stored = storedIdentifierValue(entries, (item) => (
+          String(item.provider_id || item.providerId || "").toLowerCase() === field.provider
+          && String(item.identifier_type || item.identifierType || "movie_id") === "movie_id"
+        ));
+        movieEditSourceIdBaseline[field.provider] = stored;
+        const input = document.getElementById(field.inputId);
+        if (input && document.activeElement !== input) input.value = stored;
+      });
+      fillMovieEditSeriesIds(detail);
+    }
+    function fillMovieEditSeriesIds(detail) {
+      const series = (detail || {}).series || null;
+      const linkFirst = document.getElementById("movieEditSeriesIdsLinkFirst");
+      movieEditSeriesIdBaseline = {};
+      // A series belongs to the container permissions, not the collection ones,
+      // so editing the film does not by itself entitle somebody to re-identify
+      // the show every other release of it shares. Without the check the fields
+      // would accept a value and the save would come back 403 from a route the
+      // person cannot see.
+      movieEditSeriesIdTarget = (series && hasPermission("containers.edit"))
+        ? String(series.id || "")
+        : "";
+      const entries = (series || {}).identifiers || [];
+      MOVIE_SERIES_ID_FIELDS.forEach((field) => {
+        const stored = storedIdentifierValue(entries, (item) => (
+          String(item.identifier_type || item.identifierType || "") === field.identifierType
+        ));
+        movieEditSeriesIdBaseline[field.identifierType] = stored;
+        const input = document.getElementById(field.inputId);
+        if (input) {
+          if (document.activeElement !== input) input.value = stored;
+          // A series id needs a series to hang off. Disabled rather than hidden
+          // when there is none, so the reason it cannot be filled in is on
+          // screen next to the link that would fix it.
+          input.disabled = !movieEditSeriesIdTarget;
+        }
+      });
+      // Keyed on the link and not on the target, so the hint says "link the
+      // series first" only when that is actually what is missing -- a reader
+      // without `containers.edit` is looking at a linked series and would be
+      // sent off to fix something that is not wrong.
+      if (linkFirst) linkFirst.classList.toggle("hidden", !!series);
+    }
+    // Every id the panel changed, validated before anything is sent. A message
+    // naming the field is the whole point: the routes below accept any string,
+    // so a typo would be stored and only ever surface as a link that opens the
+    // wrong film -- or as a source that quietly answers nothing.
+    function collectMovieEditIdChanges(fields, baseline, key) {
+      const changes = [];
+      for (const field of fields) {
+        const input = document.getElementById(field.inputId);
+        if (!input || input.disabled) continue;
+        const value = normalizedSourceId(field, input.value);
+        if (value !== input.value) input.value = value;
+        if (value === (baseline[field[key]] || "")) continue;
+        if (value && !field.valid.test(value)) {
+          const error = new Error(tNext(field.invalidKey, field.invalidText));
+          error.focusInput = input;
+          error.focusValue = value;
+          throw error;
+        }
+        changes.push({field, value});
+      }
+      return changes;
+    }
+    async function saveMovieSourceIds() {
+      if (!activeDetailMovieId) return null;
+      const changes = collectMovieEditIdChanges(
+        MOVIE_SOURCE_ID_FIELDS, movieEditSourceIdBaseline, "provider"
+      );
+      for (const {field, value} of changes) {
+        const base = `/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/identifiers`;
+        if (value) {
+          await authApiJson(base, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({providerId: field.provider, identifier: value, identifierType: "movie_id"})
+          });
+        } else {
+          // An emptied field is a deliberate removal, which is a different
+          // request: the POST route replaces a value and has no way to say
+          // "this record has none".
+          await authApiJson(
+            `${base}?providerId=${encodeURIComponent(field.provider)}&identifierType=movie_id`,
+            {method: "DELETE"}
+          );
+        }
+        movieEditSourceIdBaseline[field.provider] = value;
+      }
+      return changes.length;
+    }
+    async function saveMovieSeriesIds() {
+      if (!movieEditSeriesIdTarget) return null;
+      const changes = collectMovieEditIdChanges(
+        MOVIE_SERIES_ID_FIELDS, movieEditSeriesIdBaseline, "identifierType"
+      );
+      for (const {field, value} of changes) {
+        // Only a set. The series route replaces an identifier and has no
+        // removal, deliberately: a series with no identifier is one no source
+        // can be asked about, and emptying the field by accident would be a
+        // quiet way to reach that state. Correcting a wrong number is typing
+        // the right one.
+        if (!value) continue;
+        await authApiJson(`/api/next/series/${encodeURIComponent(movieEditSeriesIdTarget)}/identifiers`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            identifierType: field.identifierType,
+            identifier: value,
+            providerId: field.provider
+          })
+        });
+        movieEditSeriesIdBaseline[field.identifierType] = value;
+      }
+      return changes.length;
     }
     // The typed product identifiers. Their own route rather than a slice of the
     // detail payload, because they are their own table with their own
@@ -30475,20 +31075,29 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
-    function openMovieRewatchDialog() {
-      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
-      const { overlay, panel } = listsCreateOverlay("lists-actionsheet movie-rewatch-sheet");
+    // One sheet for every "when did you watch this". A film's Log rewatch and an
+    // episode's Watched button ask the identical question, and asking it from
+    // two copies of this markup is how the two answers drift apart -- one gains
+    // a date picker, the other keeps assuming today.
+    //
+    // `remove` is offered only by a caller that has something to remove. A film
+    // deletes individual dates from its history pills instead, so it passes
+    // none; an episode carries no such list, and without this its watched state
+    // would be a one-way door.
+    function openWatchedDateSheet({title, onPick, remove}) {
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet watched-date-sheet");
       panel.setAttribute("role", "dialog");
       panel.setAttribute("aria-modal", "true");
-      panel.setAttribute("aria-labelledby", "movieRewatchDialogTitle");
+      panel.setAttribute("aria-labelledby", "watchedDateDialogTitle");
       panel.innerHTML = `
         <header class="lists-modal-head">
-          <h3 id="movieRewatchDialogTitle">${escapeHtml(tNext("lists.logRewatch", "Log rewatch"))}</h3>
+          <h3 id="watchedDateDialogTitle">${escapeHtml(title || tNext("lists.logRewatch", "Log rewatch"))}</h3>
         </header>
         <div class="lists-actionsheet-list">
           <button type="button" class="lists-actionsheet-btn" data-rewatch-date="today">${escapeHtml(tNext("lists.watchedToday", "Watched today"))}</button>
           <button type="button" class="lists-actionsheet-btn" data-rewatch-date="yesterday">${escapeHtml(tNext("lists.watchedYesterday", "Watched yesterday"))}</button>
           <button type="button" class="lists-actionsheet-btn" data-rewatch-date="choose">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</button>
+          ${remove ? `<button type="button" class="lists-actionsheet-btn danger" data-rewatch-date="remove">${escapeHtml(remove.label)}</button>` : ""}
         </div>
         <footer class="lists-modal-actions">
           <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
@@ -30499,24 +31108,28 @@ def ui_preview_html(
         button.addEventListener("click", () => {
           const choice = button.dataset.rewatchDate;
           if (choice === "choose") {
-            openMovieRewatchDatePicker(overlay, panel);
+            openWatchedDatePicker(overlay, panel, onPick);
             return;
           }
           listsCloseOverlay(overlay);
-          markActiveMovieWatched(localDateString(choice === "yesterday" ? -1 : 0));
+          if (choice === "remove") {
+            remove?.run();
+            return;
+          }
+          onPick?.(localDateString(choice === "yesterday" ? -1 : 0));
         });
       });
       panel.querySelector("[data-rewatch-date]")?.focus();
     }
-    function openMovieRewatchDatePicker(overlay, panel) {
+    function openWatchedDatePicker(overlay, panel, onPick) {
       panel.innerHTML = `
         <header class="lists-modal-head">
-          <h3 id="movieRewatchDialogTitle">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</h3>
+          <h3 id="watchedDateDialogTitle">${escapeHtml(tNext("lists.chooseWatchedDate", "Choose a date"))}</h3>
         </header>
-        <form id="movieRewatchDateForm">
-          <label class="movie-rewatch-date">
+        <form id="watchedDateForm">
+          <label class="watched-date-field">
             <span>${escapeHtml(tNext("lists.watchedDate", "Watched date"))}</span>
-            <input type="date" id="movieRewatchDateInput" value="${escapeHtml(localDateString(0))}" required>
+            <input type="date" id="watchedDateInput" value="${escapeHtml(localDateString(0))}" required>
           </label>
           <footer class="lists-modal-actions">
             <button type="button" class="ghost" data-secondary>${escapeHtml(tNext("common.close", "Close"))}</button>
@@ -30525,14 +31138,21 @@ def ui_preview_html(
         </form>
       `;
       panel.querySelector("[data-secondary]")?.addEventListener("click", () => listsCloseOverlay(overlay));
-      panel.querySelector("#movieRewatchDateForm")?.addEventListener("submit", (event) => {
+      panel.querySelector("#watchedDateForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
-        const value = panel.querySelector("#movieRewatchDateInput")?.value || "";
+        const value = panel.querySelector("#watchedDateInput")?.value || "";
         if (!value) return;
         listsCloseOverlay(overlay);
-        markActiveMovieWatched(value);
+        onPick?.(value);
       });
-      panel.querySelector("#movieRewatchDateInput")?.focus();
+      panel.querySelector("#watchedDateInput")?.focus();
+    }
+    function openMovieRewatchDialog() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      openWatchedDateSheet({
+        title: tNext("lists.logRewatch", "Log rewatch"),
+        onPick: (watchedAt) => markActiveMovieWatched(watchedAt),
+      });
     }
     async function deleteActiveMovieWatchedEntry(entryId) {
       if (!activeDetailMovieId || !entryId || !hasPermission("watchlist.manage")) return;
@@ -32007,40 +32627,79 @@ def ui_preview_html(
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
     }
-    function seriesSeasonRowsHtml(detail) {
-      const seasons = ((detail.series || {}).seasons) || [];
-      if (!seasons.length) {
-        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noSeasons", "No seasons recorded for this series yet."))}</div>`;
-      }
-      const coveredNumbers = new Set(
-        (detail.seasonCoverage || [])
+    // ---- The Seasons tab is a browser, not a stack of expanders -------------
+    //
+    // One season is on screen at a time: the rail picks it, the arrows step
+    // through it, and what sits under the head is that season's own page. The
+    // shape this replaces was a grid of season cards each holding an inline
+    // expander -- opening three of them made the page as long as the show, and
+    // nothing on screen said which season you were reading.
+    //
+    // The selection is module state rather than something read back out of the
+    // DOM, because a view-mode switch re-renders the whole series detail and
+    // the season you were on has to survive that.
+    let seriesSeasonSelection = "";
+    let seriesSeasonSelectionSeriesId = "";
+    // season id -> {episodes} or {message}. Stepping back to a season you have
+    // already opened must cost nothing: fetching an episode list is one request
+    // per season at the source, which is the whole reason the Collectors switch
+    // gates it. The failed and empty outcomes are cached for the same reason --
+    // re-selecting a season whose refresh came back empty would otherwise ask
+    // the source again every time.
+    const seriesSeasonEpisodeCache = new Map();
+    function seriesSeasonsOf(detail) {
+      return ((detail || {}).series || {}).seasons || [];
+    }
+    function seriesSeasonOwnedNumbers(detail) {
+      return new Set(
+        ((detail || {}).seasonCoverage || [])
           .map((row) => Number.parseInt(row.seasonNumber, 10))
           .filter((value) => Number.isFinite(value))
       );
-      // A season with a poster becomes a card; one without stays the plain row it
-      // has always been. Not a uniform grid of placeholders: a series where only
-      // half the seasons resolved would then read as half-broken rather than
-      // half-illustrated.
-      // Also when Collectors mode is on: the episode toggle needs a row to live
-      // in, and falling back to the plain text rows would make episodes reachable
-      // only for series whose artwork happened to resolve.
-      const anyPoster = seasons.some((season) => season.posterUrl) || collectorsModeEnabled();
-      const rows = seasons.map((season) => {
-        const label = season.title
-          ? `${season.seasonNumber} - ${season.title}`
-          : tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
-        const owned = coveredNumbers.has(Number.parseInt(season.seasonNumber, 10));
-        const parts = [
-          owned ? tNext("seriesDetail.seasonOwned", "In your collection") : tNext("seriesDetail.seasonMissing", "Not on a disc yet"),
-          season.year || "",
-          season.episodeCount ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount) : "",
-        ].filter(Boolean);
-        return {season, label, owned, meta: parts.join(" / ")};
-      });
-      // Said once, under the list, and after the shape split above so both the
-      // plain rows and the card list carry it. Absence explains nothing: without
-      // this the missing episode button is indistinguishable from a series that
-      // has no episodes, which is the same collapse of distinct outcomes this
+    }
+    function seriesSeasonById(seasonId) {
+      return seriesSeasonsOf(activeSeriesPayload).find((season) => String(season.id) === String(seasonId)) || null;
+    }
+    function seriesSeasonTitle(season) {
+      const number = tNext("collection.seasonNumber", "Season {number}").replace("{number}", season.seasonNumber);
+      return season.title ? `${number} - ${season.title}` : number;
+    }
+    function seriesSeasonShortLabel(season) {
+      return tNext("seriesDetail.seasonShort", "S{number}").replace("{number}", season.seasonNumber);
+    }
+    // Which season the tab opens on when nothing has been picked yet: the first
+    // one a disc in the collection covers, and only then the first one that
+    // exists. A show you own the last two seasons of would otherwise always
+    // open on a season 1 you do not have.
+    function seriesSelectedSeason(detail) {
+      const seasons = seriesSeasonsOf(detail);
+      if (!seasons.length) return null;
+      const seriesId = String((detail.series || {}).id || "");
+      if (seriesId !== seriesSeasonSelectionSeriesId) {
+        // A different series: its season ids mean nothing here, and every
+        // cached episode list belongs to a season no longer on screen.
+        seriesSeasonSelectionSeriesId = seriesId;
+        seriesSeasonSelection = "";
+        seriesSeasonEpisodeCache.clear();
+      }
+      const chosen = seasons.find((season) => String(season.id) === String(seriesSeasonSelection));
+      if (chosen) return chosen;
+      const owned = seriesSeasonOwnedNumbers(detail);
+      const first = seasons.find((season) => owned.has(Number.parseInt(season.seasonNumber, 10))) || seasons[0];
+      seriesSeasonSelection = String(first.id || "");
+      return first;
+    }
+    function seriesSeasonRowsHtml(detail) {
+      const seasons = seriesSeasonsOf(detail);
+      if (!seasons.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noSeasons", "No seasons recorded for this series yet."))}</div>`;
+      }
+      const owned = seriesSeasonOwnedNumbers(detail);
+      const selected = seriesSelectedSeason(detail);
+      // Said once, under the browser, and never per season: the statement is
+      // about the page rather than about a season. Absence explains nothing --
+      // without it a missing episode list is indistinguishable from a season
+      // that has none, which is the same collapse of distinct outcomes this
       // page has had to be fixed for three times already.
       //
       // It names the reason rather than only the switch. Opening a season costs
@@ -32049,74 +32708,168 @@ def ui_preview_html(
       const episodesHint = collectorsModeEnabled()
         ? ""
         : `<p class="import-source-meta">${escapeHtml(tNext("seriesDetail.episodesCollectorsHint", "Turn on Collectors mode to open a season and see its episodes. They are fetched one request per season, so the switch decides who pays for it."))}</p>`;
-      if (!anyPoster) {
-        return detailFieldRows(rows.map((row) => [row.label, row.meta])) + episodesHint;
-      }
-      return `<div class="series-season-list">${rows.map((row) => seriesSeasonRowHtml(row)).join("")}</div>${episodesHint}`;
+      return `<div class="series-season-browser">${seriesSeasonRailHtml(seasons, owned, selected)}${seriesSeasonStageHtml(seasons, owned, selected)}${episodesHint}</div>`;
     }
-    function seriesSeasonRowHtml(row) {
-      // The episode affordance appears only with Collectors mode on. Fetching an
-      // episode list costs one request per season at the source, so the switch is
-      // not decoration -- it is who agreed to pay for it.
-      const episodes = collectorsModeEnabled()
-        ? `<button type="button" class="secondary-button series-season-episodes-toggle" data-season-episodes="${escapeHtml(row.season.id || "")}">${escapeHtml(tNext("seriesDetail.episodes", "Episodes"))}</button>`
-        : "";
-      // `is-owned` marks a season a disc in the collection covers. Stated as a
-      // border and a badge rather than only in the meta line, because the one
-      // question this list answers at a glance is which seasons are missing.
+    function seriesSeasonRailHtml(seasons, owned, selected) {
+      const index = seasons.findIndex((season) => String(season.id) === String((selected || {}).id));
+      const chips = seasons.map((season) => {
+        const isOwned = owned.has(Number.parseInt(season.seasonNumber, 10));
+        const active = String(season.id) === String((selected || {}).id);
+        const label = seriesSeasonShortLabel(season);
+        // Roving tabindex: the rail is one stop, and the arrow keys move within
+        // it. Twenty seasons must not be twenty tab stops between the head of
+        // the page and the episodes.
+        return `
+          <button type="button" role="tab" class="series-season-chip${isOwned ? " is-owned" : ""}${active ? " is-active" : ""}"
+                  data-season-chip="${escapeHtml(season.id || "")}"
+                  aria-selected="${active ? "true" : "false"}"
+                  tabindex="${active ? "0" : "-1"}"
+                  title="${escapeHtml(seriesSeasonTitle(season))}">
+            <span class="series-season-chip-thumb">${season.posterUrl
+              ? `<img src="${escapeHtml(season.posterUrl)}" alt="" loading="lazy">`
+              : `<span>${escapeHtml(label)}</span>`}</span>
+            <span class="series-season-chip-label">${escapeHtml(label)}</span>
+          </button>`;
+      }).join("");
+      // Disabled at the ends rather than wrapping around. A Next that jumps from
+      // the last season back to the first is the kind of thing a reader reads as
+      // a mis-click, not as a feature.
+      const step = (delta, key, fallback, path) => `
+        <button type="button" class="series-season-step" data-season-step="${delta}"
+                ${(delta < 0 ? index <= 0 : index < 0 || index >= seasons.length - 1) ? "disabled" : ""}
+                aria-label="${escapeHtml(tNext(key, fallback))}" title="${escapeHtml(tNext(key, fallback))}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>
+        </button>`;
       return `
-        <div class="series-season-item">
-        <div class="series-season-row${row.owned ? " is-owned" : ""}">
-          <div class="series-season-thumb">${row.season.posterUrl
-            ? `<img src="${escapeHtml(row.season.posterUrl)}" alt="${escapeHtml(row.label)}" loading="lazy">`
-            : ""}</div>
-          <div class="series-season-text">
-            <strong>${escapeHtml(row.label)}</strong>
-            <span>${escapeHtml(row.meta)}</span>
-          </div>
-          ${episodes}
-        </div>
-        <div class="series-episode-list hidden" data-season-episode-list="${escapeHtml(row.season.id || "")}"></div>
+        <div class="series-season-rail-wrap">
+          ${step(-1, "seriesDetail.previousSeason", "Previous season", "M15.4 7.4 14 6l-6 6 6 6 1.4-1.4-4.6-4.6z")}
+          <div class="series-season-rail" role="tablist" aria-label="${escapeHtml(tNext("movieDetail.seasons", "Seasons"))}">${chips}</div>
+          ${step(1, "seriesDetail.nextSeason", "Next season", "M8.6 7.4 10 6l6 6-6 6-1.4-1.4 4.6-4.6z")}
         </div>`;
     }
-    function seriesEpisodeRowsHtml(episodes) {
-      if (!episodes.length) {
-        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noEpisodes", "No episodes known for this season yet."))}</div>`;
-      }
-      return episodes.map((episode) => {
-        const parts = [
-          episode.airDate || "",
-          episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : "",
-          episode.onDisc
-            ? tNext("seriesDetail.episodeOnDisc", "On a disc")
-            : tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"),
-        ].filter(Boolean);
-        const watched = Boolean(episode.watchedAt);
-        return `
-          <div class="series-episode-row${episode.onDisc ? "" : " is-missing"}">
-            <span class="series-episode-number">${escapeHtml(String(episode.episodeNumber))}</span>
-            <div class="series-episode-text">
-              <strong>${escapeHtml(episode.title || tNext("common.untitled", "Untitled"))}</strong>
-              <span>${escapeHtml(parts.join(" / "))}</span>
+    function seriesSeasonStageHtml(seasons, owned, season) {
+      if (!season) return "";
+      const index = seasons.findIndex((entry) => String(entry.id) === String(season.id));
+      const isOwned = owned.has(Number.parseInt(season.seasonNumber, 10));
+      const meta = [
+        season.year || "",
+        season.episodeCount
+          ? tNext("seriesDetail.episodeCount", "{count} episodes").replace("{count}", season.episodeCount)
+          : "",
+        isOwned
+          ? tNext("seriesDetail.seasonOwned", "In your collection")
+          : tNext("seriesDetail.seasonMissing", "Not on a disc yet"),
+      ].filter(Boolean);
+      return `
+        <div class="series-season-stage${isOwned ? " is-owned" : ""}">
+          <div class="series-season-stage-head">
+            <div class="series-season-stage-poster">${season.posterUrl
+              ? `<img src="${escapeHtml(season.posterUrl)}" alt="" loading="lazy">`
+              : ""}</div>
+            <div class="series-season-stage-copy">
+              <span class="series-season-stage-eyebrow">${escapeHtml(
+                tNext("seriesDetail.seasonPosition", "Season {index} of {total}")
+                  .replace("{index}", String(index + 1))
+                  .replace("{total}", String(seasons.length))
+              )}</span>
+              <h4>${escapeHtml(seriesSeasonTitle(season))}</h4>
+              <span class="series-season-stage-meta">${escapeHtml(meta.join(" / "))}</span>
+              ${season.overview ? `<p class="series-season-stage-overview">${escapeHtml(season.overview)}</p>` : ""}
             </div>
-            <button type="button" class="secondary-button${watched ? " active" : ""}"
-                    data-episode-watched="${escapeHtml(episode.id)}"
-                    data-watched="${watched ? "1" : "0"}"
-                    aria-pressed="${watched ? "true" : "false"}">${escapeHtml(
-                      watched ? tNext("seriesDetail.episodeWatched", "Watched") : tNext("seriesDetail.markEpisodeWatched", "Mark watched")
-                    )}</button>
-          </div>`;
-      }).join("");
+          </div>
+          <div class="series-episode-list" data-season-episode-list="${escapeHtml(season.id || "")}"></div>
+        </div>`;
     }
-    async function toggleSeasonEpisodes(seasonId) {
-      const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);
+    // What the hero shows, in order: the poster the series owns, then the season
+    // on the rail, then the first real season that has one, then a disc's cover.
+    //
+    // The first step is the whole "unless it was uploaded and locked" clause. A
+    // series' own poster *is* the chosen one -- `entity_media` with
+    // `is_primary`, which is what an upload and the artwork tab both write -- so
+    // a series that has one never reaches the rest of this chain, and no amount
+    // of stepping along the rail changes what it shows.
+    //
+    // A season poster is preferred over a disc cover for the same reason the
+    // Library tile prefers it: it is artwork of the show, while a disc cover is
+    // a photograph of a package. The disc stays last so nothing that has a
+    // picture today loses it.
+    //
+    // Specials are skipped when *guessing* but not when chosen. Season 0 sorts
+    // first and is the least recognisable face a show has, so it must not become
+    // the default; a reader who selects it has said which season they mean, and
+    // overriding that would be the surface disagreeing with the rail.
+    function seriesHeroPosterUrl(detail) {
+      const own = mediaAssetImage(detail.mediaAssets, "poster");
+      if (own) return own;
+      const seasons = seriesSeasonsOf(detail);
+      const selected = seasons.find((season) => String(season.id) === String(seriesSeasonSelection));
+      const firstNumbered = seasons.find((season) =>
+        Number.parseInt(season.seasonNumber, 10) > 0 && usableImage(season.posterUrl));
+      return usableImage(selected?.posterUrl)
+        || usableImage(firstNumbered?.posterUrl)
+        || mediaAssetImage(detail.aggregateMediaAssets, "poster");
+    }
+    function renderSeriesHeroPoster(detail) {
+      const node = document.getElementById("seriesDetailPoster");
       if (!node) return;
-      if (!node.classList.contains("hidden")) {
-        node.classList.add("hidden");
+      const poster = seriesHeroPosterUrl(detail || {});
+      node.innerHTML = poster
+        ? `<img src="${escapeHtml(poster)}" alt="">`
+        : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+    }
+    function renderSeriesSeasons(detail) {
+      const node = document.getElementById("seriesDetailSeasons");
+      if (!node) return;
+      node.innerHTML = seriesSeasonRowsHtml(detail);
+      // After the rail, not before: `seriesSeasonRowsHtml` is what settles which
+      // season is selected on a first render, and the hero follows that choice.
+      renderSeriesHeroPoster(detail);
+      loadSeasonEpisodes(seriesSeasonSelection);
+    }
+    function selectSeriesSeason(seasonId, {focusChip = false} = {}) {
+      if (!seasonId || String(seasonId) === String(seriesSeasonSelection)) return;
+      seriesSeasonSelection = String(seasonId);
+      // Re-renders the rail, the stage and -- for a series with no poster of its
+      // own -- the hero, which follows the selection.
+      renderSeriesSeasons(activeSeriesPayload || {});
+      const chip = document.querySelector(`[data-season-chip="${seriesSeasonSelection}"]`);
+      // The rail scrolls, so a season chosen with the arrow keys or the step
+      // buttons can sit outside it. Selecting something the reader cannot see is
+      // how a browser stops looking like one.
+      chip?.scrollIntoView({block: "nearest", inline: "nearest"});
+      // Only when the keyboard asked for it: the step buttons are clicked
+      // repeatedly, and moving focus onto a chip after the first click would
+      // take the button out from under the pointer's keyboard equivalent.
+      if (focusChip) chip?.focus();
+    }
+    function stepSeriesSeason(delta, options) {
+      const seasons = seriesSeasonsOf(activeSeriesPayload);
+      const index = seasons.findIndex((season) => String(season.id) === String(seriesSeasonSelection));
+      if (index < 0) return;
+      const next = seasons[index + delta];
+      if (next) selectSeriesSeason(next.id, options);
+    }
+    async function loadSeasonEpisodes(seasonId) {
+      if (!seasonId) return;
+      const paint = (html) => {
+        // Re-queried after every await: switching season replaces the stage, and
+        // writing into the node captured before the request would paint one
+        // season's episodes into another season's page.
+        const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);
+        if (node) node.innerHTML = html;
+      };
+      if (!collectorsModeEnabled()) {
+        paint("");
         return;
       }
-      node.classList.remove("hidden");
-      node.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("common.loading", "Loading..."))}</div>`;
+      const cached = seriesSeasonEpisodeCache.get(seasonId);
+      if (cached) {
+        paint(cached.message
+          ? `<div class="preview-empty">${escapeHtml(cached.message)}</div>`
+          : seriesEpisodeRowsHtml(cached.episodes || [], seasonId));
+        return;
+      }
+      paint(`<div class="preview-empty">${escapeHtml(tNext("common.loading", "Loading..."))}</div>`);
       try {
         let payload = await authApiJson(`/api/next/series/seasons/${encodeURIComponent(seasonId)}/episodes`);
         if (!(payload.episodes || []).length && hasPermission("metadata.refresh_one")) {
@@ -32129,35 +32882,216 @@ def ui_preview_html(
           );
           const result = payload.result || {};
           if (!(payload.episodes || []).length && result.status !== "ok") {
-            node.innerHTML = `<div class="preview-empty">${escapeHtml(seriesRefreshExplanation(result))}</div>`;
+            seriesSeasonEpisodeCache.set(seasonId, {message: seriesRefreshExplanation(result)});
+            paint(`<div class="preview-empty">${escapeHtml(seriesRefreshExplanation(result))}</div>`);
             return;
           }
         }
-        node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+        seriesSeasonEpisodeCache.set(seasonId, {episodes: payload.episodes || []});
+        paint(seriesEpisodeRowsHtml(payload.episodes || [], seasonId));
       } catch (error) {
-        node.innerHTML = `<div class="preview-empty bad">${escapeHtml(error.message || String(error))}</div>`;
+        // Deliberately not cached: a request that failed is worth retrying when
+        // the reader comes back to this season, unlike a source that answered
+        // and had nothing.
+        paint(`<div class="preview-empty bad">${escapeHtml(error.message || String(error))}</div>`);
       }
     }
-    async function toggleEpisodeWatched(button) {
-      const episodeId = button.dataset.episodeWatched;
-      const watched = button.dataset.watched === "1";
-      if (!episodeId || !hasPermission("watchlist.manage")) return;
-      const node = button.closest("[data-season-episode-list]")
-        || button.parentElement?.closest("[data-season-episode-list]");
+    function seriesEpisodeCode(seasonNumber, episodeNumber) {
+      const pad = (value) => String(Number.parseInt(value, 10)).padStart(2, "0");
+      if (!Number.isFinite(Number.parseInt(seasonNumber, 10))) return pad(episodeNumber);
+      return tNext("seriesDetail.episodeCode", "S{season}E{episode}")
+        .replace("{season}", pad(seasonNumber))
+        .replace("{episode}", pad(episodeNumber));
+    }
+    const WATCHED_ICON_SVG = '<svg class="icon-outline" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="m8 12.4 2.7 2.7L16 9.8"></path></svg>';
+    const WATCHLIST_ICON_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"></path></svg>';
+    function seriesEpisodeRowsHtml(episodes, seasonId) {
+      if (!episodes.length) {
+        return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noEpisodes", "No episodes known for this season yet."))}</div>`;
+      }
+      const canManage = hasPermission("watchlist.manage");
+      const season = seriesSeasonById(seasonId);
+      const seasonNumber = season ? season.seasonNumber : null;
+      const cards = episodes.map((episode) => seriesEpisodeCardHtml(episode, seasonNumber, canManage)).join("");
+      const watched = episodes.filter((episode) => episode.watchedAt).length;
+      const progress = `<p class="series-season-progress">${escapeHtml(
+        tNext("seriesDetail.seasonProgress", "{watched} of {total} episodes watched")
+          .replace("{watched}", String(watched))
+          .replace("{total}", String(episodes.length))
+      )}</p>`;
+      const grid = `<div class="series-episode-grid">${cards}</div>`;
+      if (!canManage || !seasonId) return progress + grid;
+      return progress + seriesSeasonBulkHtml(episodes, seasonId) + grid;
+    }
+    function seriesEpisodeCardHtml(episode, seasonNumber, canManage) {
+      const parts = [
+        episode.airDate || "",
+        episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : "",
+        episode.onDisc
+          ? tNext("seriesDetail.episodeOnDisc", "On a disc")
+          : tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"),
+      ].filter(Boolean);
+      const watched = Boolean(episode.watchedAt);
+      const listed = Boolean(episode.onWatchlist);
+      // `posterSource` is the server saying which of the three images this is. A
+      // borrowed one is labelled and letterboxed rather than passed off as a
+      // still of this episode.
+      const borrowed = episode.posterUrl && episode.posterSource !== "episode";
+      const thumbAlt = borrowed
+        ? (episode.posterSource === "season"
+            ? tNext("seriesDetail.episodeImageFromSeason", "Season image")
+            : tNext("seriesDetail.episodeImageFromSeries", "Series image"))
+        : (episode.title || "");
+      const image = episode.posterUrl
+        ? `<img src="${escapeHtml(episode.posterUrl)}" alt="${escapeHtml(thumbAlt)}" title="${escapeHtml(thumbAlt)}" loading="lazy">`
+        : "";
+      // The still is the way into the disc when the collection carries one. The
+      // server resolved which disc that is, and `discId` is null exactly when
+      // nothing carries the episode -- so this is a plain frame then, rather
+      // than a control that promises somewhere to go and has none.
+      const thumb = episode.discId
+        ? `<button type="button" class="series-episode-thumb is-linked${borrowed ? " is-borrowed" : ""}"
+                   data-episode-disc="${escapeHtml(episode.discId)}"
+                   title="${escapeHtml(tNext("seriesDetail.openEpisodeDisc", "Open the disc that carries this episode"))}"
+                   aria-label="${escapeHtml(tNext("seriesDetail.openEpisodeDisc", "Open the disc that carries this episode"))}">${image}</button>`
+        : `<div class="series-episode-thumb${borrowed ? " is-borrowed" : ""}">${image}</div>`;
+      // The same two buttons a film carries, in the same shape and the same
+      // colours -- only smaller, because a season holds two dozen of them.
+      // Watched opens the date sheet rather than assuming today: an episode
+      // watched last Tuesday is the ordinary case for a box set.
+      const actions = canManage
+        ? `<div class="series-episode-actions">
+            <button type="button" class="list-action-button compact watched${watched ? " active" : ""}"
+                    data-episode-watched="${escapeHtml(episode.id)}"
+                    data-watched="${watched ? "1" : "0"}"
+                    aria-haspopup="dialog"
+                    aria-pressed="${watched ? "true" : "false"}">${WATCHED_ICON_SVG}<span>${escapeHtml(
+                      watched
+                        ? tNext("seriesDetail.watchedOn", "Watched {date}").replace("{date}", formatAppDate(episode.watchedAt))
+                        : tNext("seriesDetail.markEpisodeWatched", "Mark watched")
+                    )}</span></button>
+            <button type="button" class="list-action-button compact watchlist${listed ? " active" : ""}"
+                    data-episode-watchlist="${escapeHtml(episode.id)}"
+                    data-listed="${listed ? "1" : "0"}"
+                    aria-pressed="${listed ? "true" : "false"}">${WATCHLIST_ICON_SVG}<span>${escapeHtml(
+                      listed ? tNext("lists.inWatchlist", "In Watchlist") : tNext("lists.addToWatchlist", "Add to Watchlist")
+                    )}</span></button>
+          </div>`
+        : "";
+      return `
+        <article class="series-episode-card${episode.onDisc ? "" : " is-missing"}${watched ? " is-watched" : ""}">
+          ${thumb}
+          <div class="series-episode-body">
+            <div class="series-episode-head">
+              <span class="series-episode-code">${escapeHtml(seriesEpisodeCode(seasonNumber, episode.episodeNumber))}</span>
+              <strong class="series-episode-title">${escapeHtml(episode.title || tNext("common.untitled", "Untitled"))}</strong>
+            </div>
+            <span class="series-episode-meta">${escapeHtml(parts.join(" / "))}</span>
+            ${episode.overview ? `<p class="series-episode-overview">${escapeHtml(episode.overview)}</p>` : ""}
+          </div>
+          ${actions}
+        </article>`;
+    }
+    // Season-wide buttons state what they will do to the episodes rather than
+    // claiming the season is a thing that can be watched: that is what the
+    // server does, and a button that reads otherwise would be the only place the
+    // two disagree.
+    function seriesSeasonBulkHtml(episodes, seasonId) {
+      const allWatched = episodes.every((episode) => episode.watchedAt);
+      const allListed = episodes.every((episode) => episode.onWatchlist);
+      return `
+        <div class="series-season-bulk">
+          <p class="import-source-meta">${escapeHtml(tNext("seriesDetail.seasonBulkHint", "Applies to every episode listed here."))}</p>
+          <button type="button" class="list-action-button watched${allWatched ? " active" : ""}"
+                  data-season-watched="${escapeHtml(seasonId)}" data-watched="${allWatched ? "1" : "0"}"
+                  ${allWatched ? "" : 'aria-haspopup="dialog"'}>${WATCHED_ICON_SVG}<span>${escapeHtml(
+            allWatched ? tNext("seriesDetail.clearSeasonWatched", "Clear season watched") : tNext("seriesDetail.markSeasonWatched", "Mark season watched")
+          )}</span></button>
+          <button type="button" class="list-action-button watchlist${allListed ? " active" : ""}"
+                  data-season-watchlist="${escapeHtml(seasonId)}" data-listed="${allListed ? "1" : "0"}">${WATCHLIST_ICON_SVG}<span>${escapeHtml(
+            allListed ? tNext("seriesDetail.removeSeasonFromWatchlist", "Remove season from Watchlist") : tNext("seriesDetail.addSeasonToWatchlist", "Add season to Watchlist")
+          )}</span></button>
+        </div>`;
+    }
+    // One writer for every episode and season button. They differ only in the
+    // URL, the method and the body, and the part that is easy to get wrong --
+    // re-render the list the response carries, into the list the button lives
+    // in -- is then written once rather than six times.
+    async function runSeasonListAction(button, {path, remove, body, seasonId}) {
+      if (!hasPermission("watchlist.manage")) return;
+      const node = button.closest("[data-season-episode-list]");
+      const listId = seasonId || node?.dataset.seasonEpisodeList || "";
       button.disabled = true;
       try {
         const payload = await authApiJson(
-          `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watched`,
-          watched
+          path,
+          remove
             ? {method: "DELETE"}
-            : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})}
+            : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})}
         );
-        if (node) node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+        if (listId) {
+          // The response carries the season's new episode list, so the cache is
+          // replaced rather than dropped: leaving a stale entry behind would
+          // undo the write the moment the reader stepped away and back.
+          seriesSeasonEpisodeCache.set(listId, {episodes: payload.episodes || []});
+        }
+        if (node) node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || [], listId);
+        // The Lists page holds a cached copy; marking it stale is what stops it
+        // from showing yesterday's answer after a change made here.
+        if (typeof listsState === "object" && listsState) listsState.loaded = false;
       } catch (error) {
         setSeriesDetailMessage(error.message || String(error), "bad");
       } finally {
         button.disabled = false;
       }
+    }
+    function openEpisodeWatchedSheet(button) {
+      const episodeId = button.dataset.episodeWatched;
+      if (!episodeId || !hasPermission("watchlist.manage")) return;
+      const path = `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watched`;
+      openWatchedDateSheet({
+        title: tNext("seriesDetail.episodeWatchedTitle", "When did you watch this episode?"),
+        onPick: (watchedAt) => runSeasonListAction(button, {path, body: {watchedAt}}),
+        remove: button.dataset.watched === "1"
+          ? {
+              label: tNext("seriesDetail.removeEpisodeWatched", "Remove watched date"),
+              run: () => runSeasonListAction(button, {path, remove: true}),
+            }
+          : null,
+      });
+    }
+    function toggleEpisodeWatchlist(button) {
+      const episodeId = button.dataset.episodeWatchlist;
+      if (!episodeId) return;
+      return runSeasonListAction(button, {
+        path: `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watchlist`,
+        remove: button.dataset.listed === "1",
+      });
+    }
+    function openSeasonWatchedSheet(button) {
+      const seasonId = button.dataset.seasonWatched;
+      if (!seasonId || !hasPermission("watchlist.manage")) return;
+      const path = `/api/next/series/seasons/${encodeURIComponent(seasonId)}/watched`;
+      // A season already fully watched has only one thing left to offer, so it
+      // clears rather than opening a sheet whose three date choices would each
+      // write nothing: the server marks only the episodes that were unwatched.
+      if (button.dataset.watched === "1") {
+        runSeasonListAction(button, {path, remove: true, seasonId});
+        return;
+      }
+      openWatchedDateSheet({
+        title: tNext("seriesDetail.seasonWatchedTitle", "When did you watch this season?"),
+        onPick: (watchedAt) => runSeasonListAction(button, {path, body: {watchedAt}, seasonId}),
+      });
+    }
+    function toggleSeasonWatchlist(button) {
+      const seasonId = button.dataset.seasonWatchlist;
+      if (!seasonId) return;
+      return runSeasonListAction(button, {
+        path: `/api/next/series/seasons/${encodeURIComponent(seasonId)}/watchlist`,
+        remove: button.dataset.listed === "1",
+        seasonId,
+      });
     }
     function renderSeriesDetail(detail) {
       activeSeriesPayload = detail || {};
@@ -32165,20 +33099,16 @@ def ui_preview_html(
       activeSeriesId = String(series.id || activeSeriesId || "");
       const activePanelId = activeDetailPanel("seriesDetail", "seriesDetailDiscsPanel");
       const discs = detail.discs || [];
-      const poster = mediaAssetImage(detail.mediaAssets, "poster")
-        || mediaAssetImage(detail.aggregateMediaAssets, "poster");
       const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop")
         || mediaAssetImage(detail.aggregateMediaAssets, "backdrop");
       const hero = document.getElementById("seriesDetailHero");
       if (hero) hero.classList.toggle("is-flat", !backdrop);
       const backdropNode = document.getElementById("seriesDetailBackdrop");
       if (backdropNode) backdropNode.src = backdrop || "";
-      const posterNode = document.getElementById("seriesDetailPoster");
-      if (posterNode) {
-        posterNode.innerHTML = poster
-          ? `<img src="${escapeHtml(poster)}" alt="">`
-          : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      }
+      // The hero poster is painted by `renderSeriesSeasons` further down rather
+      // than here: which season is selected is settled while the rail renders,
+      // and painting a guess first would show one season's poster and replace it
+      // with another's in the same pass.
       document.getElementById("seriesDetailTitle").textContent = series.title || tNext("common.untitled", "Untitled");
       const years = [series.startYear, series.endYear].filter(Boolean);
       const yearLabel = years.length === 2 && years[0] !== years[1] ? `${years[0]}-${years[1]}` : (years[0] || "");
@@ -32196,7 +33126,7 @@ def ui_preview_html(
       ].map((value) => `<span>${escapeHtml(value)}</span>`).join("");
       renderSeriesDiscs(detail);
       syncSeriesViewModeControls();
-      document.getElementById("seriesDetailSeasons").innerHTML = seriesSeasonRowsHtml(detail);
+      renderSeriesSeasons(detail);
       document.getElementById("seriesDetailPosterArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("seriesDetailBackdropArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
       document.getElementById("seriesDetailVideos").innerHTML = movieVideoGroupsHtml(detail.aggregateVideos || []);
@@ -36246,7 +37176,28 @@ def ui_preview_html(
       // was not.
       const series = candidate.series && typeof candidate.series === "object" ? candidate.series : null;
       const mediaType = String(candidate.mediaType || candidate.media_type || movieUpdates.media_type || (series ? "SHOW" : "")).trim().toUpperCase();
-      const seriesRef = String(series?.tmdbTvId || series?.tmdb_tv_id || (String(candidate.identifierType || "") === "tmdb_tv" ? candidate.identifier : "") || "").trim();
+      // The namespace travels with the id, because the id alone is not identity:
+      // TheTVDB's 305288 and TMDB's 305288 are different shows, and a key built
+      // from the number alone would collapse them onto one card. An id stated
+      // without a namespace still reads as `tmdb_tv` -- that is what a bare
+      // `tmdbTvId` has always meant, and what the MovieVault feed sends.
+      const candidateIdentifierType = String(candidate.identifierType || candidate.identifier_type || "").trim().toLowerCase();
+      const seriesRefType = String(
+        series?.identifierType
+        || series?.identifier_type
+        || (series?.tmdbTvId || series?.tmdb_tv_id ? "tmdb_tv" : "")
+        // A loose identifier is only a series reference when the candidate says
+        // it is one; `tmdb_tv` names the television namespace by itself.
+        || ((mediaType === "SHOW" || candidateIdentifierType === "tmdb_tv") ? candidateIdentifierType : "")
+      ).trim().toLowerCase();
+      const seriesRef = String(
+        series?.tmdbTvId
+        || series?.tmdb_tv_id
+        || series?.identifier
+        || (seriesRefType ? candidate.identifier : "")
+        || ""
+      ).trim();
+      const seriesKey = seriesRef ? `${seriesRefType || "tmdb_tv"}:${seriesRef}` : "";
       const keyParts = [
         provider,
         title.toLowerCase(),
@@ -36257,7 +37208,7 @@ def ui_preview_html(
         // A film and a series of the same name and year carry no `tmdb` id in
         // common -- the series id lives in the television namespace -- so
         // without this their keys collide and picking one selects the other.
-        seriesRef ? `tmdbtv:${seriesRef}` : "",
+        seriesKey,
         sourceRef,
         posterUrl,
         resultIndex,
@@ -36267,6 +37218,7 @@ def ui_preview_html(
         candidateKey: keyParts.join("|"),
         mediaType,
         series,
+        seriesKey,
         provider,
         pluginId: provider,
         sourceLabel,
@@ -36304,7 +37256,7 @@ def ui_preview_html(
             normalized.format.toLowerCase(),
             normalized.identifiers.tmdb,
             normalized.identifiers.imdb,
-            normalized.series?.tmdbTvId || "",
+            normalized.seriesKey,
             normalized.sourceRef,
             normalized.posterUrl
           ].join("|");
@@ -37895,11 +38847,47 @@ def ui_preview_html(
       }
     }
     function personalListMovieId(entry) {
+      // An episode entry opens the disc that carries it. Resolved server-side
+      // (an explicit episode-to-disc link first, otherwise a disc covering the
+      // season) and returned here so every renderer's click target, disabled
+      // state and keyboard handling keep working without knowing what an
+      // episode is. `entry.id` is the episode's own id and must not win: it
+      // would send the click to a movie page that does not exist.
+      if (entry?.kind === "episode") {
+        const disc = entry.disc_movie_id || "";
+        return disc && disc !== "null" ? disc : "";
+      }
       const value = entry?.id || entry?.movie_id || entry?.list_movie_id || entry?.snapshot?.movie_id || "";
       return value && value !== "null" ? value : "";
     }
     function personalListMovieExists(entry) {
       return entry?.movie_exists !== false && !!personalListMovieId(entry);
+    }
+    // "Game of Thrones / S01E01", or as much of it as survived the episode being
+    // deleted. Without this an episode entry is a bare title with nothing saying
+    // which show or which season it belongs to.
+    function personalListEpisodeLabel(entry) {
+      if (entry?.kind !== "episode") return "";
+      const snapshot = entry.snapshot || {};
+      const season = entry.season_number ?? snapshot.season_number;
+      const number = entry.episode_number ?? snapshot.episode_number;
+      const pad = (value) => String(value).padStart(2, "0");
+      const code = season === null || season === undefined || number === null || number === undefined
+        ? ""
+        : `S${pad(season)}E${pad(number)}`;
+      const series = entry.series_title || snapshot.series_title || "";
+      const parts = [series, code].filter(Boolean);
+      if (!personalListMovieExists(entry)) {
+        // Stated rather than left to the greyed-out styling: "this is not on any
+        // disc you own" is the reason it cannot be opened, and the disabled
+        // state alone reads as a bug.
+        parts.push(tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"));
+      }
+      return parts.join(" / ");
+    }
+    function personalListEpisodeLabelHtml(entry) {
+      const label = personalListEpisodeLabel(entry);
+      return label ? `<span class="personal-list-episode-label">${escapeHtml(label)}</span>` : "";
     }
     function personalListFormatValue(entry) {
       const snapshot = entry?.snapshot || {};
@@ -37923,7 +38911,7 @@ def ui_preview_html(
         <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
           <span class="preview-poster-art">${posterHtml}${personalListVersionBadgesHtml(movie)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
-          <span class="preview-poster-meta">${escapeHtml(meta)}${unavailableMovieLabelHtml(movie)}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}${personalListEpisodeLabelHtml(movie)}${unavailableMovieLabelHtml(movie)}</span>
           ${debugIdHtml(movieId, "Movie ID")}
         </button>
       `;
@@ -37964,7 +38952,7 @@ def ui_preview_html(
         <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
           <span class="preview-poster-art">${posterHtml}${personalListVersionBadgesHtml(entry)}</span>
           <span class="preview-poster-title">${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</span>
-          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${watchlistStatusIconHtml(entry)}${unavailableMovieLabelHtml(entry)}</span>
+          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${personalListEpisodeLabelHtml(entry)}${watchlistStatusIconHtml(entry)}${unavailableMovieLabelHtml(entry)}</span>
           ${debugIdHtml(movieId, "Movie ID")}
         </button>
       `;
@@ -37979,6 +38967,7 @@ def ui_preview_html(
           <span class="mode-list-body">
             <span class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            ${personalListEpisodeLabelHtml(entry)}
             <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchedDate", "Watched Date"))}</span><span class="watched-date-value">${escapeHtml(watchedDateValue(entry))}</span></span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span>${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span></span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>${watchlistStatusIconHtml(entry)}</span>
@@ -37997,6 +38986,7 @@ def ui_preview_html(
           <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            ${personalListEpisodeLabelHtml(entry)}
             <span class="mode-list-meta">${[entry.year, formatAppDate(entry.watchlist_added_at)].filter(Boolean).map(escapeHtml).join(" / ")}</span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span>${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span></span>
             ${unavailableMovieLabelHtml(entry)}
@@ -38019,7 +39009,7 @@ def ui_preview_html(
             const exists = personalListMovieExists(entry);
             return `
               <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${personalListEpisodeLabelHtml(entry)}${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
                 <span role="cell">${escapeHtml(watchedDateValue(entry))}</span>
                 <span role="cell">${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span>
                 <span role="cell">${watchlistStatusIconHtml(entry)}</span>
@@ -38042,7 +39032,7 @@ def ui_preview_html(
             const exists = personalListMovieExists(entry);
             return `
               <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${personalListEpisodeLabelHtml(entry)}${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
                 <span role="cell">${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span>
                 <span role="cell">${escapeHtml(formatAppDate(entry.watchlist_added_at))}</span>
               </div>
@@ -38810,7 +39800,12 @@ def ui_preview_html(
     }
     function updateListsCounts(counts = listsState.counts || {}) {
       const watchlistCount = counts.watchlist ?? (listsState.watchlist || []).length;
-      const watchedCount = counts.watchedMovies ?? counts.watchHistory ?? (listsState.watched || []).length;
+      // Films and episodes are counted apart on the wire because each number is
+      // then honest on its own; the pill labels the list, which holds both, so
+      // it adds them. The `??` chain stays for a server that predates the split.
+      const watchedCount = counts.watchedMovies === undefined && counts.watchedEpisodes === undefined
+        ? (counts.watchHistory ?? (listsState.watched || []).length)
+        : (counts.watchedMovies || 0) + (counts.watchedEpisodes || 0);
       const wishlistCount = counts.wishlist ?? (listsState.wishlist || []).length;
       const loansCount = counts.activeLoans ?? (listsState.loans || []).filter((loan) => !loan.returned).length;
       const watchNode = document.getElementById("listsWatchlistCount");
@@ -41792,7 +42787,7 @@ def ui_preview_html(
         return;
       }
       if (!(await ensureMovieEditSeries())) return;
-      setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
+      setMovieDetailMessage(tNext("movieDetail.saving", "Saving title..."));
       const prevDetail = activeDetailPayload || {};
       const prevMovie = prevDetail.movie || {};
       const prevMetadata = prevMovie.metadata || {};
@@ -41881,19 +42876,53 @@ def ui_preview_html(
         // than presented as the whole save having failed -- and the panel stays
         // open, because the value that needs fixing is in it.
         let identifierError = null;
+        let identifiersWritten = 0;
         try {
           await saveMovieIdentifiers();
+          // The database ids, on the same terms and for the same reason: their
+          // own tables, their own routes, and a refusal that has to name the
+          // field rather than fail the whole save. The series ids go last
+          // because setting one also refreshes the series.
+          identifiersWritten += (await saveMovieSourceIds()) || 0;
+          identifiersWritten += (await saveMovieSeriesIds()) || 0;
         } catch (error) {
           identifierError = error;
         }
-        renderMovieDetail(payload.detail || {});
+        // `payload.detail` was built by the PATCH, before any of the writes
+        // above ran, so it still carries the old ids. Re-read rather than
+        // render it: the film's own page shows an IMDb and a TMDb chip, and
+        // leaving those a reload behind makes a save that worked look ignored.
+        let detail = payload.detail || {};
+        if (identifiersWritten) {
+          try {
+            detail = (await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`)).detail || detail;
+          } catch (error) {
+            // The write already succeeded; a failed re-read is a stale screen,
+            // not a failed save, and must not be reported as one.
+          }
+        }
+        renderMovieDetail(detail);
         await loadAppSnapshot();
         if (identifierError) {
           setMovieDetailMessage(identifierError.message || String(identifierError), "bad");
+          // A rejected id is corrected where it was typed, so the panel stays
+          // open on the tab holding it. The render above refilled the field
+          // from what is stored, which would have swallowed the value being
+          // complained about, so it is put back first.
+          if (identifierError.focusInput) {
+            if (typeof identifierError.focusValue === "string") {
+              identifierError.focusInput.value = identifierError.focusValue;
+            }
+            activateDetailTab(
+              "movieEditSections",
+              identifierError.focusInput.closest(".detail-subsection")?.id || "movieEditSectionRelease"
+            );
+            identifierError.focusInput.focus();
+          }
           return;
         }
         setMovieEditPanelVisible(false);
-        setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
+        setMovieDetailMessage(tNext("movieDetail.saved", "Title saved."), "good");
         if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
           await refreshActiveMovieMetadata(false);
         }
@@ -46272,8 +47301,10 @@ def ui_preview_html(
     function selectContainer(containerId) {
       const container = containers.find((item) => String(item.id) === String(containerId)) || {};
       const title = container.title || tNext("common.untitled", "Untitled");
-      const backdrop = usableImage(container.backdrop_url || container.poster_url);
-      const poster = usableImage(container.poster_url || container.backdrop_url);
+      // Two calls, not `usableImage(a || b)`: the `||` short-circuits on a
+      // truthy-but-unusable value and drops the other on the floor.
+      const backdrop = usableImage(container.backdrop_url) || usableImage(container.poster_url);
+      const poster = containerTilePosterUrl(container);
       document.getElementById("heroTitle").textContent = title;
       document.getElementById("heroMeta").innerHTML = [
         containerTypeLabel(container.container_type),
@@ -47490,16 +48521,43 @@ def ui_preview_html(
       // Delegated on the panel: season rows and episode rows are both rebuilt on
       // every render, so per-row listeners would have to be rebound with them.
       document.getElementById("seriesDetailSeasons")?.addEventListener("click", (event) => {
-        const seasonToggle = event.target.closest("[data-season-episodes]");
-        if (seasonToggle) {
-          event.preventDefault();
-          toggleSeasonEpisodes(seasonToggle.dataset.seasonEpisodes);
-          return;
+        const handlers = [
+          ["[data-season-chip]", (node) => selectSeriesSeason(node.dataset.seasonChip)],
+          ["[data-season-step]", (node) => stepSeriesSeason(Number.parseInt(node.dataset.seasonStep, 10) || 0)],
+          ["[data-episode-disc]", (node) => openAppMovieDetail(node.dataset.episodeDisc)],
+          ["[data-episode-watched]", openEpisodeWatchedSheet],
+          ["[data-episode-watchlist]", toggleEpisodeWatchlist],
+          ["[data-season-watched]", openSeasonWatchedSheet],
+          ["[data-season-watchlist]", toggleSeasonWatchlist],
+        ];
+        for (const [selector, handler] of handlers) {
+          const node = event.target.closest(selector);
+          if (node) {
+            event.preventDefault();
+            handler(node);
+            return;
+          }
         }
-        const watchedButton = event.target.closest("[data-episode-watched]");
-        if (watchedButton) {
+      });
+      // The rail is one tab stop with the arrow keys moving inside it, which is
+      // what `role="tablist"` promises a keyboard reader. Home and End matter
+      // more here than on a normal tablist: a show can have twenty seasons, and
+      // stepping to the last one is otherwise nineteen keypresses.
+      document.getElementById("seriesDetailSeasons")?.addEventListener("keydown", (event) => {
+        if (!event.target.closest("[data-season-chip]")) return;
+        const seasons = seriesSeasonsOf(activeSeriesPayload);
+        if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
           event.preventDefault();
-          toggleEpisodeWatched(watchedButton);
+          stepSeriesSeason(-1, {focusChip: true});
+        } else if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+          event.preventDefault();
+          stepSeriesSeason(1, {focusChip: true});
+        } else if (event.key === "Home" && seasons.length) {
+          event.preventDefault();
+          selectSeriesSeason(seasons[0].id, {focusChip: true});
+        } else if (event.key === "End" && seasons.length) {
+          event.preventDefault();
+          selectSeriesSeason(seasons[seasons.length - 1].id, {focusChip: true});
         }
       });
       document.getElementById("seriesIdentityCandidates")?.addEventListener("click", (event) => {

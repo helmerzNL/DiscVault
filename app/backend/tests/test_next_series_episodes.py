@@ -18,6 +18,7 @@ import os
 import sys
 import unittest
 import uuid
+from unittest.mock import patch
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -110,6 +111,19 @@ class EpisodeSchemaTests(unittest.TestCase):
                     "DELETE FROM watch_history WHERE episode_id IN (SELECT id FROM series_episodes WHERE public_id LIKE %s)",
                     (f"{PREFIX}-%",),
                 )
+                cur.execute(
+                    "DELETE FROM watchlist_items WHERE episode_id IN (SELECT id FROM series_episodes WHERE public_id LIKE %s)",
+                    (f"{PREFIX}-%",),
+                )
+                cur.execute(
+                    """
+                    DELETE FROM entity_media WHERE media_id IN (
+                        SELECT id FROM media_assets WHERE source_url LIKE %s
+                    )
+                    """,
+                    (f"https://{PREFIX}%",),
+                )
+                cur.execute("DELETE FROM media_assets WHERE source_url LIKE %s", (f"https://{PREFIX}%",))
                 cur.execute(
                     "DELETE FROM movie_episodes WHERE movie_id IN (SELECT id FROM movies WHERE public_id LIKE %s)",
                     (f"{PREFIX}-%",),
@@ -275,3 +289,682 @@ class EpisodeSchemaTests(unittest.TestCase):
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
+
+
+@unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
+class EpisodePresentationTests(EpisodeSchemaTests):
+    """What the episode list owes the person reading it.
+
+    Three questions the earlier shape could not answer: what does this episode
+    look like, do I still want to see it, and where in my collection is it.
+
+    These act as a signed-in user, which the watchlist requires and
+    `watch_history` does not: `watchlist_items.user_id` is NOT NULL while
+    `watch_history.user_id` is nullable, so an anonymous actor can record a
+    watch and cannot hold a list.
+    """
+
+    def setUp(self):
+        self.user_id = uuid.uuid4()
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (id, username, display_name, status) VALUES (%s,%s,'U','active')",
+                    (self.user_id, f"{PREFIX}-{self.user_id.hex[:8]}"),
+                )
+            conn.commit()
+        permission = patch(
+            "app.backend.next_app.require_next_permission",
+            return_value={"id": self.user_id},
+        )
+        permission.start()
+        self.addCleanup(permission.stop)
+        self.client = next_app.app.test_client()
+
+    def episodes(self, conn, season_id):
+        return next_app.season_episode_entities(conn, season_id, actor={"id": self.user_id})
+
+    def _artwork(self, cur, entity_type, entity_id, url):
+        """A remote asset, which is what a season poster actually is today: the
+        provider URL is served directly rather than copied into local storage."""
+        media_id = uuid.uuid4()
+        cur.execute(
+            """
+            INSERT INTO media_assets (id, kind, variant, storage_backend, storage_key, source_url, sha256)
+            VALUES (%s, 'poster', 'original', 'remote', %s, %s, %s)
+            """,
+            (media_id, f"remote/{media_id}", url, uuid.uuid4().hex),
+        )
+        cur.execute(
+            """
+            INSERT INTO entity_media (entity_type, entity_id, media_id, role, is_primary)
+            VALUES (%s, %s, %s, 'poster', true)
+            """,
+            (entity_type, entity_id, media_id),
+        )
+
+    def test_an_episode_without_a_still_borrows_the_season_then_the_series(self):
+        """The fallback is a chain, not a single alternative. Falling straight
+        through to the series poster while a season poster exists would show the
+        worse of the two images the reader could have had."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            with conn.cursor() as cur:
+                self._artwork(cur, "series", ids["series"], f"https://{PREFIX}-series.jpg")
+            conn.commit()
+            series_only = self.episodes(conn, ids["season1"])[0]
+
+            with conn.cursor() as cur:
+                self._artwork(cur, "series_season", ids["season1"], f"https://{PREFIX}-season.jpg")
+            conn.commit()
+            with_season = self.episodes(conn, ids["season1"])[0]
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE series_episodes SET still_url = %s WHERE id = %s",
+                    (f"https://{PREFIX}-still.jpg", ids["episode"]),
+                )
+            conn.commit()
+            with_still = self.episodes(conn, ids["season1"])[0]
+
+        self.assertEqual(series_only["posterSource"], "series")
+        self.assertIn(f"{PREFIX}-series.jpg", series_only["posterUrl"])
+        self.assertEqual(with_season["posterSource"], "season")
+        self.assertIn(f"{PREFIX}-season.jpg", with_season["posterUrl"])
+        self.assertEqual(with_still["posterSource"], "episode")
+        self.assertIn(f"{PREFIX}-still.jpg", with_still["posterUrl"])
+
+    def test_an_episode_with_no_image_anywhere_says_so_rather_than_guessing(self):
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            episode = self.episodes(conn, ids["season1"])[0]
+        self.assertIsNone(episode["posterUrl"])
+        self.assertIsNone(episode["posterSource"])
+
+    def test_the_disc_is_the_one_that_named_the_episode_before_the_one_that_covers_it(self):
+        """Both are honest answers, but they are not equally precise. A disc that
+        listed this episode beats a disc that merely covers its season."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            precise = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO movie_seasons (movie_id, season_id, series_id) VALUES (%s,%s,%s)",
+                    (ids["movie"], ids["season1"], ids["series"]),
+                )
+            conn.commit()
+            season_only = self.episodes(conn, ids["season1"])[0]
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO movies (id, public_id, title, sort_title, media_type, series_id)
+                    VALUES (%s,%s,'Single','Single','SHOW',%s)
+                    """,
+                    (precise, f"{PREFIX}-{precise}", ids["series"]),
+                )
+                cur.execute(
+                    "INSERT INTO movie_episodes (movie_id, episode_id, season_id, series_id) VALUES (%s,%s,%s,%s)",
+                    (precise, ids["episode"], ids["season1"], ids["series"]),
+                )
+            conn.commit()
+            with_episode = self.episodes(conn, ids["season1"])[0]
+
+        self.assertEqual(season_only["discId"], str(ids["movie"]))
+        self.assertEqual(with_episode["discId"], str(precise))
+
+    def test_an_episode_no_disc_carries_has_nowhere_to_go(self):
+        """`None` rather than the series page: an entry that looks clickable and
+        lands somewhere unrelated is worse than one that does not."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            episode = self.episodes(conn, ids["season1"])[0]
+        self.assertIsNone(episode["discId"])
+        self.assertFalse(episode["onDisc"])
+
+    def test_an_episode_can_be_wanted_as_well_as_seen(self):
+        """The half that was missing: `watch_history` could record "I saw it"
+        while the watchlist had no way to say "I still want to"."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+
+        added = self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        self.assertEqual(added.status_code, 200, added.data[:300])
+        with self.connect() as conn:
+            self.assertTrue(self.episodes(conn, ids["season1"])[0]["onWatchlist"])
+
+        removed = self.client.delete(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        self.assertEqual(removed.status_code, 200, removed.data[:300])
+        with self.connect() as conn:
+            self.assertFalse(self.episodes(conn, ids["season1"])[0]["onWatchlist"])
+
+    def test_one_persons_watchlist_is_not_anothers(self):
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            stranger = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO users (id, username, display_name, status) VALUES (%s,%s,'U','active')",
+                    (stranger, f"{PREFIX}-{stranger.hex[:8]}"),
+                )
+            conn.commit()
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        with self.connect() as conn:
+            theirs = next_app.season_episode_entities(conn, ids["season1"], actor={"id": stranger})
+        self.assertFalse(theirs[0]["onWatchlist"])
+
+    def test_a_watchlisted_episode_keeps_its_name_after_the_episode_is_gone(self):
+        """Re-linking a series deletes and recreates the whole episode tree. The
+        snapshot is what stops that from turning a list entry into a blank line."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM series_episodes WHERE id = %s", (ids["episode"],))
+            conn.commit()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT episode_id, snapshot FROM watchlist_items WHERE snapshot->>'episode_id' = %s",
+                    (str(ids["episode"]),),
+                )
+                row = cur.fetchone()
+
+        self.assertIsNotNone(row, "the entry must outlive the episode row")
+        self.assertIsNone(row["episode_id"], "the reference is cleared, the record is not")
+        self.assertEqual(row["snapshot"]["kind"], "episode")
+        self.assertEqual(row["snapshot"]["title"], "Third")
+        self.assertEqual(row["snapshot"]["episode_number"], 3)
+        self.assertEqual(row["snapshot"]["season_number"], 1)
+
+    def test_a_season_is_added_by_its_episodes_and_leaves_existing_ones_alone(self):
+        """"Add the whole season" is the per-episode act repeated, so the list
+        carries one kind of row. Episodes already on it keep their place."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            other = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO series_episodes (id, public_id, series_id, season_id, episode_number, title)
+                    VALUES (%s,%s,%s,%s,4,'Fourth')
+                    """,
+                    (other, f"{PREFIX}-{other}", ids["series"], ids["season1"]),
+                )
+            conn.commit()
+
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT added_at FROM watchlist_items WHERE episode_id = %s", (ids["episode"],)
+                )
+                before = cur.fetchone()["added_at"]
+
+        payload = self.client.post(f"/api/next/series/seasons/{ids['season1']}/watchlist").get_json()
+        self.assertEqual(payload["episodesAdded"], 1, "only the episode not already listed")
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT added_at FROM watchlist_items WHERE episode_id = %s", (ids["episode"],)
+                )
+                self.assertEqual(cur.fetchone()["added_at"], before, "must not be reshuffled")
+            self.assertTrue(all(row["onWatchlist"] for row in self.episodes(conn, ids["season1"])))
+
+        removed = self.client.delete(f"/api/next/series/seasons/{ids['season1']}/watchlist").get_json()
+        self.assertEqual(removed["episodesRemoved"], 2)
+
+    def test_marking_a_season_watched_does_not_claim_a_rewatch(self):
+        """`watch_history` is append-only and a second row means "seen again".
+        A bulk button pressed on a half-seen season is not that claim."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            other = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO series_episodes (id, public_id, series_id, season_id, episode_number, title)
+                    VALUES (%s,%s,%s,%s,4,'Fourth')
+                    """,
+                    (other, f"{PREFIX}-{other}", ids["series"], ids["season1"]),
+                )
+            conn.commit()
+
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watched", json={})
+        payload = self.client.post(f"/api/next/series/seasons/{ids['season1']}/watched", json={}).get_json()
+        self.assertEqual(payload["episodesMarked"], 1, "only the unseen one")
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT count(*) AS n FROM watch_history
+                    WHERE episode_id IN (SELECT id FROM series_episodes WHERE season_id = %s)
+                    """,
+                    (ids["season1"],),
+                )
+                self.assertEqual(cur.fetchone()["n"], 2, "one row each, no duplicate for the seen one")
+
+        cleared = self.client.delete(f"/api/next/series/seasons/{ids['season1']}/watched").get_json()
+        self.assertEqual(cleared["entriesCleared"], 2)
+
+    def test_a_season_nobody_has_opened_yet_is_answerable_rather_than_an_error(self):
+        """Episodes arrive only when somebody opens the season. Acting on a
+        season with none stored is a truthful zero, not a 404."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+        empty = self.client.post(f"/api/next/series/seasons/{ids['season2']}/watchlist")
+        self.assertEqual(empty.status_code, 200, empty.data[:300])
+        self.assertEqual(empty.get_json()["episodesAdded"], 0)
+
+        self.assertEqual(
+            self.client.post(f"/api/next/series/seasons/{uuid.uuid4()}/watchlist").status_code, 404
+        )
+
+    def test_a_row_cannot_name_a_film_and_an_episode_at_once(self):
+        """The check constraint, not a code rule: a row that claims both has no
+        meaning, and every reader would have to pick one to believe."""
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+            with self.assertRaises(psycopg.errors.CheckViolation):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO watchlist_items (user_id, movie_id, episode_id) VALUES (%s,%s,%s)",
+                        (self.user_id, ids["movie"], ids["episode"]),
+                    )
+            conn.rollback()
+
+
+@unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
+class EpisodesOnThePersonalListsTests(EpisodePresentationTests):
+    """Episodes on the same two lists films use, rather than a third place.
+
+    The point of reusing `watchlist_items` and `watch_history` is that one page
+    answers "what do I still want to see" for a collection that is half films
+    and half box sets. That only works if the episode rows reach the page, and
+    if the film query stops trying to render them.
+    """
+
+    def _linked_fixture(self, conn):
+        ids = self._fixture(conn)
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO movie_episodes (movie_id, episode_id, season_id, series_id) VALUES (%s,%s,%s,%s)",
+                (ids["movie"], ids["episode"], ids["season1"], ids["series"]),
+            )
+        conn.commit()
+        return ids
+
+    def test_an_episode_reaches_both_lists_and_points_at_its_disc(self):
+        with self.connect() as conn:
+            ids = self._linked_fixture(conn)
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watched", json={})
+
+        payload = self.client.get("/api/next/lists?limit=50").get_json()
+        for key in ("watchlist", "watched"):
+            rows = [row for row in payload[key] if row.get("kind") == "episode"]
+            self.assertEqual(len(rows), 1, f"{key} should carry the episode")
+            row = rows[0]
+            self.assertEqual(row["title"], "Third")
+            self.assertEqual(row["series_title"], "Show")
+            self.assertEqual(row["season_number"], 1)
+            self.assertEqual(row["episode_number"], 3)
+            self.assertEqual(
+                row["disc_movie_id"], str(ids["movie"]), "the click has to land on the disc"
+            )
+            self.assertTrue(row["movie_exists"], "which is also what makes it clickable")
+
+    def test_an_episode_is_not_rendered_as_a_film_that_no_longer_exists(self):
+        """The failure this replaces: `LEFT JOIN movies` matches nothing for an
+        episode row, so it arrived on the page as a titleless entry in the
+        deleted-film state -- a confident claim about a film that never was."""
+        with self.connect() as conn:
+            ids = self._linked_fixture(conn)
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watched", json={})
+
+        with self.connect() as conn:
+            for kind in ("watchlist", "watched"):
+                rows = next_app.personal_list_movie_entities(conn, self.user_id, kind=kind)
+                self.assertEqual(rows, [], f"the film query must not claim the episode ({kind})")
+
+    def test_the_two_lists_are_ordered_together_rather_than_appended(self):
+        """A film added after an episode belongs above it. Appending one list to
+        the other would put every episode last regardless of when it was added."""
+        with self.connect() as conn:
+            ids = self._linked_fixture(conn)
+            film = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO movies (id, public_id, title, sort_title)
+                    VALUES (%s,%s,'A Film','A Film')
+                    """,
+                    (film, f"{PREFIX}-{film}"),
+                )
+            conn.commit()
+
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
+        # Written directly: the film routes check collection visibility, which
+        # needs a fuller actor than this fixture builds, and the ordering is a
+        # property of the merge rather than of how a row got there.
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO watchlist_items (user_id, movie_id, added_at)
+                    VALUES (%s, %s, now() + interval '1 minute')
+                    """,
+                    (self.user_id, film),
+                )
+            conn.commit()
+
+        rows = self.client.get("/api/next/lists?limit=50").get_json()["watchlist"]
+        self.assertEqual(
+            [row.get("kind") or "movie" for row in rows[:2]],
+            ["movie", "episode"],
+            "newest first, whatever kind it is",
+        )
+
+    def test_films_and_episodes_are_counted_apart(self):
+        """`watchedMovies` says films. Counting episodes into it would have made
+        a season of thirteen read as thirteen films -- or, when the episodes are
+        untitled, as one."""
+        with self.connect() as conn:
+            ids = self._linked_fixture(conn)
+            film = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO movies (id, public_id, title, sort_title) VALUES (%s,%s,'A Film','A Film')",
+                    (film, f"{PREFIX}-{film}"),
+                )
+            conn.commit()
+
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watched", json={})
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO watch_history (user_id, movie_id, watched_at) VALUES (%s, %s, now())",
+                    (self.user_id, film),
+                )
+            conn.commit()
+
+        counts = self.client.get("/api/next/lists?limit=50").get_json()["counts"]
+        self.assertEqual(counts["watchedMovies"], 1)
+        self.assertEqual(counts["watchedEpisodes"], 1)
+        self.assertEqual(counts["watchHistory"], 2)
+
+    def test_a_watched_episode_survives_its_episode_being_deleted(self):
+        """Same guarantee as the watchlist, and the reason the watched insert
+        writes a snapshot at all: `episode_id` is SET NULL on delete, so without
+        one the row would decay into an entry naming nothing."""
+        with self.connect() as conn:
+            ids = self._linked_fixture(conn)
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watched", json={})
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM series_episodes WHERE id = %s", (ids["episode"],))
+            conn.commit()
+
+        rows = [
+            row
+            for row in self.client.get("/api/next/lists?limit=50").get_json()["watched"]
+            if row.get("kind") == "episode"
+        ]
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["title"], "Third")
+        self.assertEqual(rows[0]["series_title"], "Show")
+        self.assertIsNone(rows[0]["disc_movie_id"], "the disc link went with the episode")
+        self.assertFalse(rows[0]["movie_exists"], "so the entry is not clickable")
+
+
+class TheHeroBorrowsASeasonPosterTests(unittest.TestCase):
+    """A series with no poster of its own shows the season the reader is on.
+
+    Nothing about a series guarantees it has artwork: a source may name the show
+    and describe every season without publishing a poster for the show itself.
+    The page then said "No poster" while six season posters sat one tab away.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def _function(self, name):
+        start = self.source.index(name)
+        return self.source[start:self.source.index("\n    function ", start + 1)]
+
+    def test_an_uploaded_poster_ends_the_chain_before_it_starts(self):
+        """This is the whole "unless one was uploaded and locked" clause. A
+        series' own poster *is* the chosen one -- `entity_media` with
+        `is_primary`, which is what an upload and the artwork tab both write --
+        so a series that has one never reaches the rest of the chain, and no
+        amount of stepping along the rail changes what it shows."""
+        body = self._function("function seriesHeroPosterUrl(")
+        own = body.index('const own = mediaAssetImage(detail.mediaAssets, "poster");')
+        guard = body.index("if (own) return own;")
+        self.assertLess(own, guard)
+        self.assertLess(guard, body.index("seriesSeasonSelection"))
+
+    def test_the_hero_follows_the_rail_before_it_guesses(self):
+        body = self._function("function seriesHeroPosterUrl(")
+        selected = body.index("usableImage(selected?.posterUrl)")
+        first = body.index("usableImage(firstNumbered?.posterUrl)")
+        disc = body.index('mediaAssetImage(detail.aggregateMediaAssets, "poster")')
+        self.assertLess(selected, first)
+        self.assertLess(first, disc)
+
+    def test_specials_are_skipped_while_guessing_but_not_when_chosen(self):
+        """Season 0 sorts first and is the least recognisable face a show has, so
+        it must not become the default. A reader who selects it has said which
+        season they mean, and overriding that would be the hero disagreeing with
+        the rail beside it."""
+        body = self._function("function seriesHeroPosterUrl(")
+        self.assertIn('Number.parseInt(season.seasonNumber, 10) > 0', body)
+        selected_line = body[body.index("const selected ="):body.index("const firstNumbered")]
+        self.assertNotIn("seasonNumber", selected_line, "a chosen season is taken as chosen")
+
+    def test_the_hero_is_painted_after_the_rail_settles_the_selection(self):
+        """`seriesSeasonRowsHtml` is what chooses a season on a first render.
+        Painting the hero before it would show one season's poster and replace it
+        with another's in the same pass."""
+        body = self._function("function renderSeriesSeasons(")
+        rail = body.index("node.innerHTML = seriesSeasonRowsHtml(detail);")
+        hero = body.index("renderSeriesHeroPoster(detail);")
+        self.assertLess(rail, hero)
+        detail = self._function("function renderSeriesDetail(")
+        self.assertNotIn("renderSeriesHeroPoster(", detail)
+        self.assertIn("renderSeriesSeasons(detail);", detail)
+
+    def test_stepping_the_rail_repaints_the_hero(self):
+        """Selecting a season re-renders through the same function, so the hero
+        cannot drift out of step with the stage under it."""
+        body = self._function("function selectSeriesSeason(")
+        self.assertIn("renderSeriesSeasons(activeSeriesPayload || {});", body)
+
+
+class TheSeasonsTabIsABrowserTests(unittest.TestCase):
+    """The Seasons tab shows one season at a time.
+
+    What it replaces was a grid of season cards each holding an inline
+    expander. Opening three of them made the page as long as the show, the
+    episode lists sat inside 260px grid cells that were never meant to hold
+    them, and nothing on screen said which season was being read. A rail that
+    picks and a stage that shows is the shape that answers that question
+    without stacking.
+
+    These assertions read the rendered page's source. They are about structure
+    a reader depends on -- one season at a time, arrows that stop at the ends,
+    a keyboard that can reach every season -- not about styling.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def _function(self, name):
+        start = self.source.index(name)
+        return self.source[start:self.source.index("\n    function ", start + 1)]
+
+    def test_the_rail_picks_and_the_stage_shows(self):
+        body = self._function("function seriesSeasonRowsHtml(")
+        self.assertIn("seriesSeasonRailHtml(seasons, owned, selected)", body)
+        self.assertIn("seriesSeasonStageHtml(seasons, owned, selected)", body)
+        # One stage means one episode list on the page: the old shape rendered
+        # a `data-season-episode-list` per season, and every write had to find
+        # the right one among them.
+        self.assertEqual(self.source.count('<div class="series-episode-list" data-season-episode-list='), 1)
+
+    def test_the_arrows_stop_at_the_ends_rather_than_wrapping(self):
+        """A Next that jumps from the last season back to the first reads as a
+        mis-click, not as a feature."""
+        rail = self._function("function seriesSeasonRailHtml(")
+        self.assertIn("disabled", rail)
+        self.assertIn('data-season-step="${delta}"', rail)
+        step = self._function("function stepSeriesSeason(")
+        self.assertIn("if (next) selectSeriesSeason(next.id, options);", step)
+        self.assertNotIn("%", step, "no modulo, so no wraparound")
+
+    def test_the_rail_is_one_tab_stop_with_arrow_keys_inside_it(self):
+        """Twenty seasons must not be twenty tab stops between the head of the
+        page and the episodes, which is what a roving tabindex is for."""
+        rail = self._function("function seriesSeasonRailHtml(")
+        self.assertIn('role="tablist"', rail)
+        self.assertIn('role="tab"', rail)
+        self.assertIn('tabindex="${active ? "0" : "-1"}"', rail)
+        self.assertIn('aria-selected="${active ? "true" : "false"}"', rail)
+        for key in ("ArrowLeft", "ArrowRight", "Home", "End"):
+            self.assertIn(f'event.key === "{key}"', self.source)
+
+    def test_the_tab_opens_on_a_season_the_collection_carries(self):
+        """A show you own only the last two seasons of must not open on a
+        season 1 you do not have."""
+        body = self._function("function seriesSelectedSeason(")
+        self.assertIn(
+            "seasons.find((season) => owned.has(Number.parseInt(season.seasonNumber, 10))) || seasons[0]",
+            body,
+        )
+
+    def test_switching_series_drops_the_previous_one_s_episode_cache(self):
+        """Season ids from another series name nothing here, and a cache keyed
+        by them would answer for a season no longer on screen."""
+        body = self._function("function seriesSelectedSeason(")
+        self.assertIn("seriesSeasonEpisodeCache.clear();", body)
+        self.assertIn('seriesSeasonSelection = "";', body)
+
+    def test_a_late_response_cannot_paint_into_another_season_s_page(self):
+        """Switching season replaces the stage while a request is in flight.
+
+        Writing into the node captured before the await would put one season's
+        episodes under another season's heading -- and nothing about it would
+        look wrong.
+        """
+        body = self._function("async function loadSeasonEpisodes(")
+        self.assertIn("const paint = (html) => {", body)
+        self.assertIn(
+            'const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);',
+            body,
+        )
+        self.assertNotIn("node.innerHTML =", body.split("const paint")[0])
+
+    def test_a_write_replaces_the_cached_list_rather_than_leaving_it_stale(self):
+        """Every write returns the season's new episode list. Leaving the old
+        one cached would undo the write the moment the reader stepped away and
+        came back."""
+        body = self._function("async function runSeasonListAction(")
+        self.assertIn(
+            "seriesSeasonEpisodeCache.set(listId, {episodes: payload.episodes || []});",
+            body,
+        )
+        self.assertIn("if (typeof listsState === \"object\" && listsState) listsState.loaded = false;", body)
+
+
+class AnEpisodeIsMarkedWatchedLikeAFilmTests(unittest.TestCase):
+    """Saying when you watched something is one gesture, not two.
+
+    A film opens a sheet offering today, yesterday and a date picker. An
+    episode used to write `now` and offer nothing -- which is wrong for the
+    ordinary case it exists for, a box set watched over a fortnight. Both now
+    open the same sheet, from the same function, wearing the same button.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def _function(self, name):
+        start = self.source.index(name)
+        return self.source[start:self.source.index("\n    function ", start + 1)]
+
+    def test_the_sheet_is_written_once_and_used_by_both(self):
+        self.assertEqual(self.source.count('data-rewatch-date="today"'), 1)
+        for caller in (
+            "function openMovieRewatchDialog()",
+            "function openEpisodeWatchedSheet(",
+            "function openSeasonWatchedSheet(",
+        ):
+            self.assertIn("openWatchedDateSheet({", self._function(caller))
+
+    def test_the_chosen_date_reaches_the_route_rather_than_being_dropped(self):
+        """Both routes have accepted `watchedAt` since the day they were
+        written; the button just never sent one."""
+        body = self._function("function openEpisodeWatchedSheet(")
+        self.assertIn("onPick: (watchedAt) => runSeasonListAction(button, {path, body: {watchedAt}})", body)
+        season = self._function("function openSeasonWatchedSheet(")
+        self.assertIn("body: {watchedAt}", season)
+        writer = self._function("async function runSeasonListAction(")
+        self.assertIn("body: JSON.stringify(body || {})", writer)
+
+    def test_a_watched_episode_can_be_un_watched_from_the_same_sheet(self):
+        """A film deletes individual dates from its history pills. An episode
+        carries no such list, so without a remove entry in the sheet its
+        watched state would be a one-way door."""
+        body = self._function("function openEpisodeWatchedSheet(")
+        self.assertIn('remove: button.dataset.watched === "1"', body)
+        self.assertIn("removeEpisodeWatched", body)
+        sheet = self._function("function openWatchedDateSheet(")
+        self.assertIn('data-rewatch-date="remove"', sheet)
+        self.assertIn("remove?.run();", sheet)
+
+    def test_a_fully_watched_season_clears_instead_of_asking_for_a_date(self):
+        """The server marks only the episodes that were unwatched, so on a
+        season with none left every date choice would write nothing."""
+        body = self._function("function openSeasonWatchedSheet(")
+        self.assertIn('if (button.dataset.watched === "1") {', body)
+        self.assertIn("runSeasonListAction(button, {path, remove: true, seasonId});", body)
+
+    def test_both_buttons_wear_the_film_s_button(self):
+        card = self._function("function seriesEpisodeCardHtml(")
+        self.assertIn('class="list-action-button compact watched', card)
+        self.assertIn('class="list-action-button compact watchlist', card)
+        bulk = self._function("function seriesSeasonBulkHtml(")
+        self.assertIn('class="list-action-button watched', bulk)
+        self.assertIn('class="list-action-button watchlist', bulk)
+        self.assertNotIn("secondary-button", card + bulk)
+
+    def test_an_episode_says_which_one_it_is_and_when_it_was_seen(self):
+        card = self._function("function seriesEpisodeCardHtml(")
+        self.assertIn("seriesEpisodeCode(seasonNumber, episode.episodeNumber)", card)
+        self.assertIn('tNext("seriesDetail.watchedOn", "Watched {date}")', card)
+        self.assertIn("formatAppDate(episode.watchedAt)", card)
+        code = self._function("function seriesEpisodeCode(")
+        self.assertIn('.padStart(2, "0")', code)
+        self.assertIn('tNext("seriesDetail.episodeCode", "S{season}E{episode}")', code)
+
+    def test_the_still_opens_the_disc_only_when_one_carries_the_episode(self):
+        """`discId` is null exactly when nothing in the collection carries the
+        episode, so the frame is inert then rather than promising somewhere to
+        go and having none."""
+        card = self._function("function seriesEpisodeCardHtml(")
+        self.assertIn("const thumb = episode.discId", card)
+        self.assertIn('data-episode-disc="${escapeHtml(episode.discId)}"', card)
+        self.assertIn('["[data-episode-disc]", (node) => openAppMovieDetail(node.dataset.episodeDisc)]', self.source)

@@ -1120,6 +1120,22 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     if query.get("previewMode"):
         if tmdb_id or imdb_id:
             add("lookup_external_id", base_payload)
+            # And the television namespace, for the same reason the title branch
+            # below asks it. An id is issued *by* a namespace and a bare number
+            # does not say which: TMDB's 1516 is a film and a television series
+            # that have nothing to do with each other, so asking only the film
+            # namespace tells somebody looking for the series that no such thing
+            # exists. Both answers are offered and the person picks, exactly as
+            # they do with a title.
+            #
+            # Only when the number is the query's own. `resolvedIdentity` marks
+            # an id another source resolved -- a barcode that MovieVault matched
+            # to a film -- and there the namespace is already settled. Asking
+            # the television one with that number would offer an unrelated show
+            # beside the right film, with nobody having asked about television
+            # at all, which is §7b's failure mode wearing a candidate card.
+            if not query.get("resolvedIdentity"):
+                add("lookup_external_series_id", base_payload)
             return plan
         if title:
             # A title search should drive the preview results even when a barcode
@@ -1170,6 +1186,37 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     if (query.get("memberOfBoxSet") or query.get("detectBoxSets")) and (title or fallback or external_barcode):
         add("box_set_candidates", base_payload)
     return plan
+
+
+# The two entrypoints that answer "a person typed this title and will choose".
+# Everything else a source can do is enrichment, and enrichment belongs to the
+# movie that was picked rather than to the picking.
+PREVIEW_TITLE_SEARCH_ENTRYPOINTS = ("search_title", "search_series")
+
+
+def preview_title_search_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
+    """What a supporting source may contribute to a title search, and no more.
+
+    A preview is not a refresh. The sources outside the identity set are not run
+    in full here -- a preview would then pay for technical specs, prices and
+    box-set detection on a query that has not identified anything yet -- but
+    that exclusion was doing more than it meant to: it also withheld the one
+    question they *can* answer before anything is identified, which is which
+    titles the typed text might mean.
+
+    Filtered from `plugin_execution_plan` rather than assembled here, so a
+    source's capabilities decide this in exactly one place. A barcode-only
+    preview plans no search step and the source is skipped altogether: reaching
+    a source with a barcode it never claimed to read is how a preview grows a
+    call that can only fail.
+    """
+    if not clean_text(query.get("title")):
+        return []
+    return [
+        planned
+        for planned in plugin_execution_plan(plugin, query)
+        if planned["entrypoint"] in PREVIEW_TITLE_SEARCH_ENTRYPOINTS
+    ]
 
 
 def movievault_identification_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
@@ -3930,17 +3977,19 @@ def run_metadata_source_pipeline(
             enable_metadata_lookup_bridge=False,
         )
 
-    initial_plugins = identity_plugins if query.get("previewMode") else [*identity_plugins, *supporting_plugins]
-    for plugin in initial_plugins:
-        config = plugin_config_from_db(conn, plugin["id"])
-        context = plugin_execution_context(conn, plugin, config, actor)
-        if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
-            context["metadataLookup"] = metadata_lookup_bridge
-        plan = (
-            movievault_identification_plan(plugin, query)
-            if is_movievault_identity_source(str(plugin.get("id") or ""))
-            else plugin_execution_plan(plugin, query)
-        )
+    def run_source_plan(
+        plugin: dict[str, Any],
+        plan: list[dict[str, Any]],
+        config: dict[str, Any],
+        context: dict[str, Any],
+    ) -> None:
+        """Run one source's planned steps and record what each one answered.
+
+        Shared by the two passes below rather than written twice. The second
+        pass exists only because a title search has to reach sources the first
+        one deliberately skips; how a step is run, recorded and normalised is
+        the same act in both, and a copy is where the two would drift.
+        """
         for planned in plan:
             entrypoint = planned["entrypoint"]
             if plugin_requires_config(plugin, config, entrypoint):
@@ -4012,6 +4061,19 @@ def run_metadata_source_pipeline(
                 continue
             normalized_results.append(normalized)
 
+    initial_plugins = identity_plugins if query.get("previewMode") else [*identity_plugins, *supporting_plugins]
+    for plugin in initial_plugins:
+        config = plugin_config_from_db(conn, plugin["id"])
+        context = plugin_execution_context(conn, plugin, config, actor)
+        if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
+            context["metadataLookup"] = metadata_lookup_bridge
+        plan = (
+            movievault_identification_plan(plugin, query)
+            if is_movievault_identity_source(str(plugin.get("id") or ""))
+            else plugin_execution_plan(plugin, query)
+        )
+        run_source_plan(plugin, plan, config, context)
+
     enrichment_payload = preview_enrichment_payload_from_results(query, normalized_results)
     has_box_set_preview = any(
         bool(item.get("boxSetProposal") or item.get("boxSetProposals"))
@@ -4074,10 +4136,30 @@ def run_metadata_source_pipeline(
                     # searches and hid multi-result matches.
                     tmdb_query = dict(query)
                     tmdb_query["previewMode"] = True
-                    for key in ("title", "fallbackTitle", "year", "tmdbId", "imdbId"):
+                    # An id another source resolved is borrowed, not typed. It is
+                    # what a barcode preview has to go on -- MovieVault names the
+                    # film and TMDB then describes exactly that one -- but on a
+                    # *title* search it silently replaced the question: the plan
+                    # for an id is `lookup_external_id` and nothing else, so both
+                    # the film search and the television search disappeared, and
+                    # "The A-Team" returned the one film MovieVault happened to
+                    # match and no series at all.
+                    #
+                    # The person typed a title; the title is what TMDB is asked.
+                    # A borrowed id may still fill a query that has no title of
+                    # its own, which is the barcode case and the only one it was
+                    # ever meant for.
+                    borrowed = () if clean_text(query.get("title")) else ("tmdbId", "imdbId")
+                    for key in ("title", "fallbackTitle", "year", *borrowed):
                         value = enrichment_payload.get(key)
                         if value and not clean_text(tmdb_query.get(key)):
                             tmdb_query[key] = value
+                            if key in ("tmdbId", "imdbId"):
+                                # Says where the id came from, which decides
+                                # whether the television namespace is asked as
+                                # well: a number somebody typed is ambiguous, a
+                                # number a source resolved is not.
+                                tmdb_query["resolvedIdentity"] = True
                     tmdb_plan = [
                         planned
                         for planned in plugin_execution_plan(tmdb_plugin, tmdb_query)
@@ -4168,6 +4250,32 @@ def run_metadata_source_pipeline(
                             tmdb_enrichment["state"] = "no_match"
                     else:
                         tmdb_enrichment["state"] = execution_item.get("state") or "error"
+
+    # Every other source that can answer a typed title. Without this the Add
+    # screen's search was TMDB and nothing else: the preview pass above runs only
+    # the identity sources, the block above it is TMDB by name, and a source
+    # outside both -- TheTVDB, which is the only place a great many series are
+    # described at all -- was never asked, however high the user had ranked it.
+    #
+    # Which sources those are is decided by declared capability, not by id. The
+    # hard-coded `tmdb` that used to sit in the series path is exactly the shape
+    # this avoids: a source is included because it says it can search a title or
+    # a series namespace, so installing one is enough and no future source is a
+    # code change here.
+    #
+    # Run last on purpose. The enrichment payload above is derived from what the
+    # identity sources answered, and appending to `normalized_results` before it
+    # is computed would let a search result -- a guess a person has not chosen
+    # yet -- decide what TMDB is asked about. Ordering candidates after TMDB's
+    # also keeps the pre-selected first candidate what it has always been.
+    if query.get("previewMode"):
+        for plugin in supporting_plugins:
+            plan = preview_title_search_plan(plugin, query)
+            if not plan:
+                continue
+            config = plugin_config_from_db(conn, plugin["id"])
+            context = plugin_execution_context(conn, plugin, config, actor)
+            run_source_plan(plugin, plan, config, context)
 
     preview_enrichment = {
         "enabled": bool(tmdb_enrichment.get("enabled")),
@@ -5090,13 +5198,17 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         if media_type != MEDIA_TYPE_SHOW:
             return None
         existing_series = series_id_for_identifier(
-            cur, provider_id=payload["provider_id"], identifier=payload["identifier"]
+            cur,
+            provider_id=payload["provider_id"],
+            identifier=payload["identifier"],
+            identifier_type=payload["identifier_type"],
         )
         series_uuid = ensure_series(
             cur,
             provider_id=payload["provider_id"],
             identifier=payload["identifier"],
             title=payload["title"],
+            identifier_type=payload["identifier_type"],
         )
         if current_series is not None and current_series != series_uuid:
             return None
@@ -5866,7 +5978,7 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
 
 SEASON_EPISODES_CAPABILITY = "season_episodes"
 
-EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20}
+EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20, "still_url": 1000}
 
 
 def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
@@ -5953,9 +6065,9 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                 """
                 INSERT INTO series_episodes (
                     id, public_id, series_id, season_id, episode_number,
-                    title, overview, air_date, runtime_minutes
+                    title, overview, air_date, runtime_minutes, still_url
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 """,
                 (
@@ -5968,6 +6080,7 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
                     clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
                 ),
             )
             if cur.rowcount:
@@ -5983,6 +6096,7 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     overview = COALESCE(NULLIF(overview, ''), %s),
                     air_date = COALESCE(NULLIF(air_date, ''), %s),
                     runtime_minutes = COALESCE(runtime_minutes, %s),
+                    still_url = COALESCE(NULLIF(still_url, ''), %s),
                     updated_at = now()
                 WHERE season_id = %s AND episode_number = %s AND deleted_at IS NULL
                 """,
@@ -5991,6 +6105,7 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
                     clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
                     season_uuid,
                     number,
                 ),
@@ -6005,6 +6120,129 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
         "sources": {"consulted": [str(plugin.get("id")) for plugin in plugins], "episodes": sources},
         "errors": errors,
     }
+
+
+def apply_season_poster_inheritance(cur, movie_uuids: list[UUID] | None = None) -> int:
+    """Give a disc of a show the poster of the season it carries.
+
+    A disc linked through a barcode or a TMDb/TVDb id normally arrives with a
+    poster from the source. When it does not, the season it is filed under
+    already has one, and that is a picture of what is in the box -- so the disc
+    takes it and *has* a poster, rather than a surface deciding to draw one.
+
+    Stored rather than resolved per read, and the difference is the whole point.
+    A displayed fallback stops at the surface that implements it: the Library
+    would show something, the sync delta would carry nothing, and the iOS app
+    would still show an empty tile. "A disc of a series always has a poster" is a
+    statement about the record, so it has to be true of the record.
+
+    This is the same shape `container_metadata_proposal` already uses for a box
+    set that has no cover of its own, down to the provenance flag -- and it is
+    that flag that makes storing safe. `poster_from_season` marks the poster as
+    inherited, so a later run may replace it when the season's artwork changes,
+    while a poster the disc owns is left alone forever. Without it, "has a
+    poster" and "has its own poster" become indistinguishable the moment this
+    writes, and the disc could never be given a better one.
+
+    Passing ``movie_uuids`` limits the run to those discs; ``None`` sweeps every
+    linked disc, which is what the backfill in migration 078 needs.
+
+    Three conditions, all of them in SQL so a sweep stays one statement:
+
+    * The disc has no poster, or has one this function put there. An uploaded or
+      fetched cover always wins -- that is the "unless one was uploaded" clause,
+      and it needs no separate check because such a poster is simply not ours.
+    * ``poster_locked`` is unset. The operator has said to leave the artwork
+      alone, and this is artwork.
+    * The value would actually change, so re-running writes nothing. `updated_at`
+      feeds the sync delta, and a no-op write would wake every client for a
+      poster that did not move.
+
+    Only a season poster with a `source_url` is taken. Season artwork is stored
+    as a remote provider URL, and a locally stored asset could not be served
+    under a movie anyway: `actor_can_view_media_asset` has no branch for
+    `series_season`, which §7o records as a live gap. Skipping those leaves the
+    disc as it was rather than pointing it at a URL that would 403.
+    """
+    scoped = movie_uuids is not None
+    if scoped and not movie_uuids:
+        return 0
+    ids = list(movie_uuids or [])
+    cur.execute(
+        f"""
+        WITH candidate AS (
+            SELECT DISTINCT ON (ms.movie_id)
+                ms.movie_id,
+                ma.source_url AS poster_url
+            FROM movie_seasons ms
+            JOIN series_seasons ss ON ss.id = ms.season_id AND ss.deleted_at IS NULL
+            JOIN entity_media em
+              ON em.entity_type='series_season'
+             AND em.entity_id=ss.id
+             AND em.deleted_at IS NULL
+             AND em.hidden_at IS NULL
+            JOIN media_assets ma ON ma.id = em.media_id AND ma.kind='poster'
+            WHERE NULLIF(BTRIM(COALESCE(ma.source_url, '')), '') IS NOT NULL
+              {"AND ms.movie_id = ANY(%s)" if scoped else ""}
+            -- The lowest season number a set carries, which is what "the first
+            -- of the selected seasons" means once the seasons are the disc's own
+            -- rather than a guess. Season 0 is not excluded here: a curator who
+            -- filed a disc under the specials has said what is in the box.
+            ORDER BY ms.movie_id, ss.season_number, em.is_primary DESC, em.sort_order, ma.created_at
+        )
+        UPDATE movies m
+        SET metadata = COALESCE(m.metadata, '{{}}'::jsonb)
+                || jsonb_build_object('poster_url', c.poster_url, 'poster_from_season', true),
+            updated_at = now()
+        FROM candidate c
+        WHERE m.id = c.movie_id
+          AND m.deleted_at IS NULL
+          AND LOWER(COALESCE(m.metadata->>'poster_locked', 'false')) NOT IN ('true', '1', 'yes')
+          AND (
+                NULLIF(BTRIM(COALESCE(m.metadata->>'poster_url', '')), '') IS NULL
+                OR LOWER(COALESCE(m.metadata->>'poster_from_season', 'false')) IN ('true', '1', 'yes')
+              )
+          AND COALESCE(m.metadata->>'poster_url', '') IS DISTINCT FROM c.poster_url
+        """,
+        (ids,) if scoped else (),
+    )
+    return cur.rowcount or 0
+
+
+def clear_orphaned_season_poster(cur, movie_uuid: UUID) -> None:
+    """Drop an inherited poster from a disc that no longer carries that season.
+
+    Unlinking a disc, or moving it to a season with no artwork, would otherwise
+    leave the old season's poster behind as though the disc owned it -- and it
+    would then survive every later run, because the check above stops at a disc
+    that already has a poster it did not put there.
+
+    Only ever removes what `apply_season_poster_inheritance` wrote. A poster the
+    disc owns is not this function's to touch.
+    """
+    cur.execute(
+        """
+        UPDATE movies m
+        SET metadata = (m.metadata - 'poster_url' - 'poster_from_season'),
+            updated_at = now()
+        WHERE m.id = %s
+          AND LOWER(COALESCE(m.metadata->>'poster_from_season', 'false')) IN ('true', '1', 'yes')
+          AND NOT EXISTS (
+                SELECT 1
+                FROM movie_seasons ms
+                JOIN series_seasons ss ON ss.id = ms.season_id AND ss.deleted_at IS NULL
+                JOIN entity_media em
+                  ON em.entity_type='series_season'
+                 AND em.entity_id=ss.id
+                 AND em.deleted_at IS NULL
+                 AND em.hidden_at IS NULL
+                JOIN media_assets ma ON ma.id = em.media_id AND ma.kind='poster'
+                WHERE ms.movie_id = m.id
+                  AND NULLIF(BTRIM(COALESCE(ma.source_url, '')), '') IS NOT NULL
+          )
+        """,
+        (movie_uuid,),
+    )
 
 
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
@@ -6110,6 +6348,18 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     # with no artwork at all must still keep the text it just gained.
     applied_artwork = apply_series_artwork(conn, series_uuid, merged)
 
+    # Season artwork has just landed, so every disc filed under one of these
+    # seasons may now have an answer it did not have a moment ago. Applied here
+    # rather than in the route because the background worker refreshes through
+    # this same function and would otherwise leave those discs behind.
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM movies WHERE series_id = %s AND deleted_at IS NULL",
+            (series_uuid,),
+        )
+        linked = [row["id"] for row in cur.fetchall()]
+        inherited_posters = apply_season_poster_inheritance(cur, linked) if linked else 0
+
     return {
         "status": "ok",
         "seriesId": str(series_uuid),
@@ -6117,6 +6367,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         "seasonsUpdated": updated_seasons,
         "artwork": applied_artwork["series"],
         "seasonArtwork": applied_artwork["seasons"],
+        "discPostersInherited": inherited_posters,
         "sources": {
             "consulted": [plugin_id for plugin_id, _ in results],
             "series": merged["overviewSource"] if updated_series else "",

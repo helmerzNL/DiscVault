@@ -150,6 +150,31 @@ class SeriesHierarchyPostgresTests(unittest.TestCase):
             movie_id = self._movie(conn)
             self.assertIsNone(next_app.movie_series_payload(conn, movie_id))
 
+    def test_the_payload_carries_the_series_own_identifiers(self):
+        """The disc's edit screen reads this payload, and a television id is
+        the series' rather than the disc's. Without the identifiers on it the
+        television fields could only ever render empty, which reads as "this
+        series has no id" on a series that has one -- and the person then types
+        an id the series already had."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
+                    VALUES (%s, 'tvdb', 'tvdb', '305288')
+                    """,
+                    (series_id,),
+                )
+            conn.commit()
+            movie_id = self._movie(conn)
+            self._assign(conn, movie_id, {"series_id": series_id, "season_ids": []})
+            payload = next_app.movie_series_payload(conn, movie_id)
+        self.assertEqual(
+            [(row["identifier_type"], row["identifier"]) for row in payload["identifiers"]],
+            [("tvdb", "305288")],
+        )
+
     # --- ordinary use -------------------------------------------------------
 
     def test_seasons_are_stored_and_read_back_in_season_order(self):
