@@ -2506,7 +2506,21 @@ def selected_import_movie_candidate_proposal(candidate: dict[str, Any]) -> dict[
         "metadataUpdates": metadata_updates,
         "technicalUpdates": technical_updates,
         "mediaUpdates": media_updates,
-        "identifiers": candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {},
+        # Only the ids the candidate actually carries. The browser builds this
+        # map with a key per service it knows about and an empty string where it
+        # found nothing, and `merge_selected_import_movie_candidate` merges the
+        # pick over the sources' answer -- so an empty string here does not mean
+        # "no opinion", it overwrites an id another source had already supplied.
+        # A TMDB search result names no IMDb id, so picking one silently dropped
+        # the IMDb id the barcode lookup had found, and the film arrived with a
+        # link the sources between them could have filled in.
+        "identifiers": {
+            provider: value
+            for provider, value in (
+                candidate.get("identifiers") if isinstance(candidate.get("identifiers"), dict) else {}
+            ).items()
+            if clean_text(value)
+        },
         # None rather than {} when the candidate is a film, mirroring
         # `merge_metadata_results`: absent means "nothing was stated", which
         # `apply_movie_series_link` must never read as "unlink".
@@ -11095,6 +11109,12 @@ def movie_series_payload(conn, movie_id: UUID) -> dict[str, Any] | None:
     series = series_entity(conn, row["series_id"], with_seasons=False)
     if series is None:
         return None
+    # The series' own identifiers travel with it. A television id names the
+    # *show*, never this pressing, so it is not a `movie_identifiers` row and
+    # the disc's edit screen cannot show one without reading it from here --
+    # and without it the person holding a series DiscVault could not identify
+    # has to find the series page to say so.
+    series["identifiers"] = series_identifier_entities(conn, row["series_id"])
     with conn.cursor() as cur:
         cur.execute(
             """
