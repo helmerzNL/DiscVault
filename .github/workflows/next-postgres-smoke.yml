@@ -385,6 +385,12 @@ jobs:
       - name: Test the poster URL a linked MovieVault cover resolves to
         run: python -m unittest tests.test_next_container_poster_url
 
+      # Two cuts of one film share an IMDb id, so a box set holding both lost a
+      # member to the dedupe. This guards that a collision only collapses two
+      # members when nothing distinguishes them.
+      - name: Test box-set member deduplication
+        run: python -m unittest tests.test_next_box_set_member_dedupe
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'

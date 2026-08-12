@@ -2076,15 +2076,62 @@ def box_set_member_dedupe_keys(member: dict[str, Any]) -> set[tuple[str, str]]:
     return keys
 
 
+BOX_SET_MEMBER_STRONG_ID_KEYS = ("tmdb", "imdb")
+
+
+def box_set_member_strong_ids(member: dict[str, Any]) -> dict[str, str]:
+    """The external ids that identify a member film, keyed by provider."""
+    return {
+        kind: value
+        for kind, value in box_set_member_dedupe_keys(member)
+        if kind in BOX_SET_MEMBER_STRONG_ID_KEYS
+    }
+
+
+def box_set_members_are_distinguished(left: dict[str, str], right: dict[str, str]) -> bool:
+    """True when two members carry the *same* kind of id with different values.
+
+    That is positive evidence of two different films, and it outranks any other
+    collision between them: an id both sides carry and disagree on cannot be
+    explained away by a shared title or a shared id from another provider."""
+    return any(
+        kind in left and kind in right and left[kind] != right[kind]
+        for kind in BOX_SET_MEMBER_STRONG_ID_KEYS
+    )
+
+
 def dedupe_box_set_members(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop members that name a film an earlier member already named.
+
+    A single shared key is not enough to call two members the same film. Two
+    cuts of one film share an IMDb id -- IMDb files an alternate cut under the
+    original title, so *The Godfather Coda: The Death of Michael Corleone* and
+    *The Godfather Part III* are one tt id -- while TMDB gives them an entry
+    each. A box set holding both is holding two discs, and collapsing them on
+    the shared id silently imported a trilogy set as three films with no way to
+    tell that a fourth had been dropped.
+
+    So a collision only counts when nothing distinguishes the two members: if
+    they carry the same kind of id with different values, they are different
+    films and both are kept. Members that collide with nothing to separate them
+    -- the same ids, or the same title with no ids at all -- still collapse,
+    which is the case this dedupe exists for.
+
+    Compared pairwise against the members already kept rather than against one
+    pooled key set, because "does anything distinguish these two" is a question
+    about a pair; a pooled set cannot answer it."""
     deduped: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
+    kept: list[tuple[set[tuple[str, str]], dict[str, str]]] = []
     for member in members:
         keys = box_set_member_dedupe_keys(member)
-        if keys and seen.intersection(keys):
+        strong_ids = box_set_member_strong_ids(member)
+        if keys and any(
+            keys & seen_keys and not box_set_members_are_distinguished(strong_ids, seen_ids)
+            for seen_keys, seen_ids in kept
+        ):
             continue
         if keys:
-            seen.update(keys)
+            kept.append((keys, strong_ids))
         deduped.append(member)
     return deduped
 
