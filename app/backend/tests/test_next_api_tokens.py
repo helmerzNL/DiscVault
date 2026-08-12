@@ -209,6 +209,7 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         self.assertEqual(sql, "(false)")
         self.assertEqual(params, [])
 
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
     def test_public_request_ip_prefers_forwarded_public_client_ip(self):
         app = Flask(__name__)
 
@@ -223,6 +224,24 @@ class NextApiTokenPermissionTests(unittest.TestCase):
         self.assertEqual(selected, "8.8.8.8")
         self.assertEqual(details["ip"], "8.8.8.8")
         self.assertEqual(details["source"], "X-Forwarded-For[0]")
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_forwarded_client_ip_is_ignored_without_a_trusted_proxy(self):
+        # The token activity feed shows this address, so it has to be one the
+        # audited party could not choose for itself. Without a configured hop
+        # the forwarded chain is not read at all.
+        app = Flask(__name__)
+
+        with app.test_request_context(
+            "/api/next/mcp/catalog",
+            headers={"X-Forwarded-For": "8.8.8.8"},
+            environ_base={"REMOTE_ADDR": "9.9.9.9"},
+        ):
+            details = request_ip_details()
+            selected = public_request_ip()
+
+        self.assertEqual(selected, "9.9.9.9")
+        self.assertEqual(details["source"], "remote_addr")
 
     def test_public_request_ip_ignores_private_remote_addr_when_no_proxy_header_exists(self):
         app = Flask(__name__)

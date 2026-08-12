@@ -30,9 +30,15 @@ if str(REPO_ROOT) not in sys.path:
 try:
     from flask import Flask
 
-    from app.backend.next_auth import _peer_ip_address
+    from app.backend.next_audit import (
+        request_ip_details,
+        request_is_behind_trusted_proxy,
+        trusted_proxy_networks,
+    )
+    from app.backend.next_auth import _peer_ip_address, _throttle_address_is_per_client
     from app.backend.next_legacy_auth import (
         IP_ONLY_LOCK_ATTEMPTS,
+        IP_ONLY_SHARED_LOCK_ATTEMPTS,
         LOCK_ATTEMPTS,
         attempt_is_throttled,
         ip_only_attempt_is_throttled,
@@ -89,13 +95,29 @@ class ThrottleThresholdTests(unittest.TestCase):
         self.assertFalse(attempt_is_throttled(LOCK_ATTEMPTS - 1, 0))
         self.assertTrue(attempt_is_throttled(LOCK_ATTEMPTS, 0))
 
-    def test_ip_only_ceiling_is_far_above_the_identity_one(self):
-        # A household behind NAT shares one address. The IP-only endpoints have
-        # no second dimension to fall back on, so their ceiling has to leave
-        # room for several people mistyping on the same connection.
-        self.assertGreater(IP_ONLY_LOCK_ATTEMPTS, LOCK_ATTEMPTS * 4)
-        self.assertFalse(ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS - 1))
-        self.assertTrue(ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS))
+    def test_the_shared_ceiling_leaves_room_for_a_whole_instance(self):
+        # When the address does not identify one client -- an unconfigured
+        # proxy, where everyone arrives as the proxy -- the bound has to sit
+        # well above the identity-keyed one, or a handful of anonymous requests
+        # locks out every real user at once.
+        self.assertGreater(IP_ONLY_SHARED_LOCK_ATTEMPTS, LOCK_ATTEMPTS * 4)
+
+    def test_the_per_client_ceiling_is_tighter_than_the_shared_one(self):
+        # Once each client has its own bucket the bound can be strict, because
+        # whoever trips it locks out only themselves.
+        self.assertLess(IP_ONLY_LOCK_ATTEMPTS, IP_ONLY_SHARED_LOCK_ATTEMPTS)
+        self.assertGreater(IP_ONLY_LOCK_ATTEMPTS, LOCK_ATTEMPTS)
+        self.assertFalse(
+            ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS - 1, address_is_per_client=True)
+        )
+        self.assertTrue(
+            ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS, address_is_per_client=True)
+        )
+
+    def test_the_default_is_the_cautious_shared_bound(self):
+        # A caller that forgets the keyword must not accidentally get the tight
+        # ceiling on a shared address.
+        self.assertFalse(ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS))
 
 
 @unittest.skipIf(Flask is None, "Flask and the auth dependencies are required")
@@ -105,7 +127,8 @@ class PeerAddressTests(unittest.TestCase):
     def setUp(self):
         self.app = Flask(__name__)
 
-    def test_forwarding_headers_are_ignored(self):
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_forwarding_headers_are_ignored_without_a_trusted_proxy(self):
         with self.app.test_request_context(
             "/api/next/auth/recovery",
             headers={
@@ -117,6 +140,28 @@ class PeerAddressTests(unittest.TestCase):
         ):
             self.assertEqual(_peer_ip_address(), "172.26.0.5")
 
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
+    def test_trusted_proxy_recovers_the_real_client(self):
+        with self.app.test_request_context(
+            "/api/next/auth/recovery",
+            headers={"X-Forwarded-For": "203.0.113.9"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            self.assertEqual(_peer_ip_address(), "203.0.113.9")
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
+    def test_a_client_cannot_prepend_its_way_out_of_its_bucket(self):
+        # The chain is walked from the right past hops we vouched for. An extra
+        # address the client bolts on the left must not displace the real one,
+        # or the throttle is reset-able by anyone who can set a header.
+        with self.app.test_request_context(
+            "/api/next/auth/recovery",
+            headers={"X-Forwarded-For": "1.2.3.4, 203.0.113.9"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            self.assertEqual(_peer_ip_address(), "203.0.113.9")
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
     def test_private_peer_address_is_kept(self):
         # request_ip_details() drops private candidates, which would collapse
         # every LAN client into one empty bucket. The throttle needs the peer.
@@ -132,6 +177,128 @@ class PeerAddressTests(unittest.TestCase):
 
     def test_outside_a_request_context_it_does_not_raise(self):
         self.assertEqual(_peer_ip_address(), "")
+
+
+@unittest.skipIf(Flask is None, "Flask and the auth dependencies are required")
+class TrustedProxyTests(unittest.TestCase):
+    """Whose claim about a client address may be believed."""
+
+    def setUp(self):
+        self.app = Flask(__name__)
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_nothing_is_trusted_by_default(self):
+        self.assertEqual(trusted_proxy_networks(), ())
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "172.26.0.5"}):
+            self.assertFalse(request_is_behind_trusted_proxy())
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
+    def test_private_keyword_covers_the_usual_self_hosted_topology(self):
+        for peer in ("127.0.0.1", "10.1.2.3", "172.26.0.5", "192.168.1.4"):
+            with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": peer}):
+                self.assertTrue(request_is_behind_trusted_proxy(), peer)
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
+    def test_a_public_peer_is_never_trusted_by_the_private_keyword(self):
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "203.0.113.9"}):
+            self.assertFalse(request_is_behind_trusted_proxy())
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "10.9.0.0/16"}, clear=False)
+    def test_an_explicit_cidr_trusts_only_that_range(self):
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "10.9.1.1"}):
+            self.assertTrue(request_is_behind_trusted_proxy())
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "10.8.1.1"}):
+            self.assertFalse(request_is_behind_trusted_proxy())
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "not-an-address, 10.9.0.0/16"}, clear=False)
+    def test_a_typo_narrows_trust_rather_than_widening_it(self):
+        # A malformed entry must not become a wildcard, and must not take the
+        # application down either -- the remaining hops keep working.
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "10.9.1.1"}):
+            self.assertTrue(request_is_behind_trusted_proxy())
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "203.0.113.9"}):
+            self.assertFalse(request_is_behind_trusted_proxy())
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_audit_ignores_forwarded_headers_from_an_unvouched_hop(self):
+        # This is the spoofing fix: before it, the recorded requestIp was a
+        # claim by the party being audited.
+        # A globally routable peer on purpose: the audit selector only reports
+        # public addresses, and the documentation ranges (203.0.113.0/24) are
+        # not global as far as ipaddress is concerned.
+        with self.app.test_request_context(
+            "/",
+            headers={"X-Forwarded-For": "8.8.8.8"},
+            environ_base={"REMOTE_ADDR": "9.9.9.9"},
+        ):
+            details = request_ip_details()
+            self.assertEqual(details["ip"], "9.9.9.9")
+            self.assertFalse(details["forwardingTrusted"])
+            self.assertNotIn("8.8.8.8", [c["ip"] for c in details["candidates"]])
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
+    def test_audit_believes_a_vouched_hop(self):
+        with self.app.test_request_context(
+            "/",
+            headers={"X-Forwarded-For": "8.8.8.8"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            details = request_ip_details()
+            self.assertEqual(details["ip"], "8.8.8.8")
+            self.assertTrue(details["forwardingTrusted"])
+
+
+@unittest.skipIf(Flask is None, "Flask and the auth dependencies are required")
+class SharedBucketCeilingTests(unittest.TestCase):
+    """The ceiling has to follow whether the address identifies one client."""
+
+    def setUp(self):
+        self.app = Flask(__name__)
+
+    def test_a_per_client_address_gets_the_tight_ceiling(self):
+        self.assertFalse(
+            ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS - 1, address_is_per_client=True)
+        )
+        self.assertTrue(
+            ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS, address_is_per_client=True)
+        )
+
+    def test_a_shared_address_gets_the_loose_one(self):
+        # Behind an unconfigured proxy every caller shares one bucket, so a
+        # tight ceiling would let anyone lock out every real user with a handful
+        # of anonymous requests. That is a denial of service, not a defence.
+        self.assertFalse(
+            ip_only_attempt_is_throttled(IP_ONLY_LOCK_ATTEMPTS, address_is_per_client=False)
+        )
+        self.assertTrue(
+            ip_only_attempt_is_throttled(IP_ONLY_SHARED_LOCK_ATTEMPTS, address_is_per_client=False)
+        )
+
+    def test_the_shared_ceiling_is_the_looser_of_the_two(self):
+        self.assertGreater(IP_ONLY_SHARED_LOCK_ATTEMPTS, IP_ONLY_LOCK_ATTEMPTS)
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_an_unvouched_forwarding_hop_is_treated_as_shared(self):
+        with self.app.test_request_context(
+            "/",
+            headers={"X-Forwarded-For": "8.8.8.8"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            self.assertFalse(_throttle_address_is_per_client())
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": ""}, clear=False)
+    def test_a_direct_connection_is_per_client(self):
+        with self.app.test_request_context("/", environ_base={"REMOTE_ADDR": "203.0.113.9"}):
+            self.assertTrue(_throttle_address_is_per_client())
+
+    @mock.patch.dict(os.environ, {"DISCVAULT_TRUSTED_PROXIES": "private"}, clear=False)
+    def test_a_vouched_proxy_is_per_client(self):
+        with self.app.test_request_context(
+            "/",
+            headers={"X-Forwarded-For": "203.0.113.9"},
+            environ_base={"REMOTE_ADDR": "172.26.0.5"},
+        ):
+            self.assertTrue(_throttle_address_is_per_client())
 
 
 @unittest.skipIf(Flask is None, "Flask and the auth dependencies are required")

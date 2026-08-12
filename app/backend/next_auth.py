@@ -79,7 +79,7 @@ try:
         verify_recovery_code,
         verify_totp,
     )
-    from .next_audit import request_ip_details
+    from .next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
     from .next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -128,7 +128,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_recovery_code,
         verify_totp,
     )
-    from next_audit import request_ip_details
+    from next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
     from next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -978,21 +978,50 @@ def _observed_request_ip() -> dict[str, str]:
 
 
 def _peer_ip_address() -> str:
-    """The address this connection actually arrived from.
+    """The address a throttle may attribute this request to.
 
-    Deliberately not ``request_ip_details()``: that resolver honours forwarding
-    headers, and a client sets those for itself. Counting failed attempts
-    against a value the caller controls gives the caller a reset button, so the
-    throttles below key on the peer address and nothing else. It is also why a
-    private address is kept rather than discarded here -- on a self-hosted
-    instance the LAN address is frequently the only one there is, and a throttle
-    that collapses every LAN client into one empty bucket is worse than useless.
+    A direct connection answers with the peer. Behind a proxy the operator has
+    configured as trusted, it answers with the client address recovered from the
+    forwarded chain -- so each real client gets its own bucket instead of the
+    whole instance sharing the proxy's.
+
+    What it never does is believe a forwarding header from an unvouched hop.
+    Counting failures against a value the caller sets for itself would hand the
+    caller a reset button. A private address is kept rather than discarded: on a
+    self-hosted instance the LAN address is frequently the only one there is,
+    and collapsing every LAN client into one empty bucket is worse than useless.
     """
 
     try:
-        return (request.remote_addr or "").strip()
+        return trusted_client_ip()
     except RuntimeError:  # pragma: no cover - no request context (workers, tests)
         return ""
+
+
+def _throttle_address_is_per_client() -> bool:
+    """Whether the throttle address identifies one client rather than a crowd.
+
+    True for a direct connection, and for a trusted-proxy topology where the
+    real client address was recovered. False for the unconfigured proxy case,
+    where every caller shares the proxy's address and a tight ceiling would lock
+    everyone out at once.
+    """
+
+    try:
+        if request_is_behind_trusted_proxy():
+            return True
+        peer = str(request.remote_addr or "").strip()
+    except RuntimeError:  # pragma: no cover - no request context
+        return False
+    if not peer:
+        return False
+    # No trusted proxy is configured. The address is per-client only if nothing
+    # is forwarding on the caller's behalf; a forwarding header arriving from an
+    # unvouched hop is exactly the case we must not tighten for.
+    return not any(
+        request.headers.get(header)
+        for header in ("X-Forwarded-For", "X-Original-Forwarded-For", "Forwarded")
+    )
 
 
 def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
@@ -1996,7 +2025,10 @@ def register_next_auth_routes(
         identity_hash, ip_hash = scoped_attempt_digests(scope, identity)
         identity_failures, ip_failures = scoped_attempt_failures(conn, identity_hash, ip_hash)
         throttled = (
-            ip_only_attempt_is_throttled(ip_failures)
+            ip_only_attempt_is_throttled(
+                ip_failures,
+                address_is_per_client=_throttle_address_is_per_client(),
+            )
             if ip_only
             else attempt_is_throttled(identity_failures, ip_failures)
         )
