@@ -6963,14 +6963,26 @@ def actor_can_delete_movie(actor: dict[str, Any], movie: dict[str, Any]) -> bool
 
 
 def actor_has_effective_permission(actor: dict[str, Any], permission_key: str) -> bool:
-    permissions = {str(item) for item in actor.get("permissions") or []}
-    if actor.get("role") == "owner" or "*" in permissions or permission_key in permissions:
-        return actor_token_allows_permission(actor, permission_key)
-    return False
+    """Deprecated alias for actor_effective_has_permission.
+
+    These two differed by one word's position and, until the gates became an
+    intersection, by their meaning: this one already required both halves while
+    its near-namesake required either. Now that the names describe the same
+    rule, keeping two implementations is how they drift apart again. Callers
+    should use actor_effective_has_permission; this remains only so the
+    UI-payload call sites below keep reading naturally.
+
+    The one behaviour dropped on purpose is the `role == "owner"` shortcut: the
+    owner role is granted every permission by migration (005 and 007 both
+    cross-join the whole permissions table into it), so the shortcut answered a
+    question the role already answers, and it let an owner's narrowly scoped
+    token be reported as unrestricted.
+    """
+    return actor_effective_has_permission(actor, permission_key)
 
 
 def actor_has_any_effective_permission(actor: dict[str, Any], permission_keys: tuple[str, ...]) -> bool:
-    return any(actor_has_effective_permission(actor, permission_key) for permission_key in permission_keys)
+    return actor_effective_has_any_permission(actor, permission_keys)
 
 
 def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str, int]]:
@@ -9052,15 +9064,29 @@ def permission_key_catalog(conn) -> set[str]:
 
 
 def actor_effective_permission_keys(conn, actor: dict[str, Any] | None) -> set[str]:
+    """What this actor may actually do -- the same answer the gates give.
+
+    This feeds `auth.effectivePermissionKeys` in the mobile bootstrap and the
+    native login response, and `mobile_feature_capabilities` derives the client's
+    feature flags from it. It therefore has to agree with
+    actor_effective_has_permission: a client told it may do something it will be
+    refused turns a 403 into a broken screen rather than a hidden button.
+    """
     if not actor:
         return set()
     permissions = set(actor.get("permissions") or [])
     if actor.get("role") == "owner":
         permissions.update(permission_key_catalog(conn))
+    permissions = {str(item) for item in permissions if item}
+    if "*" in permissions:
+        return permissions
     token_permissions = actor_api_token_permission_keys(actor)
-    if token_permissions:
-        permissions.update(token_permissions)
-    return {str(item) for item in permissions if item}
+    if token_permissions is None or not token_permissions:
+        # No token, or an unscoped legacy row -- see actor_token_allows_permission.
+        return permissions
+    if "*" in token_permissions:
+        return permissions
+    return permissions & {str(item) for item in token_permissions if item}
 
 
 def app_preference_sections_payload(preferences: dict[str, Any]) -> list[dict[str, Any]]:
@@ -9108,7 +9134,46 @@ def require_next_admin_user(conn) -> dict[str, Any]:
     if role not in {"owner", "admin"}:
         raise NextApiError("Admin access required", 403)
     user["role"] = role
+    deny_api_token_actor(conn, user, surface="administrative")
     return user
+
+
+ADMIN_GATE_TOKEN_DENIAL = "API tokens cannot be used for administrative actions"
+
+
+def deny_api_token_actor(conn, actor: dict[str, Any], *, surface: str) -> None:
+    """Refuse an actor that arrived on a bearer token, whatever its scope.
+
+    A role-only gate asks "is this an admin" and stops there. That is the right
+    question for a session and the wrong one for a token: the token inherits its
+    holder's role, so every one of these routes -- role management, deleting
+    users, invites, switching authentication off, transferring ownership --
+    stood open to any token belonging to an admin, no matter how narrowly it was
+    scoped. Making the permission gates an intersection does not reach them,
+    because they never consult a permission at all. Without this the claim that
+    token scopes now bind would be false for precisely the routes where it
+    matters most.
+
+    Nothing legitimate is lost: no route in the advertised native contract needs
+    an admin role, and administrative permissions are not grantable to a token.
+    """
+    if actor_api_token_permission_keys(actor) is None:
+        return
+    audit_permission_denied(
+        conn,
+        actor,
+        required_permissions=(f"{surface}:session",),
+        reason="api_token_barred_from_role_only_gate",
+        message=ADMIN_GATE_TOKEN_DENIAL,
+    )
+    try:
+        # Authorisation runs before the route mutates anything, so this commits
+        # the denial event on its own -- the raise below would otherwise roll it
+        # back and leave the refusal unrecorded.
+        conn.commit()
+    except Exception:
+        app.logger.error("Failed to persist the token permission-denied audit event")
+    raise NextApiError(ADMIN_GATE_TOKEN_DENIAL, 403)
 
 
 def require_next_authenticated_user(conn) -> dict[str, Any]:
@@ -9148,6 +9213,19 @@ def actor_api_token_permission_keys(actor: dict[str, Any]) -> set[str] | None:
 def actor_token_allows_permission(actor: dict[str, Any], permission_key: str) -> bool:
     token_permissions = actor_api_token_permission_keys(actor)
     if token_permissions is None:
+        # Not a token actor at all -- a session, the synthetic owner used when
+        # authentication is switched off, or the migration actor. The token half
+        # of the check does not apply to them.
+        return True
+    if not token_permissions:
+        # A row whose permission_keys is the empty list. The column is
+        # NOT NULL DEFAULT '[]' (migration 016), so every token minted before
+        # scopes existed looks like this, and normalize_api_token_permissions
+        # refuses to create an empty one now. Treating it as "denies everything"
+        # would revoke those tokens on deploy; treating it as unscoped keeps
+        # exactly the access they have today, where the role decides alone.
+        # The role still binds, so this is the old behaviour preserved, not a
+        # hole opened. Reconciling these rows is a follow-up, not a silent one.
         return True
     return "*" in token_permissions or permission_key in token_permissions
 
@@ -9176,21 +9254,34 @@ def actor_role_allows_any_permission(actor: dict[str, Any] | None, permission_ke
 
 
 def actor_effective_has_permission(actor: dict[str, Any] | None, permission_key: str) -> bool:
+    """Both the actor's role and, when one is used, its token must allow this.
+
+    This used to be a union: either half saying yes was enough. That made a
+    token's permission_keys advisory in both directions -- a token could reach
+    everything its holder could regardless of how narrowly it was scoped, and a
+    token could reach what its holder's role did not allow at all. "Read-only
+    token" described nothing the server enforced.
+
+    Requiring both is what the profile UI already implies it is doing: it
+    refuses at creation any key the creator's role lacks
+    (normalize_api_token_permissions), so the intersection is exactly the set
+    the user picked. Sessions are unaffected -- they have no token half.
+    """
     if not actor:
         return False
-    if actor_role_allows_permission(actor, permission_key):
-        return True
-    token_permissions = actor_api_token_permission_keys(actor)
-    return bool(token_permissions is not None and ("*" in token_permissions or permission_key in token_permissions))
+    if not actor_role_allows_permission(actor, permission_key):
+        return False
+    return actor_token_allows_permission(actor, permission_key)
 
 
 def actor_effective_has_any_permission(actor: dict[str, Any] | None, permission_keys: tuple[str, ...]) -> bool:
+    # One key must satisfy both halves. Asking "does the role allow any" and
+    # "does the token allow any" separately would pass an actor whose role
+    # allows A and whose token allows B -- granting a route neither half
+    # actually permits.
     if not actor:
         return False
-    if actor_role_allows_any_permission(actor, permission_keys):
-        return True
-    token_permissions = actor_api_token_permission_keys(actor)
-    return bool(token_permissions is not None and ("*" in token_permissions or token_permissions.intersection(permission_keys)))
+    return any(actor_effective_has_permission(actor, key) for key in permission_keys)
 
 
 def actor_has_permission(actor: dict[str, Any] | None, permission_key: str) -> bool:
@@ -9240,6 +9331,25 @@ def audit_permission_denied(
         )
     except Exception:
         app.logger.exception("Failed to write permission denied audit event")
+        return
+    try:
+        # Every caller writes this event and then raises, and the raise leaves
+        # the `with connect() as conn` block by exception -- which rolls the
+        # connection back. So the event was written and then discarded, and no
+        # permission refusal has ever reached the audit trail on these gates.
+        #
+        # That matters more now than it did: token scopes are the thing that
+        # turns a request into a 403, and this event is the only place that says
+        # which key was wanted and which the token carried. Without it a refused
+        # client is a mystery rather than one query.
+        #
+        # Committing here is safe because authorisation runs before a route
+        # mutates anything. The one exception is the plugin-configuration route,
+        # which re-authorises after refreshing the plugin registry; that refresh
+        # is idempotent bookkeeping, not user data.
+        conn.commit()
+    except Exception:
+        app.logger.error("Failed to persist the permission denied audit event")
 
 
 def require_next_permission(conn, permission_key: str) -> dict[str, Any]:
@@ -28130,9 +28240,11 @@ def register_routes(flask_app: Flask) -> None:
     def mcp_catalog():
         with connect() as conn:
             actor = require_any_next_permission(conn, ("mcp.use", "api.tokens.manage", "admin.view_settings"))
-            permissions = set(actor.get("permissions") or [])
-            if actor.get("role") == "owner":
-                permissions.update(permission_key_catalog(conn))
+            # The catalogue is what an MCP client uses to decide which tools to
+            # offer. Reading the role alone told a narrowly scoped token that
+            # every tool was available, so the client advertised tools whose
+            # first call is a 403. The effective set is the one the gates use.
+            permissions = actor_effective_permission_keys(conn, actor)
             tools = [
                 {
                     "name": tool,

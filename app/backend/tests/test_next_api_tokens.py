@@ -119,32 +119,96 @@ class NextApiTokenPermissionTests(unittest.TestCase):
 
         self.assertEqual(scopes, ["read", "write"])
 
-    def test_api_token_request_can_use_user_role_permission(self):
+    # The three assertions below were written the other way round, and each
+    # recorded a real property of the old union: a token's scope could neither
+    # take authority away from its holder nor was it needed to have any. Turning
+    # them over is the contract change itself, not the tests being bent to fit.
+
+    def test_a_narrow_token_no_longer_inherits_its_holders_role(self):
+        # The owner may refresh metadata; this token was not given that key. It
+        # used to be granted anyway, which is what made "scope" a label rather
+        # than a limit -- and made a leaked read-only token as dangerous as its
+        # holder's session.
         actor = {
             "role": "owner",
             "permissions": ["metadata.refresh_one"],
             "apiToken": {"permissionKeys": ["api.read"]},
         }
 
-        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
 
-    def test_custom_role_can_use_metadata_refresh_permission_with_mobile_token(self):
+    def test_a_role_permission_the_token_omits_is_not_reachable_through_it(self):
         actor = {
             "role": "media_editor",
             "permissions": ["metadata.refresh_one"],
             "apiToken": {"permissionKeys": ["api.read", "metadata.search"]},
         }
 
-        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        # What the token does list, and the role allows, still works.
+        self.assertFalse(actor_effective_has_permission(actor, "metadata.search"))
 
-    def test_api_token_scope_can_grant_permission_when_role_lacks_it(self):
+    def test_a_token_cannot_grant_what_its_holders_role_lacks(self):
+        # This was the sharper half of the same defect: the token added
+        # authority rather than only removing it. A token mint validates against
+        # the creator's role, so a row like this should not arise -- but nothing
+        # enforced it at use, so a row that did arise escalated.
         actor = {
             "role": "media_viewer",
             "permissions": ["collection.view"],
             "apiToken": {"permissionKeys": ["metadata.refresh_one"]},
         }
 
+        self.assertFalse(actor_effective_has_permission(actor, "metadata.refresh_one"))
+
+    def test_both_halves_agreeing_is_what_grants_access(self):
+        actor = {
+            "role": "media_editor",
+            "permissions": ["metadata.refresh_one", "collection.view"],
+            "apiToken": {"permissionKeys": ["metadata.refresh_one"]},
+        }
+
         self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        self.assertFalse(actor_effective_has_permission(actor, "collection.view"))
+
+    def test_a_session_actor_is_unaffected(self):
+        # No apiToken key at all: actor_api_token_permission_keys returns None
+        # and the token half does not apply. Sessions must behave exactly as
+        # before, or this change logs everyone out of the web app.
+        actor = {"role": "media_editor", "permissions": ["metadata.refresh_one"]}
+
+        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        self.assertFalse(actor_effective_has_permission(actor, "collection.delete_all"))
+
+    def test_an_unscoped_legacy_token_row_is_grandfathered(self):
+        # permission_keys is NOT NULL DEFAULT '[]', so every token minted before
+        # scopes existed reads as an empty list. Denying those would revoke them
+        # on deploy; they keep exactly the access they have today, which the
+        # role still bounds.
+        actor = {
+            "role": "media_editor",
+            "permissions": ["metadata.refresh_one"],
+            "apiToken": {"permissionKeys": []},
+        }
+
+        self.assertTrue(actor_effective_has_permission(actor, "metadata.refresh_one"))
+        self.assertFalse(actor_effective_has_permission(actor, "collection.delete_all"))
+
+    def test_any_permission_needs_one_key_both_halves_allow(self):
+        # The role allows A, the token allows B, and the route accepts either.
+        # Checking the two halves separately would pass this -- granting a route
+        # on the strength of two permissions neither side actually shares.
+        actor = {
+            "role": "media_editor",
+            "permissions": ["metadata.refresh_one"],
+            "apiToken": {"permissionKeys": ["metadata.refresh_bulk"]},
+        }
+
+        self.assertFalse(
+            actor_effective_has_any_permission(
+                actor, ("metadata.refresh_one", "metadata.refresh_bulk")
+            )
+        )
 
     def test_request_without_role_or_token_permission_is_denied(self):
         actor = {
