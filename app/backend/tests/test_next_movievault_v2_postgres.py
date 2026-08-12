@@ -860,10 +860,16 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             ),
             self.connect() as conn,
         ):
+            # force=True because this substitutes discovery rather than changing
+            # the files. sync_plugin_registry skips itself when the plugin files
+            # on disk are unchanged since the last sync -- that is what keeps a
+            # page load from becoming a writer on the plugins table -- and the
+            # fingerprint cannot see a patched discover_plugins.
             next_plugin_runtime.sync_plugin_registry(
                 conn,
                 self.table_exists,
                 Jsonb,
+                force=True,
             )
             with conn.cursor() as cur:
                 cur.execute(
@@ -910,10 +916,13 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
                     "errors": [],
                 },
             ):
+                # force=True for the same reason as the sync above: discovery is
+                # substituted, so the on-disk fingerprint would skip this.
                 next_plugin_runtime.sync_plugin_registry(
                     conn,
                     self.table_exists,
                     Jsonb,
+                    force=True,
                 )
             with conn.cursor() as cur:
                 cur.execute(
