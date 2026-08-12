@@ -2376,8 +2376,9 @@ def selected_import_movie_candidate_from_body(body: dict[str, Any]) -> dict[str,
         # the trip from the picker to the import. `mediaType` is what keeps the
         # disc from being filed as a film; `series` is the block
         # `provider_series_payload` already understands, so the series row and
-        # its `tmdb_tv` identifier are created by code that exists rather than by
-        # a second, parallel linking path.
+        # its identifier -- in whichever namespace the source that answered
+        # issued it -- are created by code that exists rather than by a second,
+        # parallel linking path.
         "mediaType": normalize_media_type(candidate.get("mediaType") or candidate.get("media_type")) or "",
         "series": candidate.get("series") if isinstance(candidate.get("series"), dict) else None,
     }

@@ -202,15 +202,31 @@ def normalize_season_ids(value: Any) -> list[UUID]:
 # import loop. This module already owns the validation half and has no heavy
 # dependencies, so it is the seam that does not cost an import cycle.
 
+# The default namespace, not the only one. It stays the default because the
+# MovieVault feed states television identity as a TMDB television id and says so
+# by omission -- it names no type at all -- so reading an unstated type as
+# anything else would silently re-file every series the feed has ever placed.
+# A source that speaks its own namespace says which one, and TheTVDB does.
 SERIES_IDENTIFIER_TYPE = "tmdb_tv"
 
 
-def series_id_for_identifier(cur: Any, *, provider_id: str, identifier: str) -> UUID | None:
+def series_id_for_identifier(
+    cur: Any,
+    *,
+    provider_id: str,
+    identifier: str,
+    identifier_type: str = SERIES_IDENTIFIER_TYPE,
+) -> UUID | None:
     """The live series carrying this provider identifier, if one already does.
 
     Soft-deleted series are ignored rather than resurrected. A deleted series is
     a statement by whoever deleted it, and quietly reviving it because a feed
     mentioned the show again would overrule that with no trace.
+
+    ``identifier_type`` is part of the lookup rather than a constant because an
+    id means nothing without the namespace it was issued in: TheTVDB's 305288
+    and TMDB's 305288 are different shows, and matching on the number alone
+    would hand one series' row to the other.
     """
     cur.execute(
         """
@@ -223,7 +239,7 @@ def series_id_for_identifier(cur: Any, *, provider_id: str, identifier: str) -> 
           AND s.deleted_at IS NULL
         LIMIT 1
         """,
-        (provider_id, SERIES_IDENTIFIER_TYPE, identifier),
+        (provider_id, identifier_type or SERIES_IDENTIFIER_TYPE, identifier),
     )
     row = cur.fetchone()
     if not row:
@@ -231,7 +247,14 @@ def series_id_for_identifier(cur: Any, *, provider_id: str, identifier: str) -> 
     return row["id"] if isinstance(row, dict) else row[0]
 
 
-def ensure_series(cur: Any, *, provider_id: str, identifier: str, title: str) -> UUID:
+def ensure_series(
+    cur: Any,
+    *,
+    provider_id: str,
+    identifier: str,
+    title: str,
+    identifier_type: str = SERIES_IDENTIFIER_TYPE,
+) -> UUID:
     """Find the series this identifier names, or create it once.
 
     The lookup is by identifier and never by title. A title match would mint a
@@ -246,7 +269,13 @@ def ensure_series(cur: Any, *, provider_id: str, identifier: str, title: str) ->
     has its own relationship with. A row with a title and an id is enough to
     hang seasons and discs off, which is what this exists to do.
     """
-    existing = series_id_for_identifier(cur, provider_id=provider_id, identifier=identifier)
+    identifier_type = identifier_type or SERIES_IDENTIFIER_TYPE
+    existing = series_id_for_identifier(
+        cur,
+        provider_id=provider_id,
+        identifier=identifier,
+        identifier_type=identifier_type,
+    )
     if existing is not None:
         return existing
     series_uuid = uuid.uuid4()
@@ -263,7 +292,7 @@ def ensure_series(cur: Any, *, provider_id: str, identifier: str, title: str) ->
         VALUES (%s, %s, %s, %s)
         ON CONFLICT (series_id, provider_id, identifier_type, identifier) DO NOTHING
         """,
-        (series_uuid, provider_id, SERIES_IDENTIFIER_TYPE, identifier),
+        (series_uuid, provider_id, identifier_type, identifier),
     )
     return series_uuid
 
@@ -324,10 +353,23 @@ def provider_series_payload(value: Any) -> dict[str, Any] | None:
     Returns None when the source said nothing usable. That is not the same as
     saying "no series": nothing here ever proposes *unlinking*, because a
     provider that stays silent has not disagreed with a link a user made.
+
+    A source may state its identifier in its own namespace (``identifier`` plus
+    ``identifierType``) or as the ``tmdbTvId`` this shape started out as. Both
+    are accepted, and an unstated type means ``tmdb_tv``: the MovieVault feed
+    has always sent a TMDB television id without naming the namespace, so
+    reading silence as anything else would re-file every series it ever placed.
+    The type travels onward rather than being resolved away here, because which
+    namespace an id belongs to is the one thing that makes two equal numbers
+    different shows.
     """
     if not isinstance(value, dict):
         return None
-    identifier = clean_text(value.get("tmdbTvId"))
+    identifier = clean_text(value.get("tmdbTvId")) or clean_text(value.get("identifier"))
+    identifier_type = (
+        clean_text(value.get("identifierType") or value.get("identifier_type"))
+        or SERIES_IDENTIFIER_TYPE
+    )
     provider_id = clean_text(value.get("providerId") or value.get("provider"))
     title = clean_text(value.get("title"))
     if not identifier or not provider_id or not title:
@@ -360,6 +402,7 @@ def provider_series_payload(value: Any) -> dict[str, Any] | None:
     return {
         "provider_id": provider_id,
         "identifier": identifier,
+        "identifier_type": identifier_type,
         "title": title,
         "seasons": seasons,
     }
