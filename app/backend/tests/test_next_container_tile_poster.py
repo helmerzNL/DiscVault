@@ -88,6 +88,7 @@ class ContainerTilePosterTests(unittest.TestCase):
         for fragment in (
             "usableImage(container?.poster_url)",
             "usableImage(metadata.poster_url)",
+            "usableImage(container?.member_poster_url)",
             "containerMemberMovies(container?.id)",
             "childContainersOf(container?.id)",
             "usableImage(container?.backdrop_url)",
@@ -96,13 +97,42 @@ class ContainerTilePosterTests(unittest.TestCase):
 
     def test_own_artwork_outranks_anything_borrowed(self):
         own = self.resolver.index("usableImage(container?.poster_url)")
-        member = self.resolver.index("containerMemberMovies(container?.id)")
+        member = self.resolver.index("usableImage(container?.member_poster_url)")
         self.assertLess(own, member)
+
+    def test_the_served_borrowed_cover_is_read_before_the_client_scan(self):
+        """`movies` arrives a page at a time, so the client scan cannot answer
+        for a member outside the loaded page. The server-resolved column can."""
+        served = self.resolver.index("usableImage(container?.member_poster_url)")
+        scanned = self.resolver.index("containerMemberMovies(container?.id)")
+        self.assertLess(served, scanned)
 
     def test_a_member_film_outranks_a_child_container(self):
         member = self.resolver.index("containerMemberMovies(container?.id)")
         child = self.resolver.index("childContainersOf(container?.id)")
         self.assertLess(member, child)
+
+    def test_the_server_resolves_the_borrowed_cover_for_the_library(self):
+        """The column the first borrowed rung reads has to be produced, and it
+        must be filtered by what the actor may see."""
+        with open(
+            os.path.join(os.path.dirname(NEXT_VIEWS_UI_PATH), "next_app.py"),
+            encoding="utf-8",
+        ) as handle:
+            app_source = handle.read()
+        self.assertIn("def container_member_poster_lateral(", app_source)
+        self.assertIn("def fold_container_member_poster(", app_source)
+        self.assertIn('data["member_poster_url"] = url', app_source)
+        # Members come from both membership tables.
+        self.assertIn("FROM container_movies cm WHERE cm.container_id=", app_source)
+        self.assertIn("FROM collection_items ci", app_source)
+        # A borrowed cover must never surface a film the actor may not see.
+        self.assertIn('visible_movie_where_sql(conn, actor, "member_m")', app_source)
+        # The library snapshot query is the one that grew the join.
+        self.assertIn(
+            "[with_preview_media_urls(fold_container_member_poster(row)) for row in cur.fetchall()]",
+            app_source,
+        )
 
     def test_the_backdrop_stands_in_last(self):
         child = self.resolver.index("childContainersOf(container?.id)")
