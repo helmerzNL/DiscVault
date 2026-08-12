@@ -7183,6 +7183,16 @@ def ui_preview_html(
       align-items: center;
       gap: 6px;
     }
+    /* The database-id pairs. Their own two-column grid rather than cells of the
+       edit grid, because the pair is one statement -- what this record is called
+       in somebody else's catalogue -- and splitting it across a row boundary
+       reads as two unrelated fields. */
+    .movie-edit-source-id-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin: 6px 0 4px;
+    }
     .movie-edit-lock {
       margin-left: auto;
       border: 1px solid var(--line);
@@ -13516,6 +13526,9 @@ def ui_preview_html(
       .movie-edit-grid {
         grid-template-columns: 1fr;
       }
+      .movie-edit-source-id-grid {
+        grid-template-columns: 1fr;
+      }
       .movie-edit-track-row,
       .movie-edit-track-row.movie-edit-subtitle-row {
         grid-template-columns: 1fr;
@@ -15689,6 +15702,25 @@ def ui_preview_html(
                       <button type="button" id="movieEditIdentifierAdd" class="ghost-button" data-next-i18n="movieDetail.productIdentifierAdd">Add a code</button>
                       <p class="hint" data-next-i18n="movieDetail.productIdentifiersHint">The barcode above is what a scan resolves to. These are the same product's other codes: an EAN for Europe, a UPC for North America, an ISBN, an Amazon ASIN, or the distributor's catalogue number.</p>
                     </div>
+                    <!-- The database ids, beside the product codes and not among
+                         them: a code is printed on the box, an id is a record in
+                         somebody else's catalogue. Editable because a source can
+                         only supply one for a film it recognised, and the film it
+                         did not is exactly the one a person has to identify. -->
+                    <div id="movieEditSourceIdsRow" class="movie-edit-identifiers wide">
+                      <span data-next-i18n="movieDetail.sourceIds">Database ids</span>
+                      <div class="movie-edit-source-id-grid">
+                        <label for="movieEditTmdbId">
+                          <span data-next-i18n="movieDetail.tmdbId">TMDb id</span>
+                          <input id="movieEditTmdbId" maxlength="160" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                        </label>
+                        <label for="movieEditImdbId">
+                          <span data-next-i18n="movieDetail.imdbId">IMDb id</span>
+                          <input id="movieEditImdbId" maxlength="160" autocomplete="off" data-next-i18n-placeholder="importCenter.imdbIdPlaceholder" placeholder="tt0123456">
+                        </label>
+                      </div>
+                      <p class="hint" data-next-i18n="movieDetail.sourceIdsHint">What TMDb and IMDb call this film. Filling one in lets the metadata sources find it; pasting the page's address works too, the id is taken from it.</p>
+                    </div>
                     <label for="movieEditMediaType">
                       <span data-next-i18n="movieDetail.mediaType">Type</span>
                       <select id="movieEditMediaType" name="media_type">
@@ -15750,6 +15782,26 @@ def ui_preview_html(
                     <div id="movieEditSeasons" class="movie-edit-seasons-list"></div>
                   </div>
                   <p class="hint" id="movieEditSeriesEmptyHint" hidden data-next-i18n="movieDetail.seriesPickFirst">Pick a series above to choose which seasons this release covers.</p>
+                  <!-- A television id names the show, not this pressing, so it
+                       is stored on the series and edited here rather than beside
+                       the film's own ids. Without one no source can be asked
+                       about the series at all, which is why it is worth typing
+                       by hand when no source recognised the title. -->
+                  <div id="movieEditSeriesIdsRow" class="movie-edit-identifiers">
+                    <span data-next-i18n="movieDetail.seriesIds">Series ids</span>
+                    <div class="movie-edit-source-id-grid">
+                      <label for="movieEditSeriesTvdbId">
+                        <span data-next-i18n="movieDetail.tvdbId">TheTVDB id</span>
+                        <input id="movieEditSeriesTvdbId" maxlength="160" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                      </label>
+                      <label for="movieEditSeriesTmdbId">
+                        <span data-next-i18n="movieDetail.tmdbTvId">TMDb series id</span>
+                        <input id="movieEditSeriesTmdbId" maxlength="160" autocomplete="off" inputmode="numeric" data-next-i18n-placeholder="importCenter.tmdbIdPlaceholder" placeholder="e.g. 12345">
+                      </label>
+                    </div>
+                    <p class="hint" data-next-i18n="movieDetail.seriesIdsHint">These belong to the series, not to this disc, so every release of the show shares them. Without one no source can be asked about the series and it stays without a synopsis or artwork.</p>
+                    <p class="hint hidden" id="movieEditSeriesIdsLinkFirst" data-next-i18n="movieDetail.seriesIdsLinkFirst">Save the series link first, then its ids can be filled in here.</p>
+                  </div>
                 </div>
                 <div class="detail-subsection hidden" id="movieEditReleaseTechnicalSection" role="tabpanel" aria-labelledby="movieEditTabTechnical" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.audioVideo">Audio &amp; Video</h4>
@@ -29989,6 +30041,201 @@ def ui_preview_html(
       }
       setupMovieEditLocks(movie_locked_fields_from_metadata(metadata));
       loadMovieEditIdentifiers();
+      fillMovieEditSourceIds(detail);
+    }
+    // The database ids: what TMDb, IMDb and TheTVDB call this record.
+    //
+    // Separate from the product codes above them, and stored somewhere else
+    // again. A product code is printed on the box and describes the pressing; a
+    // database id is a row in somebody else's catalogue and is what lets a
+    // source be asked about the film at all. They are editable for one reason:
+    // a source supplies an id only for a title it recognised, and the title it
+    // did not recognise is exactly the one that needs identifying by hand.
+    //
+    // Which store each id belongs to is not a detail. `tmdb`/`imdb` name the
+    // film and live in `movie_identifiers`; a television id names the *show*,
+    // is shared by every release of it, and lives on the series -- so the two
+    // pairs are edited in the tabs that own them and saved through different
+    // routes.
+    const MOVIE_SOURCE_ID_FIELDS = [
+      {
+        inputId: "movieEditTmdbId",
+        provider: "tmdb",
+        // Accepts a pasted page address as well as a bare id. Somebody looking
+        // an id up has the page open, and copying the address is one action
+        // where reading the number out of it is three.
+        patterns: [/themoviedb\\.org\\/(?:movie|tv)\\/(\\d+)/i],
+        valid: /^\\d+$/,
+        invalidKey: "movieDetail.idDigitsOnly",
+        invalidText: "This id is a number, with no letters or punctuation."
+      },
+      {
+        inputId: "movieEditImdbId",
+        provider: "imdb",
+        patterns: [/imdb\\.com\\/title\\/(tt\\d+)/i],
+        valid: /^tt\\d{7,10}$/,
+        invalidKey: "movieDetail.idImdbFormat",
+        invalidText: "An IMDb id looks like tt0123456."
+      }
+    ];
+    const MOVIE_SERIES_ID_FIELDS = [
+      {
+        inputId: "movieEditSeriesTvdbId",
+        identifierType: "tvdb",
+        provider: "tvdb",
+        patterns: [/thetvdb\\.com\\/.*[?&]id=(\\d+)/i],
+        valid: /^\\d+$/,
+        invalidKey: "movieDetail.idDigitsOnly",
+        invalidText: "This id is a number, with no letters or punctuation."
+      },
+      {
+        inputId: "movieEditSeriesTmdbId",
+        identifierType: "tmdb_tv",
+        provider: "tmdb",
+        patterns: [/themoviedb\\.org\\/tv\\/(\\d+)/i],
+        valid: /^\\d+$/,
+        invalidKey: "movieDetail.idDigitsOnly",
+        invalidText: "This id is a number, with no letters or punctuation."
+      }
+    ];
+    function normalizedSourceId(field, raw) {
+      const value = String(raw || "").trim();
+      if (!value) return "";
+      for (const pattern of field.patterns || []) {
+        const match = value.match(pattern);
+        if (match) return match[1];
+      }
+      return value;
+    }
+    function storedIdentifierValue(entries, matches) {
+      const hit = (entries || []).filter(Boolean).find(matches);
+      return hit ? String(hit.identifier || "").trim() : "";
+    }
+    // What was on screen when the panel opened, so a save can tell "left alone"
+    // from "cleared". Without it every save would re-send both ids, and an
+    // emptied field would be indistinguishable from one that was never touched.
+    let movieEditSourceIdBaseline = {};
+    let movieEditSeriesIdBaseline = {};
+    let movieEditSeriesIdTarget = "";
+    function fillMovieEditSourceIds(detail) {
+      const entries = (detail || {}).identifiers || [];
+      movieEditSourceIdBaseline = {};
+      MOVIE_SOURCE_ID_FIELDS.forEach((field) => {
+        const stored = storedIdentifierValue(entries, (item) => (
+          String(item.provider_id || item.providerId || "").toLowerCase() === field.provider
+          && String(item.identifier_type || item.identifierType || "movie_id") === "movie_id"
+        ));
+        movieEditSourceIdBaseline[field.provider] = stored;
+        const input = document.getElementById(field.inputId);
+        if (input && document.activeElement !== input) input.value = stored;
+      });
+      fillMovieEditSeriesIds(detail);
+    }
+    function fillMovieEditSeriesIds(detail) {
+      const series = (detail || {}).series || null;
+      const linkFirst = document.getElementById("movieEditSeriesIdsLinkFirst");
+      movieEditSeriesIdBaseline = {};
+      // A series belongs to the container permissions, not the collection ones,
+      // so editing the film does not by itself entitle somebody to re-identify
+      // the show every other release of it shares. Without the check the fields
+      // would accept a value and the save would come back 403 from a route the
+      // person cannot see.
+      movieEditSeriesIdTarget = (series && hasPermission("containers.edit"))
+        ? String(series.id || "")
+        : "";
+      const entries = (series || {}).identifiers || [];
+      MOVIE_SERIES_ID_FIELDS.forEach((field) => {
+        const stored = storedIdentifierValue(entries, (item) => (
+          String(item.identifier_type || item.identifierType || "") === field.identifierType
+        ));
+        movieEditSeriesIdBaseline[field.identifierType] = stored;
+        const input = document.getElementById(field.inputId);
+        if (input) {
+          if (document.activeElement !== input) input.value = stored;
+          // A series id needs a series to hang off. Disabled rather than hidden
+          // when there is none, so the reason it cannot be filled in is on
+          // screen next to the link that would fix it.
+          input.disabled = !movieEditSeriesIdTarget;
+        }
+      });
+      // Keyed on the link and not on the target, so the hint says "link the
+      // series first" only when that is actually what is missing -- a reader
+      // without `containers.edit` is looking at a linked series and would be
+      // sent off to fix something that is not wrong.
+      if (linkFirst) linkFirst.classList.toggle("hidden", !!series);
+    }
+    // Every id the panel changed, validated before anything is sent. A message
+    // naming the field is the whole point: the routes below accept any string,
+    // so a typo would be stored and only ever surface as a link that opens the
+    // wrong film -- or as a source that quietly answers nothing.
+    function collectMovieEditIdChanges(fields, baseline, key) {
+      const changes = [];
+      for (const field of fields) {
+        const input = document.getElementById(field.inputId);
+        if (!input || input.disabled) continue;
+        const value = normalizedSourceId(field, input.value);
+        if (value !== input.value) input.value = value;
+        if (value === (baseline[field[key]] || "")) continue;
+        if (value && !field.valid.test(value)) {
+          const error = new Error(tNext(field.invalidKey, field.invalidText));
+          error.focusInput = input;
+          error.focusValue = value;
+          throw error;
+        }
+        changes.push({field, value});
+      }
+      return changes;
+    }
+    async function saveMovieSourceIds() {
+      if (!activeDetailMovieId) return null;
+      const changes = collectMovieEditIdChanges(
+        MOVIE_SOURCE_ID_FIELDS, movieEditSourceIdBaseline, "provider"
+      );
+      for (const {field, value} of changes) {
+        const base = `/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/identifiers`;
+        if (value) {
+          await authApiJson(base, {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({providerId: field.provider, identifier: value, identifierType: "movie_id"})
+          });
+        } else {
+          // An emptied field is a deliberate removal, which is a different
+          // request: the POST route replaces a value and has no way to say
+          // "this record has none".
+          await authApiJson(
+            `${base}?providerId=${encodeURIComponent(field.provider)}&identifierType=movie_id`,
+            {method: "DELETE"}
+          );
+        }
+        movieEditSourceIdBaseline[field.provider] = value;
+      }
+      return changes.length;
+    }
+    async function saveMovieSeriesIds() {
+      if (!movieEditSeriesIdTarget) return null;
+      const changes = collectMovieEditIdChanges(
+        MOVIE_SERIES_ID_FIELDS, movieEditSeriesIdBaseline, "identifierType"
+      );
+      for (const {field, value} of changes) {
+        // Only a set. The series route replaces an identifier and has no
+        // removal, deliberately: a series with no identifier is one no source
+        // can be asked about, and emptying the field by accident would be a
+        // quiet way to reach that state. Correcting a wrong number is typing
+        // the right one.
+        if (!value) continue;
+        await authApiJson(`/api/next/series/${encodeURIComponent(movieEditSeriesIdTarget)}/identifiers`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            identifierType: field.identifierType,
+            identifier: value,
+            providerId: field.provider
+          })
+        });
+        movieEditSeriesIdBaseline[field.identifierType] = value;
+      }
+      return changes.length;
     }
     // The typed product identifiers. Their own route rather than a slice of the
     // detail payload, because they are their own table with their own
@@ -42123,15 +42370,49 @@ def ui_preview_html(
         // than presented as the whole save having failed -- and the panel stays
         // open, because the value that needs fixing is in it.
         let identifierError = null;
+        let identifiersWritten = 0;
         try {
           await saveMovieIdentifiers();
+          // The database ids, on the same terms and for the same reason: their
+          // own tables, their own routes, and a refusal that has to name the
+          // field rather than fail the whole save. The series ids go last
+          // because setting one also refreshes the series.
+          identifiersWritten += (await saveMovieSourceIds()) || 0;
+          identifiersWritten += (await saveMovieSeriesIds()) || 0;
         } catch (error) {
           identifierError = error;
         }
-        renderMovieDetail(payload.detail || {});
+        // `payload.detail` was built by the PATCH, before any of the writes
+        // above ran, so it still carries the old ids. Re-read rather than
+        // render it: the film's own page shows an IMDb and a TMDb chip, and
+        // leaving those a reload behind makes a save that worked look ignored.
+        let detail = payload.detail || {};
+        if (identifiersWritten) {
+          try {
+            detail = (await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`)).detail || detail;
+          } catch (error) {
+            // The write already succeeded; a failed re-read is a stale screen,
+            // not a failed save, and must not be reported as one.
+          }
+        }
+        renderMovieDetail(detail);
         await loadAppSnapshot();
         if (identifierError) {
           setMovieDetailMessage(identifierError.message || String(identifierError), "bad");
+          // A rejected id is corrected where it was typed, so the panel stays
+          // open on the tab holding it. The render above refilled the field
+          // from what is stored, which would have swallowed the value being
+          // complained about, so it is put back first.
+          if (identifierError.focusInput) {
+            if (typeof identifierError.focusValue === "string") {
+              identifierError.focusInput.value = identifierError.focusValue;
+            }
+            activateDetailTab(
+              "movieEditSections",
+              identifierError.focusInput.closest(".detail-subsection")?.id || "movieEditSectionRelease"
+            );
+            identifierError.focusInput.focus();
+          }
           return;
         }
         setMovieEditPanelVisible(false);

@@ -265,6 +265,15 @@ jobs:
       - name: Test adding a series from the title search
         run: python -m unittest tests.test_next_series_add_flow
 
+      # Named here for the same reason as the module above it. The database ids
+      # a record is known by live in two different tables -- a film's in
+      # `movie_identifiers`, a show's on the series -- and the edit surface has
+      # to keep them apart. It also holds the guard on the merge that used to
+      # blank an id the sources had found, which is a pure-function claim and
+      # needs no database.
+      - name: Test the database ids and where each one is stored
+        run: python -m unittest tests.test_next_movie_source_ids
+
       # Where a hand-created series gets its seasons. The PostgreSQL half is the
       # part that matters: that the offer writes nothing, and that a season
       # already in the collection comes back marked rather than filtered out --
