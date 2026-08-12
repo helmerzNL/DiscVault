@@ -7430,57 +7430,251 @@ def emit_location_change(conn, location_id, *, operation: str, entity: dict[str,
 def episodes_available(conn) -> bool:
     return table_exists(conn, "series_episodes") and table_exists(conn, "movie_episodes")
 
+# Snapshot of what a watchlisted episode was, written at add time.
+#
+# 015 gave a watchlist row a snapshot so a deleted film does not silently
+# shorten somebody's list; an episode gets the same, and for a sharper reason.
+# A film that leaves the collection is still a film the list can name from
+# `movies`. An episode row only exists because a metadata refresh created it,
+# and re-linking a series to a different identifier deletes and recreates the
+# whole tree -- so without this, "S02E07" would become a blank line rather than
+# a name.
+#
+# `kind` is stated rather than inferred from which id is non-NULL: the reader
+# on the Lists page branches on it, and inference would break the moment a
+# third subject is added.
+EPISODE_SNAPSHOT_SQL = """
+                        jsonb_strip_nulls(jsonb_build_object(
+                            'kind', 'episode',
+                            'episode_id', e.id,
+                            'episode_public_id', e.public_id,
+                            'episode_number', e.episode_number,
+                            'title', e.title,
+                            'still_url', e.still_url,
+                            'season_id', s.id,
+                            'season_number', s.season_number,
+                            'season_title', s.title,
+                            'series_id', sr.id,
+                            'series_title', sr.title
+                        ))
+"""
+
+
+def require_episode_season(conn, episode_uuid: UUID) -> UUID:
+    """The season one live episode belongs to, or the right error.
+
+    Shared by every episode-scoped personal route so the three failure modes
+    are worded once: no episode tables at all, no watchlist table, and an
+    episode id that names nothing.
+    """
+    if not episodes_available(conn) or not table_exists(conn, "watchlist_items"):
+        raise NextApiError("Episode tables are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT season_id FROM series_episodes WHERE id = %s AND deleted_at IS NULL",
+            (episode_uuid,),
+        )
+        row = cur.fetchone()
+    if not row:
+        raise NextApiError("Episode not found", 404)
+    return row["season_id"]
+
+
+def require_season_for_episodes(conn, season_uuid: UUID) -> None:
+    """Guard for the season-wide personal routes.
+
+    A season with no episodes stored yet is *not* an error: the bulk buttons
+    then act on nothing and say so in their count, which is a truthful answer
+    to "add this season" for a season nobody has opened yet. Only a season id
+    that names nothing is a 404.
+    """
+    if not episodes_available(conn) or not table_exists(conn, "watchlist_items"):
+        raise NextApiError("Episode tables are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM series_seasons WHERE id = %s AND deleted_at IS NULL",
+            (season_uuid,),
+        )
+        if not cur.fetchone():
+            raise NextApiError("Season not found", 404)
+
+
 def season_episode_entities(conn, season_uuid: UUID, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """One season's episodes, with what this user has done with them.
 
-    `watchedAt` is per user and not per instance, so it is read with the
-    actor rather than joined once and shared -- a shared shelf would
-    otherwise show one person's viewing to everyone.
+    `watchedAt` and `onWatchlist` are per user and not per instance, so they
+    are read with the actor rather than joined once and shared -- a shared
+    shelf would otherwise show one person's viewing to everyone.
 
     `onDisc` says whether any disc in the collection carries the episode. It
     is the answer that makes an episode list worth showing at all: a season
     listed as owned may still be missing its last two episodes.
+
+    `discId` is the disc to open when somebody clicks the episode. It is
+    resolved here rather than in the client because the fallback needs SQL the
+    client does not have: an explicit `movie_episodes` row when the disc
+    listed its episodes, and otherwise any disc that covers the season. The
+    second is weaker on purpose -- most box sets never enumerate episodes, and
+    "the season 2 set" is the honest answer to "where is S02E07" when nothing
+    finer was recorded. `None` when no disc in the collection carries it, which
+    is what makes the entry unclickable rather than dishonestly clickable.
+
+    `posterUrl` is the episode's own still if a source supplied one, then the
+    season poster, then the series poster. Resolved at read time, so a season
+    that gains a poster tomorrow improves every episode under it without a
+    backfill. `posterSource` names which of the three answered, because
+    "this image is the series poster, not this episode" is exactly the thing a
+    reader would otherwise have to guess.
     """
     if not episodes_available(conn):
         return []
     actor_id = (actor or {}).get("id")
+    watchlist_ready = table_exists(conn, "watchlist_items")
+    watchlist_select = (
+        """
+                   EXISTS (
+                       SELECT 1 FROM watchlist_items wi
+                       WHERE wi.episode_id = e.id
+                             AND wi.user_id IS NOT DISTINCT FROM %(actor)s
+                   ) AS on_watchlist,
+        """
+        if watchlist_ready
+        else "                   false AS on_watchlist,\n"
+    )
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT e.id, e.public_id, e.episode_number, e.title, e.overview,
-                   e.air_date, e.runtime_minutes,
+                   e.air_date, e.runtime_minutes, e.still_url,
                    EXISTS (
                        SELECT 1 FROM movie_episodes me
                        JOIN movies m ON m.id = me.movie_id AND m.deleted_at IS NULL
                        WHERE me.episode_id = e.id
                    ) AS on_disc,
+{watchlist_select}
                    (
                        SELECT max(wh.watched_at)
                        FROM watch_history wh
                        WHERE wh.episode_id = e.id
-                             AND wh.user_id IS NOT DISTINCT FROM %s
-                   ) AS watched_at
+                             AND wh.user_id IS NOT DISTINCT FROM %(actor)s
+                   ) AS watched_at,
+                   COALESCE(episode_disc.id, season_disc.id) AS disc_id,
+                   season_poster.id AS season_poster_id,
+                   season_poster.storage_backend AS season_poster_storage_backend,
+                   season_poster.storage_key AS season_poster_storage_key,
+                   season_poster.source_url AS season_poster_source_url,
+                   series_poster.id AS series_poster_id,
+                   series_poster.storage_backend AS series_poster_storage_backend,
+                   series_poster.storage_key AS series_poster_storage_key,
+                   series_poster.source_url AS series_poster_source_url
             FROM series_episodes e
-            WHERE e.season_id = %s AND e.deleted_at IS NULL
+            -- The disc that named this episode, and then the disc that merely
+            -- covers its season. Two laterals rather than one OR'd join: the
+            -- first has to win whenever it answers, and ordering a union by
+            -- "which branch matched" is the kind of thing that quietly stops
+            -- being true when a row is added.
+            LEFT JOIN LATERAL (
+                SELECT m.id
+                FROM movie_episodes me
+                JOIN movies m ON m.id = me.movie_id AND m.deleted_at IS NULL
+                WHERE me.episode_id = e.id
+                ORDER BY m.created_at
+                LIMIT 1
+            ) episode_disc ON true
+            LEFT JOIN LATERAL (
+                SELECT m.id
+                FROM movie_seasons ms
+                JOIN movies m ON m.id = ms.movie_id AND m.deleted_at IS NULL
+                WHERE ms.season_id = e.season_id
+                ORDER BY m.created_at
+                LIMIT 1
+            ) season_disc ON true
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type = 'series_season'
+                  AND em.entity_id = e.season_id
+                  AND em.role = 'poster'
+                  AND em.is_primary = true
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                ORDER BY em.sort_order, ma.created_at
+                LIMIT 1
+            ) season_poster ON true
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type = 'series'
+                  AND em.entity_id = e.series_id
+                  AND em.role = 'poster'
+                  AND em.is_primary = true
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                ORDER BY em.sort_order, ma.created_at
+                LIMIT 1
+            ) series_poster ON true
+            WHERE e.season_id = %(season)s AND e.deleted_at IS NULL
             ORDER BY e.episode_number
             """,
-            (actor_id, season_uuid),
+            {"actor": actor_id, "season": season_uuid},
         )
         rows = cur.fetchall()
-    return [
-        {
-            "id": str(row["id"]),
-            "publicId": row["public_id"],
-            "episodeNumber": row["episode_number"],
-            "title": row["title"],
-            "overview": row["overview"],
-            "airDate": row["air_date"],
-            "runtimeMinutes": row["runtime_minutes"],
-            "onDisc": bool(row["on_disc"]),
-            "watchedAt": row["watched_at"],
-        }
-        for row in rows
-    ]
+    entities = []
+    for row in rows:
+        still_url = server_usable_image(clean_text(row.get("still_url"))) or None
+        season_poster = media_asset_public_url(
+            {
+                "id": row.get("season_poster_id"),
+                "storage_backend": row.get("season_poster_storage_backend"),
+                "storage_key": row.get("season_poster_storage_key"),
+                "source_url": row.get("season_poster_source_url"),
+            }
+            if row.get("season_poster_id")
+            else None
+        )
+        series_poster = media_asset_public_url(
+            {
+                "id": row.get("series_poster_id"),
+                "storage_backend": row.get("series_poster_storage_backend"),
+                "storage_key": row.get("series_poster_storage_key"),
+                "source_url": row.get("series_poster_source_url"),
+            }
+            if row.get("series_poster_id")
+            else None
+        )
+        poster_url, poster_source = next(
+            (
+                (candidate, source)
+                for candidate, source in (
+                    (still_url, "episode"),
+                    (season_poster, "season"),
+                    (series_poster, "series"),
+                )
+                if candidate
+            ),
+            (None, None),
+        )
+        entities.append(
+            {
+                "id": str(row["id"]),
+                "publicId": row["public_id"],
+                "episodeNumber": row["episode_number"],
+                "title": row["title"],
+                "overview": row["overview"],
+                "airDate": row["air_date"],
+                "runtimeMinutes": row["runtime_minutes"],
+                "onDisc": bool(row["on_disc"]),
+                "onWatchlist": bool(row["on_watchlist"]),
+                "watchedAt": row["watched_at"],
+                "discId": str(row["disc_id"]) if row.get("disc_id") else None,
+                "stillUrl": still_url,
+                "posterUrl": poster_url,
+                "posterSource": poster_source,
+            }
+        )
+    return entities
 
 
 def series_sync_entities(conn) -> list[dict[str, Any]]:
@@ -12449,6 +12643,7 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
             "watchlist": 0,
             "watchHistory": 0,
             "watchedMovies": 0,
+            "watchedEpisodes": 0,
             "wishlist": 0,
             "tags": 0,
             "activeLoans": 0,
@@ -12457,6 +12652,7 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
         "watchlist": 0,
         "watchHistory": 0,
         "watchedMovies": 0,
+        "watchedEpisodes": 0,
         "wishlist": 0,
         "tags": 0,
         "activeLoans": 0,
@@ -12471,7 +12667,16 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
                 """
                 SELECT
                     COUNT(*)::int AS count,
-                    COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'movie_title', snapshot->>'title'))::int AS movie_count
+                    -- Films only, which is what the name says. Before episodes
+                    -- existed the filter was unnecessary; now, without it, every
+                    -- episode row falls through to `snapshot->>'title'` and a
+                    -- whole season collapses into as many buckets as it has
+                    -- distinct episode titles -- or into one, when they are
+                    -- untitled.
+                    COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'movie_title', snapshot->>'title'))
+                        FILTER (WHERE episode_id IS NULL AND snapshot->>'kind' IS DISTINCT FROM 'episode')::int
+                        AS movie_count,
+                    COUNT(DISTINCT COALESCE(episode_id::text, snapshot->>'episode_id'))::int AS episode_count
                 FROM watch_history
                 WHERE user_id=%s
                 """,
@@ -12480,6 +12685,7 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
             row = cur.fetchone() or {}
             counts["watchHistory"] = int(row.get("count") or 0)
             counts["watchedMovies"] = int(row.get("movie_count") or 0)
+            counts["watchedEpisodes"] = int(row.get("episode_count") or 0)
     if table_exists(conn, "wishlist_items"):
         with conn.cursor() as cur:
             cur.execute("SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s", (user_id,))
@@ -13867,7 +14073,16 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                     FROM watch_history wh
                     WHERE wh.user_id=w.user_id AND wh.movie_id=w.movie_id
                 ) latest ON true
+                -- Episode entries are a different shape and are built by
+                -- `personal_list_episode_entities`. Without this they would not
+                -- merely be missing: `LEFT JOIN movies` matches nothing for
+                -- them, so each would render as a titleless orphan -- the
+                -- "deleted film" state, claimed about a film that never existed.
+                -- The snapshot arm catches entries whose episode row is gone,
+                -- which is exactly when `episode_id` has been set to NULL.
                 WHERE w.user_id=%s
+                  AND w.episode_id IS NULL
+                  AND w.snapshot->>'kind' IS DISTINCT FROM 'episode'
                 ORDER BY w.added_at DESC
                 LIMIT %s
                 """,
@@ -13901,7 +14116,13 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                 FROM watch_history wh
                 LEFT JOIN movies m ON m.id = wh.movie_id
                 {poster_join}
+                -- Same exclusion as the watchlist branch above, and the same
+                -- reason. An episode watch deliberately carries `movie_id IS
+                -- NULL` (074: naming one of several discs would invent a fact),
+                -- so before this it read here as a watch of a deleted film.
                 WHERE wh.user_id=%s
+                  AND wh.episode_id IS NULL
+                  AND wh.snapshot->>'kind' IS DISTINCT FROM 'episode'
                 ORDER BY wh.watched_at DESC, wh.created_at DESC
                 LIMIT %s
                 """,
@@ -13910,6 +14131,252 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
             rows = finalize_personal_list_rows(conn, cur.fetchall(), kind="watched")
         return attach_movie_search_credits(conn, attach_media_group_availability(conn, attach_digital_availability(conn, rows)))
     return []
+
+
+def personal_list_episode_entities(
+    conn, user_id: UUID | str, *, kind: str, limit: int = 200
+) -> list[dict[str, Any]]:
+    """The episode half of the watchlist and the watched list.
+
+    A separate builder rather than a branch inside
+    `personal_list_movie_entities` because the two share almost nothing: that
+    query is thirty columns of `movies` plus digital availability, media-group
+    availability and search credits, none of which an episode has. Widening it
+    would have meant thirty `NULL AS` columns and a join tree that is dead for
+    half its rows.
+
+    What the two do share is the *contract with the client*: `movie_exists`
+    means "this entry has somewhere to go", and it is spelled the same here so
+    the existing disabled-entry handling keeps working without knowing what an
+    episode is.
+
+    Orphans are included deliberately. An entry whose episode row is gone still
+    reads out of the snapshot, which is the whole reason the snapshot is
+    written; it simply has no disc to open.
+    """
+    if not user_id or not table_exists(conn, "series_episodes"):
+        return []
+    limit = min(max(int(limit or 200), 1), 500)
+
+    # The same fallback chain `season_episode_entities` documents, over the same
+    # two artwork joins. Repeated rather than shared because the surrounding
+    # queries differ; the chain itself is asserted in one place by the tests.
+    artwork_joins = """
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type = 'series_season' AND em.entity_id = e.season_id
+                  AND em.role = 'poster' AND em.is_primary = true
+                  AND em.deleted_at IS NULL AND em.hidden_at IS NULL
+                ORDER BY em.sort_order, ma.created_at
+                LIMIT 1
+            ) season_poster ON true
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type = 'series' AND em.entity_id = e.series_id
+                  AND em.role = 'poster' AND em.is_primary = true
+                  AND em.deleted_at IS NULL AND em.hidden_at IS NULL
+                ORDER BY em.sort_order, ma.created_at
+                LIMIT 1
+            ) series_poster ON true
+            LEFT JOIN LATERAL (
+                SELECT m.id
+                FROM movie_episodes me
+                JOIN movies m ON m.id = me.movie_id AND m.deleted_at IS NULL
+                WHERE me.episode_id = e.id
+                ORDER BY m.created_at
+                LIMIT 1
+            ) episode_disc ON true
+            LEFT JOIN LATERAL (
+                SELECT m.id
+                FROM movie_seasons ms
+                JOIN movies m ON m.id = ms.movie_id AND m.deleted_at IS NULL
+                WHERE ms.season_id = e.season_id
+                ORDER BY m.created_at
+                LIMIT 1
+            ) season_disc ON true
+    """
+    episode_select = """
+                e.id AS episode_id,
+                e.public_id,
+                e.episode_number,
+                e.title,
+                e.overview,
+                e.air_date,
+                e.runtime_minutes,
+                e.still_url,
+                s.id AS season_id,
+                s.season_number,
+                s.title AS season_title,
+                sr.id AS series_id,
+                sr.title AS series_title,
+                COALESCE(episode_disc.id, season_disc.id) AS disc_movie_id,
+                season_poster.id AS season_poster_id,
+                season_poster.storage_backend AS season_poster_storage_backend,
+                season_poster.storage_key AS season_poster_storage_key,
+                season_poster.source_url AS season_poster_source_url,
+                series_poster.id AS series_poster_id,
+                series_poster.storage_backend AS series_poster_storage_backend,
+                series_poster.storage_key AS series_poster_storage_key,
+                series_poster.source_url AS series_poster_source_url
+    """
+    episode_joins = f"""
+            LEFT JOIN series_seasons s ON s.id = e.season_id
+            LEFT JOIN series sr ON sr.id = e.series_id
+            {artwork_joins}
+    """
+
+    if kind == "watchlist":
+        if not table_exists(conn, "watchlist_items"):
+            return []
+        sql = f"""
+            SELECT
+                w.id AS watchlist_item_id,
+                w.added_at AS watchlist_added_at,
+                w.snapshot,
+                true AS on_watchlist,
+                (
+                    SELECT max(wh.watched_at) FROM watch_history wh
+                    WHERE wh.episode_id = e.id AND wh.user_id IS NOT DISTINCT FROM w.user_id
+                ) AS last_watched,
+{episode_select}
+            FROM watchlist_items w
+            LEFT JOIN series_episodes e ON e.id = w.episode_id AND e.deleted_at IS NULL
+            {episode_joins}
+            WHERE w.user_id = %s
+              AND (w.episode_id IS NOT NULL OR w.snapshot->>'kind' = 'episode')
+            ORDER BY w.added_at DESC
+            LIMIT %s
+        """
+    elif kind == "watched":
+        if not table_exists(conn, "watch_history"):
+            return []
+        sql = f"""
+            SELECT
+                wh.id AS watch_history_id,
+                wh.watched_at,
+                wh.created_at AS watch_history_created_at,
+                wh.snapshot,
+                EXISTS (
+                    SELECT 1 FROM watchlist_items wi
+                    WHERE wi.episode_id = e.id AND wi.user_id IS NOT DISTINCT FROM wh.user_id
+                ) AS on_watchlist,
+                wh.watched_at AS last_watched,
+{episode_select}
+            FROM watch_history wh
+            LEFT JOIN series_episodes e ON e.id = wh.episode_id AND e.deleted_at IS NULL
+            {episode_joins}
+            WHERE wh.user_id = %s
+              AND (wh.episode_id IS NOT NULL OR wh.snapshot->>'kind' = 'episode')
+            ORDER BY wh.watched_at DESC, wh.created_at DESC
+            LIMIT %s
+        """
+    else:
+        return []
+
+    with conn.cursor() as cur:
+        cur.execute(sql, (user_id, limit))
+        rows = cur.fetchall()
+
+    entities = []
+    for row in rows:
+        snapshot = row.get("snapshot") if isinstance(row.get("snapshot"), dict) else {}
+        still_url = server_usable_image(
+            clean_text(row.get("still_url")) or clean_text(snapshot.get("still_url"))
+        ) or None
+        season_poster = media_asset_public_url(
+            {
+                "id": row.get("season_poster_id"),
+                "storage_backend": row.get("season_poster_storage_backend"),
+                "storage_key": row.get("season_poster_storage_key"),
+                "source_url": row.get("season_poster_source_url"),
+            }
+            if row.get("season_poster_id")
+            else None
+        )
+        series_poster = media_asset_public_url(
+            {
+                "id": row.get("series_poster_id"),
+                "storage_backend": row.get("series_poster_storage_backend"),
+                "storage_key": row.get("series_poster_storage_key"),
+                "source_url": row.get("series_poster_source_url"),
+            }
+            if row.get("series_poster_id")
+            else None
+        )
+        poster_url, poster_source = next(
+            (
+                (candidate, source)
+                for candidate, source in (
+                    (still_url, "episode"),
+                    (season_poster, "season"),
+                    (series_poster, "series"),
+                )
+                if candidate
+            ),
+            (None, None),
+        )
+        disc_id = row.get("disc_movie_id")
+        entity = {
+            "kind": "episode",
+            "id": str(row["episode_id"]) if row.get("episode_id") else None,
+            "public_id": row.get("public_id") or snapshot.get("episode_public_id"),
+            "title": row.get("title") or snapshot.get("title"),
+            "overview": row.get("overview"),
+            "air_date": row.get("air_date"),
+            "runtime_minutes": row.get("runtime_minutes"),
+            "episode_number": row.get("episode_number")
+            if row.get("episode_number") is not None
+            else snapshot.get("episode_number"),
+            "season_id": str(row["season_id"]) if row.get("season_id") else snapshot.get("season_id"),
+            "season_number": row.get("season_number")
+            if row.get("season_number") is not None
+            else snapshot.get("season_number"),
+            "season_title": row.get("season_title") or snapshot.get("season_title"),
+            "series_id": str(row["series_id"]) if row.get("series_id") else snapshot.get("series_id"),
+            "series_title": row.get("series_title") or snapshot.get("series_title"),
+            "poster_url": poster_url,
+            "poster_source": poster_source,
+            "disc_movie_id": str(disc_id) if disc_id else None,
+            # The client's existing word for "this entry has somewhere to go".
+            "movie_exists": bool(disc_id),
+            "on_watchlist": bool(row.get("on_watchlist")),
+            "last_watched": row.get("last_watched"),
+            "snapshot": snapshot,
+        }
+        if kind == "watchlist":
+            entity["watchlist_item_id"] = str(row["watchlist_item_id"])
+            entity["watchlist_added_at"] = row.get("watchlist_added_at")
+        else:
+            entity["watch_history_id"] = str(row["watch_history_id"])
+            entity["watched_at"] = row.get("watched_at")
+            entity["watch_history_created_at"] = row.get("watch_history_created_at")
+        entities.append(entity)
+    return entities
+
+
+def merge_personal_list_entries(
+    movies: list[dict[str, Any]], episodes: list[dict[str, Any]], *, kind: str, limit: int
+) -> list[dict[str, Any]]:
+    """One list, ordered the way each half already orders itself.
+
+    Merged here rather than in SQL: a UNION would have to agree on a column
+    list the two halves do not share, and sorting in Python over at most two
+    `limit`-sized lists is cheaper than the shape that would make it possible.
+    """
+    key = "watchlist_added_at" if kind == "watchlist" else "watched_at"
+    combined = list(movies) + list(episodes)
+    # Both columns are NOT NULL, so the undated bucket is normally empty. It is
+    # split out rather than sorted with a sentinel because mixing None into the
+    # comparison raises rather than ordering badly, and a list page is not worth
+    # a 500.
+    dated = [row for row in combined if row.get(key) is not None]
+    undated = [row for row in combined if row.get(key) is None]
+    dated.sort(key=lambda row: row[key], reverse=True)
+    return (dated + undated)[:limit]
 
 
 def digital_item_web_url(row: dict[str, Any]) -> str | None:
@@ -24793,13 +25260,24 @@ def register_routes(flask_app: Flask) -> None:
                     # `movie_id` stays NULL: an episode watch is about the
                     # episode, and naming one of possibly several discs that
                     # carry it would be inventing a fact.
+                    #
+                    # The snapshot is what makes the row still readable once the
+                    # episode is gone -- `episode_id` is SET NULL on delete, so
+                    # without it a watched entry would decay into a row naming
+                    # neither a film nor an episode, indistinguishable from a
+                    # watch of a deleted film. Same argument 015 made for the
+                    # watchlist.
                     cur.execute(
-                        """
+                        f"""
                         INSERT INTO watch_history (user_id, episode_id, watched_at, snapshot)
-                        VALUES (%s, %s, %s, %s)
+                        SELECT %s, e.id, %s, {EPISODE_SNAPSHOT_SQL}
+                        FROM series_episodes e
+                        JOIN series_seasons s ON s.id = e.season_id
+                        JOIN series sr ON sr.id = e.series_id
+                        WHERE e.id = %s AND e.deleted_at IS NULL
                         RETURNING id
                         """,
-                        (actor.get("id"), episode_uuid, watched_at, Jsonb({})),
+                        (actor.get("id"), watched_at, episode_uuid),
                     )
                     entry = cur.fetchone()
                 audit_event(
@@ -24863,6 +25341,242 @@ def register_routes(flask_app: Flask) -> None:
                 )
             episodes = season_episode_entities(conn, episode["season_id"], actor=actor)
         return response({"status": "ok", "episodes": episodes})
+
+    @flask_app.post("/api/next/series/episodes/<episode_id>/watchlist")
+    def add_episode_to_watchlist(episode_id):
+        episode_uuid = parse_uuid(episode_id, "episode id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            season_uuid = require_episode_season(conn, episode_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # DO UPDATE rather than DO NOTHING, mirroring
+                    # `add_movie_to_watchlist`: adding something already on the
+                    # list is how a person says "still want this", and the
+                    # refreshed `added_at` is what moves it back to the top.
+                    cur.execute(
+                        f"""
+                        INSERT INTO watchlist_items (user_id, episode_id, snapshot)
+                        SELECT %s, e.id, {EPISODE_SNAPSHOT_SQL}
+                        FROM series_episodes e
+                        JOIN series_seasons s ON s.id = e.season_id
+                        JOIN series sr ON sr.id = e.series_id
+                        WHERE e.id = %s AND e.deleted_at IS NULL
+                        ON CONFLICT (user_id, episode_id) WHERE episode_id IS NOT NULL
+                        DO UPDATE SET added_at = now(), snapshot = EXCLUDED.snapshot
+                        """,
+                        (actor.get("id"), episode_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="watchlist.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_episode",
+                    target_id=episode_uuid,
+                    summary="Added episode to watchlist",
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "episodes": episodes})
+
+    @flask_app.delete("/api/next/series/episodes/<episode_id>/watchlist")
+    def remove_episode_from_watchlist(episode_id):
+        episode_uuid = parse_uuid(episode_id, "episode id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            season_uuid = require_episode_season(conn, episode_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # `IS NOT DISTINCT FROM` for the same reason
+                    # `clear_episode_watched` documents: a plain `=` matches
+                    # nothing when the actor carries no id, so the button would
+                    # report success and remove nothing.
+                    cur.execute(
+                        """
+                        DELETE FROM watchlist_items
+                        WHERE user_id IS NOT DISTINCT FROM %s AND episode_id = %s
+                        """,
+                        (actor.get("id"), episode_uuid),
+                    )
+                audit_event(
+                    conn,
+                    event_type="watchlist.removed",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_episode",
+                    target_id=episode_uuid,
+                    summary="Removed episode from watchlist",
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "episodes": episodes})
+
+    @flask_app.post("/api/next/series/seasons/<season_id>/watchlist")
+    def add_season_to_watchlist(season_id):
+        """Put every episode of one season on the watchlist.
+
+        A season is not itself a watchlist subject: what a person watches is an
+        episode, and a season row would have to be reconciled with the episode
+        rows underneath it every time one of them changed. So the bulk button
+        is exactly the per-episode act repeated -- one kind of row on the list,
+        and "the whole season" remains a statement about its episodes rather
+        than a fourth thing the list has to know how to render.
+        """
+        season_uuid = parse_uuid(season_id, "season id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            require_season_for_episodes(conn, season_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    # DO NOTHING, unlike the single-episode add: adding a season
+                    # you partly held should not reshuffle the episodes already
+                    # on the list to today's date.
+                    cur.execute(
+                        f"""
+                        INSERT INTO watchlist_items (user_id, episode_id, snapshot)
+                        SELECT %s, e.id, {EPISODE_SNAPSHOT_SQL}
+                        FROM series_episodes e
+                        JOIN series_seasons s ON s.id = e.season_id
+                        JOIN series sr ON sr.id = e.series_id
+                        WHERE e.season_id = %s AND e.deleted_at IS NULL
+                        ON CONFLICT (user_id, episode_id) WHERE episode_id IS NOT NULL
+                        DO NOTHING
+                        """,
+                        (actor.get("id"), season_uuid),
+                    )
+                    added = cur.rowcount or 0
+                audit_event(
+                    conn,
+                    event_type="watchlist.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_season",
+                    target_id=season_uuid,
+                    summary="Added season to watchlist",
+                    metadata={"episodesAdded": added},
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "episodesAdded": added, "episodes": episodes})
+
+    @flask_app.delete("/api/next/series/seasons/<season_id>/watchlist")
+    def remove_season_from_watchlist(season_id):
+        season_uuid = parse_uuid(season_id, "season id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            require_season_for_episodes(conn, season_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM watchlist_items
+                        WHERE user_id IS NOT DISTINCT FROM %s
+                              AND episode_id IN (
+                                  SELECT id FROM series_episodes
+                                  WHERE season_id = %s AND deleted_at IS NULL
+                              )
+                        """,
+                        (actor.get("id"), season_uuid),
+                    )
+                    removed = cur.rowcount or 0
+                audit_event(
+                    conn,
+                    event_type="watchlist.removed",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_season",
+                    target_id=season_uuid,
+                    summary="Removed season from watchlist",
+                    metadata={"episodesRemoved": removed},
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "episodesRemoved": removed, "episodes": episodes})
+
+    @flask_app.post("/api/next/series/seasons/<season_id>/watched")
+    def mark_season_watched(season_id):
+        """Mark every not-yet-watched episode of one season as watched.
+
+        Only the ones missing, so pressing this on a season you had half-seen
+        does not write a second row for the half you had. `watch_history` is an
+        append-only log where a second row means a rewatch, and a bulk button
+        is not a claim to have rewatched anything.
+        """
+        season_uuid = parse_uuid(season_id, "season id")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Watched request body must be an object", 400)
+        watched_at = clean_text(body.get("watchedAt", body.get("watched_at"))) or (
+            datetime.utcnow().isoformat(timespec="seconds") + "Z"
+        )
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            require_season_for_episodes(conn, season_uuid)
+            if not table_exists(conn, "watch_history"):
+                raise NextApiError("Episode tables are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        INSERT INTO watch_history (user_id, episode_id, watched_at, snapshot)
+                        SELECT %s, e.id, %s, {EPISODE_SNAPSHOT_SQL}
+                        FROM series_episodes e
+                        JOIN series_seasons s ON s.id = e.season_id
+                        JOIN series sr ON sr.id = e.series_id
+                        WHERE e.season_id = %s AND e.deleted_at IS NULL
+                              AND NOT EXISTS (
+                                  SELECT 1 FROM watch_history wh
+                                  WHERE wh.episode_id = e.id
+                                        AND wh.user_id IS NOT DISTINCT FROM %s
+                              )
+                        """,
+                        (actor.get("id"), watched_at, season_uuid, actor.get("id")),
+                    )
+                    marked = cur.rowcount or 0
+                audit_event(
+                    conn,
+                    event_type="watch_history.added",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_season",
+                    target_id=season_uuid,
+                    summary="Marked season as watched",
+                    metadata={"watchedAt": watched_at, "episodesMarked": marked},
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "episodesMarked": marked, "episodes": episodes})
+
+    @flask_app.delete("/api/next/series/seasons/<season_id>/watched")
+    def clear_season_watched(season_id):
+        season_uuid = parse_uuid(season_id, "season id")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            require_season_for_episodes(conn, season_uuid)
+            if not table_exists(conn, "watch_history"):
+                raise NextApiError("Episode tables are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        DELETE FROM watch_history
+                        WHERE user_id IS NOT DISTINCT FROM %s
+                              AND episode_id IN (
+                                  SELECT id FROM series_episodes
+                                  WHERE season_id = %s AND deleted_at IS NULL
+                              )
+                        """,
+                        (actor.get("id"), season_uuid),
+                    )
+                    cleared = cur.rowcount or 0
+                audit_event(
+                    conn,
+                    event_type="watch_history.removed",
+                    category="personal",
+                    actor=actor,
+                    target_type="series_season",
+                    target_id=season_uuid,
+                    summary="Cleared season watched state",
+                    metadata={"entriesCleared": cleared},
+                )
+            episodes = season_episode_entities(conn, season_uuid, actor=actor)
+        return response({"status": "ok", "entriesCleared": cleared, "episodes": episodes})
 
     @flask_app.post("/api/next/series/<series_id>/media/primary")
     def series_media_primary(series_id):
@@ -28742,8 +29456,18 @@ def register_routes(flask_app: Flask) -> None:
                 {
                     "status": "ok",
                     "counts": personal_list_counts(conn, user_id),
-                    "watchlist": personal_list_movie_entities(conn, user_id, kind="watchlist", limit=limit),
-                    "watched": personal_list_movie_entities(conn, user_id, kind="watched", limit=limit),
+                    "watchlist": merge_personal_list_entries(
+                        personal_list_movie_entities(conn, user_id, kind="watchlist", limit=limit),
+                        personal_list_episode_entities(conn, user_id, kind="watchlist", limit=limit),
+                        kind="watchlist",
+                        limit=limit,
+                    ),
+                    "watched": merge_personal_list_entries(
+                        personal_list_movie_entities(conn, user_id, kind="watched", limit=limit),
+                        personal_list_episode_entities(conn, user_id, kind="watched", limit=limit),
+                        kind="watched",
+                        limit=limit,
+                    ),
                 }
             )
 
@@ -28755,7 +29479,12 @@ def register_routes(flask_app: Flask) -> None:
             return response(
                 {
                     "status": "ok",
-                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit),
+                    "items": merge_personal_list_entries(
+                        personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit),
+                        personal_list_episode_entities(conn, actor.get("id"), kind="watchlist", limit=limit),
+                        kind="watchlist",
+                        limit=limit,
+                    ),
                     "counts": personal_list_counts(conn, actor.get("id")),
                 }
             )
@@ -28768,7 +29497,12 @@ def register_routes(flask_app: Flask) -> None:
             return response(
                 {
                     "status": "ok",
-                    "items": personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit),
+                    "items": merge_personal_list_entries(
+                        personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit),
+                        personal_list_episode_entities(conn, actor.get("id"), kind="watched", limit=limit),
+                        kind="watched",
+                        limit=limit,
+                    ),
                     "counts": personal_list_counts(conn, actor.get("id")),
                 }
             )

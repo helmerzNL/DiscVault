@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Переглянуто знову",
   "lists.watchedDate": "Дата перегляду",
   "lists.watchedDateUnknown": "Невідома дата",
-  "lists.watchedEntries": "переглянуті фільми",
-  "lists.watchedEntry": "переглянутий фільм",
+  "lists.watchedEntries": "переглянуто",
+  "lists.watchedEntry": "переглянуто",
   "lists.watchedToday": "Переглянуто сьогодні",
   "lists.watchedYesterday": "Переглянуто вчора",
   "lists.watchlist": "Список для перегляду",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Аудіодоріжки",
   "contribute.field.subtitles": "Субтитри",
   "contribute.field.alternateTitles": "Альтернативні назви",
-  "contribute.field.discs": "Диски"
+  "contribute.field.discs": "Диски",
+  "seriesDetail.markSeasonWatched": "Позначити сезон як переглянутий",
+  "seriesDetail.clearSeasonWatched": "Зняти позначку перегляду сезону",
+  "seriesDetail.addSeasonToWatchlist": "Додати сезон до списку для перегляду",
+  "seriesDetail.removeSeasonFromWatchlist": "Вилучити сезон зі списку для перегляду",
+  "seriesDetail.seasonBulkHint": "Стосується всіх епізодів у цьому списку.",
+  "seriesDetail.episodeImageFromSeason": "Зображення сезону",
+  "seriesDetail.episodeImageFromSeries": "Зображення серіалу"
 }

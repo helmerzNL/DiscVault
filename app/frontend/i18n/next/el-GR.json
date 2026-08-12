@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Προβλήθηκε ξανά",
   "lists.watchedDate": "Ημερομηνία προβολής",
   "lists.watchedDateUnknown": "Άγνωστη ημερομηνία",
-  "lists.watchedEntries": "προβλημένες ταινίες",
-  "lists.watchedEntry": "προβλημένη ταινία",
+  "lists.watchedEntries": "παρακολουθήθηκαν",
+  "lists.watchedEntry": "παρακολουθήθηκαν",
   "lists.watchedToday": "Προβλήθηκε σήμερα",
   "lists.watchedYesterday": "Προβλήθηκε χθες",
   "lists.watchlist": "Λίστα παρακολούθησης",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Κομμάτια ήχου",
   "contribute.field.subtitles": "Υπότιτλοι",
   "contribute.field.alternateTitles": "Εναλλακτικοί τίτλοι",
-  "contribute.field.discs": "Δίσκοι"
+  "contribute.field.discs": "Δίσκοι",
+  "seriesDetail.markSeasonWatched": "Σήμανση σεζόν ως παρακολουθημένης",
+  "seriesDetail.clearSeasonWatched": "Κατάργηση σήμανσης σεζόν",
+  "seriesDetail.addSeasonToWatchlist": "Προσθήκη σεζόν στη λίστα παρακολούθησης",
+  "seriesDetail.removeSeasonFromWatchlist": "Αφαίρεση σεζόν από τη λίστα παρακολούθησης",
+  "seriesDetail.seasonBulkHint": "Ισχύει για κάθε επεισόδιο αυτής της λίστας.",
+  "seriesDetail.episodeImageFromSeason": "Εικόνα σεζόν",
+  "seriesDetail.episodeImageFromSeries": "Εικόνα σειράς"
 }

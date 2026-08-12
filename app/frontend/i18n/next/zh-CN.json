@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "再次观看",
   "lists.watchedDate": "观看日期",
   "lists.watchedDateUnknown": "未知日期",
-  "lists.watchedEntries": "部已观看电影",
-  "lists.watchedEntry": "部已观看电影",
+  "lists.watchedEntries": "部已观看",
+  "lists.watchedEntry": "部已观看",
   "lists.watchedToday": "今天已观看",
   "lists.watchedYesterday": "昨天已观看",
   "lists.watchlist": "待看列表",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "音轨",
   "contribute.field.subtitles": "字幕",
   "contribute.field.alternateTitles": "其他标题",
-  "contribute.field.discs": "光盘"
+  "contribute.field.discs": "光盘",
+  "seriesDetail.markSeasonWatched": "将本季标记为已观看",
+  "seriesDetail.clearSeasonWatched": "取消本季已观看标记",
+  "seriesDetail.addSeasonToWatchlist": "将本季添加到待看列表",
+  "seriesDetail.removeSeasonFromWatchlist": "将本季从待看列表移除",
+  "seriesDetail.seasonBulkHint": "适用于此处列出的所有剧集。",
+  "seriesDetail.episodeImageFromSeason": "本季图片",
+  "seriesDetail.episodeImageFromSeries": "本剧图片"
 }

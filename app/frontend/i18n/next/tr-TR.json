@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Tekrar izlendi",
   "lists.watchedDate": "İzlenme tarihi",
   "lists.watchedDateUnknown": "Bilinmeyen tarih",
-  "lists.watchedEntries": "izlenen filmler",
-  "lists.watchedEntry": "izlenen film",
+  "lists.watchedEntries": "izlendi",
+  "lists.watchedEntry": "izlendi",
   "lists.watchedToday": "Bugün izlendi",
   "lists.watchedYesterday": "Dün izlendi",
   "lists.watchlist": "İzleme listesi",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Ses parçaları",
   "contribute.field.subtitles": "Altyazılar",
   "contribute.field.alternateTitles": "Alternatif başlıklar",
-  "contribute.field.discs": "Diskler"
+  "contribute.field.discs": "Diskler",
+  "seriesDetail.markSeasonWatched": "Sezonu izlendi olarak işaretle",
+  "seriesDetail.clearSeasonWatched": "Sezonun izlendi işaretini kaldır",
+  "seriesDetail.addSeasonToWatchlist": "Sezonu izleme listesine ekle",
+  "seriesDetail.removeSeasonFromWatchlist": "Sezonu izleme listesinden çıkar",
+  "seriesDetail.seasonBulkHint": "Burada listelenen tüm bölümler için geçerlidir.",
+  "seriesDetail.episodeImageFromSeason": "Sezon görseli",
+  "seriesDetail.episodeImageFromSeries": "Dizi görseli"
 }

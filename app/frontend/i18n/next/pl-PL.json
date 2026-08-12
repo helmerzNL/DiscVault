@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Obejrzano ponownie",
   "lists.watchedDate": "Data obejrzenia",
   "lists.watchedDateUnknown": "Nieznana data",
-  "lists.watchedEntries": "obejrzane filmy",
-  "lists.watchedEntry": "obejrzany film",
+  "lists.watchedEntries": "obejrzane",
+  "lists.watchedEntry": "obejrzane",
   "lists.watchedToday": "Obejrzano dzisiaj",
   "lists.watchedYesterday": "Obejrzano wczoraj",
   "lists.watchlist": "Do obejrzenia",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Ścieżki audio",
   "contribute.field.subtitles": "Napisy",
   "contribute.field.alternateTitles": "Tytuły alternatywne",
-  "contribute.field.discs": "Płyty"
+  "contribute.field.discs": "Płyty",
+  "seriesDetail.markSeasonWatched": "Oznacz sezon jako obejrzany",
+  "seriesDetail.clearSeasonWatched": "Usuń oznaczenie obejrzenia sezonu",
+  "seriesDetail.addSeasonToWatchlist": "Dodaj sezon do listy do obejrzenia",
+  "seriesDetail.removeSeasonFromWatchlist": "Usuń sezon z listy do obejrzenia",
+  "seriesDetail.seasonBulkHint": "Dotyczy wszystkich odcinków na tej liście.",
+  "seriesDetail.episodeImageFromSeason": "Obraz sezonu",
+  "seriesDetail.episodeImageFromSeries": "Obraz serialu"
 }

@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Vu ? nouveau",
   "lists.watchedDate": "Date de visionnage",
   "lists.watchedDateUnknown": "Date inconnue",
-  "lists.watchedEntries": "films vus",
-  "lists.watchedEntry": "film vu",
+  "lists.watchedEntries": "vus",
+  "lists.watchedEntry": "vus",
   "lists.watchedToday": "Vu aujourd’hui",
   "lists.watchedYesterday": "Vu hier",
   "lists.watchlist": "Watchlist",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Pistes audio",
   "contribute.field.subtitles": "Sous-titres",
   "contribute.field.alternateTitles": "Titres alternatifs",
-  "contribute.field.discs": "Disques"
+  "contribute.field.discs": "Disques",
+  "seriesDetail.markSeasonWatched": "Marquer la saison comme vue",
+  "seriesDetail.clearSeasonWatched": "Annuler la saison comme vue",
+  "seriesDetail.addSeasonToWatchlist": "Ajouter la saison à la watchlist",
+  "seriesDetail.removeSeasonFromWatchlist": "Retirer la saison de la watchlist",
+  "seriesDetail.seasonBulkHint": "S'applique à tous les épisodes de cette liste.",
+  "seriesDetail.episodeImageFromSeason": "Image de la saison",
+  "seriesDetail.episodeImageFromSeries": "Image de la série"
 }

@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Гледан отново",
   "lists.watchedDate": "Дата на гледане",
   "lists.watchedDateUnknown": "Неизвестна дата",
-  "lists.watchedEntries": "гледани филми",
-  "lists.watchedEntry": "гледан филм",
+  "lists.watchedEntries": "гледани",
+  "lists.watchedEntry": "гледани",
   "lists.watchedToday": "Гледано днес",
   "lists.watchedYesterday": "Гледано вчера",
   "lists.watchlist": "Списък за гледане",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Аудиозаписи",
   "contribute.field.subtitles": "Субтитри",
   "contribute.field.alternateTitles": "Алтернативни заглавия",
-  "contribute.field.discs": "Дискове"
+  "contribute.field.discs": "Дискове",
+  "seriesDetail.markSeasonWatched": "Отбележи сезона като гледан",
+  "seriesDetail.clearSeasonWatched": "Изчисти гледането на сезона",
+  "seriesDetail.addSeasonToWatchlist": "Добави сезона към списъка за гледане",
+  "seriesDetail.removeSeasonFromWatchlist": "Премахни сезона от списъка за гледане",
+  "seriesDetail.seasonBulkHint": "Прилага се за всеки епизод в този списък.",
+  "seriesDetail.episodeImageFromSeason": "Изображение на сезона",
+  "seriesDetail.episodeImageFromSeries": "Изображение на сериала"
 }

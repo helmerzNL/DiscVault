@@ -5866,7 +5866,7 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
 
 SEASON_EPISODES_CAPABILITY = "season_episodes"
 
-EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20}
+EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20, "still_url": 1000}
 
 
 def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
@@ -5953,9 +5953,9 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                 """
                 INSERT INTO series_episodes (
                     id, public_id, series_id, season_id, episode_number,
-                    title, overview, air_date, runtime_minutes
+                    title, overview, air_date, runtime_minutes, still_url
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT DO NOTHING
                 """,
                 (
@@ -5968,6 +5968,7 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
                     clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
                 ),
             )
             if cur.rowcount:
@@ -5983,6 +5984,7 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     overview = COALESCE(NULLIF(overview, ''), %s),
                     air_date = COALESCE(NULLIF(air_date, ''), %s),
                     runtime_minutes = COALESCE(runtime_minutes, %s),
+                    still_url = COALESCE(NULLIF(still_url, ''), %s),
                     updated_at = now()
                 WHERE season_id = %s AND episode_number = %s AND deleted_at IS NULL
                 """,
@@ -5991,6 +5993,7 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
                     clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
+                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
                     season_uuid,
                     number,
                 ),

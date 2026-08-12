@@ -4662,6 +4662,18 @@ def ui_preview_html(
     .personal-list-version-badges {
       display: contents;
     }
+    /* Which show and which episode. It sits under the title in every view mode,
+       so an episode entry is never a bare title with no way to tell it apart
+       from the film of the same name. */
+    .personal-list-episode-label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .mode-list-poster .digital-source-badges {
       left: 5px;
       top: 5px;
@@ -8445,12 +8457,15 @@ def ui_preview_html(
     .series-episode-list.hidden {
       display: none;
     }
+    /* Four columns: number, still, copy, actions. The still is what turns a
+       list of numbered titles into something recognisable at a glance, and it
+       sits after the number so the numbers stay in one readable column. */
     .series-episode-row {
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) auto;
-      align-items: center;
+      grid-template-columns: 28px 96px minmax(0, 1fr) auto;
+      align-items: start;
       gap: 10px;
-      padding: 6px 8px;
+      padding: 8px;
       border-radius: 6px;
       border: 1px solid var(--line-strong);
     }
@@ -8464,15 +8479,89 @@ def ui_preview_html(
       color: var(--muted);
       font-variant-numeric: tabular-nums;
       text-align: right;
+      padding-top: 2px;
+    }
+    .series-episode-thumb {
+      width: 96px;
+      aspect-ratio: 16 / 9;
+      border-radius: 4px;
+      overflow: hidden;
+      background: var(--surface-2);
+      display: grid;
+      place-items: center;
+    }
+    .series-episode-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    /* A borrowed image is letterboxed rather than cropped. A season or series
+       poster is portrait, and filling a 16:9 box with it crops exactly the part
+       that makes it recognisable. */
+    .series-episode-thumb.is-borrowed img {
+      object-fit: contain;
+      background: var(--surface-2);
     }
     .series-episode-text {
       display: grid;
-      gap: 1px;
+      gap: 2px;
       min-width: 0;
     }
     .series-episode-text span {
       color: var(--muted);
       font-size: 12px;
+    }
+    /* Clamped rather than truncated to one line: two lines of synopsis is
+       usually the sentence that says which episode this is, and a season of
+       thirteen full paragraphs is a wall nobody reads. */
+    .series-episode-overview {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .series-episode-actions {
+      display: grid;
+      gap: 4px;
+      justify-items: stretch;
+    }
+    .series-episode-actions button {
+      min-height: 30px;
+      padding: 0 10px;
+      font-size: .8rem;
+      white-space: nowrap;
+    }
+    /* The season-wide row sits above the episodes and is visibly a header for
+       them rather than a fifth episode. */
+    .series-season-bulk {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      padding: 4px 8px 6px;
+    }
+    .series-season-bulk .import-source-meta {
+      margin: 0;
+      flex: 1 1 auto;
+    }
+    @media (max-width: 640px) {
+      /* The still leaves the grid before the actions do: on a narrow screen the
+         buttons are the part you came to press. */
+      .series-episode-row {
+        grid-template-columns: 24px minmax(0, 1fr);
+      }
+      .series-episode-thumb {
+        display: none;
+      }
+      .series-episode-actions {
+        grid-column: 2;
+        grid-auto-flow: column;
+        justify-content: start;
+      }
     }
     .container-member-grid {
       display: grid;
@@ -32079,11 +32168,12 @@ def ui_preview_html(
         <div class="series-episode-list hidden" data-season-episode-list="${escapeHtml(row.season.id || "")}"></div>
         </div>`;
     }
-    function seriesEpisodeRowsHtml(episodes) {
+    function seriesEpisodeRowsHtml(episodes, seasonId) {
       if (!episodes.length) {
         return `<div class="preview-empty">${escapeHtml(tNext("seriesDetail.noEpisodes", "No episodes known for this season yet."))}</div>`;
       }
-      return episodes.map((episode) => {
+      const canManage = hasPermission("watchlist.manage");
+      const rows = episodes.map((episode) => {
         const parts = [
           episode.airDate || "",
           episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : "",
@@ -32092,21 +32182,65 @@ def ui_preview_html(
             : tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"),
         ].filter(Boolean);
         const watched = Boolean(episode.watchedAt);
+        const listed = Boolean(episode.onWatchlist);
+        // `posterSource` is the server saying which of the three images this
+        // is. A borrowed one is labelled and letterboxed rather than passed off
+        // as a still of this episode.
+        const borrowed = episode.posterUrl && episode.posterSource !== "episode";
+        const thumbAlt = borrowed
+          ? (episode.posterSource === "season"
+              ? tNext("seriesDetail.episodeImageFromSeason", "Season image")
+              : tNext("seriesDetail.episodeImageFromSeries", "Series image"))
+          : (episode.title || "");
+        const thumb = episode.posterUrl
+          ? `<div class="series-episode-thumb${borrowed ? " is-borrowed" : ""}"><img src="${escapeHtml(episode.posterUrl)}" alt="${escapeHtml(thumbAlt)}" title="${escapeHtml(thumbAlt)}" loading="lazy"></div>`
+          : `<div class="series-episode-thumb"></div>`;
+        const actions = canManage
+          ? `<div class="series-episode-actions">
+              <button type="button" class="secondary-button${watched ? " active" : ""}"
+                      data-episode-watched="${escapeHtml(episode.id)}"
+                      data-watched="${watched ? "1" : "0"}"
+                      aria-pressed="${watched ? "true" : "false"}">${escapeHtml(
+                        watched ? tNext("seriesDetail.episodeWatched", "Watched") : tNext("seriesDetail.markEpisodeWatched", "Mark watched")
+                      )}</button>
+              <button type="button" class="secondary-button${listed ? " active" : ""}"
+                      data-episode-watchlist="${escapeHtml(episode.id)}"
+                      data-listed="${listed ? "1" : "0"}"
+                      aria-pressed="${listed ? "true" : "false"}">${escapeHtml(
+                        listed ? tNext("lists.inWatchlist", "In Watchlist") : tNext("lists.addToWatchlist", "Add to Watchlist")
+                      )}</button>
+            </div>`
+          : "";
         return `
           <div class="series-episode-row${episode.onDisc ? "" : " is-missing"}">
             <span class="series-episode-number">${escapeHtml(String(episode.episodeNumber))}</span>
+            ${thumb}
             <div class="series-episode-text">
               <strong>${escapeHtml(episode.title || tNext("common.untitled", "Untitled"))}</strong>
               <span>${escapeHtml(parts.join(" / "))}</span>
+              ${episode.overview ? `<p class="series-episode-overview">${escapeHtml(episode.overview)}</p>` : ""}
             </div>
-            <button type="button" class="secondary-button${watched ? " active" : ""}"
-                    data-episode-watched="${escapeHtml(episode.id)}"
-                    data-watched="${watched ? "1" : "0"}"
-                    aria-pressed="${watched ? "true" : "false"}">${escapeHtml(
-                      watched ? tNext("seriesDetail.episodeWatched", "Watched") : tNext("seriesDetail.markEpisodeWatched", "Mark watched")
-                    )}</button>
+            ${actions}
           </div>`;
       }).join("");
+      if (!canManage || !seasonId) return rows;
+      // Season-wide buttons state what they will do to the episodes rather than
+      // claiming the season is a thing that can be watched: that is what the
+      // server does, and a button that reads otherwise would be the only place
+      // the two disagree.
+      const allWatched = episodes.every((episode) => episode.watchedAt);
+      const allListed = episodes.every((episode) => episode.onWatchlist);
+      const bulk = `
+        <div class="series-season-bulk">
+          <p class="import-source-meta">${escapeHtml(tNext("seriesDetail.seasonBulkHint", "Applies to every episode listed here."))}</p>
+          <button type="button" class="secondary-button" data-season-watched="${escapeHtml(seasonId)}" data-watched="${allWatched ? "1" : "0"}">${escapeHtml(
+            allWatched ? tNext("seriesDetail.clearSeasonWatched", "Clear season watched") : tNext("seriesDetail.markSeasonWatched", "Mark season watched")
+          )}</button>
+          <button type="button" class="secondary-button" data-season-watchlist="${escapeHtml(seasonId)}" data-listed="${allListed ? "1" : "0"}">${escapeHtml(
+            allListed ? tNext("seriesDetail.removeSeasonFromWatchlist", "Remove season from Watchlist") : tNext("seriesDetail.addSeasonToWatchlist", "Add season to Watchlist")
+          )}</button>
+        </div>`;
+      return bulk + rows;
     }
     async function toggleSeasonEpisodes(seasonId) {
       const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);
@@ -32133,31 +32267,74 @@ def ui_preview_html(
             return;
           }
         }
-        node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+        node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || [], seasonId);
       } catch (error) {
         node.innerHTML = `<div class="preview-empty bad">${escapeHtml(error.message || String(error))}</div>`;
       }
     }
-    async function toggleEpisodeWatched(button) {
-      const episodeId = button.dataset.episodeWatched;
-      const watched = button.dataset.watched === "1";
-      if (!episodeId || !hasPermission("watchlist.manage")) return;
-      const node = button.closest("[data-season-episode-list]")
-        || button.parentElement?.closest("[data-season-episode-list]");
+    // One writer for every episode and season button. They differ only in the
+    // URL and the method, and the part that is easy to get wrong -- re-render
+    // the list the response carries, into the list the button lives in -- is
+    // then written once rather than six times.
+    async function runSeasonListAction(button, {path, remove, seasonId}) {
+      if (!hasPermission("watchlist.manage")) return;
+      const node = button.closest("[data-season-episode-list]");
       button.disabled = true;
       try {
         const payload = await authApiJson(
-          `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watched`,
-          watched
+          path,
+          remove
             ? {method: "DELETE"}
             : {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({})}
         );
-        if (node) node.innerHTML = seriesEpisodeRowsHtml(payload.episodes || []);
+        if (node) {
+          node.innerHTML = seriesEpisodeRowsHtml(
+            payload.episodes || [],
+            seasonId || node.dataset.seasonEpisodeList || ""
+          );
+        }
+        // The Lists page holds a cached copy; marking it stale is what stops it
+        // from showing yesterday's answer after a change made here.
+        if (typeof listsState === "object" && listsState) listsState.loaded = false;
       } catch (error) {
         setSeriesDetailMessage(error.message || String(error), "bad");
       } finally {
         button.disabled = false;
       }
+    }
+    async function toggleEpisodeWatched(button) {
+      const episodeId = button.dataset.episodeWatched;
+      if (!episodeId) return;
+      await runSeasonListAction(button, {
+        path: `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watched`,
+        remove: button.dataset.watched === "1",
+      });
+    }
+    async function toggleEpisodeWatchlist(button) {
+      const episodeId = button.dataset.episodeWatchlist;
+      if (!episodeId) return;
+      await runSeasonListAction(button, {
+        path: `/api/next/series/episodes/${encodeURIComponent(episodeId)}/watchlist`,
+        remove: button.dataset.listed === "1",
+      });
+    }
+    async function toggleSeasonWatched(button) {
+      const seasonId = button.dataset.seasonWatched;
+      if (!seasonId) return;
+      await runSeasonListAction(button, {
+        path: `/api/next/series/seasons/${encodeURIComponent(seasonId)}/watched`,
+        remove: button.dataset.watched === "1",
+        seasonId,
+      });
+    }
+    async function toggleSeasonWatchlist(button) {
+      const seasonId = button.dataset.seasonWatchlist;
+      if (!seasonId) return;
+      await runSeasonListAction(button, {
+        path: `/api/next/series/seasons/${encodeURIComponent(seasonId)}/watchlist`,
+        remove: button.dataset.listed === "1",
+        seasonId,
+      });
     }
     function renderSeriesDetail(detail) {
       activeSeriesPayload = detail || {};
@@ -37895,11 +38072,47 @@ def ui_preview_html(
       }
     }
     function personalListMovieId(entry) {
+      // An episode entry opens the disc that carries it. Resolved server-side
+      // (an explicit episode-to-disc link first, otherwise a disc covering the
+      // season) and returned here so every renderer's click target, disabled
+      // state and keyboard handling keep working without knowing what an
+      // episode is. `entry.id` is the episode's own id and must not win: it
+      // would send the click to a movie page that does not exist.
+      if (entry?.kind === "episode") {
+        const disc = entry.disc_movie_id || "";
+        return disc && disc !== "null" ? disc : "";
+      }
       const value = entry?.id || entry?.movie_id || entry?.list_movie_id || entry?.snapshot?.movie_id || "";
       return value && value !== "null" ? value : "";
     }
     function personalListMovieExists(entry) {
       return entry?.movie_exists !== false && !!personalListMovieId(entry);
+    }
+    // "Game of Thrones / S01E01", or as much of it as survived the episode being
+    // deleted. Without this an episode entry is a bare title with nothing saying
+    // which show or which season it belongs to.
+    function personalListEpisodeLabel(entry) {
+      if (entry?.kind !== "episode") return "";
+      const snapshot = entry.snapshot || {};
+      const season = entry.season_number ?? snapshot.season_number;
+      const number = entry.episode_number ?? snapshot.episode_number;
+      const pad = (value) => String(value).padStart(2, "0");
+      const code = season === null || season === undefined || number === null || number === undefined
+        ? ""
+        : `S${pad(season)}E${pad(number)}`;
+      const series = entry.series_title || snapshot.series_title || "";
+      const parts = [series, code].filter(Boolean);
+      if (!personalListMovieExists(entry)) {
+        // Stated rather than left to the greyed-out styling: "this is not on any
+        // disc you own" is the reason it cannot be opened, and the disabled
+        // state alone reads as a bug.
+        parts.push(tNext("seriesDetail.episodeNotOnDisc", "Not on a disc"));
+      }
+      return parts.join(" / ");
+    }
+    function personalListEpisodeLabelHtml(entry) {
+      const label = personalListEpisodeLabel(entry);
+      return label ? `<span class="personal-list-episode-label">${escapeHtml(label)}</span>` : "";
     }
     function personalListFormatValue(entry) {
       const snapshot = entry?.snapshot || {};
@@ -37923,7 +38136,7 @@ def ui_preview_html(
         <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
           <span class="preview-poster-art">${posterHtml}${personalListVersionBadgesHtml(movie)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
-          <span class="preview-poster-meta">${escapeHtml(meta)}${unavailableMovieLabelHtml(movie)}</span>
+          <span class="preview-poster-meta">${escapeHtml(meta)}${personalListEpisodeLabelHtml(movie)}${unavailableMovieLabelHtml(movie)}</span>
           ${debugIdHtml(movieId, "Movie ID")}
         </button>
       `;
@@ -37964,7 +38177,7 @@ def ui_preview_html(
         <button type="button" class="preview-poster" data-list-movie="${escapeHtml(movieId)}" ${exists ? "" : "disabled"}>
           <span class="preview-poster-art">${posterHtml}${personalListVersionBadgesHtml(entry)}</span>
           <span class="preview-poster-title">${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</span>
-          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${watchlistStatusIconHtml(entry)}${unavailableMovieLabelHtml(entry)}</span>
+          <span class="preview-poster-meta watched-poster-meta">${escapeHtml(watchedDateValue(entry))}${personalListEpisodeLabelHtml(entry)}${watchlistStatusIconHtml(entry)}${unavailableMovieLabelHtml(entry)}</span>
           ${debugIdHtml(movieId, "Movie ID")}
         </button>
       `;
@@ -37979,6 +38192,7 @@ def ui_preview_html(
           <span class="mode-list-body">
             <span class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            ${personalListEpisodeLabelHtml(entry)}
             <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchedDate", "Watched Date"))}</span><span class="watched-date-value">${escapeHtml(watchedDateValue(entry))}</span></span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span>${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span></span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("lists.watchlist", "Watchlist"))}</span>${watchlistStatusIconHtml(entry)}</span>
@@ -37997,6 +38211,7 @@ def ui_preview_html(
           <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
+            ${personalListEpisodeLabelHtml(entry)}
             <span class="mode-list-meta">${[entry.year, formatAppDate(entry.watchlist_added_at)].filter(Boolean).map(escapeHtml).join(" / ")}</span>
             <span class="mode-list-line"><span>${escapeHtml(tNext("movieDetail.format", "Format"))}</span><span>${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span></span>
             ${unavailableMovieLabelHtml(entry)}
@@ -38019,7 +38234,7 @@ def ui_preview_html(
             const exists = personalListMovieExists(entry);
             return `
               <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${personalListEpisodeLabelHtml(entry)}${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
                 <span role="cell">${escapeHtml(watchedDateValue(entry))}</span>
                 <span role="cell">${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span>
                 <span role="cell">${watchlistStatusIconHtml(entry)}</span>
@@ -38042,7 +38257,7 @@ def ui_preview_html(
             const exists = personalListMovieExists(entry);
             return `
               <div class="watched-detail-row" role="row" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
+                <span role="cell"><strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>${personalListEpisodeLabelHtml(entry)}${unavailableMovieLabelHtml(entry)}${debugIdHtml(movieId, "Movie ID")}</span>
                 <span role="cell">${personalListVersionBadgesHtml(entry) || escapeHtml(physicalFormatLabel(personalListFormatValue(entry)))}</span>
                 <span role="cell">${escapeHtml(formatAppDate(entry.watchlist_added_at))}</span>
               </div>
@@ -38810,7 +39025,12 @@ def ui_preview_html(
     }
     function updateListsCounts(counts = listsState.counts || {}) {
       const watchlistCount = counts.watchlist ?? (listsState.watchlist || []).length;
-      const watchedCount = counts.watchedMovies ?? counts.watchHistory ?? (listsState.watched || []).length;
+      // Films and episodes are counted apart on the wire because each number is
+      // then honest on its own; the pill labels the list, which holds both, so
+      // it adds them. The `??` chain stays for a server that predates the split.
+      const watchedCount = counts.watchedMovies === undefined && counts.watchedEpisodes === undefined
+        ? (counts.watchHistory ?? (listsState.watched || []).length)
+        : (counts.watchedMovies || 0) + (counts.watchedEpisodes || 0);
       const wishlistCount = counts.wishlist ?? (listsState.wishlist || []).length;
       const loansCount = counts.activeLoans ?? (listsState.loans || []).filter((loan) => !loan.returned).length;
       const watchNode = document.getElementById("listsWatchlistCount");
@@ -47496,10 +47716,19 @@ def ui_preview_html(
           toggleSeasonEpisodes(seasonToggle.dataset.seasonEpisodes);
           return;
         }
-        const watchedButton = event.target.closest("[data-episode-watched]");
-        if (watchedButton) {
-          event.preventDefault();
-          toggleEpisodeWatched(watchedButton);
+        const handlers = [
+          ["[data-episode-watched]", toggleEpisodeWatched],
+          ["[data-episode-watchlist]", toggleEpisodeWatchlist],
+          ["[data-season-watched]", toggleSeasonWatched],
+          ["[data-season-watchlist]", toggleSeasonWatchlist],
+        ];
+        for (const [selector, handler] of handlers) {
+          const button = event.target.closest(selector);
+          if (button) {
+            event.preventDefault();
+            handler(button);
+            return;
+          }
         }
       });
       document.getElementById("seriesIdentityCandidates")?.addEventListener("click", (event) => {

@@ -1540,8 +1540,8 @@
   "lists.watchedAgain": "Vizionat din nou",
   "lists.watchedDate": "Data vizionării",
   "lists.watchedDateUnknown": "Dată necunoscută",
-  "lists.watchedEntries": "filme vizionate",
-  "lists.watchedEntry": "film vizionat",
+  "lists.watchedEntries": "vizionate",
+  "lists.watchedEntry": "vizionate",
   "lists.watchedToday": "Vizionat astăzi",
   "lists.watchedYesterday": "Vizionat ieri",
   "lists.watchlist": "Listă de vizionare",
@@ -2983,5 +2983,12 @@
   "contribute.field.audioTracks": "Piste audio",
   "contribute.field.subtitles": "Subtitrări",
   "contribute.field.alternateTitles": "Titluri alternative",
-  "contribute.field.discs": "Discuri"
+  "contribute.field.discs": "Discuri",
+  "seriesDetail.markSeasonWatched": "Marchează sezonul ca vizionat",
+  "seriesDetail.clearSeasonWatched": "Șterge marcajul de vizionare al sezonului",
+  "seriesDetail.addSeasonToWatchlist": "Adaugă sezonul în lista de vizionare",
+  "seriesDetail.removeSeasonFromWatchlist": "Elimină sezonul din lista de vizionare",
+  "seriesDetail.seasonBulkHint": "Se aplică tuturor episoadelor listate aici.",
+  "seriesDetail.episodeImageFromSeason": "Imaginea sezonului",
+  "seriesDetail.episodeImageFromSeries": "Imaginea serialului"
 }
