@@ -721,6 +721,73 @@ class EpisodesOnThePersonalListsTests(EpisodePresentationTests):
         self.assertFalse(rows[0]["movie_exists"], "so the entry is not clickable")
 
 
+class TheHeroBorrowsASeasonPosterTests(unittest.TestCase):
+    """A series with no poster of its own shows the season the reader is on.
+
+    Nothing about a series guarantees it has artwork: a source may name the show
+    and describe every season without publishing a poster for the show itself.
+    The page then said "No poster" while six season posters sat one tab away.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def _function(self, name):
+        start = self.source.index(name)
+        return self.source[start:self.source.index("\n    function ", start + 1)]
+
+    def test_an_uploaded_poster_ends_the_chain_before_it_starts(self):
+        """This is the whole "unless one was uploaded and locked" clause. A
+        series' own poster *is* the chosen one -- `entity_media` with
+        `is_primary`, which is what an upload and the artwork tab both write --
+        so a series that has one never reaches the rest of the chain, and no
+        amount of stepping along the rail changes what it shows."""
+        body = self._function("function seriesHeroPosterUrl(")
+        own = body.index('const own = mediaAssetImage(detail.mediaAssets, "poster");')
+        guard = body.index("if (own) return own;")
+        self.assertLess(own, guard)
+        self.assertLess(guard, body.index("seriesSeasonSelection"))
+
+    def test_the_hero_follows_the_rail_before_it_guesses(self):
+        body = self._function("function seriesHeroPosterUrl(")
+        selected = body.index("usableImage(selected?.posterUrl)")
+        first = body.index("usableImage(firstNumbered?.posterUrl)")
+        disc = body.index('mediaAssetImage(detail.aggregateMediaAssets, "poster")')
+        self.assertLess(selected, first)
+        self.assertLess(first, disc)
+
+    def test_specials_are_skipped_while_guessing_but_not_when_chosen(self):
+        """Season 0 sorts first and is the least recognisable face a show has, so
+        it must not become the default. A reader who selects it has said which
+        season they mean, and overriding that would be the hero disagreeing with
+        the rail beside it."""
+        body = self._function("function seriesHeroPosterUrl(")
+        self.assertIn('Number.parseInt(season.seasonNumber, 10) > 0', body)
+        selected_line = body[body.index("const selected ="):body.index("const firstNumbered")]
+        self.assertNotIn("seasonNumber", selected_line, "a chosen season is taken as chosen")
+
+    def test_the_hero_is_painted_after_the_rail_settles_the_selection(self):
+        """`seriesSeasonRowsHtml` is what chooses a season on a first render.
+        Painting the hero before it would show one season's poster and replace it
+        with another's in the same pass."""
+        body = self._function("function renderSeriesSeasons(")
+        rail = body.index("node.innerHTML = seriesSeasonRowsHtml(detail);")
+        hero = body.index("renderSeriesHeroPoster(detail);")
+        self.assertLess(rail, hero)
+        detail = self._function("function renderSeriesDetail(")
+        self.assertNotIn("renderSeriesHeroPoster(", detail)
+        self.assertIn("renderSeriesSeasons(detail);", detail)
+
+    def test_stepping_the_rail_repaints_the_hero(self):
+        """Selecting a season re-renders through the same function, so the hero
+        cannot drift out of step with the stage under it."""
+        body = self._function("function selectSeriesSeason(")
+        self.assertIn("renderSeriesSeasons(activeSeriesPayload || {});", body)
+
+
 class TheSeasonsTabIsABrowserTests(unittest.TestCase):
     """The Seasons tab shows one season at a time.
 

@@ -132,6 +132,53 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             "a chosen series poster must outrank a borrowed disc poster",
         )
 
+    def test_a_season_s_poster_sits_between_the_series_own_and_a_disc_s(self):
+        """Three stand-ins, in order of how much they are a picture of the show.
+
+        A season poster is artwork *of the show*, published as such. A disc cover
+        is a photograph of a package, with a studio's slipcase text and a format
+        badge on it. Both are borrowed for a series nobody has given artwork to,
+        but only one is a picture of the thing the tile names.
+
+        The disc stays last rather than being dropped: no tile that shows
+        something today may fall back to an empty one.
+        """
+        body = self._function_body("itemPosterUrl")
+        own = body.index("item.series?.posterUrl")
+        season = body.index("item.series?.seasonPosterUrl")
+        borrowed = body.index("movie?.poster_url).find(Boolean)")
+        self.assertLess(own, season)
+        self.assertLess(season, borrowed)
+        # Each step gets its own `usableImage` call rather than sharing one over
+        # a `||` chain: the latter short-circuits on a truthy-but-unusable
+        # earlier value and drops a good later one on the floor. The existing
+        # comment in the function says so; this keeps the new step honouring it.
+        self.assertIn("usableImage(item.series?.posterUrl)", body)
+        self.assertIn("usableImage(item.series?.seasonPosterUrl)", body)
+
+    def test_the_library_payload_carries_the_season_poster_it_may_borrow(self):
+        """The frontend cannot prefer what it is never given, and the tile query
+        deliberately carries no seasons -- so the one poster it may borrow is
+        resolved in SQL beside the series' own."""
+        start = self.app_source.index("def collection_series_preview_entities(")
+        body = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertIn("em.entity_type='series_season'", body)
+        # Lowest season number, not lowest id: a tile has no selection to follow,
+        # and season 1 is the one a reader recognises a show by.
+        self.assertIn("ORDER BY ss.season_number, em.is_primary DESC", body)
+        self.assertIn("AND ss.season_number > 0", body)
+        self.assertIn('"seasonPosterUrl": series_season_poster_url(row)', body)
+
+    def test_the_borrowed_poster_is_a_field_of_its_own(self):
+        """Folding it into `posterUrl` would leave no caller able to tell a
+        poster the series owns from one it is standing in with -- and the series
+        page needs that difference, because only a series without its own follows
+        the season rail."""
+        start = self.app_source.index("def series_season_poster_url(")
+        body = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertIn('if not row.get("season_poster_id"):', body)
+        self.assertIn("return None", body)
+
     def test_the_library_payload_carries_the_series_own_poster(self):
         """The frontend cannot prefer what it is never given. Artwork lives in
         `entity_media` under `entity_type='series'`, which is the one store both
