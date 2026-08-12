@@ -9,6 +9,7 @@ migration 063.
 """
 
 import hashlib
+import json
 import os
 import sys
 import unittest
@@ -604,6 +605,119 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
             row = self._listed(conn, series_id)
 
         self.assertIsNone(row["seasonPosterUrl"])
+
+
+    # --- a disc borrows the season it carries --------------------------------
+
+    def _movie_poster(self, conn, movie_id, url="https://img.example/own-disc.jpg"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s WHERE id = %s",
+                (json.dumps({"poster_url": url}), movie_id),
+            )
+        conn.commit()
+
+    def _lock_poster(self, conn, movie_id):
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s WHERE id = %s",
+                (json.dumps({"poster_locked": True}), movie_id),
+            )
+        conn.commit()
+
+    def _borrowed(self, conn, movie_id, poster_url=None):
+        row = {"id": movie_id, "poster_url": poster_url}
+        next_app.attach_borrowed_season_posters(conn, [row])
+        return row.get("season_poster_url")
+
+    def test_a_disc_with_no_cover_shows_the_season_it_carries(self):
+        """The case that was reported: a disc covering exactly one season had no
+        cover of its own and showed nothing, while the season's poster was on
+        file and is a picture of what is inside the box."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 2)
+            wanted = self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id, title="Season 2")
+            self._cover(conn, movie_id, series_id, season)
+
+            self.assertIn(str(wanted), self._borrowed(conn, movie_id))
+
+    def test_a_set_of_several_seasons_uses_the_lowest_numbered(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            third = self._season(conn, series_id, 3)
+            first = self._season(conn, series_id, 1)
+            self._season_poster(conn, third)
+            wanted = self._season_poster(conn, first)
+            movie_id = self._disc(conn, series_id=series_id, title="Seasons 1-3")
+            self._cover(conn, movie_id, series_id, third)
+            self._cover(conn, movie_id, series_id, first)
+
+            self.assertIn(str(wanted), self._borrowed(conn, movie_id))
+
+    def test_a_disc_that_has_its_own_cover_is_left_alone(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season)
+
+            borrowed = self._borrowed(conn, movie_id, poster_url="https://img.example/own.jpg")
+
+        self.assertIsNone(borrowed, "a disc with a cover must not borrow one")
+
+    def test_a_locked_disc_is_left_alone_even_with_no_cover(self):
+        """`poster_locked` is the operator saying "leave this disc's artwork
+        alone". Quietly showing a borrowed image is not leaving it alone."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season)
+            self._lock_poster(conn, movie_id)
+
+            self.assertIsNone(self._borrowed(conn, movie_id))
+
+    def test_specials_count_when_the_disc_names_them(self):
+        """The opposite of the series tile's rule, and deliberately so: a disc
+        that names season 0 as what it carries has been told so by a curator,
+        which is a selection rather than a guess."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            specials = self._season(conn, series_id, 0)
+            wanted = self._season_poster(conn, specials)
+            movie_id = self._disc(conn, series_id=series_id, title="Specials")
+            self._cover(conn, movie_id, series_id, specials)
+
+            self.assertIn(str(wanted), self._borrowed(conn, movie_id))
+
+    def test_a_film_borrows_nothing(self):
+        with self.connect() as conn:
+            movie_id = self._disc(conn, title="Heat")
+
+            self.assertIsNone(self._borrowed(conn, movie_id))
+
+    def test_the_detail_payload_carries_each_covered_season_s_poster(self):
+        """The detail page prefers the season over the series, so it needs both
+        -- and `movie_entity` must not be where they come from, because its rows
+        are stored verbatim as sync delta payloads."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            second = self._season(conn, series_id, 2)
+            wanted = self._season_poster(conn, second)
+            movie_id = self._disc(conn, series_id=series_id, title="Season 2")
+            self._cover(conn, movie_id, series_id, second)
+
+            payload = next_app.movie_series_payload(conn, movie_id)
+            entity = next_app.movie_entity(conn, movie_id)
+
+        self.assertEqual(len(payload["seasons"]), 1)
+        self.assertIn(str(wanted), payload["seasons"][0]["posterUrl"])
+        for season in entity.get("seasons") or []:
+            self.assertNotIn("posterUrl", season, "a borrowed image must not reach the sync payload")
 
 
 if __name__ == "__main__":  # pragma: no cover

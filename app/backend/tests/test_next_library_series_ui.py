@@ -195,6 +195,51 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         self.assertIn("ORDER BY em.is_primary DESC, em.sort_order, ma.created_at", body)
         self.assertIn('"posterUrl": series_poster_url(row)', body)
 
+    def test_a_disc_of_a_show_borrows_the_season_it_carries(self):
+        """The reported case. A disc covering one season had no cover of its own
+        and showed nothing, while the season's poster was on file.
+
+        Nothing is ranked here: the backend fills `season_poster_url` only for a
+        disc that has no poster anywhere and no artwork lock, so by the time the
+        tile sees it every decision has already been made."""
+        body = self._function_body("itemPosterUrl")
+        own = body.index("item?.movie?.poster_url")
+        borrowed = body.index("item?.movie?.season_poster_url")
+        self.assertLess(own, borrowed)
+
+    def test_the_borrowed_disc_poster_is_never_written(self):
+        """It is resolved per read and lives only on the payload. `movie_entity`
+        rows are stored verbatim as sync delta payloads, so a borrowed image
+        materialised onto one would reach a client as the disc's own artwork."""
+        # In the one helper both Library entry points share. Wiring it into the
+        # preview query alone would reach the first-paint snapshot and not the
+        # paged hydration behind it -- the exact split that helper exists to
+        # close, and one that has already shipped as a bug once.
+        start = self.app_source.index("def attach_library_movie_enrichments(")
+        shared = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertIn("attach_borrowed_season_posters(conn, movies)", shared)
+        start = self.app_source.index("def attach_borrowed_season_posters(")
+        body = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertNotIn("UPDATE", body.upper().replace("UPDATED_AT", ""))
+        self.assertIn('movie["season_poster_url"] = url', body)
+        # Only a disc with nothing of its own, and never over a lock.
+        self.assertIn('not clean_text(movie.get("poster_url"))', body)
+        self.assertIn("m.metadata->>'poster_locked'", body)
+        # Lowest season number first, matching the order `movie_series_payload`
+        # already presents the covered seasons in.
+        self.assertIn("ORDER BY ms.movie_id, ss.season_number", body)
+
+    def test_the_detail_page_prefers_the_season_over_the_show(self):
+        """A box of season 2 is a box of season 2 -- the season poster says
+        exactly that, the series poster says something true but broader. An empty
+        `seasons` on a linked disc is the complete-series set, which is the one
+        case where the broader answer is the right one."""
+        body = self._function_body("borrowedSeriesPosterUrl")
+        season = body.index("season?.posterUrl")
+        series = body.index("series.posterUrl")
+        self.assertLess(season, series)
+        self.assertIn("poster_locked", body)
+
     def test_the_merge_switch_off_still_returns_a_flat_movie_list(self):
         body = self._function_body("libraryDisplayItems")
         early_return = body.index("if (!mergeEditionsAsTitleEnabled())")
