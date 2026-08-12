@@ -1172,6 +1172,37 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     return plan
 
 
+# The two entrypoints that answer "a person typed this title and will choose".
+# Everything else a source can do is enrichment, and enrichment belongs to the
+# movie that was picked rather than to the picking.
+PREVIEW_TITLE_SEARCH_ENTRYPOINTS = ("search_title", "search_series")
+
+
+def preview_title_search_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
+    """What a supporting source may contribute to a title search, and no more.
+
+    A preview is not a refresh. The sources outside the identity set are not run
+    in full here -- a preview would then pay for technical specs, prices and
+    box-set detection on a query that has not identified anything yet -- but
+    that exclusion was doing more than it meant to: it also withheld the one
+    question they *can* answer before anything is identified, which is which
+    titles the typed text might mean.
+
+    Filtered from `plugin_execution_plan` rather than assembled here, so a
+    source's capabilities decide this in exactly one place. A barcode-only
+    preview plans no search step and the source is skipped altogether: reaching
+    a source with a barcode it never claimed to read is how a preview grows a
+    call that can only fail.
+    """
+    if not clean_text(query.get("title")):
+        return []
+    return [
+        planned
+        for planned in plugin_execution_plan(plugin, query)
+        if planned["entrypoint"] in PREVIEW_TITLE_SEARCH_ENTRYPOINTS
+    ]
+
+
 def movievault_identification_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
     """Plan only MovieVault identity and box-set calls, never enrichment calls."""
     capabilities = set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
@@ -3930,17 +3961,19 @@ def run_metadata_source_pipeline(
             enable_metadata_lookup_bridge=False,
         )
 
-    initial_plugins = identity_plugins if query.get("previewMode") else [*identity_plugins, *supporting_plugins]
-    for plugin in initial_plugins:
-        config = plugin_config_from_db(conn, plugin["id"])
-        context = plugin_execution_context(conn, plugin, config, actor)
-        if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
-            context["metadataLookup"] = metadata_lookup_bridge
-        plan = (
-            movievault_identification_plan(plugin, query)
-            if is_movievault_identity_source(str(plugin.get("id") or ""))
-            else plugin_execution_plan(plugin, query)
-        )
+    def run_source_plan(
+        plugin: dict[str, Any],
+        plan: list[dict[str, Any]],
+        config: dict[str, Any],
+        context: dict[str, Any],
+    ) -> None:
+        """Run one source's planned steps and record what each one answered.
+
+        Shared by the two passes below rather than written twice. The second
+        pass exists only because a title search has to reach sources the first
+        one deliberately skips; how a step is run, recorded and normalised is
+        the same act in both, and a copy is where the two would drift.
+        """
         for planned in plan:
             entrypoint = planned["entrypoint"]
             if plugin_requires_config(plugin, config, entrypoint):
@@ -4011,6 +4044,19 @@ def run_metadata_source_pipeline(
             if normalized.get("status") in {"miss", "not_found", "needs_configuration"}:
                 continue
             normalized_results.append(normalized)
+
+    initial_plugins = identity_plugins if query.get("previewMode") else [*identity_plugins, *supporting_plugins]
+    for plugin in initial_plugins:
+        config = plugin_config_from_db(conn, plugin["id"])
+        context = plugin_execution_context(conn, plugin, config, actor)
+        if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
+            context["metadataLookup"] = metadata_lookup_bridge
+        plan = (
+            movievault_identification_plan(plugin, query)
+            if is_movievault_identity_source(str(plugin.get("id") or ""))
+            else plugin_execution_plan(plugin, query)
+        )
+        run_source_plan(plugin, plan, config, context)
 
     enrichment_payload = preview_enrichment_payload_from_results(query, normalized_results)
     has_box_set_preview = any(
@@ -4168,6 +4214,32 @@ def run_metadata_source_pipeline(
                             tmdb_enrichment["state"] = "no_match"
                     else:
                         tmdb_enrichment["state"] = execution_item.get("state") or "error"
+
+    # Every other source that can answer a typed title. Without this the Add
+    # screen's search was TMDB and nothing else: the preview pass above runs only
+    # the identity sources, the block above it is TMDB by name, and a source
+    # outside both -- TheTVDB, which is the only place a great many series are
+    # described at all -- was never asked, however high the user had ranked it.
+    #
+    # Which sources those are is decided by declared capability, not by id. The
+    # hard-coded `tmdb` that used to sit in the series path is exactly the shape
+    # this avoids: a source is included because it says it can search a title or
+    # a series namespace, so installing one is enough and no future source is a
+    # code change here.
+    #
+    # Run last on purpose. The enrichment payload above is derived from what the
+    # identity sources answered, and appending to `normalized_results` before it
+    # is computed would let a search result -- a guess a person has not chosen
+    # yet -- decide what TMDB is asked about. Ordering candidates after TMDB's
+    # also keeps the pre-selected first candidate what it has always been.
+    if query.get("previewMode"):
+        for plugin in supporting_plugins:
+            plan = preview_title_search_plan(plugin, query)
+            if not plan:
+                continue
+            config = plugin_config_from_db(conn, plugin["id"])
+            context = plugin_execution_context(conn, plugin, config, actor)
+            run_source_plan(plugin, plan, config, context)
 
     preview_enrichment = {
         "enabled": bool(tmdb_enrichment.get("enabled")),
@@ -5090,13 +5162,17 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         if media_type != MEDIA_TYPE_SHOW:
             return None
         existing_series = series_id_for_identifier(
-            cur, provider_id=payload["provider_id"], identifier=payload["identifier"]
+            cur,
+            provider_id=payload["provider_id"],
+            identifier=payload["identifier"],
+            identifier_type=payload["identifier_type"],
         )
         series_uuid = ensure_series(
             cur,
             provider_id=payload["provider_id"],
             identifier=payload["identifier"],
             title=payload["title"],
+            identifier_type=payload["identifier_type"],
         )
         if current_series is not None and current_series != series_uuid:
             return None

@@ -192,6 +192,19 @@ def search_series(payload, context=None):
     A candidate carries `identifierType` alongside its value, because which
     namespace an id belongs to is knowledge this source has and the caller would
     otherwise have to reconstruct.
+
+    The same answer serves two callers, which is why it says more than an
+    identity picker needs. The picker on a series page only stores the
+    identifier; the Add screen creates a disc from the pick, and a candidate
+    that does not say `mediaType` arrives there as a film with no series behind
+    it -- the un-enrichable dead end the picker exists to escape. `series` is
+    the block `provider_series_payload` already accepts, so the series row and
+    its `tvdb` identifier are written by code that exists rather than by a
+    second linking path.
+
+    `seasons` is deliberately empty. TheTVDB knows every season the show has and
+    none of them is a statement about what is in *this* box; which seasons a
+    disc carries is the owner's to say.
     """
     title = str((payload or {}).get("title") or "").strip()
     if not title:
@@ -213,16 +226,25 @@ def search_series(payload, context=None):
         identifier = str(result.get("tvdb_id") or "").strip()
         if not identifier:
             continue
+        title_value = str(result.get("name") or "")
         items.append(
             {
                 "provider": "tvdb",
                 "providerLabel": "TheTVDB",
                 "identifierType": "tvdb",
                 "identifier": identifier,
-                "title": str(result.get("name") or ""),
+                "title": title_value,
                 "year": str(result.get("year") or "")[:4],
                 "overview": str(result.get("overview") or ""),
                 "posterUrl": str(result.get("image_url") or ""),
+                "mediaType": "SHOW",
+                "series": {
+                    "providerId": "tvdb",
+                    "identifier": identifier,
+                    "identifierType": "tvdb",
+                    "title": title_value,
+                    "seasons": [],
+                },
             }
         )
     return {"status": "hit" if items else "miss", "provider": "tvdb", "items": items[:8]}

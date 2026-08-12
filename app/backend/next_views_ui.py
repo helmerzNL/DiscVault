@@ -36246,7 +36246,28 @@ def ui_preview_html(
       // was not.
       const series = candidate.series && typeof candidate.series === "object" ? candidate.series : null;
       const mediaType = String(candidate.mediaType || candidate.media_type || movieUpdates.media_type || (series ? "SHOW" : "")).trim().toUpperCase();
-      const seriesRef = String(series?.tmdbTvId || series?.tmdb_tv_id || (String(candidate.identifierType || "") === "tmdb_tv" ? candidate.identifier : "") || "").trim();
+      // The namespace travels with the id, because the id alone is not identity:
+      // TheTVDB's 305288 and TMDB's 305288 are different shows, and a key built
+      // from the number alone would collapse them onto one card. An id stated
+      // without a namespace still reads as `tmdb_tv` -- that is what a bare
+      // `tmdbTvId` has always meant, and what the MovieVault feed sends.
+      const candidateIdentifierType = String(candidate.identifierType || candidate.identifier_type || "").trim().toLowerCase();
+      const seriesRefType = String(
+        series?.identifierType
+        || series?.identifier_type
+        || (series?.tmdbTvId || series?.tmdb_tv_id ? "tmdb_tv" : "")
+        // A loose identifier is only a series reference when the candidate says
+        // it is one; `tmdb_tv` names the television namespace by itself.
+        || ((mediaType === "SHOW" || candidateIdentifierType === "tmdb_tv") ? candidateIdentifierType : "")
+      ).trim().toLowerCase();
+      const seriesRef = String(
+        series?.tmdbTvId
+        || series?.tmdb_tv_id
+        || series?.identifier
+        || (seriesRefType ? candidate.identifier : "")
+        || ""
+      ).trim();
+      const seriesKey = seriesRef ? `${seriesRefType || "tmdb_tv"}:${seriesRef}` : "";
       const keyParts = [
         provider,
         title.toLowerCase(),
@@ -36257,7 +36278,7 @@ def ui_preview_html(
         // A film and a series of the same name and year carry no `tmdb` id in
         // common -- the series id lives in the television namespace -- so
         // without this their keys collide and picking one selects the other.
-        seriesRef ? `tmdbtv:${seriesRef}` : "",
+        seriesKey,
         sourceRef,
         posterUrl,
         resultIndex,
@@ -36267,6 +36288,7 @@ def ui_preview_html(
         candidateKey: keyParts.join("|"),
         mediaType,
         series,
+        seriesKey,
         provider,
         pluginId: provider,
         sourceLabel,
@@ -36304,7 +36326,7 @@ def ui_preview_html(
             normalized.format.toLowerCase(),
             normalized.identifiers.tmdb,
             normalized.identifiers.imdb,
-            normalized.series?.tmdbTvId || "",
+            normalized.seriesKey,
             normalized.sourceRef,
             normalized.posterUrl
           ].join("|");
