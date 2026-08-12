@@ -622,7 +622,7 @@ def process_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[st
     if not isinstance(actor, dict):
         actor = {}
     with connect() as conn:
-        result = refresh_movie_metadata(conn, movie_id, dry_run=dry_run, actor=actor)
+        result = refresh_movie_metadata(conn, movie_id, dry_run=dry_run, actor=actor, force=force)
         if refresh_people:
             try:
                 from .next_app import refresh_movie_person_metadata_cascade

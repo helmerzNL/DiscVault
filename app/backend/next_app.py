@@ -34878,7 +34878,9 @@ def register_routes(flask_app: Flask) -> None:
             # applied proposal (movie rows + global sync_state lock) before the
             # receiver-plugin push and the person cascade run their network
             # I/O. The trailing audit/notification commits on context exit.
-            result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
+            result = refresh_movie_metadata(
+                conn, movie_uuid, dry_run=dry_run, actor=actor, force=force
+            )
             result["personRefresh"] = (
                 refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope, force=force)
                 if refresh_people
