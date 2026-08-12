@@ -71,6 +71,17 @@ jobs:
       - name: Test runtime secret configuration
         run: python -m unittest tests.test_next_runtime_secrets
 
+      # Listed by hand like every module above it. The throttles these cover sit
+      # on endpoints that had none, so a silent drop here restores the gap
+      # without anything failing to say so.
+      - name: Test authentication throttling
+        run: >-
+          python -m unittest
+          tests.test_next_auth_throttle
+          tests.test_next_legacy_auth
+          tests.test_next_mobile_auth
+          tests.test_next_review_login
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 
