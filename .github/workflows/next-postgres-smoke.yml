@@ -101,6 +101,17 @@ jobs:
           tests.test_next_api_token
           tests.test_next_api_tokens
 
+      # A token's scope is only a limit if both halves have to agree, and only
+      # honestly a limit if the gates that consult no permission at all -- role
+      # management, user deletion, the auth toggle, ownership transfer -- refuse
+      # a token too. Losing either half silently restores an "advisory" scope,
+      # which looks identical from the outside to an enforced one.
+      - name: Test that token scopes bind
+        run: >-
+          python -m unittest
+          tests.test_next_token_binding
+          tests.test_next_plugin_authorization
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 

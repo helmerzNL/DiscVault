@@ -1075,6 +1075,7 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
                 t.id AS api_token_id,
                 t.name AS api_token_name,
                 t.scopes AS api_token_scopes,
+                t.client_kind AS api_token_client_kind,
                 t.permission_keys AS api_token_permission_keys
             FROM api_access_tokens t
             JOIN users u ON u.id = t.user_id
@@ -1092,16 +1093,28 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
         # answer "is this one mine?". Always the address the server observed —
         # a client-supplied one would be a claim rather than evidence.
         observed = _observed_request_ip()
+        stored_keys = [str(item) for item in (row["api_token_permission_keys"] or [])]
+        reconciled = _reconciled_native_token_permissions(
+            row.pop("api_token_client_kind"), stored_keys
+        )
         cur.execute(
             """
             UPDATE api_access_tokens
             SET last_used_at=now(),
                 last_seen_ip=COALESCE(NULLIF(%s, ''), last_seen_ip),
-                last_seen_ip_source=COALESCE(NULLIF(%s, ''), last_seen_ip_source)
+                last_seen_ip_source=COALESCE(NULLIF(%s, ''), last_seen_ip_source),
+                permission_keys=COALESCE(%s::jsonb, permission_keys)
             WHERE id=%s
             """,
-            (observed.get("ip"), observed.get("source"), row["api_token_id"]),
+            (
+                observed.get("ip"),
+                observed.get("source"),
+                json.dumps(reconciled) if reconciled is not None else None,
+                row["api_token_id"],
+            ),
         )
+        if reconciled is not None:
+            row["api_token_permission_keys"] = reconciled
     row["apiToken"] = {
         "id": row.pop("api_token_id"),
         "name": row.pop("api_token_name"),
@@ -1109,6 +1122,42 @@ def next_auth_current_api_token_user(conn, token: str) -> dict[str, Any] | None:
         "permissionKeys": row.pop("api_token_permission_keys") or [],
     }
     return row
+
+
+def _reconciled_native_token_permissions(
+    client_kind: Any, stored_keys: list[str]
+) -> list[str] | None:
+    """Bring a native client's stored scope up to what login would issue today.
+
+    A native client has no refresh endpoint (see issue_mobile_api_token): the
+    tuple it was given is fixed until the user signs in again, and it only signs
+    in again once its token stops working. So widening the tuple leaves every
+    already-installed app on the old, narrower one -- and once a token's keys
+    have to agree with the role, "narrower" means routes that worked yesterday
+    answer 403 until someone re-authenticates. Reconciling on use removes that
+    window without asking anyone to log in again.
+
+    Only native rows are touched. A user-created token is a scope its owner
+    chose, and rewriting that would be the opposite of taking it seriously; a
+    native token is not a chosen scope but "this app, on this device", which the
+    server already re-decides at every login. This applies the same decision
+    without waiting for one.
+
+    This cannot escalate: the role is required independently, so a key added
+    here that the holder's role lacks stays inert. Returns None when there is
+    nothing to change, which is the case from the second request onwards.
+    """
+    if str(client_kind or "") not in NATIVE_CLIENT_KINDS:
+        return None
+    if not stored_keys:
+        # An empty list is grandfathered as unscoped rather than reconciled --
+        # rewriting it would narrow a token that currently has full role
+        # authority, which is a revocation, not a repair.
+        return None
+    missing = [key for key in MOBILE_AUTH_TOKEN_PERMISSIONS if key not in stored_keys]
+    if not missing:
+        return None
+    return stored_keys + missing
 
 
 def _parse_uuid(value: Any) -> UUID | None:
@@ -1587,7 +1636,13 @@ def register_next_auth_routes(
                     str(target_id) if target_id is not None else None,
                     summary,
                     Jsonb(_json_ready(metadata or {})),
-                    request.headers.get("X-Forwarded-For", request.remote_addr or "").split(",")[0].strip(),
+                    # The address the server resolved, not the one the caller
+                    # claimed. This writer kept its own inline copy of the old
+                    # "first X-Forwarded-For hop" rule and so was missed when
+                    # forwarded headers stopped being believed on their own --
+                    # which left the auth events, the ones that most need a
+                    # truthful address, choosable by the caller.
+                    trusted_client_ip(),
                     request.headers.get("User-Agent"),
                 ),
             )
@@ -2552,6 +2607,56 @@ def register_next_auth_routes(
                 cur.execute("UPDATE users SET updated_at=now() WHERE id=%s", (user_id,))
         return user_admin_row(conn, user_id)
 
+    def deny_api_token_actor(conn, actor: dict[str, Any]) -> None:
+        """Refuse an actor that arrived on a bearer token, whatever its scope.
+
+        The gates below ask "is this an owner or an admin" and stop. That is the
+        right question for a session and the wrong one for a token: a token
+        inherits its holder's role, so these routes -- roles, users, invites,
+        switching authentication off, RBAC mode, ownership transfer, legacy
+        credentials -- stood open to any token belonging to an admin, however
+        narrowly it was scoped. Making the permission gates an intersection does
+        not reach them, because they consult no permission at all.
+
+        Nothing legitimate is lost: no route in the advertised native contract
+        needs an admin role, and administrative permissions are not grantable to
+        a token in the first place.
+        """
+        if not isinstance(actor.get("apiToken"), dict):
+            return
+        token = actor.get("apiToken") or {}
+        message = "API tokens cannot be used for administrative actions"
+        try:
+            audit_event(
+                conn,
+                event_type="security.permission_denied",
+                category="security",
+                actor=actor,
+                target_type="permission",
+                target_id="administrative:session",
+                summary=message,
+                metadata={
+                    "reason": "api_token_barred_from_role_only_gate",
+                    "authMethod": "api_token",
+                    "userRole": actor.get("role"),
+                    "tokenPermissions": sorted(
+                        str(item) for item in (token.get("permissionKeys") or [])
+                    ),
+                    "apiToken": {
+                        "id": str(token.get("id")) if token.get("id") is not None else None,
+                        "name": token.get("name"),
+                        "scopes": token.get("scopes") or [],
+                    },
+                },
+            )
+            # Authorisation runs before the route mutates anything, so this
+            # commits the denial on its own -- the raise below would otherwise
+            # roll it back and leave the refusal unrecorded.
+            conn.commit()
+        except Exception:
+            app.logger.exception("Failed to persist the token permission-denied audit event")
+        raise next_api_error(message, 403)
+
     def require_admin(conn) -> dict[str, Any]:
         if not auth_enabled(conn):
             return {"id": None, "username": "system", "role": "owner"}
@@ -2562,6 +2667,7 @@ def register_next_auth_routes(
         if role not in {"owner", "admin"}:
             raise next_api_error("Admin access required", 403)
         user["role"] = role
+        deny_api_token_actor(conn, user)
         return user
 
     def require_authenticated_admin(conn) -> dict[str, Any]:
@@ -2578,6 +2684,7 @@ def register_next_auth_routes(
         if role != "owner":
             raise next_api_error("Owner access required", 403)
         user["role"] = role
+        deny_api_token_actor(conn, user)
         return user
 
     def ownership_transfer_target(conn, owner: dict[str, Any], target_user_id: UUID) -> dict[str, Any]:
