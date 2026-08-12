@@ -81,6 +81,11 @@ PLUGIN_ENTRYPOINTS = (
     # `test_next_plugin_entrypoint_coverage.py`.
     "series_details",
     "search_series",
+    # The television sibling of `lookup_external_id`. Separate from
+    # `series_details` for the reason that one is separate from `search_series`:
+    # this answers a number a *person* typed, in `items` so the answer can sit
+    # beside the film namespace's in one list to choose from.
+    "lookup_external_series_id",
     "season_episodes",
     "box_set_candidates",
     "people_for_movie",
