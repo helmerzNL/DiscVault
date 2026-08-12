@@ -158,22 +158,55 @@ RECOVERY_CODE_GROUP_LENGTH = 4
 MOBILE_AUTH_FLOW_TTL_SECONDS = 5 * 60
 MOBILE_AUTH_CODE_TTL_SECONDS = 60
 MOBILE_AUTH_ALLOWED_CALLBACK_SCHEMES = {"discvault"}
+# What a review login's token may do.
+#
+# The review flow assigns exactly one role -- `media_viewer` (see review_login),
+# whose grants are collection.view, containers.view, groups.view,
+# watchlist.manage and lending.request. That role exists, in its own migration's
+# words, so an account "can view group media and use personal watchlist or
+# borrowing features"; the token was missing both halves of that second clause,
+# so a reviewer could browse and nothing else. Neither key grants anything the
+# assigned role does not already carry.
+#
+# The metadata.* keys below are not in `media_viewer`. They are left in place
+# because removing them would narrow the token today, and this tuple only ever
+# widens; once a token's keys must also be held by the role, they stop having
+# any effect on their own.
 REVIEW_LOGIN_TOKEN_PERMISSIONS = (
     "api.read",
     "collection.view",
     "containers.view",
     "groups.view",
+    "lending.request",
     "metadata.search",
     "metadata.refresh_one",
     "metadata.refresh_bulk",
+    "watchlist.manage",
 )
+# What a native client's token may do.
+#
+# The guiding rule is that this tuple must cover what the server itself tells
+# its clients to call -- no more. `mobile_endpoint_contract_payload` is that
+# instruction, and three of its groups had no key here at all: locations and
+# their QR codes (containers.view), the two metadata-refresh routes and the job
+# list (metadata.refresh_one), and every loan-request route (lending.request).
+#
+# collection.view is not in the advertised contract; it is here because its
+# absence was incoherent. The tuple already grants collection.add and
+# collection.edit_all, so it described a client permitted to change a movie but
+# not to read one. That went unnoticed while a token's keys were merely added to
+# the role's; it stops being harmless the moment they have to agree.
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
     "metadata.search",
+    "metadata.refresh_one",
+    "collection.view",
     "collection.add",
     "collection.add_own",
     "collection.import",
     "collection.edit_all",
+    "containers.view",
+    "lending.request",
     "watchlist.manage",
 )
 
