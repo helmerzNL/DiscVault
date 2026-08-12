@@ -4949,6 +4949,29 @@ def series_poster_url(row: dict[str, Any]) -> str | None:
     ) or None
 
 
+def series_season_poster_url(row: dict[str, Any]) -> str | None:
+    """Fold the joined `season_poster_*` columns into one URL.
+
+    Kept beside `posterUrl` rather than folded into it, for the same reason §7o
+    gives an episode a `posterSource`: a caller has to be able to tell a poster
+    the series owns from one it is standing in with. The Library tile borrows
+    silently, the series page swaps its hero as the reader steps along the rail,
+    and a single merged field would leave neither able to say which it had.
+
+    `None` rather than `""`, matching `series_poster_url`.
+    """
+    if not row.get("season_poster_id"):
+        return None
+    return media_asset_public_url(
+        {
+            "id": row.get("season_poster_id"),
+            "storage_backend": row.get("season_poster_storage_backend"),
+            "storage_key": row.get("season_poster_storage_key"),
+            "source_url": row.get("season_poster_source_url"),
+        }
+    ) or None
+
+
 def collection_series_preview_entities(
     conn, *, limit: int = 200, actor: dict[str, Any] | None = None
 ) -> list[dict[str, Any]]:
@@ -4964,6 +4987,13 @@ def collection_series_preview_entities(
     The tile also needs the series' own poster, or it can only borrow one from a
     disc filed under it -- a season's cover standing in for the show's, and
     disagreeing with the series page beside it.
+
+    `seasonPosterUrl` is the better thing to borrow when there is no own poster:
+    the lowest-numbered season that has one. A season poster is artwork *of the
+    show*, published as such; a disc cover is a photograph of a package, with a
+    studio's slipcase text and a format badge on it. Both are stand-ins, but only
+    one of them is a picture of the thing the tile names. The disc stays as the
+    last resort, so nothing that shows a picture today loses it.
     """
     if not series_tables_available(conn):
         return []
@@ -4983,7 +5013,11 @@ def collection_series_preview_entities(
                 poster_asset.id AS poster_asset_id,
                 poster_asset.storage_backend AS poster_asset_storage_backend,
                 poster_asset.storage_key AS poster_asset_storage_key,
-                poster_asset.source_url AS poster_asset_source_url
+                poster_asset.source_url AS poster_asset_source_url,
+                season_poster.id AS season_poster_id,
+                season_poster.storage_backend AS season_poster_storage_backend,
+                season_poster.storage_key AS season_poster_storage_key,
+                season_poster.source_url AS season_poster_source_url
             FROM (
                 SELECT
                     s.id,
@@ -5024,6 +5058,28 @@ def collection_series_preview_entities(
                 ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                 LIMIT 1
             ) poster_asset ON true
+            -- The first season that has a poster, for a series that has none of
+            -- its own. "First" is the lowest season number rather than the
+            -- lowest id: a tile has no selection to follow, and season 1 is the
+            -- one a reader recognises a show by. Season 0 is specials and sorts
+            -- ahead of it, so it is excluded rather than allowed to become the
+            -- face of the show; a series that is *only* specials still falls
+            -- through to a disc.
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                FROM series_seasons ss
+                JOIN entity_media em
+                  ON em.entity_type='series_season'
+                 AND em.entity_id=ss.id
+                 AND em.deleted_at IS NULL
+                 AND em.hidden_at IS NULL
+                JOIN media_assets ma ON ma.id = em.media_id AND ma.kind='poster'
+                WHERE ss.series_id = g.id
+                  AND ss.deleted_at IS NULL
+                  AND ss.season_number > 0
+                ORDER BY ss.season_number, em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) season_poster ON true
             ORDER BY lower(COALESCE(g.sort_title, g.title))
             """,
             (*visibility_params, limit),
@@ -5040,6 +5096,7 @@ def collection_series_preview_entities(
             "seasonCount": int(row["season_count"] or 0),
             "discCount": int(row["disc_count"] or 0),
             "posterUrl": series_poster_url(row),
+            "seasonPosterUrl": series_season_poster_url(row),
         }
         for row in rows
     ]

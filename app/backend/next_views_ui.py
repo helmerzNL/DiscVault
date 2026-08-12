@@ -26971,8 +26971,15 @@ def ui_preview_html(
       // `posterUrl` is camelCase because the series payload is hand-built that
       // way; `poster_url` beside it is snake_case because a movie row is a raw
       // database row.
+      // A season's poster sits between the two. It is artwork *of the show*,
+      // published as such; a disc cover is a photograph of a package, carrying a
+      // studio's slipcase text and a format badge. Both are stand-ins for a
+      // series nobody has given artwork to, but only one is a picture of the
+      // thing the tile names. The disc stays last, so no tile that shows
+      // something today falls back to an empty one.
       if (item?.kind === "series") {
         return usableImage(item.series?.posterUrl)
+          || usableImage(item.series?.seasonPosterUrl)
           || usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
       }
       return usableImage(item?.movie?.poster_url);
@@ -32708,15 +32715,57 @@ def ui_preview_html(
           <div class="series-episode-list" data-season-episode-list="${escapeHtml(season.id || "")}"></div>
         </div>`;
     }
+    // What the hero shows, in order: the poster the series owns, then the season
+    // on the rail, then the first real season that has one, then a disc's cover.
+    //
+    // The first step is the whole "unless it was uploaded and locked" clause. A
+    // series' own poster *is* the chosen one -- `entity_media` with
+    // `is_primary`, which is what an upload and the artwork tab both write -- so
+    // a series that has one never reaches the rest of this chain, and no amount
+    // of stepping along the rail changes what it shows.
+    //
+    // A season poster is preferred over a disc cover for the same reason the
+    // Library tile prefers it: it is artwork of the show, while a disc cover is
+    // a photograph of a package. The disc stays last so nothing that has a
+    // picture today loses it.
+    //
+    // Specials are skipped when *guessing* but not when chosen. Season 0 sorts
+    // first and is the least recognisable face a show has, so it must not become
+    // the default; a reader who selects it has said which season they mean, and
+    // overriding that would be the surface disagreeing with the rail.
+    function seriesHeroPosterUrl(detail) {
+      const own = mediaAssetImage(detail.mediaAssets, "poster");
+      if (own) return own;
+      const seasons = seriesSeasonsOf(detail);
+      const selected = seasons.find((season) => String(season.id) === String(seriesSeasonSelection));
+      const firstNumbered = seasons.find((season) =>
+        Number.parseInt(season.seasonNumber, 10) > 0 && usableImage(season.posterUrl));
+      return usableImage(selected?.posterUrl)
+        || usableImage(firstNumbered?.posterUrl)
+        || mediaAssetImage(detail.aggregateMediaAssets, "poster");
+    }
+    function renderSeriesHeroPoster(detail) {
+      const node = document.getElementById("seriesDetailPoster");
+      if (!node) return;
+      const poster = seriesHeroPosterUrl(detail || {});
+      node.innerHTML = poster
+        ? `<img src="${escapeHtml(poster)}" alt="">`
+        : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+    }
     function renderSeriesSeasons(detail) {
       const node = document.getElementById("seriesDetailSeasons");
       if (!node) return;
       node.innerHTML = seriesSeasonRowsHtml(detail);
+      // After the rail, not before: `seriesSeasonRowsHtml` is what settles which
+      // season is selected on a first render, and the hero follows that choice.
+      renderSeriesHeroPoster(detail);
       loadSeasonEpisodes(seriesSeasonSelection);
     }
     function selectSeriesSeason(seasonId, {focusChip = false} = {}) {
       if (!seasonId || String(seasonId) === String(seriesSeasonSelection)) return;
       seriesSeasonSelection = String(seasonId);
+      // Re-renders the rail, the stage and -- for a series with no poster of its
+      // own -- the hero, which follows the selection.
       renderSeriesSeasons(activeSeriesPayload || {});
       const chip = document.querySelector(`[data-season-chip="${seriesSeasonSelection}"]`);
       // The rail scrolls, so a season chosen with the arrow keys or the step
@@ -32985,20 +33034,16 @@ def ui_preview_html(
       activeSeriesId = String(series.id || activeSeriesId || "");
       const activePanelId = activeDetailPanel("seriesDetail", "seriesDetailDiscsPanel");
       const discs = detail.discs || [];
-      const poster = mediaAssetImage(detail.mediaAssets, "poster")
-        || mediaAssetImage(detail.aggregateMediaAssets, "poster");
       const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop")
         || mediaAssetImage(detail.aggregateMediaAssets, "backdrop");
       const hero = document.getElementById("seriesDetailHero");
       if (hero) hero.classList.toggle("is-flat", !backdrop);
       const backdropNode = document.getElementById("seriesDetailBackdrop");
       if (backdropNode) backdropNode.src = backdrop || "";
-      const posterNode = document.getElementById("seriesDetailPoster");
-      if (posterNode) {
-        posterNode.innerHTML = poster
-          ? `<img src="${escapeHtml(poster)}" alt="">`
-          : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-      }
+      // The hero poster is painted by `renderSeriesSeasons` further down rather
+      // than here: which season is selected is settled while the rail renders,
+      // and painting a guess first would show one season's poster and replace it
+      // with another's in the same pass.
       document.getElementById("seriesDetailTitle").textContent = series.title || tNext("common.untitled", "Untitled");
       const years = [series.startYear, series.endYear].filter(Boolean);
       const yearLabel = years.length === 2 && years[0] !== years[1] ? `${years[0]}-${years[1]}` : (years[0] || "");

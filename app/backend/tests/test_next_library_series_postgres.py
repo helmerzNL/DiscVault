@@ -493,5 +493,118 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
         self.assertTrue(any(row["id"] == str(series_id) for row in snapshot["series"]))
 
 
+    # --- borrowing a season's poster ----------------------------------------
+
+    def _season_poster(self, conn, season_id, *, is_primary=True, sort_order=0):
+        """Give a season a poster the way `refresh_series_seasons` does: an asset
+        plus a link under `entity_type='series_season'`."""
+        media_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO media_assets (id, kind, variant, storage_backend, storage_key,
+                                          source_url, provider_id, sha256)
+                VALUES (%s, 'poster', 'display', 'remote', %s, %s, %s, %s)
+                """,
+                (
+                    media_id,
+                    f"remote/{media_id}",
+                    f"https://images.example/{media_id}.jpg",
+                    f"{PREFIX}-{media_id}",
+                    hashlib.sha256(str(media_id).encode()).hexdigest(),
+                ),
+            )
+            cur.execute(
+                """
+                INSERT INTO entity_media (entity_type, entity_id, media_id, role, is_primary, sort_order)
+                VALUES ('series_season', %s, %s, 'poster', %s, %s)
+                """,
+                (season_id, media_id, is_primary, sort_order),
+            )
+        conn.commit()
+        return media_id
+
+    def test_a_series_with_no_poster_offers_its_first_season_s(self):
+        """A season poster is artwork of the show; a disc cover is a photograph
+        of a package. Both stand in, but only one is a picture of the thing the
+        tile names -- so the tile is handed the season's as well as the disc's
+        and can prefer it."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            first = self._season(conn, series_id, 1)
+            second = self._season(conn, series_id, 2)
+            self._season_poster(conn, second)
+            wanted = self._season_poster(conn, first)
+            self._disc(conn, series_id=series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row["posterUrl"], "the series itself still has none")
+        self.assertIn(str(wanted), row["seasonPosterUrl"], "season 1, not season 2")
+
+    def test_the_season_poster_never_outranks_the_series_own(self):
+        """The whole "unless one was uploaded and locked" clause. A series' own
+        poster is the chosen one -- `entity_media` with `is_primary`, which is
+        what an upload and the artwork tab both write -- so a borrowed season
+        poster is offered beside it and never instead of it."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            own = self._poster(conn, series_id)
+            self._disc(conn, series_id=series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIn(str(own), row["posterUrl"])
+        self.assertNotIn(str(own), row["seasonPosterUrl"] or "")
+
+    def test_specials_do_not_become_the_face_of_a_show(self):
+        """Season 0 sorts ahead of season 1 and is the least recognisable face a
+        show has. It is skipped while *guessing*; the series page still shows it
+        when a reader selects it, because that is no longer a guess."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            specials = self._season(conn, series_id, 0)
+            first = self._season(conn, series_id, 1)
+            self._season_poster(conn, specials)
+            wanted = self._season_poster(conn, first)
+            self._disc(conn, series_id=series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIn(str(wanted), row["seasonPosterUrl"])
+
+    def test_a_show_whose_only_artwork_is_specials_falls_through_to_a_disc(self):
+        """Skipping season 0 must leave nothing rather than reach past it, so the
+        disc stays the last resort instead of being quietly overtaken."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            specials = self._season(conn, series_id, 0)
+            self._season_poster(conn, specials)
+            self._disc(conn, series_id=series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row["seasonPosterUrl"])
+
+    def test_a_hidden_or_deleted_season_poster_is_not_borrowed(self):
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            media_id = self._season_poster(conn, season)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE entity_media SET hidden_at = now() WHERE media_id = %s",
+                    (media_id,),
+                )
+            conn.commit()
+            self._disc(conn, series_id=series_id)
+
+            row = self._listed(conn, series_id)
+
+        self.assertIsNone(row["seasonPosterUrl"])
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
