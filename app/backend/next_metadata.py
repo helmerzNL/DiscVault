@@ -1120,6 +1120,22 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     if query.get("previewMode"):
         if tmdb_id or imdb_id:
             add("lookup_external_id", base_payload)
+            # And the television namespace, for the same reason the title branch
+            # below asks it. An id is issued *by* a namespace and a bare number
+            # does not say which: TMDB's 1516 is a film and a television series
+            # that have nothing to do with each other, so asking only the film
+            # namespace tells somebody looking for the series that no such thing
+            # exists. Both answers are offered and the person picks, exactly as
+            # they do with a title.
+            #
+            # Only when the number is the query's own. `resolvedIdentity` marks
+            # an id another source resolved -- a barcode that MovieVault matched
+            # to a film -- and there the namespace is already settled. Asking
+            # the television one with that number would offer an unrelated show
+            # beside the right film, with nobody having asked about television
+            # at all, which is §7b's failure mode wearing a candidate card.
+            if not query.get("resolvedIdentity"):
+                add("lookup_external_series_id", base_payload)
             return plan
         if title:
             # A title search should drive the preview results even when a barcode
@@ -4120,10 +4136,30 @@ def run_metadata_source_pipeline(
                     # searches and hid multi-result matches.
                     tmdb_query = dict(query)
                     tmdb_query["previewMode"] = True
-                    for key in ("title", "fallbackTitle", "year", "tmdbId", "imdbId"):
+                    # An id another source resolved is borrowed, not typed. It is
+                    # what a barcode preview has to go on -- MovieVault names the
+                    # film and TMDB then describes exactly that one -- but on a
+                    # *title* search it silently replaced the question: the plan
+                    # for an id is `lookup_external_id` and nothing else, so both
+                    # the film search and the television search disappeared, and
+                    # "The A-Team" returned the one film MovieVault happened to
+                    # match and no series at all.
+                    #
+                    # The person typed a title; the title is what TMDB is asked.
+                    # A borrowed id may still fill a query that has no title of
+                    # its own, which is the barcode case and the only one it was
+                    # ever meant for.
+                    borrowed = () if clean_text(query.get("title")) else ("tmdbId", "imdbId")
+                    for key in ("title", "fallbackTitle", "year", *borrowed):
                         value = enrichment_payload.get(key)
                         if value and not clean_text(tmdb_query.get(key)):
                             tmdb_query[key] = value
+                            if key in ("tmdbId", "imdbId"):
+                                # Says where the id came from, which decides
+                                # whether the television namespace is asked as
+                                # well: a number somebody typed is ambiguous, a
+                                # number a source resolved is not.
+                                tmdb_query["resolvedIdentity"] = True
                     tmdb_plan = [
                         planned
                         for planned in plugin_execution_plan(tmdb_plugin, tmdb_query)

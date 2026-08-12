@@ -33,6 +33,24 @@ def _request(context, path, **params):
     return response.json()
 
 
+def _request_optional(context, path, **params):
+    """The same request, with "nothing here answers to that" as an answer.
+
+    Every other caller asks about an id TMDB itself supplied, so a 404 there is
+    a fault worth surfacing. The exception is a number a *person* typed: whether
+    it names anything in this namespace is the question, and "no" is an ordinary
+    answer rather than a failure.
+    """
+    import requests
+
+    try:
+        return _request(context, path, **params)
+    except requests.HTTPError as error:
+        if getattr(error.response, "status_code", None) == 404:
+            return None
+        raise
+
+
 def _image(path):
     return f"{IMAGE_BASE}{path}" if path else ""
 
@@ -255,7 +273,14 @@ def _normalize_details(data):
 
 
 def _details(context, tmdb_id):
-    return _request(
+    """The film's own record, or None when nothing here answers to that id.
+
+    Optional rather than raising because a search by id now asks both
+    namespaces: half of those requests are expected to find nothing, and a
+    television id reaching this must read as "not a film" rather than as a
+    failed request.
+    """
+    return _request_optional(
         context,
         f"/movie/{tmdb_id}",
         language=_language(context),
@@ -340,6 +365,57 @@ def search_title(payload, context=None):
     return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
 
 
+def _series_candidate(item):
+    """One television result, in the shape both callers below answer in.
+
+    Written once because the two entrypoints that produce it -- a title search
+    and an id lookup -- differ in the *question*, not in the answer. `/search/tv`
+    and `/tv/{id}` return the same field names, so a second copy of this mapping
+    would be two places to keep in step for no gain.
+    """
+    identifier = item.get("id")
+    if identifier is None:
+        return None
+    return {
+        "provider": "tmdb",
+        "providerLabel": "TMDb",
+        # The namespace travels with the value. A bare id would have to be
+        # matched to a namespace by whoever stores it, which is exactly the
+        # knowledge a source should not be making the caller reconstruct.
+        "identifierType": "tmdb_tv",
+        "identifier": str(identifier),
+        "title": item.get("name") or "",
+        "originalTitle": item.get("original_name") or "",
+        "year": str(item.get("first_air_date") or "")[:4],
+        "overview": item.get("overview") or "",
+        "posterUrl": _image(item.get("poster_path")),
+        # Two fields that only matter when this answer drives the Add screen
+        # rather than the identity picker.
+        #
+        # `mediaType` lands as the disc's `media_type` through the field alias
+        # map, so a television disc added from here is a SHOW rather than a
+        # MOVIE that nothing will ever recognise as television.
+        "mediaType": "SHOW",
+        # And `series` is the shape `provider_series_payload` already accepts --
+        # the same contract the MovieVault feed uses to hang a disc under a
+        # series. Answering in it means the linking, the series row and its
+        # `tmdb_tv` identifier all happen through code that exists, and the
+        # series is enrichable from the moment it is created rather than after
+        # somebody links it by hand.
+        #
+        # `seasons` is deliberately empty: TMDB knows every season the show has
+        # and none of them is a statement about what is on *this* disc. Which
+        # seasons a box carries is the owner's to say, which is what
+        # `test_a_season_the_feed_never_recorded_is_not_created` protects.
+        "series": {
+            "tmdbTvId": str(identifier),
+            "providerId": "tmdb",
+            "title": item.get("name") or "",
+            "seasons": [],
+        },
+    }
+
+
 def search_series(payload, context=None):
     """Candidate series for a title a person typed.
 
@@ -364,52 +440,54 @@ def search_series(payload, context=None):
         first_air_date_year=year,
         language=_language(context),
     )
-    items = []
-    for item in data.get("results") or []:
-        identifier = item.get("id")
-        if identifier is None:
-            continue
-        items.append(
-            {
-                "provider": "tmdb",
-                "providerLabel": "TMDb",
-                # The namespace travels with the value. A bare id would have to be
-                # matched to a namespace by whoever stores it, which is exactly the
-                # knowledge a source should not be making the caller reconstruct.
-                "identifierType": "tmdb_tv",
-                "identifier": str(identifier),
-                "title": item.get("name") or "",
-                "originalTitle": item.get("original_name") or "",
-                "year": str(item.get("first_air_date") or "")[:4],
-                "overview": item.get("overview") or "",
-                "posterUrl": _image(item.get("poster_path")),
-                # Two fields that only matter when this answer drives the Add
-                # screen rather than the identity picker.
-                #
-                # `mediaType` lands as the disc's `media_type` through the field
-                # alias map, so a television disc added from here is a SHOW rather
-                # than a MOVIE that nothing will ever recognise as television.
-                "mediaType": "SHOW",
-                # And `series` is the shape `provider_series_payload` already
-                # accepts -- the same contract the MovieVault feed uses to hang a
-                # disc under a series. Answering in it means the linking, the
-                # series row and its `tmdb_tv` identifier all happen through code
-                # that exists, and the series is enrichable from the moment it is
-                # created rather than after somebody links it by hand.
-                #
-                # `seasons` is deliberately empty: TMDB knows every season the show
-                # has and none of them is a statement about what is on *this* disc.
-                # Which seasons a box carries is the owner's to say, which is what
-                # `test_a_season_the_feed_never_recorded_is_not_created` protects.
-                "series": {
-                    "tmdbTvId": str(identifier),
-                    "providerId": "tmdb",
-                    "title": item.get("name") or "",
-                    "seasons": [],
-                },
-            }
-        )
+    items = [
+        candidate
+        for candidate in (_series_candidate(item) for item in data.get("results") or [])
+        if candidate
+    ]
     return {"status": "hit" if items else "miss", "provider": "tmdb", "items": items[:8]}
+
+
+def lookup_external_series_id(payload, context=None):
+    """The series a number names, offered as something to choose from.
+
+    The television sibling of `lookup_external_id`, and a separate entrypoint
+    rather than a mode of it, because the two ask different namespaces and only
+    the caller's own screen can say which one was meant. TMDB's 1516 is a film
+    and a television series with nothing to do with each other; answering from
+    the film namespace alone tells somebody searching for the show that no such
+    thing exists.
+
+    Answers in `items` rather than as a detail block. The caller is a person
+    choosing, and this runs beside `lookup_external_id` so both offers land in
+    one list -- the same list a title search fills.
+
+    A number that names no series is a **miss, not an error**. Asking the wrong
+    namespace is the ordinary case here, not a fault: every id typed for a film
+    reaches this too, and reporting each one as a failure would put a red
+    message on the screen for a search that worked.
+    """
+    identifiers = (payload or {}).get("seriesIdentifiers")
+    identifier = str(
+        (payload or {}).get("tmdbTvId")
+        or (identifiers.get("tmdb_tv") if isinstance(identifiers, dict) else "")
+        or (payload or {}).get("tmdbId")
+        or (payload or {}).get("tmdb_id")
+        or ""
+    ).strip()
+    if not identifier:
+        return {"status": "skipped", "provider": "tmdb", "items": []}
+    if not identifier.isdigit():
+        # The same guard `series_details` applies: a slug, a title or an IMDb id
+        # arriving where a TMDB id belongs must not be pasted into a path and
+        # sent as though it were one. An IMDb id reaches this whenever somebody
+        # searches by one, and it names nothing in this namespace.
+        return {"status": "miss", "provider": "tmdb", "items": []}
+    data = _request_optional(context or {}, f"/tv/{identifier}", language=_language(context))
+    candidate = _series_candidate(data or {})
+    if not candidate:
+        return {"status": "miss", "provider": "tmdb", "items": []}
+    return {"status": "hit", "provider": "tmdb", "items": [candidate]}
 
 
 def _normalized_title(value):
@@ -442,15 +520,29 @@ def _exact_title_match(payload, items):
 
 
 def lookup_external_id(payload, context=None):
+    """The film a number names.
+
+    A 404 is a **miss, not an error**, for the same reason it is one in
+    `lookup_external_series_id`: since a search by id asks both namespaces, half
+    of those requests are expected to find nothing. A number that turns out to
+    be a television id would otherwise put a red message on a search that
+    worked, and `movie_details` -- which calls this first and falls back to a
+    title search -- would raise instead of falling back.
+    """
     tmdb_id = str((payload or {}).get("tmdbId") or (payload or {}).get("tmdb_id") or "").strip()
     imdb_id = str((payload or {}).get("imdbId") or (payload or {}).get("imdb_id") or "").strip()
     if tmdb_id:
-        return _normalize_details(_details(context or {}, tmdb_id))
+        details = _details(context or {}, tmdb_id)
+        if details is None:
+            return {"status": "miss", "provider": "tmdb"}
+        return _normalize_details(details)
     if imdb_id:
         found = _request(context or {}, f"/find/{imdb_id}", external_source="imdb_id", language=_language(context))
         movies = found.get("movie_results") or []
         if movies:
-            return _normalize_details(_details(context or {}, movies[0]["id"]))
+            details = _details(context or {}, movies[0]["id"])
+            if details is not None:
+                return _normalize_details(details)
     return {"status": "miss", "provider": "tmdb"}
 
 
@@ -465,7 +557,14 @@ def movie_details(payload, context=None):
     tmdb_id = matched.get("tmdbId") or matched.get("id")
     if not tmdb_id:
         return {"status": "miss", "provider": "tmdb"}
-    return _normalize_details(_details(context or {}, tmdb_id))
+    details = _details(context or {}, tmdb_id)
+    if details is None:
+        # TMDB's own search just named this id, so a 404 here means the record
+        # was withdrawn between the two calls. A miss rather than a crash: the
+        # search found something, the detail did not, and neither is a fault of
+        # the caller's.
+        return {"status": "miss", "provider": "tmdb"}
+    return _normalize_details(details)
 
 
 def _series_details_request(context, tmdb_tv_id):

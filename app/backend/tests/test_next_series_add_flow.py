@@ -244,6 +244,127 @@ class ATitleSearchReachesTheTelevisionSourceTests(unittest.TestCase):
         self.assertNotIn("tvdb", {plugin_id for plugin_id, _ in self._executions(result)})
 
 
+class AnIdentifierIsAskedOfBothNamespacesTests(unittest.TestCase):
+    """A bare number does not say which namespace issued it.
+
+    `lookup_external_id` is `/movie/{id}` at TMDB, so searching by an id could
+    only ever find a film. TMDB's 1516 is a film and a television series with
+    nothing to do with each other, and somebody searching for the series was
+    told there is no such thing.
+    """
+
+    CAPABILITIES = ["search_title", "search_series", "movie_details",
+                    "lookup_external_id", "lookup_external_series_id"]
+
+    def _plan(self, **query):
+        return [
+            step["entrypoint"]
+            for step in plugin_execution_plan(
+                {"capabilities": list(self.CAPABILITIES)},
+                {"previewMode": True, **query},
+            )
+        ]
+
+    def test_a_typed_id_reaches_the_television_namespace(self):
+        self.assertEqual(
+            self._plan(tmdbId="1516"),
+            ["lookup_external_id", "lookup_external_series_id"],
+        )
+
+    def test_a_source_without_the_capability_gains_no_empty_step(self):
+        plan = [
+            step["entrypoint"]
+            for step in plugin_execution_plan(
+                {"capabilities": ["lookup_external_id"]},
+                {"previewMode": True, "tmdbId": "1516"},
+            )
+        ]
+        self.assertEqual(plan, ["lookup_external_id"])
+
+    def test_an_id_another_source_resolved_asks_only_the_film_namespace(self):
+        """A barcode MovieVault matched to a film has settled the namespace
+        already. Asking the television one with that number would offer an
+        unrelated show beside the right film, with nobody having asked about
+        television at all -- §7b's failure mode wearing a candidate card."""
+        self.assertEqual(
+            self._plan(tmdbId="10195", resolvedIdentity=True),
+            ["lookup_external_id"],
+        )
+
+
+class ATitleSearchIsNotReplacedByAResolvedIdTests(unittest.TestCase):
+    """Why "The A-Team" returned one film and no series.
+
+    An identity source recognises the title and hands over the film's TMDB id.
+    That id was copied into the query TMDB is then asked, and the preview plan
+    for a query carrying an id is `lookup_external_id` and nothing else -- so
+    both the film search and the television search disappeared, and the answer
+    was the single film that source happened to match.
+
+    The id is borrowed, not typed. The person typed a title.
+    """
+
+    TMDB = {
+        "id": "tmdb", "name": "TMDb", "categories": ["metadata_source"],
+        "capabilities": ["search_title", "search_series", "movie_details",
+                         "lookup_external_id", "lookup_external_series_id"],
+        "manifest": {}, "order_index": 10,
+    }
+    IDENTITY = {
+        "id": "movievault_v2", "name": "MovieVault", "categories": ["metadata_source"],
+        "capabilities": ["search_barcode", "search_title"], "manifest": {}, "order_index": 45,
+    }
+
+    def _tmdb_entrypoints(self, payload, identity_result):
+        seen = []
+
+        def answer(plugin_id, entrypoint, _payload, _context):
+            seen.append((plugin_id, entrypoint))
+            if plugin_id == "movievault_v2":
+                return {"status": "ok", "state": "available", "elapsedMs": 1, "result": identity_result}
+            return {"status": "ok", "state": "available", "elapsedMs": 1,
+                    "result": {"status": "hit", "provider": "tmdb", "items": []}}
+
+        with mock.patch("app.backend.next_metadata.metadata_source_plugins",
+                        return_value=[self.TMDB, self.IDENTITY]), \
+             mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False), \
+             mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False), \
+             mock.patch("app.backend.next_metadata.run_plugin_entrypoint", side_effect=answer):
+            run_metadata_source_pipeline(
+                object(),
+                query=query_from_payload(payload),
+                current={"metadata": {}},
+                technical_current={},
+            )
+        return [entrypoint for plugin_id, entrypoint in seen if plugin_id == "tmdb"]
+
+    TITLE_HIT = {
+        "status": "hit", "provider": "movievault_v2",
+        "items": [{"title": "The A-Team", "year": "2010", "tmdbId": "10195"}],
+    }
+    BARCODE_HIT = {
+        "status": "hit", "provider": "movievault_v2",
+        "movie": {"title": "The A-Team", "year": "2010"}, "tmdbId": "10195",
+    }
+
+    def test_the_title_still_decides_what_tmdb_is_asked(self):
+        self.assertEqual(
+            self._tmdb_entrypoints({"title": "The A-Team", "previewMode": True}, self.TITLE_HIT),
+            ["search_title", "search_series"],
+        )
+
+    def test_a_barcode_still_uses_the_id_the_source_resolved(self):
+        """The case the borrowing was built for, and the one that must not
+        regress: on a scan there is no title to search, and the resolved id is
+        all TMDB has to go on."""
+        self.assertEqual(
+            self._tmdb_entrypoints({"barcode": "5051892123457", "previewMode": True}, self.BARCODE_HIT),
+            ["lookup_external_id"],
+        )
+
+
 class ATvdbCandidateCarriesItsSeriesTests(unittest.TestCase):
     """The same contract `ACandidateCarriesItsSeriesTests` pins for TMDB, on the
     source that has no film namespace at all -- so every result it offers is a
