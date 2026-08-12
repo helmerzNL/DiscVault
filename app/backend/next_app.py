@@ -2076,15 +2076,62 @@ def box_set_member_dedupe_keys(member: dict[str, Any]) -> set[tuple[str, str]]:
     return keys
 
 
+BOX_SET_MEMBER_STRONG_ID_KEYS = ("tmdb", "imdb")
+
+
+def box_set_member_strong_ids(member: dict[str, Any]) -> dict[str, str]:
+    """The external ids that identify a member film, keyed by provider."""
+    return {
+        kind: value
+        for kind, value in box_set_member_dedupe_keys(member)
+        if kind in BOX_SET_MEMBER_STRONG_ID_KEYS
+    }
+
+
+def box_set_members_are_distinguished(left: dict[str, str], right: dict[str, str]) -> bool:
+    """True when two members carry the *same* kind of id with different values.
+
+    That is positive evidence of two different films, and it outranks any other
+    collision between them: an id both sides carry and disagree on cannot be
+    explained away by a shared title or a shared id from another provider."""
+    return any(
+        kind in left and kind in right and left[kind] != right[kind]
+        for kind in BOX_SET_MEMBER_STRONG_ID_KEYS
+    )
+
+
 def dedupe_box_set_members(members: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Drop members that name a film an earlier member already named.
+
+    A single shared key is not enough to call two members the same film. Two
+    cuts of one film share an IMDb id -- IMDb files an alternate cut under the
+    original title, so *The Godfather Coda: The Death of Michael Corleone* and
+    *The Godfather Part III* are one tt id -- while TMDB gives them an entry
+    each. A box set holding both is holding two discs, and collapsing them on
+    the shared id silently imported a trilogy set as three films with no way to
+    tell that a fourth had been dropped.
+
+    So a collision only counts when nothing distinguishes the two members: if
+    they carry the same kind of id with different values, they are different
+    films and both are kept. Members that collide with nothing to separate them
+    -- the same ids, or the same title with no ids at all -- still collapse,
+    which is the case this dedupe exists for.
+
+    Compared pairwise against the members already kept rather than against one
+    pooled key set, because "does anything distinguish these two" is a question
+    about a pair; a pooled set cannot answer it."""
     deduped: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
+    kept: list[tuple[set[tuple[str, str]], dict[str, str]]] = []
     for member in members:
         keys = box_set_member_dedupe_keys(member)
-        if keys and seen.intersection(keys):
+        strong_ids = box_set_member_strong_ids(member)
+        if keys and any(
+            keys & seen_keys and not box_set_members_are_distinguished(strong_ids, seen_ids)
+            for seen_keys, seen_ids in kept
+        ):
             continue
         if keys:
-            seen.update(keys)
+            kept.append((keys, strong_ids))
         deduped.append(member)
     return deduped
 
@@ -5234,6 +5281,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     poster_asset.storage_backend AS poster_asset_storage_backend,
                     poster_asset.storage_key AS poster_asset_storage_key,
                     poster_asset.source_url AS poster_asset_source_url,
+                    poster_asset.provider_id AS poster_asset_provider_id,
                     backdrop_asset.id AS backdrop_asset_id,
                     backdrop_asset.storage_backend AS backdrop_asset_storage_backend,
                     backdrop_asset.storage_key AS backdrop_asset_storage_key,
@@ -5243,7 +5291,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     c.updated_at
                 FROM containers c
                 LEFT JOIN LATERAL (
-                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
                     FROM entity_media em
                     JOIN media_assets ma ON ma.id = em.media_id
                     WHERE em.entity_type='container'
@@ -5584,6 +5632,24 @@ def app_href(path: str = "") -> str:
 
 
 def media_asset_public_url(asset: dict[str, Any] | None) -> str:
+    """Turn a media asset row into the URL a client may load it from.
+
+    A locally stored asset is served by `/api/next/media/assets/<id>` -- except
+    a MovieVault v2 poster, which that route deliberately refuses. Those posters
+    keep their own lifecycle (a cache status the route checks, and `no-store`
+    instead of a revalidating cache header), so they are served by
+    `/api/next/movievault-v2/posters/<id>` and nothing else.
+
+    Routing them here rather than at each call site is what makes the two rules
+    one rule: a box-set links its MovieVault cover into `entity_media` like any
+    other artwork, and every reader of that link -- detail page, library tile,
+    artwork picker -- has to arrive at the endpoint that will actually serve it.
+    Sending them to the generic route produced a poster that resolved to a 404
+    and rendered as a broken image.
+
+    Deciding this needs `kind` and `provider_id` on the row. A caller that folds
+    joined poster columns into a partial dict must carry both, or a MovieVault
+    poster silently reads as an ordinary one again."""
     if not asset:
         return ""
     asset_id = asset.get("id")
@@ -5595,6 +5661,8 @@ def media_asset_public_url(asset: dict[str, Any] | None) -> str:
         and storage_key
         and not storage_key.startswith("remote/")
     ):
+        if is_movievault_v2_poster_media_asset(asset):
+            return f"/api/next/movievault-v2/posters/{asset_id}"
         return f"/api/next/media/assets/{asset_id}"
     return server_usable_image(asset.get("source_url"))
 
@@ -5711,6 +5779,12 @@ def with_preview_media_urls(row: dict[str, Any]) -> dict[str, Any]:
             "storage_backend": data.pop(f"{kind}_asset_storage_backend", None),
             "storage_key": data.pop(f"{kind}_asset_storage_key", None),
             "source_url": data.pop(f"{kind}_asset_source_url", None),
+            # `kind` and `provider_id` are what let media_asset_public_url spot a
+            # MovieVault poster, which is served by its own route. A query that
+            # does not select the provider leaves it None and the asset reads as
+            # an ordinary one -- correct for every source but that one.
+            "kind": kind,
+            "provider_id": data.pop(f"{kind}_asset_provider_id", None),
         }
         url = media_asset_public_url(asset)
         metadata = data.get("metadata") if isinstance(data.get("metadata"), dict) else {}
@@ -21020,6 +21094,10 @@ def container_list_row(row: dict[str, Any]) -> dict[str, Any]:
         "storage_backend": item.pop("poster_storage_backend", None),
         "storage_key": item.pop("poster_storage_key", None),
         "source_url": item.pop("poster_source_url", None),
+        # Carried so a MovieVault poster resolves to the route that serves it;
+        # see media_asset_public_url.
+        "kind": "poster",
+        "provider_id": item.pop("poster_provider_id", None),
     }
     if asset["id"]:
         poster_url = media_asset_public_url(asset)
@@ -34699,13 +34777,14 @@ def register_routes(flask_app: Flask) -> None:
                         poster.id AS poster_asset_id,
                         poster.storage_backend AS poster_storage_backend,
                         poster.storage_key AS poster_storage_key,
-                        poster.source_url AS poster_source_url
+                        poster.source_url AS poster_source_url,
+                        poster.provider_id AS poster_provider_id
                     FROM containers c
                     -- The container's own cover, so the library shows the artwork
                     -- the detail view already resolves from entity_media instead of
                     -- only the subset that happens to carry a metadata URL.
                     LEFT JOIN LATERAL (
-                        SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url
+                        SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
                         FROM entity_media em
                         JOIN media_assets ma ON ma.id = em.media_id
                         WHERE em.entity_type = 'container'
