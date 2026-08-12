@@ -369,6 +369,16 @@ jobs:
       - name: Test API and MCP connection grouping
         run: python -m unittest tests.test_next_api_connections
 
+      # Same hand-listed gap as the modules above: the container policy tests
+      # had never been added here, and the reorder module guards the member
+      # routes against requiring links the client was never shown (a container
+      # holding a tombstoned movie was permanently un-reorderable).
+      - name: Test container member routes and reordering
+        run: >-
+          python -m unittest
+          tests.test_next_containers
+          tests.test_next_container_reorder
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'

@@ -26970,7 +26970,7 @@ def register_routes(flask_app: Flask) -> None:
         if not container_uuid or not movie_uuid:
             raise NextApiError("containerId and movieId are required", 400)
         with connect() as conn:
-            require_next_permission(conn, "containers.edit")
+            actor = require_next_permission(conn, "containers.edit")
             if not table_exists(conn, "container_movies"):
                 raise NextApiError("Container movie links are not available yet", 503)
             container_type = container_type_for_id(conn, container_uuid)
@@ -26992,7 +26992,7 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 if changed:
                     emit_container_membership_change(conn, container_uuid)
-            detail = container_detail_entity(conn, container_uuid)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
             capture_collection_value_snapshot(conn, actor)
         if not detail:
             raise NextApiError("Container not found", 404)
@@ -27018,7 +27018,7 @@ def register_routes(flask_app: Flask) -> None:
         if not movie_ids:
             raise NextApiError("movieIds must be a non-empty array", 400)
         with connect() as conn:
-            require_next_permission(conn, "containers.edit")
+            actor = require_next_permission(conn, "containers.edit")
             if not table_exists(conn, "container_movies"):
                 raise NextApiError("Container movie links are not available yet", 503)
             container_type = container_type_for_id(conn, container_uuid)
@@ -27030,7 +27030,26 @@ def register_routes(flask_app: Flask) -> None:
             missing = [str(item) for item in movie_ids if item not in current]
             if missing:
                 raise NextApiError(f"Movie is not linked to this container: {', '.join(missing)}", 400)
-            omitted = [str(item) for item in current if item not in set(movie_ids)]
+            # The client can only echo back the members it was shown, and
+            # container_member_movie_entities hides links whose movie is
+            # tombstoned (soft delete keeps the container_movies row) or outside
+            # the actor's visibility scope. Requiring the raw link set here made
+            # such containers permanently un-reorderable, so only the members
+            # the actor can see are required; hidden links keep their order.
+            visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT cm.movie_id
+                    FROM container_movies cm
+                    JOIN movies m ON m.id = cm.movie_id
+                    WHERE cm.container_id=%s
+                      AND {visibility_where}
+                    """,
+                    (container_uuid, *visibility_params),
+                )
+                required = {row["movie_id"] for row in cur.fetchall()}
+            omitted = [str(item) for item in required if item not in set(movie_ids)]
             if omitted:
                 raise NextApiError("movieIds must include every linked movie for this container", 400)
             with conn.transaction():
@@ -27042,7 +27061,7 @@ def register_routes(flask_app: Flask) -> None:
                         )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (container_uuid,))
                 emit_container_membership_change(conn, container_uuid)
-            detail = container_detail_entity(conn, container_uuid)
+            detail = container_detail_entity(conn, container_uuid, actor=actor)
         return response({"status": "ok", "detail": detail})
 
     @flask_app.delete("/api/next/collections/<collection_id>/items/<item_type>/<item_id>")
@@ -27055,7 +27074,7 @@ def register_routes(flask_app: Flask) -> None:
         if normalized_type not in {"movie", "box_set", "vault", "collection"}:
             raise NextApiError("itemType must be movie, box_set, vault or collection", 400)
         with connect() as conn:
-            require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            actor = require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
             if not table_exists(conn, "collection_items"):
                 raise NextApiError("Collection items are not available yet", 503)
             target_type = container_type_for_id(conn, collection_uuid)
@@ -27073,7 +27092,7 @@ def register_routes(flask_app: Flask) -> None:
                     )
                     changed = cur.rowcount
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
-            detail = container_detail_entity(conn, collection_uuid)
+            detail = container_detail_entity(conn, collection_uuid, actor=actor)
         if not detail:
             raise NextApiError("Collection not found", 404)
         return response(
@@ -27116,7 +27135,7 @@ def register_routes(flask_app: Flask) -> None:
                 order_items.append(key)
                 seen.add(key)
         with connect() as conn:
-            require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
+            actor = require_any_next_permission(conn, ("containers.edit", "collection.bulk_edit"))
             if not table_exists(conn, "collection_items"):
                 raise NextApiError("Collection items are not available yet", 503)
             if container_type_for_id(conn, collection_uuid) != "collection":
@@ -27130,9 +27149,40 @@ def register_routes(flask_app: Flask) -> None:
             missing = [f"{item_type}:{item_uuid}" for item_type, item_uuid in order_items if (item_type, item_uuid) not in current]
             if missing:
                 raise NextApiError(f"Item is not linked to this collection: {', '.join(missing)}", 400)
+            # Mirror collection_item_entities: rows whose movie or container is
+            # tombstoned, orphaned (item_id has no FK), or outside the actor's
+            # visibility scope never reach the client, so they cannot be echoed
+            # back. Only the items the actor can see are required; hidden rows
+            # keep their existing order.
+            movie_where, movie_params = visible_movie_where_sql(conn, actor, "m")
+            container_where, container_params = visible_container_where_sql(conn, actor, "c")
+            required: set[tuple[str, UUID]] = set()
+            with conn.cursor() as cur:
+                cur.execute(
+                    f"""
+                    SELECT ci.item_type, ci.item_id
+                    FROM collection_items ci
+                    JOIN movies m ON m.id = ci.item_id
+                    WHERE ci.collection_id=%s AND ci.item_type='movie'
+                      AND {movie_where}
+                    """,
+                    (collection_uuid, *movie_params),
+                )
+                required.update((row["item_type"], row["item_id"]) for row in cur.fetchall())
+                cur.execute(
+                    f"""
+                    SELECT ci.item_type, ci.item_id
+                    FROM collection_items ci
+                    JOIN containers c ON c.id = ci.item_id
+                    WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
+                      AND {container_where}
+                    """,
+                    (collection_uuid, *container_params),
+                )
+                required.update((row["item_type"], row["item_id"]) for row in cur.fetchall())
             omitted = [
                 f"{item_type}:{item_uuid}"
-                for item_type, item_uuid in current
+                for item_type, item_uuid in required
                 if (item_type, item_uuid) not in set(order_items)
             ]
             if omitted:
@@ -27149,7 +27199,7 @@ def register_routes(flask_app: Flask) -> None:
                             (index, collection_uuid, item_type, item_uuid),
                         )
                     cur.execute("UPDATE containers SET updated_at=now() WHERE id=%s", (collection_uuid,))
-            detail = container_detail_entity(conn, collection_uuid)
+            detail = container_detail_entity(conn, collection_uuid, actor=actor)
         return response({"status": "ok", "detail": detail})
 
     @flask_app.get("/api/next/digital-items")
