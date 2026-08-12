@@ -99,6 +99,8 @@ try:
     from .next_metadata import external_metadata_barcode
     from .next_metadata import metadata_receiver_plugins
     from .next_metadata import record_sync_change
+    from .next_metadata import apply_season_poster_inheritance
+    from .next_metadata import clear_orphaned_season_poster
     from .next_metadata import refresh_movie_metadata
     from .next_metadata import refresh_series_metadata
     from .next_metadata import refresh_season_episodes
@@ -386,6 +388,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import external_metadata_barcode
     from next_metadata import metadata_receiver_plugins
     from next_metadata import record_sync_change
+    from next_metadata import apply_season_poster_inheritance
+    from next_metadata import clear_orphaned_season_poster
     from next_metadata import refresh_movie_metadata
     from next_metadata import refresh_series_metadata
     from next_metadata import refresh_season_episodes
@@ -4674,81 +4678,6 @@ def attach_movie_seasons(conn, movies: list[dict[str, Any]]) -> list[dict[str, A
     return movies
 
 
-def attach_borrowed_season_posters(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Fill ``season_poster_url`` for a disc of a show that has no cover of its own.
-
-    A box of season 2 is catalogued with the season it carries, so when nobody
-    has given the disc a cover there is already a picture on file that is about
-    what is inside it. The alternative was an empty tile.
-
-    Three things this deliberately does not do.
-
-    It does not write. The value is resolved per read and lives only on the
-    payload, so nothing downstream can mistake it for a cover the disc owns --
-    which matters most for ``movie_entity``, whose rows are stored verbatim as
-    sync delta payloads and have to keep meaning "this disc's own artwork".
-
-    It does not touch a disc that already has one. ``poster_url`` on these rows
-    has already folded in both places a disc's own cover can live -- its metadata
-    and its ``entity_media`` primary -- so "no poster" here means no poster
-    anywhere.
-
-    It does not overrule a lock. ``poster_locked`` is the operator saying "leave
-    this disc's artwork alone", and quietly showing a borrowed image is not
-    leaving it alone.
-
-    The lowest season number wins when a set carries several, matching the order
-    ``movie_series_payload`` already presents them in. Season 0 is *not* skipped
-    here, unlike the guess a series tile makes: a disc that names the specials as
-    what it carries has been told so by a curator, which is a selection rather
-    than a guess.
-    """
-    if not movies:
-        return movies
-    if not table_exists(conn, "movie_seasons") or not series_tables_available(conn):
-        return movies
-    wanted = [
-        movie.get("id")
-        for movie in movies
-        if movie.get("id") and not clean_text(movie.get("poster_url"))
-    ]
-    if not wanted:
-        return movies
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            SELECT DISTINCT ON (ms.movie_id)
-                ms.movie_id,
-                ma.id,
-                ma.storage_backend,
-                ma.storage_key,
-                ma.source_url
-            FROM movie_seasons ms
-            JOIN movies m ON m.id = ms.movie_id
-            JOIN series_seasons ss ON ss.id = ms.season_id AND ss.deleted_at IS NULL
-            JOIN entity_media em
-              ON em.entity_type='series_season'
-             AND em.entity_id=ss.id
-             AND em.deleted_at IS NULL
-             AND em.hidden_at IS NULL
-            JOIN media_assets ma ON ma.id = em.media_id AND ma.kind='poster'
-            WHERE ms.movie_id = ANY(%s)
-              AND LOWER(COALESCE(m.metadata->>'poster_locked', 'false')) NOT IN ('true', '1', 'yes')
-            ORDER BY ms.movie_id, ss.season_number, em.is_primary DESC, em.sort_order, ma.created_at
-            """,
-            (wanted,),
-        )
-        borrowed = {
-            str(row["movie_id"]): media_asset_public_url(row) or None
-            for row in cur.fetchall()
-        }
-    for movie in movies:
-        url = borrowed.get(str(movie.get("id")))
-        if url:
-            movie["season_poster_url"] = url
-    return movies
-
-
 #: The wire spelling of every ``movie_discs`` column that travels, keyed by the
 #: column name. camelCase on the wire and snake_case in the table, the same
 #: split every other entity here uses, and declared once so the reader and the
@@ -4995,7 +4924,6 @@ def attach_library_movie_enrichments(
     user_id = user.get("id") if user else None
     movies = attach_personal_list_state(conn, movies, user_id)
     movies = attach_movie_series_membership(conn, movies)
-    movies = attach_borrowed_season_posters(conn, movies)
     return movies
 
 
@@ -11556,6 +11484,12 @@ def apply_movie_series_assignment(
     prune_movie_seasons(cur, movie_uuid, season_ids)
     cur.execute("UPDATE movies SET series_id = %s WHERE id = %s", (series_id, movie_uuid))
     upsert_movie_seasons(cur, movie_uuid, series_id, season_ids)
+    # The seasons this disc carries have just been restated, so this is the one
+    # moment its inherited poster can become wrong. Clearing runs first: a disc
+    # moved to a season with no artwork has to lose the old season's poster
+    # rather than keep it as though it owned it.
+    clear_orphaned_season_poster(cur, movie_uuid)
+    apply_season_poster_inheritance(cur, [movie_uuid])
 
 
 def prune_movie_seasons(cur, movie_uuid: UUID, keep_ids: list[UUID]) -> None:

@@ -26982,12 +26982,7 @@ def ui_preview_html(
           || usableImage(item.series?.seasonPosterUrl)
           || usableImage(itemMovieRows(item).map((movie) => movie?.poster_url).find(Boolean));
       }
-      // A disc of a show with no cover of its own shows the season it carries.
-      // `season_poster_url` is only ever set by the backend when this disc has
-      // no poster anywhere and its artwork is not locked, so there is nothing
-      // left to outrank here -- the ordering that matters was already decided
-      // where the field was filled.
-      return usableImage(item?.movie?.poster_url) || usableImage(item?.movie?.season_poster_url);
+      return usableImage(item?.movie?.poster_url);
     }
     function itemMembersHtml(item, limit = 6) {
       if (!itemIsGroup(item)) return "";
@@ -31728,33 +31723,6 @@ def ui_preview_html(
       panel.appendChild(actions);
       send.focus();
     }
-    // What a disc of a show may show when it has no cover of its own: the
-    // season it carries, and only then the show it belongs to.
-    //
-    // The season comes first because it is the more specific true statement. A
-    // box of season 2 is a box of season 2, and its season poster says exactly
-    // that; the series poster says something true but broader. `seasons` here is
-    // what this disc *covers*, already ordered by season number, so "the first"
-    // is the lowest-numbered season on the box -- and a set carrying several is
-    // the case that ordering exists for.
-    //
-    // An empty `seasons` on a linked disc is the complete-series set rather than
-    // "no seasons known", which is the one case where the series' own poster is
-    // the better answer rather than a broader one.
-    //
-    // A lock stops both. `poster_locked` is the operator saying "leave this
-    // disc's artwork alone", and borrowing quietly is not leaving it alone.
-    function borrowedSeriesPosterUrl(detail) {
-      const movie = detail?.movie || {};
-      const metadata = movie.metadata && typeof movie.metadata === "object" ? movie.metadata : {};
-      const locked = metadata.poster_locked;
-      if (locked === true || String(locked || "").toLowerCase() === "true") return "";
-      const series = detail?.series;
-      if (!series) return "";
-      const seasons = Array.isArray(series.seasons) ? series.seasons : [];
-      const covered = seasons.map((season) => usableImage(season?.posterUrl)).find(Boolean);
-      return covered || usableImage(series.posterUrl);
-    }
     function renderMovieDetail(detail) {
       activeDetailPayload = detail;
       const movie = detail.movie || {};
@@ -31764,9 +31732,7 @@ def ui_preview_html(
       void refreshContributeButton("movie", movie.id);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
-      const poster = mediaAssetImage(detail.mediaAssets, "poster")
-        || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster)
-        || borrowedSeriesPosterUrl(detail);
+      const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
       const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop") || usableImage(movie.backdrop_url || metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
       const title = movie.title || tNext("common.untitled", "Untitled");
       const backdropNode = document.getElementById("movieDetailBackdrop");

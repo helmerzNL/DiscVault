@@ -195,50 +195,68 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
         self.assertIn("ORDER BY em.is_primary DESC, em.sort_order, ma.created_at", body)
         self.assertIn('"posterUrl": series_poster_url(row)', body)
 
-    def test_a_disc_of_a_show_borrows_the_season_it_carries(self):
-        """The reported case. A disc covering one season had no cover of its own
-        and showed nothing, while the season's poster was on file.
+    def test_a_disc_inherits_the_season_poster_rather_than_borrowing_it(self):
+        """The first attempt resolved this per read, which stopped at whichever
+        surface implemented it: the Library showed something, the sync delta
+        carried nothing, and the iOS app still showed an empty tile. "A disc of a
+        series always has a poster" is a statement about the record, so it has to
+        be true of the record."""
+        import os
 
-        Nothing is ranked here: the backend fills `season_poster_url` only for a
-        disc that has no poster anywhere and no artwork lock, so by the time the
-        tile sees it every decision has already been made."""
-        body = self._function_body("itemPosterUrl")
-        own = body.index("item?.movie?.poster_url")
-        borrowed = body.index("item?.movie?.season_poster_url")
-        self.assertLess(own, borrowed)
-
-    def test_the_borrowed_disc_poster_is_never_written(self):
-        """It is resolved per read and lives only on the payload. `movie_entity`
-        rows are stored verbatim as sync delta payloads, so a borrowed image
-        materialised onto one would reach a client as the disc's own artwork."""
-        # In the one helper both Library entry points share. Wiring it into the
-        # preview query alone would reach the first-paint snapshot and not the
-        # paged hydration behind it -- the exact split that helper exists to
-        # close, and one that has already shipped as a bug once.
-        start = self.app_source.index("def attach_library_movie_enrichments(")
-        shared = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
-        self.assertIn("attach_borrowed_season_posters(conn, movies)", shared)
-        start = self.app_source.index("def attach_borrowed_season_posters(")
-        body = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
-        self.assertNotIn("UPDATE", body.upper().replace("UPDATED_AT", ""))
-        self.assertIn('movie["season_poster_url"] = url', body)
-        # Only a disc with nothing of its own, and never over a lock.
-        self.assertIn('not clean_text(movie.get("poster_url"))', body)
+        meta_path = os.path.join(BACKEND_DIR, "next_metadata.py")
+        with open(meta_path, encoding="utf-8") as handle:
+            meta_source = handle.read()
+        start = meta_source.index("def apply_season_poster_inheritance(")
+        body = meta_source[start:meta_source.index("\ndef ", start + 1)]
+        self.assertIn("UPDATE movies m", body)
+        self.assertIn("'poster_from_season', true", body)
+        # The two conditions the feature was asked for with.
         self.assertIn("m.metadata->>'poster_locked'", body)
-        # Lowest season number first, matching the order `movie_series_payload`
-        # already presents the covered seasons in.
+        self.assertIn("NULLIF(BTRIM(COALESCE(m.metadata->>'poster_url', '')), '') IS NULL", body)
+        # Re-running must not touch `updated_at`, which feeds the sync delta.
+        self.assertIn("IS DISTINCT FROM c.poster_url", body)
+        # Lowest covered season, specials included -- the disc named them.
         self.assertIn("ORDER BY ms.movie_id, ss.season_number", body)
+        self.assertNotIn("ss.season_number > 0", body)
 
-    def test_the_detail_page_prefers_the_season_over_the_show(self):
-        """A box of season 2 is a box of season 2 -- the season poster says
-        exactly that, the series poster says something true but broader. An empty
-        `seasons` on a linked disc is the complete-series set, which is the one
-        case where the broader answer is the right one."""
-        body = self._function_body("borrowedSeriesPosterUrl")
-        season = body.index("season?.posterUrl")
-        series = body.index("series.posterUrl")
-        self.assertLess(season, series)
-        self.assertIn("poster_locked", body)
+    def test_every_path_that_can_change_the_answer_applies_it(self):
+        """Two moments, and both had to be wired or a disc waits for someone to
+        re-save it: the seasons a disc carries being assigned, and a series
+        refresh bringing season artwork in. The refresh is applied inside
+        `refresh_series_metadata` rather than in its route because the background
+        worker calls the same function and would otherwise skip those discs."""
+        import os
+
+        with open(os.path.join(BACKEND_DIR, "next_metadata.py"), encoding="utf-8") as handle:
+            meta_source = handle.read()
+        start = self.app_source.index("def apply_movie_series_assignment(")
+        assignment = self.app_source[start:self.app_source.index("\ndef ", start + 1)]
+        self.assertIn("clear_orphaned_season_poster(cur, movie_uuid)", assignment)
+        self.assertIn("apply_season_poster_inheritance(cur, [movie_uuid])", assignment)
+        # Clearing first: a disc moved to a season with no artwork has to lose
+        # the old season's poster rather than keep it as though it owned it.
+        self.assertLess(
+            assignment.index("clear_orphaned_season_poster"),
+            assignment.index("apply_season_poster_inheritance"),
+        )
+
+        start = meta_source.index("def refresh_series_metadata(")
+        refresh = meta_source[start:meta_source.index("\ndef ", start + 1)]
+        self.assertIn("apply_season_poster_inheritance(cur, linked)", refresh)
+
+    def test_the_migration_backfills_what_already_exists(self):
+        """The application applies this from now on; the discs a user is looking
+        at today were added before it existed."""
+        import os
+
+        path = os.path.join(BACKEND_DIR, "migrations_next", "078_disc_inherits_season_poster.sql")
+        with open(path, encoding="utf-8") as handle:
+            sql = handle.read()
+        self.assertIn("'poster_from_season', true", sql)
+        self.assertIn("m.metadata->>'poster_locked'", sql)
+        self.assertIn("NULLIF(BTRIM(COALESCE(m.metadata->>'poster_url', '')), '') IS NULL", sql)
+        # Guarded, like every other migration here: the tables may not exist yet.
+        self.assertIn("to_regclass('public.movie_seasons') IS NULL", sql)
 
     def test_the_merge_switch_off_still_returns_a_flat_movie_list(self):
         body = self._function_body("libraryDisplayItems")

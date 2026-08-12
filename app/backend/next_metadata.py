@@ -6086,6 +6086,129 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
     }
 
 
+def apply_season_poster_inheritance(cur, movie_uuids: list[UUID] | None = None) -> int:
+    """Give a disc of a show the poster of the season it carries.
+
+    A disc linked through a barcode or a TMDb/TVDb id normally arrives with a
+    poster from the source. When it does not, the season it is filed under
+    already has one, and that is a picture of what is in the box -- so the disc
+    takes it and *has* a poster, rather than a surface deciding to draw one.
+
+    Stored rather than resolved per read, and the difference is the whole point.
+    A displayed fallback stops at the surface that implements it: the Library
+    would show something, the sync delta would carry nothing, and the iOS app
+    would still show an empty tile. "A disc of a series always has a poster" is a
+    statement about the record, so it has to be true of the record.
+
+    This is the same shape `container_metadata_proposal` already uses for a box
+    set that has no cover of its own, down to the provenance flag -- and it is
+    that flag that makes storing safe. `poster_from_season` marks the poster as
+    inherited, so a later run may replace it when the season's artwork changes,
+    while a poster the disc owns is left alone forever. Without it, "has a
+    poster" and "has its own poster" become indistinguishable the moment this
+    writes, and the disc could never be given a better one.
+
+    Passing ``movie_uuids`` limits the run to those discs; ``None`` sweeps every
+    linked disc, which is what the backfill in migration 078 needs.
+
+    Three conditions, all of them in SQL so a sweep stays one statement:
+
+    * The disc has no poster, or has one this function put there. An uploaded or
+      fetched cover always wins -- that is the "unless one was uploaded" clause,
+      and it needs no separate check because such a poster is simply not ours.
+    * ``poster_locked`` is unset. The operator has said to leave the artwork
+      alone, and this is artwork.
+    * The value would actually change, so re-running writes nothing. `updated_at`
+      feeds the sync delta, and a no-op write would wake every client for a
+      poster that did not move.
+
+    Only a season poster with a `source_url` is taken. Season artwork is stored
+    as a remote provider URL, and a locally stored asset could not be served
+    under a movie anyway: `actor_can_view_media_asset` has no branch for
+    `series_season`, which §7o records as a live gap. Skipping those leaves the
+    disc as it was rather than pointing it at a URL that would 403.
+    """
+    scoped = movie_uuids is not None
+    if scoped and not movie_uuids:
+        return 0
+    ids = list(movie_uuids or [])
+    cur.execute(
+        f"""
+        WITH candidate AS (
+            SELECT DISTINCT ON (ms.movie_id)
+                ms.movie_id,
+                ma.source_url AS poster_url
+            FROM movie_seasons ms
+            JOIN series_seasons ss ON ss.id = ms.season_id AND ss.deleted_at IS NULL
+            JOIN entity_media em
+              ON em.entity_type='series_season'
+             AND em.entity_id=ss.id
+             AND em.deleted_at IS NULL
+             AND em.hidden_at IS NULL
+            JOIN media_assets ma ON ma.id = em.media_id AND ma.kind='poster'
+            WHERE NULLIF(BTRIM(COALESCE(ma.source_url, '')), '') IS NOT NULL
+              {"AND ms.movie_id = ANY(%s)" if scoped else ""}
+            -- The lowest season number a set carries, which is what "the first
+            -- of the selected seasons" means once the seasons are the disc's own
+            -- rather than a guess. Season 0 is not excluded here: a curator who
+            -- filed a disc under the specials has said what is in the box.
+            ORDER BY ms.movie_id, ss.season_number, em.is_primary DESC, em.sort_order, ma.created_at
+        )
+        UPDATE movies m
+        SET metadata = COALESCE(m.metadata, '{{}}'::jsonb)
+                || jsonb_build_object('poster_url', c.poster_url, 'poster_from_season', true),
+            updated_at = now()
+        FROM candidate c
+        WHERE m.id = c.movie_id
+          AND m.deleted_at IS NULL
+          AND LOWER(COALESCE(m.metadata->>'poster_locked', 'false')) NOT IN ('true', '1', 'yes')
+          AND (
+                NULLIF(BTRIM(COALESCE(m.metadata->>'poster_url', '')), '') IS NULL
+                OR LOWER(COALESCE(m.metadata->>'poster_from_season', 'false')) IN ('true', '1', 'yes')
+              )
+          AND COALESCE(m.metadata->>'poster_url', '') IS DISTINCT FROM c.poster_url
+        """,
+        (ids,) if scoped else (),
+    )
+    return cur.rowcount or 0
+
+
+def clear_orphaned_season_poster(cur, movie_uuid: UUID) -> None:
+    """Drop an inherited poster from a disc that no longer carries that season.
+
+    Unlinking a disc, or moving it to a season with no artwork, would otherwise
+    leave the old season's poster behind as though the disc owned it -- and it
+    would then survive every later run, because the check above stops at a disc
+    that already has a poster it did not put there.
+
+    Only ever removes what `apply_season_poster_inheritance` wrote. A poster the
+    disc owns is not this function's to touch.
+    """
+    cur.execute(
+        """
+        UPDATE movies m
+        SET metadata = (m.metadata - 'poster_url' - 'poster_from_season'),
+            updated_at = now()
+        WHERE m.id = %s
+          AND LOWER(COALESCE(m.metadata->>'poster_from_season', 'false')) IN ('true', '1', 'yes')
+          AND NOT EXISTS (
+                SELECT 1
+                FROM movie_seasons ms
+                JOIN series_seasons ss ON ss.id = ms.season_id AND ss.deleted_at IS NULL
+                JOIN entity_media em
+                  ON em.entity_type='series_season'
+                 AND em.entity_id=ss.id
+                 AND em.deleted_at IS NULL
+                 AND em.hidden_at IS NULL
+                JOIN media_assets ma ON ma.id = em.media_id AND ma.kind='poster'
+                WHERE ms.movie_id = m.id
+                  AND NULLIF(BTRIM(COALESCE(ma.source_url, '')), '') IS NOT NULL
+          )
+        """,
+        (movie_uuid,),
+    )
+
+
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     """Fill a series' description from whichever sources can describe it.
 
@@ -6189,6 +6312,18 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     # with no artwork at all must still keep the text it just gained.
     applied_artwork = apply_series_artwork(conn, series_uuid, merged)
 
+    # Season artwork has just landed, so every disc filed under one of these
+    # seasons may now have an answer it did not have a moment ago. Applied here
+    # rather than in the route because the background worker refreshes through
+    # this same function and would otherwise leave those discs behind.
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT id FROM movies WHERE series_id = %s AND deleted_at IS NULL",
+            (series_uuid,),
+        )
+        linked = [row["id"] for row in cur.fetchall()]
+        inherited_posters = apply_season_poster_inheritance(cur, linked) if linked else 0
+
     return {
         "status": "ok",
         "seriesId": str(series_uuid),
@@ -6196,6 +6331,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         "seasonsUpdated": updated_seasons,
         "artwork": applied_artwork["series"],
         "seasonArtwork": applied_artwork["seasons"],
+        "discPostersInherited": inherited_posters,
         "sources": {
             "consulted": [plugin_id for plugin_id, _ in results],
             "series": merged["overviewSource"] if updated_series else "",

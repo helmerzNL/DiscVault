@@ -28,6 +28,7 @@ except ModuleNotFoundError:
     dict_row = None
 
 from app.backend import next_app
+from app.backend import next_metadata
 from app.backend import next_library_data
 
 
@@ -607,43 +608,49 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
         self.assertIsNone(row["seasonPosterUrl"])
 
 
-    # --- a disc borrows the season it carries --------------------------------
+    # --- a disc inherits the poster of the season it carries -----------------
 
-    def _movie_poster(self, conn, movie_id, url="https://img.example/own-disc.jpg"):
+    def _metadata(self, conn, movie_id, patch):
         with conn.cursor() as cur:
             cur.execute(
                 "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s WHERE id = %s",
-                (json.dumps({"poster_url": url}), movie_id),
+                (json.dumps(patch), movie_id),
             )
         conn.commit()
 
-    def _lock_poster(self, conn, movie_id):
+    def _poster_of(self, conn, movie_id):
         with conn.cursor() as cur:
             cur.execute(
-                "UPDATE movies SET metadata = COALESCE(metadata, '{}'::jsonb) || %s WHERE id = %s",
-                (json.dumps({"poster_locked": True}), movie_id),
+                "SELECT metadata->>'poster_url' AS url, metadata->>'poster_from_season' AS inherited"
+                " FROM movies WHERE id = %s",
+                (movie_id,),
             )
+            return cur.fetchone()
+
+    def _inherit(self, conn, movie_ids=None):
+        with conn.cursor() as cur:
+            written = next_metadata.apply_season_poster_inheritance(cur, movie_ids)
         conn.commit()
+        return written
 
-    def _borrowed(self, conn, movie_id, poster_url=None):
-        row = {"id": movie_id, "poster_url": poster_url}
-        next_app.attach_borrowed_season_posters(conn, [row])
-        return row.get("season_poster_url")
-
-    def test_a_disc_with_no_cover_shows_the_season_it_carries(self):
-        """The case that was reported: a disc covering exactly one season had no
-        cover of its own and showed nothing, while the season's poster was on
-        file and is a picture of what is inside the box."""
+    def test_a_disc_with_no_poster_takes_the_season_s(self):
+        """The reported case, and the reason this is a write rather than a
+        display fallback: the disc has to *have* a poster, or the sync delta
+        carries nothing and the iOS app still shows an empty tile."""
         with self.connect() as conn:
             series_id = self._series(conn, "Fargo")
             season = self._season(conn, series_id, 2)
-            wanted = self._season_poster(conn, season)
+            self._season_poster(conn, season)
             movie_id = self._disc(conn, series_id=series_id, title="Season 2")
             self._cover(conn, movie_id, series_id, season)
 
-            self.assertIn(str(wanted), self._borrowed(conn, movie_id))
+            self.assertEqual(self._inherit(conn, [movie_id]), 1)
+            row = self._poster_of(conn, movie_id)
 
-    def test_a_set_of_several_seasons_uses_the_lowest_numbered(self):
+        self.assertTrue(row["url"].startswith("https://"))
+        self.assertEqual(row["inherited"], "true", "the provenance flag has to travel with it")
+
+    def test_a_set_of_several_seasons_takes_the_lowest_numbered(self):
         with self.connect() as conn:
             series_id = self._series(conn, "Fargo")
             third = self._season(conn, series_id, 3)
@@ -654,9 +661,69 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
             self._cover(conn, movie_id, series_id, third)
             self._cover(conn, movie_id, series_id, first)
 
-            self.assertIn(str(wanted), self._borrowed(conn, movie_id))
+            self._inherit(conn, [movie_id])
+            row = self._poster_of(conn, movie_id)
 
-    def test_a_disc_that_has_its_own_cover_is_left_alone(self):
+        self.assertIn(str(wanted), row["url"])
+
+    def test_a_disc_that_has_its_own_poster_is_left_alone(self):
+        """The first of the two conditions the feature was asked for with. A
+        poster from the metadata source is simply not ours to replace."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season)
+            self._metadata(conn, movie_id, {"poster_url": "https://img.example/from-tmdb.jpg"})
+
+            self.assertEqual(self._inherit(conn, [movie_id]), 0)
+            row = self._poster_of(conn, movie_id)
+
+        self.assertEqual(row["url"], "https://img.example/from-tmdb.jpg")
+        self.assertIsNone(row["inherited"])
+
+    def test_a_locked_disc_is_left_alone(self):
+        """The second condition. `poster_locked` is the operator saying to leave
+        this disc's artwork alone, and this is artwork."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season)
+            self._metadata(conn, movie_id, {"poster_locked": True})
+
+            self.assertEqual(self._inherit(conn, [movie_id]), 0)
+
+            self.assertIsNone(self._poster_of(conn, movie_id)["url"])
+
+    def test_an_inherited_poster_keeps_tracking_the_season(self):
+        """What the provenance flag buys. A poster this wrote may be replaced
+        when the season's artwork changes; one the disc owns may not."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season)
+            self._inherit(conn, [movie_id])
+            first = self._poster_of(conn, movie_id)["url"]
+
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM entity_media WHERE entity_type='series_season' AND entity_id=%s", (season,))
+            conn.commit()
+            replacement = self._season_poster(conn, season)
+
+            self.assertEqual(self._inherit(conn, [movie_id]), 1)
+            second = self._poster_of(conn, movie_id)["url"]
+
+        self.assertNotEqual(first, second)
+        self.assertIn(str(replacement), second)
+
+    def test_running_twice_writes_nothing_the_second_time(self):
+        """`updated_at` feeds the sync delta. A no-op write would wake every
+        client for a poster that did not move."""
         with self.connect() as conn:
             series_id = self._series(conn, "Fargo")
             season = self._season(conn, series_id, 1)
@@ -664,27 +731,13 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
             movie_id = self._disc(conn, series_id=series_id)
             self._cover(conn, movie_id, series_id, season)
 
-            borrowed = self._borrowed(conn, movie_id, poster_url="https://img.example/own.jpg")
-
-        self.assertIsNone(borrowed, "a disc with a cover must not borrow one")
-
-    def test_a_locked_disc_is_left_alone_even_with_no_cover(self):
-        """`poster_locked` is the operator saying "leave this disc's artwork
-        alone". Quietly showing a borrowed image is not leaving it alone."""
-        with self.connect() as conn:
-            series_id = self._series(conn, "Fargo")
-            season = self._season(conn, series_id, 1)
-            self._season_poster(conn, season)
-            movie_id = self._disc(conn, series_id=series_id)
-            self._cover(conn, movie_id, series_id, season)
-            self._lock_poster(conn, movie_id)
-
-            self.assertIsNone(self._borrowed(conn, movie_id))
+            self.assertEqual(self._inherit(conn, [movie_id]), 1)
+            self.assertEqual(self._inherit(conn, [movie_id]), 0)
 
     def test_specials_count_when_the_disc_names_them(self):
-        """The opposite of the series tile's rule, and deliberately so: a disc
-        that names season 0 as what it carries has been told so by a curator,
-        which is a selection rather than a guess."""
+        """A curator who filed a disc under the specials has said what is in the
+        box -- which is why season 0 is excluded when a series *tile* guesses at
+        artwork and included here."""
         with self.connect() as conn:
             series_id = self._series(conn, "Fargo")
             specials = self._season(conn, series_id, 0)
@@ -692,32 +745,117 @@ class SeriesLibrarySnapshotPostgresTests(unittest.TestCase):
             movie_id = self._disc(conn, series_id=series_id, title="Specials")
             self._cover(conn, movie_id, series_id, specials)
 
-            self.assertIn(str(wanted), self._borrowed(conn, movie_id))
+            self._inherit(conn, [movie_id])
 
-    def test_a_film_borrows_nothing(self):
+            self.assertIn(str(wanted), self._poster_of(conn, movie_id)["url"])
+
+    def test_a_film_inherits_nothing(self):
         with self.connect() as conn:
             movie_id = self._disc(conn, title="Heat")
 
-            self.assertIsNone(self._borrowed(conn, movie_id))
+            self.assertEqual(self._inherit(conn, [movie_id]), 0)
+            self.assertIsNone(self._poster_of(conn, movie_id)["url"])
 
-    def test_the_detail_payload_carries_each_covered_season_s_poster(self):
-        """The detail page prefers the season over the series, so it needs both
-        -- and `movie_entity` must not be where they come from, because its rows
-        are stored verbatim as sync delta payloads."""
+    def test_unlinking_a_disc_drops_the_inherited_poster(self):
+        """Otherwise the old season's poster stays behind as though the disc
+        owned it -- and it would then survive every later run, because the check
+        stops at a disc that already has a poster it did not write."""
         with self.connect() as conn:
             series_id = self._series(conn, "Fargo")
-            second = self._season(conn, series_id, 2)
-            wanted = self._season_poster(conn, second)
-            movie_id = self._disc(conn, series_id=series_id, title="Season 2")
-            self._cover(conn, movie_id, series_id, second)
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            movie_id = self._disc(conn, series_id=series_id)
+            self._cover(conn, movie_id, series_id, season)
+            self._inherit(conn, [movie_id])
+            self.assertIsNotNone(self._poster_of(conn, movie_id)["url"])
 
-            payload = next_app.movie_series_payload(conn, movie_id)
-            entity = next_app.movie_entity(conn, movie_id)
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM movie_seasons WHERE movie_id = %s", (movie_id,))
+                next_metadata.clear_orphaned_season_poster(cur, movie_id)
+            conn.commit()
+            row = self._poster_of(conn, movie_id)
 
-        self.assertEqual(len(payload["seasons"]), 1)
-        self.assertIn(str(wanted), payload["seasons"][0]["posterUrl"])
-        for season in entity.get("seasons") or []:
-            self.assertNotIn("posterUrl", season, "a borrowed image must not reach the sync payload")
+        self.assertIsNone(row["url"])
+        self.assertIsNone(row["inherited"])
+
+    def test_unlinking_never_removes_a_poster_the_disc_owns(self):
+        with self.connect() as conn:
+            movie_id = self._disc(conn, title="Heat")
+            self._metadata(conn, movie_id, {"poster_url": "https://img.example/own.jpg"})
+
+            with conn.cursor() as cur:
+                next_metadata.clear_orphaned_season_poster(cur, movie_id)
+            conn.commit()
+
+            self.assertEqual(self._poster_of(conn, movie_id)["url"], "https://img.example/own.jpg")
+
+    def test_a_sweep_with_no_id_list_reaches_every_linked_disc(self):
+        """What migration 078 needs: the discs that already exist are the ones a
+        user is looking at today."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 1)
+            self._season_poster(conn, season)
+            first = self._disc(conn, series_id=series_id, title="A")
+            second = self._disc(conn, series_id=series_id, title="B")
+            self._cover(conn, first, series_id, season)
+            self._cover(conn, second, series_id, season)
+
+            self.assertGreaterEqual(self._inherit(conn, None), 2)
+
+            self.assertIsNotNone(self._poster_of(conn, first)["url"])
+            self.assertIsNotNone(self._poster_of(conn, second)["url"])
+
+    def test_selecting_a_season_in_the_series_tab_gives_the_disc_its_poster(self):
+        """End to end through the path the Series tab actually uses, rather than
+        the helper on its own. Selecting the season is the moment the user
+        expects the poster to appear."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            season = self._season(conn, series_id, 2)
+            wanted = self._season_poster(conn, season)
+            movie_id = self._disc(conn, title="Some Box")
+
+            with conn.cursor() as cur:
+                next_app.apply_movie_series_assignment(
+                    cur,
+                    movie_id,
+                    {"series_id": series_id, "season_ids": [season]},
+                    media_type=next_app.MEDIA_TYPE_SHOW,
+                )
+            conn.commit()
+            row = self._poster_of(conn, movie_id)
+
+        self.assertIn(str(wanted), row["url"])
+        self.assertEqual(row["inherited"], "true")
+
+    def test_moving_a_disc_to_a_season_with_no_artwork_drops_the_old_poster(self):
+        """The clearing step, through the same path. Keeping the previous
+        season's poster would leave the disc claiming artwork for something it no
+        longer carries."""
+        with self.connect() as conn:
+            series_id = self._series(conn, "Fargo")
+            first = self._season(conn, series_id, 1)
+            bare = self._season(conn, series_id, 2)
+            self._season_poster(conn, first)
+            movie_id = self._disc(conn, title="Some Box")
+
+            with conn.cursor() as cur:
+                next_app.apply_movie_series_assignment(
+                    cur, movie_id, {"series_id": series_id, "season_ids": [first]},
+                    media_type=next_app.MEDIA_TYPE_SHOW,
+                )
+            conn.commit()
+            self.assertIsNotNone(self._poster_of(conn, movie_id)["url"])
+
+            with conn.cursor() as cur:
+                next_app.apply_movie_series_assignment(
+                    cur, movie_id, {"series_id": series_id, "season_ids": [bare]},
+                    media_type=next_app.MEDIA_TYPE_SHOW,
+                )
+            conn.commit()
+
+            self.assertIsNone(self._poster_of(conn, movie_id)["url"])
 
 
 if __name__ == "__main__":  # pragma: no cover
