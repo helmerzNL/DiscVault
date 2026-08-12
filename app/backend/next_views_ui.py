@@ -42722,7 +42722,7 @@ def ui_preview_html(
         return;
       }
       if (!(await ensureMovieEditSeries())) return;
-      setMovieDetailMessage(tNext("movieDetail.saving", "Saving movie..."));
+      setMovieDetailMessage(tNext("movieDetail.saving", "Saving title..."));
       const prevDetail = activeDetailPayload || {};
       const prevMovie = prevDetail.movie || {};
       const prevMetadata = prevMovie.metadata || {};
@@ -42857,7 +42857,7 @@ def ui_preview_html(
           return;
         }
         setMovieEditPanelVisible(false);
-        setMovieDetailMessage(tNext("movieDetail.saved", "Movie saved."), "good");
+        setMovieDetailMessage(tNext("movieDetail.saved", "Title saved."), "good");
         if (clearedUnlockedField && hasPermission("metadata.refresh_one")) {
           await refreshActiveMovieMetadata(false);
         }
