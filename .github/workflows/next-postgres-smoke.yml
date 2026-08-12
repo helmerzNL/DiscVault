@@ -112,6 +112,16 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
+      # Reading the plugin list must not make the reader a writer. Losing the
+      # memo would silently restore the coupling that let one slow provider call
+      # freeze every page load -- and nothing about that failure is visible in a
+      # test that only checks the registry ends up correct.
+      - name: Test the plugin registry cache
+        run: >-
+          python -m unittest
+          tests.test_next_plugin_registry_cache
+          tests.test_next_plugin_runtime
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 
