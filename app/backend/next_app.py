@@ -5258,11 +5258,123 @@ def attach_movie_search_credits(conn, movies: list[dict[str, Any]]) -> list[dict
     return movies
 
 
+def container_member_poster_lateral(
+    conn,
+    actor: dict[str, Any] | None,
+    *,
+    container_alias: str = "c",
+    alias: str = "member_poster",
+) -> tuple[str, list[Any]]:
+    """The cover a container borrows from its first visible member film.
+
+    Only a box set reliably owns artwork. A vault and a collection borrow theirs,
+    and the container page has always done so -- it falls back to the artwork
+    aggregated from its members. The library has to reach the same answer, and it
+    cannot do it from the payload alone: `movies` is delivered a page at a time
+    (`COLLECTION_MOVIE_PAGE_SIZE`), so a member outside the first page is simply
+    not there to borrow from, and the tile would stay empty for exactly the
+    largest collections.
+
+    Resolved per container in SQL instead, so the answer does not depend on how
+    much of the library has been scrolled. Members come from `container_movies`
+    (vault, box set) and from `collection_items` (collection), and the member
+    must be visible to the actor -- borrowing must never surface a film the
+    actor may not see.
+
+    Emitted as its own column rather than folded into `poster_url`: the
+    container's own artwork has to outrank anything borrowed, and that ordering
+    belongs to the one resolver every surface calls, not to this query."""
+    has_container_movies = table_exists(conn, "container_movies")
+    has_collection_items = table_exists(conn, "collection_items")
+    if not table_exists(conn, "movies") or not (has_container_movies or has_collection_items):
+        return "", []
+    movie_where, movie_params = visible_movie_where_sql(conn, actor, "member_m") if actor else ("TRUE", [])
+    sources: list[str] = []
+    if has_container_movies:
+        sources.append(
+            f"SELECT cm.movie_id, cm.sort_order FROM container_movies cm WHERE cm.container_id={container_alias}.id"
+        )
+    if has_collection_items:
+        sources.append(
+            f"SELECT ci.item_id AS movie_id, ci.sort_order FROM collection_items ci"
+            f" WHERE ci.collection_id={container_alias}.id AND ci.item_type='movie'"
+        )
+    union = " UNION ALL ".join(sources)
+    sql = f"""
+                LEFT JOIN LATERAL (
+                    SELECT
+                        member_asset.id AS asset_id,
+                        member_asset.storage_backend AS storage_backend,
+                        member_asset.storage_key AS storage_key,
+                        member_asset.source_url AS source_url,
+                        member_asset.provider_id AS provider_id,
+                        member_m.metadata->>'poster_url' AS metadata_poster_url
+                    FROM ({union}) member_link
+                    JOIN movies member_m ON member_m.id = member_link.movie_id
+                    LEFT JOIN LATERAL (
+                        SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
+                        FROM entity_media em
+                        JOIN media_assets ma ON ma.id = em.media_id
+                        WHERE em.entity_type='movie'
+                          AND em.entity_id=member_m.id
+                          AND em.deleted_at IS NULL
+                          AND em.hidden_at IS NULL
+                          AND ma.kind='poster'
+                        ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                        LIMIT 1
+                    ) member_asset ON true
+                    WHERE {movie_where}
+                      AND (
+                            member_asset.id IS NOT NULL
+                            OR NULLIF(member_m.metadata->>'poster_url', '') IS NOT NULL
+                      )
+                    ORDER BY member_link.sort_order, lower(COALESCE(member_m.sort_title, member_m.title))
+                    LIMIT 1
+                ) {alias} ON true
+    """
+    return sql, list(movie_params)
+
+
+CONTAINER_MEMBER_POSTER_COLUMNS = """
+                    member_poster.asset_id AS member_poster_asset_id,
+                    member_poster.storage_backend AS member_poster_storage_backend,
+                    member_poster.storage_key AS member_poster_storage_key,
+                    member_poster.source_url AS member_poster_source_url,
+                    member_poster.provider_id AS member_poster_provider_id,
+                    member_poster.metadata_poster_url AS member_poster_metadata_url,
+"""
+
+
+def fold_container_member_poster(row: dict[str, Any]) -> dict[str, Any]:
+    """Fold the borrowed-cover columns into a single `member_poster_url`.
+
+    Kept beside `poster_url` rather than merged into it, for the reason
+    `container_member_poster_lateral` gives: which cover wins is the resolver's
+    decision, and a caller has to be able to tell a container's own artwork from
+    one it is standing in with."""
+    data = dict(row)
+    asset = {
+        "id": data.pop("member_poster_asset_id", None),
+        "storage_backend": data.pop("member_poster_storage_backend", None),
+        "storage_key": data.pop("member_poster_storage_key", None),
+        "source_url": data.pop("member_poster_source_url", None),
+        "kind": "poster",
+        "provider_id": data.pop("member_poster_provider_id", None),
+    }
+    metadata_poster_url = data.pop("member_poster_metadata_url", None)
+    url = media_asset_public_url(asset) or first_usable_image(metadata_poster_url)
+    if url:
+        data["member_poster_url"] = url
+    return data
+
+
 def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     if not table_exists(conn, "containers"):
         return []
     visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
     if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        member_poster_sql, member_poster_params = container_member_poster_lateral(conn, actor)
+        member_poster_columns = CONTAINER_MEMBER_POSTER_COLUMNS if member_poster_sql else ""
         with conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -5277,6 +5389,7 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     c.description,
                     c.owner_id,
                     c.metadata,
+{member_poster_columns}
                     poster_asset.id AS poster_asset_id,
                     poster_asset.storage_backend AS poster_asset_storage_backend,
                     poster_asset.storage_key AS poster_asset_storage_key,
@@ -5314,13 +5427,17 @@ def collection_container_preview_entities(conn, *, limit: int = 200, actor: dict
                     ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
                     LIMIT 1
                 ) backdrop_asset ON true
+{member_poster_sql}
                 WHERE {visibility_where}
                 ORDER BY c.container_type, lower(c.title)
                 LIMIT %s
                 """,
-                (*visibility_params, limit),
+                (*member_poster_params, *visibility_params, limit),
             )
-            return attach_location_summaries(conn, [with_preview_media_urls(row) for row in cur.fetchall()])
+            return attach_location_summaries(
+                conn,
+                [with_preview_media_urls(fold_container_member_poster(row)) for row in cur.fetchall()],
+            )
     with conn.cursor() as cur:
         cur.execute(
             f"""

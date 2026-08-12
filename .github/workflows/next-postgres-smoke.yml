@@ -447,6 +447,11 @@ jobs:
               "/api/next/metadata/plugins",
               "/api/next/movies",
               "/api/next/containers",
+              # The library's own payload. It was never smoked, so a SQL error
+              # in the snapshot broke the whole library page with nothing red --
+              # and the container queries behind it are the ones that grew a
+              # borrowed-cover join.
+              "/api/next/app/snapshot",
               "/api/next/sync/state",
               "/api/next/sync/bootstrap",
               "/api/next/sync/delta?since=0",

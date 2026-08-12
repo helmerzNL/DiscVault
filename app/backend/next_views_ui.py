@@ -26659,6 +26659,14 @@ def ui_preview_html(
         || usableImage(metadata.posterUrl)
         || usableImage(metadata.poster);
       if (own) return own;
+      // The server resolves the borrowed cover per container, because `movies`
+      // arrives a page at a time: a member outside the loaded page is not there
+      // to borrow from, and the tile would stay empty for exactly the largest
+      // collections. The client scan stays as a second reading -- it costs
+      // nothing, it follows the library's own ordering, and it still answers for
+      // a payload built before the column existed.
+      const servedPoster = usableImage(container?.member_poster_url);
+      if (servedPoster) return servedPoster;
       const memberPoster = containerMemberMovies(container?.id)
         .map((movie) => usableImage(movie?.poster_url) || usableImage(movie?.metadata?.poster_url))
         .find(Boolean);
