@@ -379,6 +379,12 @@ jobs:
           tests.test_next_containers
           tests.test_next_container_reorder
 
+      # A MovieVault poster is served by its own route; the generic media route
+      # refuses it. This pins that every reader of a box-set's linked cover
+      # builds the URL that will actually serve it.
+      - name: Test the poster URL a linked MovieVault cover resolves to
+        run: python -m unittest tests.test_next_container_poster_url
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'
