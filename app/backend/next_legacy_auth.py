@@ -117,15 +117,26 @@ def attempt_is_throttled(identity_failures: int, ip_failures: int) -> bool:
 
 # Some endpoints cannot know who is knocking until after the credential check --
 # a passkey assertion and a PKCE exchange both carry a credential, not a name.
-# They have one dimension left to count on, and a single IPv4 address is normal
-# for a whole household behind NAT. So this ceiling sits well above the
-# identity-keyed one: it is here to bound abuse of an endpoint, not to police a
-# family that mistypes its way through a login.
-IP_ONLY_LOCK_ATTEMPTS = 50
+# They have one dimension left to count on, so how tight that ceiling may be
+# depends entirely on whether the address identifies one client or many.
+#
+# When it identifies one client -- a direct connection, or a proxy the operator
+# configured as trusted so the real client address is recovered -- a low ceiling
+# is both effective and safe: whoever trips it locks out only themselves.
+IP_ONLY_LOCK_ATTEMPTS = 15
+
+# When it does not, every caller shares one bucket. That is the state of an
+# unconfigured deployment behind a reverse proxy, where the peer is always the
+# proxy. A low ceiling there would be a denial-of-service lever rather than a
+# defence: a handful of anonymous requests would lock every real user out of
+# login. So the shared bucket gets a much looser bound, and the way to earn the
+# tight one is to configure DISCVAULT_TRUSTED_PROXIES.
+IP_ONLY_SHARED_LOCK_ATTEMPTS = 50
 
 
-def ip_only_attempt_is_throttled(ip_failures: int) -> bool:
-    return int(ip_failures) >= IP_ONLY_LOCK_ATTEMPTS
+def ip_only_attempt_is_throttled(ip_failures: int, *, address_is_per_client: bool = False) -> bool:
+    ceiling = IP_ONLY_LOCK_ATTEMPTS if address_is_per_client else IP_ONLY_SHARED_LOCK_ATTEMPTS
+    return int(ip_failures) >= ceiling
 
 
 def failed_attempt_state(

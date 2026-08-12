@@ -11,6 +11,7 @@ same names from ``next_app``).
 from __future__ import annotations
 
 import ipaddress
+import os
 from typing import Any
 
 from flask import Flask, has_request_context, request
@@ -131,6 +132,130 @@ def normalize_request_ip_candidate(value: Any) -> str:
     return text.strip()
 
 
+TRUSTED_PROXIES_ENV = "DISCVAULT_TRUSTED_PROXIES"
+
+# The keyword an operator can use instead of listing their own subnets. Nearly
+# every self-hosted deployment puts the reverse proxy on the same private
+# network as the application, and asking people to write out four CIDRs to
+# describe "my own LAN" is how a security setting ends up unset.
+_PRIVATE_PROXY_NETWORKS = (
+    "127.0.0.0/8",
+    "::1/128",
+    "10.0.0.0/8",
+    "172.16.0.0/12",
+    "192.168.0.0/16",
+    "169.254.0.0/16",
+    "fc00::/7",
+    "fe80::/10",
+)
+
+_trusted_proxy_cache: tuple[str, tuple[Any, ...]] | None = None
+
+
+def trusted_proxy_networks() -> tuple[Any, ...]:
+    """Networks whose forwarded client headers may be believed.
+
+    Empty by default, and that default is deliberate: an unset value means no
+    header is trusted and every request is attributed to the address the server
+    actually saw. Getting that wrong in the permissive direction is what lets a
+    caller pick its own identity in the audit trail and rotate away from a
+    throttle, so the failure mode of forgetting to configure this is a loss of
+    detail rather than a loss of the control.
+    """
+
+    global _trusted_proxy_cache
+    raw = str(os.environ.get(TRUSTED_PROXIES_ENV) or "").strip()
+    if _trusted_proxy_cache is not None and _trusted_proxy_cache[0] == raw:
+        return _trusted_proxy_cache[1]
+
+    networks: list[Any] = []
+    for entry in raw.replace(";", ",").split(","):
+        token = entry.strip()
+        if not token:
+            continue
+        if token.lower() in {"private", "local", "lan"}:
+            for network in _PRIVATE_PROXY_NETWORKS:
+                networks.append(ipaddress.ip_network(network))
+            continue
+        try:
+            networks.append(ipaddress.ip_network(token, strict=False))
+        except ValueError:
+            # A typo must not silently widen trust, and it must not take the
+            # application down either. Skipping the entry keeps the remaining
+            # hops working and leaves this one untrusted.
+            continue
+    resolved = tuple(networks)
+    _trusted_proxy_cache = (raw, resolved)
+    return resolved
+
+
+def _address_is_trusted_proxy(value: Any) -> bool:
+    networks = trusted_proxy_networks()
+    if not networks:
+        return False
+    candidate = normalize_request_ip_candidate(value)
+    if not candidate:
+        return False
+    try:
+        parsed = ipaddress.ip_address(candidate)
+    except ValueError:
+        return False
+    return any(parsed in network for network in networks)
+
+
+def request_is_behind_trusted_proxy() -> bool:
+    try:
+        return _address_is_trusted_proxy(request.remote_addr)
+    except RuntimeError:  # pragma: no cover - no request context
+        return False
+
+
+def trusted_client_ip() -> str:
+    """The client address, believed only as far as the topology allows.
+
+    Direct connections answer with the peer. Behind a configured proxy the
+    forwarded chain is walked from the right, discarding hops that are
+    themselves trusted proxies, so the first address the operator has not
+    vouched for is the one attributed -- an extra header a client bolts on the
+    left cannot displace it.
+    """
+
+    try:
+        peer = str(request.remote_addr or "").strip()
+    except RuntimeError:  # pragma: no cover - no request context
+        return ""
+    if not request_is_behind_trusted_proxy():
+        return peer
+
+    chain: list[str] = []
+    for header in ("X-Forwarded-For", "X-Original-Forwarded-For"):
+        forwarded = request.headers.get(header)
+        if not forwarded:
+            continue
+        for part in str(forwarded).split(","):
+            candidate = normalize_request_ip_candidate(part)
+            if candidate:
+                chain.append(candidate)
+        break
+    if not chain:
+        for header in ("CF-Connecting-IP", "True-Client-IP", "X-Real-IP"):
+            candidate = normalize_request_ip_candidate(request.headers.get(header))
+            if candidate:
+                chain.append(candidate)
+                break
+    if not chain:
+        return peer
+
+    for candidate in reversed(chain):
+        try:
+            ipaddress.ip_address(candidate)
+        except ValueError:
+            continue
+        if not _address_is_trusted_proxy(candidate):
+            return candidate
+    return chain[0]
+
+
 def request_ip_details() -> dict[str, Any]:
     candidates: list[dict[str, str]] = []
 
@@ -153,31 +278,37 @@ def request_ip_details() -> dict[str, Any]:
             }
         )
 
-    for header in (
-        "X-DiscVault-Client-IP",
-        "CF-Connecting-IP",
-        "True-Client-IP",
-        "Fastly-Client-IP",
-        "Fly-Client-IP",
-        "X-Azure-ClientIP",
-        "X-Real-IP",
-        "X-Client-IP",
-        "X-Cluster-Client-IP",
-    ):
-        add_candidate(header, request.headers.get(header))
-    for header in ("X-Forwarded-For", "X-Original-Forwarded-For"):
-        forwarded_for = request.headers.get(header)
-        if not forwarded_for:
-            continue
-        for index, part in enumerate(str(forwarded_for).split(",")):
-            add_candidate(f"{header}[{index}]", part)
-    forwarded = request.headers.get("Forwarded")
-    if forwarded:
-        for segment_index, segment in enumerate(str(forwarded).split(",")):
-            for part in segment.split(";"):
-                part = part.strip()
-                if part.lower().startswith("for="):
-                    add_candidate(f"Forwarded[{segment_index}]", part)
+    # Forwarding headers are only read when the hop that delivered the request
+    # is one the operator vouched for. Before this gate every one of these was
+    # believed unconditionally, so any caller could name its own address: the
+    # recorded requestIp was a claim by the party being audited.
+    trusted = request_is_behind_trusted_proxy()
+    if trusted:
+        for header in (
+            "X-DiscVault-Client-IP",
+            "CF-Connecting-IP",
+            "True-Client-IP",
+            "Fastly-Client-IP",
+            "Fly-Client-IP",
+            "X-Azure-ClientIP",
+            "X-Real-IP",
+            "X-Client-IP",
+            "X-Cluster-Client-IP",
+        ):
+            add_candidate(header, request.headers.get(header))
+        for header in ("X-Forwarded-For", "X-Original-Forwarded-For"):
+            forwarded_for = request.headers.get(header)
+            if not forwarded_for:
+                continue
+            for index, part in enumerate(str(forwarded_for).split(",")):
+                add_candidate(f"{header}[{index}]", part)
+        forwarded = request.headers.get("Forwarded")
+        if forwarded:
+            for segment_index, segment in enumerate(str(forwarded).split(",")):
+                for part in segment.split(";"):
+                    part = part.strip()
+                    if part.lower().startswith("for="):
+                        add_candidate(f"Forwarded[{segment_index}]", part)
     add_candidate("remote_addr", request.remote_addr)
 
     selected = ""
@@ -191,6 +322,7 @@ def request_ip_details() -> dict[str, Any]:
         "ip": selected,
         "source": selected_source,
         "candidates": candidates,
+        "forwardingTrusted": trusted,
     }
 
 
