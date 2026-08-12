@@ -82,6 +82,13 @@ jobs:
           tests.test_next_mobile_auth
           tests.test_next_review_login
 
+      # The passkey ceremony itself. On a passkey-only instance this is the
+      # entire front door, and both defects it covers were invisible in normal
+      # single-user testing: the challenge race needs two people at once, and
+      # the counter check needs an authenticator that actually counts.
+      - name: Test the passkey login ceremony
+        run: python -m unittest tests.test_next_passkey_ceremony
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 

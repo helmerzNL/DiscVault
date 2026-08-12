@@ -2665,6 +2665,17 @@ def register_next_auth_routes(
             row = cur.fetchone()
         return bytes(row["challenge"]) if row else None
 
+    def login_challenge_key(challenge: bytes) -> str:
+        """One row per login ceremony, addressed by the challenge itself.
+
+        The challenge already makes the round trip inside clientDataJSON, so
+        keying on it needs nothing new from any client -- which matters,
+        because the iOS and Android apps live in other repositories and
+        cannot be changed in step with the server.
+        """
+
+        return f"login:{_b64url_encode(challenge)}"
+
     def validate_invite(conn, username: str, invite_code: str) -> dict[str, Any] | None:
         if not invite_code:
             return None
@@ -4200,7 +4211,13 @@ def register_next_auth_routes(
                     credentials = cur.fetchall()
             challenge = _make_challenge()
             with conn.transaction():
-                store_challenge(conn, "login", challenge)
+                # Keyed by the challenge itself rather than a fixed "login"
+                # slot. One slot meant one pending login for the whole
+                # instance: two people signing in at the same moment
+                # overwrote each other, and the first to finish failed on a
+                # challenge that no longer existed. On a passkey-only
+                # instance that is the entire front door.
+                store_challenge(conn, login_challenge_key(challenge), challenge)
 
         options = {
             "challenge": _b64url_encode(challenge),
@@ -4253,12 +4270,34 @@ def register_next_auth_routes(
             # counts on the peer address alone under the IP-only ceiling. The
             # point is not to make guessing a signature harder -- that is already
             # infeasible -- but to bound how cheaply this route can be driven,
-            # since every call burns the single pending login challenge.
+            # since each call consumes a stored challenge row.
             identity_hash, ip_hash = enforce_scoped_throttle(
                 conn, "passkey-verify", ip_only=True
             )
-            challenge = pop_challenge(conn, "login")
+            # The challenge is read out of clientDataJSON before anything is
+            # trusted, purely to address the row it belongs to. Nothing is
+            # believed on its say-so: a value we never issued finds no row, and
+            # a value we did issue is consumed here so it cannot be replayed.
+            try:
+                presented_challenge = _b64url_decode(
+                    str(
+                        (json.loads(_b64url_decode(credential["response"]["clientDataJSON"])) or {})
+                        .get("challenge")
+                        or ""
+                    )
+                )
+            except Exception:
+                presented_challenge = b""
+            # Decoded to bytes and re-encoded through the same helper the store
+            # side uses, so padding differences between clients cannot turn a
+            # valid challenge into a missing row.
+            challenge = (
+                pop_challenge(conn, login_challenge_key(presented_challenge))
+                if presented_challenge
+                else None
+            )
             if not challenge:
+                record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                 raise next_api_error("No pending challenge", 400)
             with conn.cursor() as cur:
                 cur.execute(
@@ -4299,6 +4338,37 @@ def register_next_auth_routes(
             except Exception as exc:
                 record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
                 raise next_api_error(f"Verification failed: {exc}", 400) from exc
+
+            # The signature counter was written on every login and compared on
+            # none, so the one thing it exists to reveal -- the same credential
+            # in two places -- went unnoticed.
+            #
+            # Only meaningful when both sides count. Passkeys synced through
+            # iCloud Keychain or a password manager report 0 forever by design,
+            # and treating a permanent 0 as a regression would reject every
+            # login from the authenticators most people actually use.
+            stored_sign_count = int(stored.get("sign_count") or 0)
+            if new_sign_count and stored_sign_count and new_sign_count <= stored_sign_count:
+                audit_event(
+                    conn,
+                    event_type="auth.passkey_sign_count_regressed",
+                    category="security",
+                    actor={
+                        "id": stored["user_id"],
+                        "username": stored["username"],
+                        "role": None,
+                    },
+                    target_type="passkey_credential",
+                    target_id=str(credential_id),
+                    summary="Passkey signature counter did not advance",
+                    metadata={
+                        "storedSignCount": stored_sign_count,
+                        "presentedSignCount": int(new_sign_count),
+                    },
+                )
+                conn.commit()
+                record_scoped_attempt(identity_hash, ip_hash, succeeded=False)
+                raise next_api_error("Verification failed: signature counter did not advance", 400)
 
             with conn.transaction():
                 with conn.cursor() as cur:
