@@ -27,6 +27,30 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_mcp_activity import MCP_TOOL_NAMES
 
 
+# Which permissions a user may put on a token they create themselves.
+#
+# This list is a ceiling on the *kind* of authority a bearer token may carry,
+# not on who may carry it: normalize_api_token_permissions separately refuses
+# any key the creator's own role lacks, so widening this can never let someone
+# grant more than they hold.
+#
+# watchlist.manage and lending.request are here because between them they gate
+# 47 ordinary personal-library routes -- watchlist, wishlist, watched history,
+# tags, loans, personal stats, the per-user sync stream, and every loan request.
+# Leaving them out made the one thing a personal token is usually created for
+# unreachable by any token at all.
+#
+# watchlist.manage carries a consequence worth stating plainly: it is also the
+# permission that governs price-provider plugins (plugin_manage_permissions
+# maps the price_provider category to it), so a token holding it can read and
+# write those plugins' configuration, secrets included. That is authority the
+# creator already has, but it is wider than the key's name suggests.
+#
+# Deliberately still absent, and meant to stay absent -- these do not belong in
+# a bearer token even when its creator holds them: admin.*, security.*,
+# groups.create, groups.invite, collection.delete_*, collection.export_functional,
+# containers.delete, metadata.manage_*, and digital_sources.*. Routes gated
+# solely on those keys are unreachable by token by design.
 API_TOKEN_GRANTABLE_PERMISSION_KEYS = (
     "api.read",
     "api.write",
@@ -43,9 +67,11 @@ API_TOKEN_GRANTABLE_PERMISSION_KEYS = (
     "containers.create",
     "containers.edit",
     "groups.view",
+    "lending.request",
     "metadata.search",
     "metadata.refresh_one",
     "metadata.refresh_bulk",
+    "watchlist.manage",
     "admin.view_jobs",
 )
 API_TOKEN_DEFAULT_PERMISSION_KEYS = (
@@ -285,12 +311,19 @@ def normalize_api_token_permissions(conn, actor: dict[str, Any], raw_values: Any
 
 def api_token_scopes_for_permissions(permission_keys: list[str]) -> list[str]:
     scopes: list[str] = []
+    # watchlist.manage and lending.request appear in both sets on purpose: each
+    # gates reads (the lists, the loans, the requests) and the mutations on the
+    # same data. Listing them only as writes would show "write" on a token whose
+    # GETs work; omitting them entirely -- which is what happened before they
+    # were grantable -- gives a token holding nothing else an empty scope list.
     read_permissions = {
         "api.read",
         "collection.view",
         "containers.view",
         "groups.view",
+        "lending.request",
         "metadata.search",
+        "watchlist.manage",
     }
     write_permissions = {
         "api.write",
@@ -301,8 +334,10 @@ def api_token_scopes_for_permissions(permission_keys: list[str]) -> list[str]:
         "collection.bulk_edit",
         "containers.create",
         "containers.edit",
+        "lending.request",
         "metadata.refresh_one",
         "metadata.refresh_bulk",
+        "watchlist.manage",
     }
     permission_set = set(permission_keys)
     if permission_set.intersection(read_permissions):

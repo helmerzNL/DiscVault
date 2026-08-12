@@ -89,6 +89,18 @@ jobs:
       - name: Test the passkey login ceremony
         run: python -m unittest tests.test_next_passkey_ceremony
 
+      # Reads the routing table out of the source and checks that the token the
+      # server hands its own native clients can actually pass every gate the
+      # advertised contract sends them through. Tightening a route's permission
+      # without widening the tuple is meant to fail here -- today it would fail
+      # silently in the field instead, and only once token scopes are binding.
+      - name: Test token scope sufficiency
+        run: >-
+          python -m unittest
+          tests.test_next_token_scope_sufficiency
+          tests.test_next_api_token
+          tests.test_next_api_tokens
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 
