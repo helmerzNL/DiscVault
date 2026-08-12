@@ -115,6 +115,19 @@ def attempt_is_throttled(identity_failures: int, ip_failures: int) -> bool:
     return int(identity_failures) >= LOCK_ATTEMPTS or int(ip_failures) >= LOCK_ATTEMPTS * 4
 
 
+# Some endpoints cannot know who is knocking until after the credential check --
+# a passkey assertion and a PKCE exchange both carry a credential, not a name.
+# They have one dimension left to count on, and a single IPv4 address is normal
+# for a whole household behind NAT. So this ceiling sits well above the
+# identity-keyed one: it is here to bound abuse of an endpoint, not to police a
+# family that mistypes its way through a login.
+IP_ONLY_LOCK_ATTEMPTS = 50
+
+
+def ip_only_attempt_is_throttled(ip_failures: int) -> bool:
+    return int(ip_failures) >= IP_ONLY_LOCK_ATTEMPTS
+
+
 def failed_attempt_state(
     failed_attempt_count: int,
     first_failed_at: datetime | None,
