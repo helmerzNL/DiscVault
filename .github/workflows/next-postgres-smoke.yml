@@ -398,6 +398,12 @@ jobs:
       - name: Test box-set member deduplication
         run: python -m unittest tests.test_next_box_set_member_dedupe
 
+      # A vault and a collection showed a cover on their page and an empty tile
+      # in the library. This guards that every container surface resolves the
+      # cover through the one shared chain.
+      - name: Test the container tile's poster resolution
+        run: python -m unittest tests.test_next_container_tile_poster
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'

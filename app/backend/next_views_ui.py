@@ -26612,6 +26612,63 @@ def ui_preview_html(
     function containerPosterValue(container) {
       return container?.poster_url || container?.metadata?.poster_url || container?.metadata?.poster || container?.poster || "";
     }
+    function childContainersOf(containerId) {
+      const id = String(containerId || "");
+      if (!id) return [];
+      const childIds = new Set();
+      containerMembershipRows().forEach((row) => {
+        if (String(row?.container_id || "") !== id) return;
+        const childId = String(row?.child_container_id || "");
+        if (childId) childIds.add(childId);
+      });
+      if (!childIds.size) return [];
+      return (containers || []).filter((entry) => childIds.has(String(entry?.id || "")));
+    }
+    // What a container's tile shows, resolved through the same chain the
+    // container page uses. A vault and a collection showed a cover on their own
+    // page and an empty tile in the library, because the page falls back to the
+    // artwork aggregated from its members and the tile read only the container's
+    // own `poster_url` column. Two surfaces disagreeing about the same
+    // container, and the empty one reads as a bug rather than as a gap.
+    //
+    // The rungs, and why they are in this order:
+    //
+    //  - the container's own artwork first, column then metadata. A cover
+    //    somebody chose, or the one a refresh stored for it, must outrank
+    //    anything borrowed.
+    //  - then a member film's poster. Borrowing is only right for a container
+    //    nobody has given artwork to, which is exactly what the first rung
+    //    settles before this one is reached.
+    //  - then a child container's *own* cover, for a collection whose members
+    //    are box sets and which therefore has no member films to borrow from.
+    //    Deliberately one hop and non-recursive: cycles predating the write
+    //    guard are known to be possible, and one hop is enough to fill a tile.
+    //  - the container's backdrop last. It is the wrong shape for a poster
+    //    slot, so it stands in only when nothing else does -- which is what
+    //    the tile did before, and no tile that shows something today should
+    //    fall back to an empty one.
+    //
+    // Each rung is its own `usableImage` call rather than `usableImage(a || b)`,
+    // and the member scan maps through `usableImage` before `find`, for the
+    // reason `itemPosterUrl` records for series: `||` short-circuits on a
+    // truthy-but-unusable value and drops a good poster on the floor.
+    function containerTilePosterUrl(container) {
+      const metadata = container?.metadata || {};
+      const own = usableImage(container?.poster_url)
+        || usableImage(metadata.poster_url)
+        || usableImage(metadata.posterUrl)
+        || usableImage(metadata.poster);
+      if (own) return own;
+      const memberPoster = containerMemberMovies(container?.id)
+        .map((movie) => usableImage(movie?.poster_url) || usableImage(movie?.metadata?.poster_url))
+        .find(Boolean);
+      if (memberPoster) return memberPoster;
+      const childPoster = childContainersOf(container?.id)
+        .map((child) => usableImage(child?.poster_url) || usableImage(child?.metadata?.poster_url))
+        .find(Boolean);
+      if (childPoster) return childPoster;
+      return usableImage(container?.backdrop_url) || usableImage(metadata.backdrop_url) || "";
+    }
     function containerBackdropValue(container) {
       return container?.backdrop_url || container?.metadata?.backdrop_url || container?.metadata?.backdrop || container?.backdrop || "";
     }
@@ -26957,7 +27014,7 @@ def ui_preview_html(
       return containerTypeLabel(item.container?.container_type);
     }
     function itemPosterUrl(item) {
-      if (item?.kind === "container") return usableImage(item.container?.poster_url || item.container?.backdrop_url);
+      if (item?.kind === "container") return containerTilePosterUrl(item.container);
       // The series' own poster first; a disc's only when it has none. Borrowing
       // is still right for a series nobody has given artwork to -- an empty tile
       // reads as a bug rather than as a gap -- but it must not outrank a poster
@@ -27727,7 +27784,7 @@ def ui_preview_html(
       `;
     }
     function containerPosterCardHtml(container, index) {
-      const poster = usableImage(container.poster_url || container.backdrop_url);
+      const poster = containerTilePosterUrl(container);
       const typeLabel = containerTypeLabel(container.container_type);
       const showFormatBadge = String(container.container_type || "") !== "collection" && preferences.show_container_format_badges !== false;
       const showMemberBadge = preferences.show_container_member_badges !== false;
@@ -47236,8 +47293,10 @@ def ui_preview_html(
     function selectContainer(containerId) {
       const container = containers.find((item) => String(item.id) === String(containerId)) || {};
       const title = container.title || tNext("common.untitled", "Untitled");
-      const backdrop = usableImage(container.backdrop_url || container.poster_url);
-      const poster = usableImage(container.poster_url || container.backdrop_url);
+      // Two calls, not `usableImage(a || b)`: the `||` short-circuits on a
+      // truthy-but-unusable value and drops the other on the floor.
+      const backdrop = usableImage(container.backdrop_url) || usableImage(container.poster_url);
+      const poster = containerTilePosterUrl(container);
       document.getElementById("heroTitle").textContent = title;
       document.getElementById("heroMeta").innerHTML = [
         containerTypeLabel(container.container_type),
