@@ -719,3 +719,185 @@ class EpisodesOnThePersonalListsTests(EpisodePresentationTests):
         self.assertEqual(rows[0]["series_title"], "Show")
         self.assertIsNone(rows[0]["disc_movie_id"], "the disc link went with the episode")
         self.assertFalse(rows[0]["movie_exists"], "so the entry is not clickable")
+
+
+class TheSeasonsTabIsABrowserTests(unittest.TestCase):
+    """The Seasons tab shows one season at a time.
+
+    What it replaces was a grid of season cards each holding an inline
+    expander. Opening three of them made the page as long as the show, the
+    episode lists sat inside 260px grid cells that were never meant to hold
+    them, and nothing on screen said which season was being read. A rail that
+    picks and a stage that shows is the shape that answers that question
+    without stacking.
+
+    These assertions read the rendered page's source. They are about structure
+    a reader depends on -- one season at a time, arrows that stop at the ends,
+    a keyboard that can reach every season -- not about styling.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def _function(self, name):
+        start = self.source.index(name)
+        return self.source[start:self.source.index("\n    function ", start + 1)]
+
+    def test_the_rail_picks_and_the_stage_shows(self):
+        body = self._function("function seriesSeasonRowsHtml(")
+        self.assertIn("seriesSeasonRailHtml(seasons, owned, selected)", body)
+        self.assertIn("seriesSeasonStageHtml(seasons, owned, selected)", body)
+        # One stage means one episode list on the page: the old shape rendered
+        # a `data-season-episode-list` per season, and every write had to find
+        # the right one among them.
+        self.assertEqual(self.source.count('<div class="series-episode-list" data-season-episode-list='), 1)
+
+    def test_the_arrows_stop_at_the_ends_rather_than_wrapping(self):
+        """A Next that jumps from the last season back to the first reads as a
+        mis-click, not as a feature."""
+        rail = self._function("function seriesSeasonRailHtml(")
+        self.assertIn("disabled", rail)
+        self.assertIn('data-season-step="${delta}"', rail)
+        step = self._function("function stepSeriesSeason(")
+        self.assertIn("if (next) selectSeriesSeason(next.id, options);", step)
+        self.assertNotIn("%", step, "no modulo, so no wraparound")
+
+    def test_the_rail_is_one_tab_stop_with_arrow_keys_inside_it(self):
+        """Twenty seasons must not be twenty tab stops between the head of the
+        page and the episodes, which is what a roving tabindex is for."""
+        rail = self._function("function seriesSeasonRailHtml(")
+        self.assertIn('role="tablist"', rail)
+        self.assertIn('role="tab"', rail)
+        self.assertIn('tabindex="${active ? "0" : "-1"}"', rail)
+        self.assertIn('aria-selected="${active ? "true" : "false"}"', rail)
+        for key in ("ArrowLeft", "ArrowRight", "Home", "End"):
+            self.assertIn(f'event.key === "{key}"', self.source)
+
+    def test_the_tab_opens_on_a_season_the_collection_carries(self):
+        """A show you own only the last two seasons of must not open on a
+        season 1 you do not have."""
+        body = self._function("function seriesSelectedSeason(")
+        self.assertIn(
+            "seasons.find((season) => owned.has(Number.parseInt(season.seasonNumber, 10))) || seasons[0]",
+            body,
+        )
+
+    def test_switching_series_drops_the_previous_one_s_episode_cache(self):
+        """Season ids from another series name nothing here, and a cache keyed
+        by them would answer for a season no longer on screen."""
+        body = self._function("function seriesSelectedSeason(")
+        self.assertIn("seriesSeasonEpisodeCache.clear();", body)
+        self.assertIn('seriesSeasonSelection = "";', body)
+
+    def test_a_late_response_cannot_paint_into_another_season_s_page(self):
+        """Switching season replaces the stage while a request is in flight.
+
+        Writing into the node captured before the await would put one season's
+        episodes under another season's heading -- and nothing about it would
+        look wrong.
+        """
+        body = self._function("async function loadSeasonEpisodes(")
+        self.assertIn("const paint = (html) => {", body)
+        self.assertIn(
+            'const node = document.querySelector(`[data-season-episode-list="${seasonId}"]`);',
+            body,
+        )
+        self.assertNotIn("node.innerHTML =", body.split("const paint")[0])
+
+    def test_a_write_replaces_the_cached_list_rather_than_leaving_it_stale(self):
+        """Every write returns the season's new episode list. Leaving the old
+        one cached would undo the write the moment the reader stepped away and
+        came back."""
+        body = self._function("async function runSeasonListAction(")
+        self.assertIn(
+            "seriesSeasonEpisodeCache.set(listId, {episodes: payload.episodes || []});",
+            body,
+        )
+        self.assertIn("if (typeof listsState === \"object\" && listsState) listsState.loaded = false;", body)
+
+
+class AnEpisodeIsMarkedWatchedLikeAFilmTests(unittest.TestCase):
+    """Saying when you watched something is one gesture, not two.
+
+    A film opens a sheet offering today, yesterday and a date picker. An
+    episode used to write `now` and offer nothing -- which is wrong for the
+    ordinary case it exists for, a box set watched over a fortnight. Both now
+    open the same sheet, from the same function, wearing the same button.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        path = os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+        with open(os.path.abspath(path), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def _function(self, name):
+        start = self.source.index(name)
+        return self.source[start:self.source.index("\n    function ", start + 1)]
+
+    def test_the_sheet_is_written_once_and_used_by_both(self):
+        self.assertEqual(self.source.count('data-rewatch-date="today"'), 1)
+        for caller in (
+            "function openMovieRewatchDialog()",
+            "function openEpisodeWatchedSheet(",
+            "function openSeasonWatchedSheet(",
+        ):
+            self.assertIn("openWatchedDateSheet({", self._function(caller))
+
+    def test_the_chosen_date_reaches_the_route_rather_than_being_dropped(self):
+        """Both routes have accepted `watchedAt` since the day they were
+        written; the button just never sent one."""
+        body = self._function("function openEpisodeWatchedSheet(")
+        self.assertIn("onPick: (watchedAt) => runSeasonListAction(button, {path, body: {watchedAt}})", body)
+        season = self._function("function openSeasonWatchedSheet(")
+        self.assertIn("body: {watchedAt}", season)
+        writer = self._function("async function runSeasonListAction(")
+        self.assertIn("body: JSON.stringify(body || {})", writer)
+
+    def test_a_watched_episode_can_be_un_watched_from_the_same_sheet(self):
+        """A film deletes individual dates from its history pills. An episode
+        carries no such list, so without a remove entry in the sheet its
+        watched state would be a one-way door."""
+        body = self._function("function openEpisodeWatchedSheet(")
+        self.assertIn('remove: button.dataset.watched === "1"', body)
+        self.assertIn("removeEpisodeWatched", body)
+        sheet = self._function("function openWatchedDateSheet(")
+        self.assertIn('data-rewatch-date="remove"', sheet)
+        self.assertIn("remove?.run();", sheet)
+
+    def test_a_fully_watched_season_clears_instead_of_asking_for_a_date(self):
+        """The server marks only the episodes that were unwatched, so on a
+        season with none left every date choice would write nothing."""
+        body = self._function("function openSeasonWatchedSheet(")
+        self.assertIn('if (button.dataset.watched === "1") {', body)
+        self.assertIn("runSeasonListAction(button, {path, remove: true, seasonId});", body)
+
+    def test_both_buttons_wear_the_film_s_button(self):
+        card = self._function("function seriesEpisodeCardHtml(")
+        self.assertIn('class="list-action-button compact watched', card)
+        self.assertIn('class="list-action-button compact watchlist', card)
+        bulk = self._function("function seriesSeasonBulkHtml(")
+        self.assertIn('class="list-action-button watched', bulk)
+        self.assertIn('class="list-action-button watchlist', bulk)
+        self.assertNotIn("secondary-button", card + bulk)
+
+    def test_an_episode_says_which_one_it_is_and_when_it_was_seen(self):
+        card = self._function("function seriesEpisodeCardHtml(")
+        self.assertIn("seriesEpisodeCode(seasonNumber, episode.episodeNumber)", card)
+        self.assertIn('tNext("seriesDetail.watchedOn", "Watched {date}")', card)
+        self.assertIn("formatAppDate(episode.watchedAt)", card)
+        code = self._function("function seriesEpisodeCode(")
+        self.assertIn('.padStart(2, "0")', code)
+        self.assertIn('tNext("seriesDetail.episodeCode", "S{season}E{episode}")', code)
+
+    def test_the_still_opens_the_disc_only_when_one_carries_the_episode(self):
+        """`discId` is null exactly when nothing in the collection carries the
+        episode, so the frame is inert then rather than promising somewhere to
+        go and having none."""
+        card = self._function("function seriesEpisodeCardHtml(")
+        self.assertIn("const thumb = episode.discId", card)
+        self.assertIn('data-episode-disc="${escapeHtml(episode.discId)}"', card)
+        self.assertIn('["[data-episode-disc]", (node) => openAppMovieDetail(node.dataset.episodeDisc)]', self.source)
