@@ -581,20 +581,35 @@ class NextMovieDetailUiTests(unittest.TestCase):
 
         self.assertLess(actions_index, history_index)
         self.assertIn(
-            'class="movie-list-primary-action rewatch" '
+            'class="list-action-button rewatch" '
             'id="movieLogRewatchButton" aria-haspopup="dialog"',
             self.source,
         )
         self.assertIn(
-            'class="movie-list-primary-action watchlist" '
+            'class="list-action-button watchlist" '
             'id="movieWatchlistToggleButton" aria-pressed="false"',
             self.source,
         )
         self.assertIn('data-next-i18n="lists.logRewatch"', self.source)
         self.assertIn('id="movieWatchlistToggleLabel"', self.source)
 
+    def test_the_personal_list_button_style_is_not_movie_only(self):
+        """`list-action-button` is the one personal-list button in the app.
+
+        A film's Log rewatch, an episode's Watched and a season's bulk actions
+        ask the same three things -- save it, say you saw it, say when -- and a
+        per-surface button class is how they end up different sizes and
+        eventually different colours for the same meaning. The old name said
+        `movie`, which is exactly the invitation to write a second one.
+        """
+        self.assertNotIn("movie-list-primary-action ", self.source)
+        self.assertIn(".list-action-button {", self.source)
+        self.assertIn(".list-action-button.compact {", self.source)
+        self.assertIn(".list-action-button.watched.active {", self.source)
+
     def test_rewatch_action_sheet_has_localized_date_choices(self):
         self.assertIn("function openMovieRewatchDialog()", self.source)
+        self.assertIn("function openWatchedDateSheet({title, onPick, remove})", self.source)
         self.assertIn('tNext("lists.logRewatch", "Log rewatch")', self.source)
         self.assertIn('tNext("lists.watchedToday", "Watched today")', self.source)
         self.assertIn(
@@ -610,13 +625,20 @@ class NextMovieDetailUiTests(unittest.TestCase):
         self.assertIn('data-rewatch-date="choose"', self.source)
 
     def test_rewatch_custom_date_uses_native_date_picker(self):
-        self.assertIn("function openMovieRewatchDatePicker(overlay, panel)", self.source)
         self.assertIn(
-            '<input type="date" id="movieRewatchDateInput"',
+            "function openWatchedDatePicker(overlay, panel, onPick)",
             self.source,
         )
-        self.assertIn('id="movieRewatchDateForm"', self.source)
-        self.assertIn("markActiveMovieWatched(value);", self.source)
+        self.assertIn(
+            '<input type="date" id="watchedDateInput"',
+            self.source,
+        )
+        self.assertIn('id="watchedDateForm"', self.source)
+        self.assertIn("onPick?.(value);", self.source)
+        self.assertIn(
+            "onPick: (watchedAt) => markActiveMovieWatched(watchedAt),",
+            self.source,
+        )
         self.assertNotIn('data-watch-date-choice="today"', self.source)
 
     def test_tags_use_plus_button_instead_of_inline_form(self):
