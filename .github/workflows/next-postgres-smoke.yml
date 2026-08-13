@@ -112,6 +112,15 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
+      # Needs the real PostgreSQL: the claim is about the connection's actual
+      # transaction status at the moment a provider is called, which a stubbed
+      # cursor cannot have. The structural half is there because the boundary
+      # is one `conn.commit()` away from silently moving back, and a lookup
+      # that drifts below the transaction opener costs nothing visible until a
+      # provider is slow and the whole write side is behind it.
+      - name: Test the import transaction boundary
+        run: python -m unittest tests.test_next_import_transaction_boundary
+
       # Opening a film queues its refresh instead of waiting for it. The whole
       # claim is that the *work* is unchanged and only its location moved, so
       # these assertions are about what must not quietly disappear: the job

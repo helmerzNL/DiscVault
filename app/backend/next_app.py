@@ -34197,102 +34197,58 @@ def register_routes(flask_app: Flask) -> None:
                         existing_payload["container"] = container_detail_entity(conn, target_container_uuid)
                     return response(existing_payload)
 
-            with conn.transaction():
-                selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
-                metadata_result: dict[str, Any] = dict(provided_metadata_result)
-                box_set_proposal: dict[str, Any] = {}
-                provided_proposal = provided_box_set_body
-                if wants_box_set_import and isinstance(provided_proposal, dict):
-                    candidate = dict(provided_proposal)
-                    candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
-                    candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
-                    if selected_box_set_key:
-                        candidate["_proposalKey"] = selected_box_set_key
-                    else:
-                        candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
-                    candidate_members = box_set_proposal_members(candidate)
-                    body_members = normalized_box_set_members_from_body(body)
-                    if body_members:
-                        candidate["members"] = body_members
-                        candidate["movies"] = body_members
-                        candidate_members = body_members
-                    if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
-                        candidate["members"] = candidate_members
-                        candidate["movies"] = candidate_members
-                        box_set_proposal = candidate
-                if wants_box_set_import and not box_set_proposal and not metadata_result:
-                    metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
-                if wants_box_set_import and not box_set_proposal:
-                    box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
-                if wants_box_set_import and not box_set_proposal:
-                    if explicit_box_set_import:
-                        raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
-                    # Box-set import was only inferred (e.g. a collection was detected while
-                    # adding a single film); fall back to importing the movie instead of failing.
-                    wants_box_set_import = False
-                if wants_box_set_import and box_set_proposal:
-                    body_members = normalized_box_set_members_from_body(body)
-                    explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
-                    if box_set_proposal_is_candidate_only(box_set_proposal) and not explicit_review_payload:
-                        raise NextApiError("Box-set candidate members require review before import.", 422)
-                    box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
-                    box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
-                    box_set_receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_payload"}
-                    box_set_detail = box_set_import.get("container") if isinstance(box_set_import.get("container"), dict) else {}
-                    imported_container = box_set_detail.get("container") if isinstance(box_set_detail.get("container"), dict) else {}
-                    if imported_container:
-                        receiver_payload = container_receiver_payload(
-                            conn,
-                            imported_container,
-                            imported_container,
-                            force_members=True,
-                            member_overrides=box_set_import.get("receiverMembers") or [],
-                            replace_members=bool(box_set_import.get("memberSelectionReplaced")),
-                            source_label="DiscVault box-set import",
-                            source_provider="discvault_box_set_import",
-                        )
-                        if receiver_payload:
-                            box_set_receiver_summary = queue_receiver_payload_to_receivers(
-                                conn,
-                                payload=receiver_payload,
-                                actor=actor,
-                                reason="box_set_import",
-                            )
-                            audit_event(
-                                conn,
-                                event_type="metadata.receiver_queued",
-                                category="metadata",
-                                actor=actor,
-                                target_type="container",
-                                target_id=parse_uuid(imported_container.get("id"), "containerId"),
-                                summary=f"Queued imported box-set receiver payload for {imported_container.get('title')}",
-                                metadata={
-                                    "containerType": imported_container.get("container_type"),
-                                    "title": imported_container.get("title"),
-                                    "barcode": imported_container.get("barcode"),
-                                    "memberCount": len(receiver_payload.get("payload", {}).get("members") or []),
-                                    "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
-                                    "receiverSummary": box_set_receiver_summary,
-                                },
-                            )
-                    first_movie = (box_set_import.get("movies") or [{}])[0]
-                    box_set_state = "box_set_created" if box_set_import.get("containerCreated") else "already_exists"
-                    return response(
-                        {
-                            "status": "ok",
-                            "state": box_set_state,
-                            "movie": first_movie,
-                            "detail": movie_detail_entity(conn, first_movie.get("id")) if first_movie.get("id") else None,
-                            "boxSet": box_set_import.get("container"),
-                            "movies": box_set_import.get("movies") or [],
-                            "metadata": metadata_result,
-                            "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
-                            "queuedMetadataRefreshJobs": box_set_import.get("queuedMetadataRefreshJobs") or [],
-                            "decisionCounts": box_set_import.get("decisionCounts") or {},
-                            "receiverSummary": box_set_receiver_summary,
-                        },
-                        201,
-                    )
+            # The metadata lookups below reach TMDB, OMDb and MovieVault over
+            # the network, and one of them answering slowly is a normal event
+            # rather than a fault. connect() runs with autocommit=False, so the
+            # pre-checks above have already opened a transaction, and it would
+            # otherwise stay open for as long as those providers take -- which
+            # is what `idle in transaction` for 10.1 and 14.5 seconds meant in
+            # the samples that prompted this. Every branch that writes has
+            # already returned by here, so there is nothing to lose by closing
+            # it, and the whole resolution below now runs holding no snapshot
+            # and no lock.
+            conn.commit()
+
+            selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
+            metadata_result: dict[str, Any] = dict(provided_metadata_result)
+            box_set_proposal: dict[str, Any] = {}
+            provided_proposal = provided_box_set_body
+            if wants_box_set_import and isinstance(provided_proposal, dict):
+                candidate = dict(provided_proposal)
+                candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
+                candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
+                if selected_box_set_key:
+                    candidate["_proposalKey"] = selected_box_set_key
+                else:
+                    candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
+                candidate_members = box_set_proposal_members(candidate)
+                body_members = normalized_box_set_members_from_body(body)
+                if body_members:
+                    candidate["members"] = body_members
+                    candidate["movies"] = body_members
+                    candidate_members = body_members
+                if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
+                    candidate["members"] = candidate_members
+                    candidate["movies"] = candidate_members
+                    box_set_proposal = candidate
+            if wants_box_set_import and not box_set_proposal and not metadata_result:
+                metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
+            if wants_box_set_import and not box_set_proposal:
+                box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
+            if wants_box_set_import and not box_set_proposal:
+                if explicit_box_set_import:
+                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                # Box-set import was only inferred (e.g. a collection was detected while
+                # adding a single film); fall back to importing the movie instead of failing.
+                wants_box_set_import = False
+            importing_box_set = bool(wants_box_set_import and box_set_proposal)
+            if importing_box_set:
+                body_members = normalized_box_set_members_from_body(body)
+                explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
+                if box_set_proposal_is_candidate_only(box_set_proposal) and not explicit_review_payload:
+                    raise NextApiError("Box-set candidate members require review before import.", 422)
+                box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
+            else:
                 if not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": False}, actor)
                 selected_movie_candidate = selected_import_movie_candidate_from_body(body)
@@ -34352,6 +34308,77 @@ def register_routes(flask_app: Flask) -> None:
                 if not import_title:
                     raise NextApiError("No movie title was found for this import.", 422)
 
+            # The lookups opened a transaction of their own -- they read the
+            # plugin registry and write the metadata lookup cache. Close that
+            # one too, so the write below starts from nothing and takes its row
+            # locks on `movies`, `containers` and the global `sync_state` row
+            # for as long as the writing takes rather than for as long as a
+            # provider took.
+            conn.commit()
+
+            with conn.transaction():
+                if importing_box_set:
+                    box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
+                    box_set_receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_payload"}
+                    box_set_detail = box_set_import.get("container") if isinstance(box_set_import.get("container"), dict) else {}
+                    imported_container = box_set_detail.get("container") if isinstance(box_set_detail.get("container"), dict) else {}
+                    if imported_container:
+                        receiver_payload = container_receiver_payload(
+                            conn,
+                            imported_container,
+                            imported_container,
+                            force_members=True,
+                            member_overrides=box_set_import.get("receiverMembers") or [],
+                            replace_members=bool(box_set_import.get("memberSelectionReplaced")),
+                            source_label="DiscVault box-set import",
+                            source_provider="discvault_box_set_import",
+                        )
+                        if receiver_payload:
+                            box_set_receiver_summary = queue_receiver_payload_to_receivers(
+                                conn,
+                                payload=receiver_payload,
+                                actor=actor,
+                                reason="box_set_import",
+                            )
+                            audit_event(
+                                conn,
+                                event_type="metadata.receiver_queued",
+                                category="metadata",
+                                actor=actor,
+                                target_type="container",
+                                target_id=parse_uuid(imported_container.get("id"), "containerId"),
+                                summary=f"Queued imported box-set receiver payload for {imported_container.get('title')}",
+                                metadata={
+                                    "containerType": imported_container.get("container_type"),
+                                    "title": imported_container.get("title"),
+                                    "barcode": imported_container.get("barcode"),
+                                    "memberCount": len(receiver_payload.get("payload", {}).get("members") or []),
+                                    "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
+                                    "receiverSummary": box_set_receiver_summary,
+                                },
+                            )
+                    first_movie = (box_set_import.get("movies") or [{}])[0]
+                    box_set_state = "box_set_created" if box_set_import.get("containerCreated") else "already_exists"
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": box_set_state,
+                            "movie": first_movie,
+                            "detail": movie_detail_entity(conn, first_movie.get("id")) if first_movie.get("id") else None,
+                            "boxSet": box_set_import.get("container"),
+                            "movies": box_set_import.get("movies") or [],
+                            "metadata": metadata_result,
+                            "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
+                            "queuedMetadataRefreshJobs": box_set_import.get("queuedMetadataRefreshJobs") or [],
+                            "decisionCounts": box_set_import.get("decisionCounts") or {},
+                            "receiverSummary": box_set_receiver_summary,
+                        },
+                        201,
+                    )
+
+                # Reached only when the branch above did not return, i.e. a
+                # single-film import. Everything it needs was resolved before
+                # the transaction opened.
                 payload = dict(movie_updates)
                 payload["title"] = import_title
                 # Last resort only. A stated type -- the user's, or MovieVault's
