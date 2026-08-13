@@ -112,24 +112,6 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
-      # An index is only worth anything if the planner picks it, and nothing
-      # about a wrong one is visible from the schema: an index leading with the
-      # wrong column looks correct in pg_indexes and serves the query no better
-      # than none. So this asserts the plan, not the DDL -- which also makes it
-      # fail if the query in next_metadata.py drifts away from the index rather
-      # than the other way round.
-      - name: Test the person-identifier lookup index
-        run: python -m unittest tests.test_next_person_identifier_index
-
-      # Needs the real PostgreSQL: the claim is about the connection's actual
-      # transaction status at the moment a provider is called, which a stubbed
-      # cursor cannot have. The structural half is there because the boundary
-      # is one `conn.commit()` away from silently moving back, and a lookup
-      # that drifts below the transaction opener costs nothing visible until a
-      # provider is slow and the whole write side is behind it.
-      - name: Test the import transaction boundary
-        run: python -m unittest tests.test_next_import_transaction_boundary
-
       # Opening a film queues its refresh instead of waiting for it. The whole
       # claim is that the *work* is unchanged and only its location moved, so
       # these assertions are about what must not quietly disappear: the job
@@ -284,6 +266,18 @@ jobs:
 
       - name: Show migration status
         run: python next_database.py status
+
+      # Below the migrations for the reason the block further down gives, and
+      # for a second one specific to this pair: they do not merely read tables,
+      # they assert what PostgreSQL *does* -- which index the planner picks, and
+      # what the connection's transaction status is at the moment a provider is
+      # called. Neither question exists without the schema. Placed above the
+      # migrations first, where both died on `relation "people" does not exist`.
+      - name: Test the person-identifier lookup index
+        run: python -m unittest tests.test_next_person_identifier_index
+
+      - name: Test the import transaction boundary
+        run: python -m unittest tests.test_next_import_transaction_boundary
 
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
