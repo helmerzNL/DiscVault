@@ -35810,6 +35810,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/profile")
     @flask_app.get("/lists")
     @flask_app.get("/app/lists")
+    @flask_app.get("/statistics")
+    @flask_app.get("/app/statistics")
     @flask_app.get("/discover")
     @flask_app.get("/app/discover")
     @flask_app.get("/discover/<discover_media_type>/<discover_id>")

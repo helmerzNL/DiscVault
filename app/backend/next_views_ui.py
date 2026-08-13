@@ -4092,6 +4092,100 @@ def ui_preview_html(
     .stats-price-change.flat {
       color: var(--muted);
     }
+    /* Genre bar chart styling */
+    .stats-genres-chart {
+      display: grid;
+      gap: 14px;
+    }
+    .stats-genre-bar-item {
+      display: grid;
+      gap: 6px;
+    }
+    .stats-genre-bar-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: .85rem;
+    }
+    .stats-genre-bar-title {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .stats-genre-bar-count {
+      color: var(--muted);
+      flex: 0 0 auto;
+      font-size: .8rem;
+    }
+    .stats-genre-bar-container {
+      height: 24px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--line) 40%, transparent);
+      overflow: hidden;
+    }
+    .stats-genre-bar {
+      height: 100%;
+      border-radius: 12px;
+      transition: width 0.3s ease;
+    }
+    /* Pie chart styling with glassmorphism */
+    .stats-pie-chart {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: minmax(180px, auto) 1fr;
+      align-items: center;
+    }
+    .stats-pie-chart-container {
+      display: grid;
+      gap: 16px;
+    }
+    .stats-pie-svg {
+      display: block;
+      width: 100%;
+      max-width: 200px;
+      height: auto;
+      filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.1));
+    }
+    .stats-pie-legend {
+      display: grid;
+      gap: 8px;
+      font-size: .82rem;
+    }
+    .stats-pie-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 8px;
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--bg-elevated) 40%, transparent);
+    }
+    .stats-pie-color {
+      flex: 0 0 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: block;
+    }
+    .stats-pie-legend-item span:last-child {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    /* Glassmorphism effect for stats blocks */
+    .stats-block {
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .stats-pie-chart-block {
+      background: linear-gradient(135deg,
+        color-mix(in srgb, var(--bg-elevated) 70%, transparent) 0%,
+        color-mix(in srgb, var(--bg-elevated) 50%, transparent) 100%);
+      backdrop-filter: blur(12px) saturate(180%);
+      -webkit-backdrop-filter: blur(12px) saturate(180%);
+      border: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+    }
     .detail-card-actions {
       display: flex;
       flex-wrap: wrap;
@@ -41412,33 +41506,46 @@ def ui_preview_html(
       if (!items.length) {
         return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
       }
-      // Create a simple CSS color palette for genres
+      // Create a CSS color palette for genres - using vibrant, distinct colors
       const colors = [
         "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
         "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A",
         "#1890FF", "#FF85C0", "#FAAD14", "#13C2C2", "#EB2F96"
       ];
-      return items
-        .map((row, idx) => {
-          const pct = (row.count || 0);
-          const color = colors[idx % colors.length];
-          const label = row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown"));
-          return `
-            <div class="stats-genre-item">
-              <span class="stats-genre-color" style="background-color: ${escapeHtml(color)}"></span>
-              <span class="stats-genre-label">${escapeHtml(label)}</span>
-              <span class="stats-genre-count">${escapeHtml(pct)}</span>
-            </div>
-          `;
-        })
-        .join("");
+
+      // Find max count to calculate percentages
+      const maxCount = Math.max(...items.map((row) => row.count || 0));
+
+      return `
+        <div class="stats-genres-chart">
+          ${items
+            .map((row, idx) => {
+              const count = row.count || 0;
+              const percentage = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
+              const color = colors[idx % colors.length];
+              const label = row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown"));
+              return `
+                <div class="stats-genre-bar-item">
+                  <div class="stats-genre-bar-label">
+                    <span class="stats-genre-bar-title">${escapeHtml(label)}</span>
+                    <span class="stats-genre-bar-count">${escapeHtml(count)}</span>
+                  </div>
+                  <div class="stats-genre-bar-container">
+                    <div class="stats-genre-bar" style="width: ${percentage}%; background-color: ${escapeHtml(color)};"></div>
+                  </div>
+                </div>
+              `;
+            })
+            .join("")}
+        </div>
+      `;
     }
     function statsPieChartHtml(rows, chartId) {
       const items = (rows || []).filter((row) => (row.count || 0) > 0);
       if (!items.length) {
         return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
       }
-      // Create pie chart with SVG
+      // Create pie chart with SVG - native Apple aesthetic colors
       const total = items.reduce((sum, item) => sum + (item.count || 0), 0) || 1;
       const colors = [
         "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
@@ -41454,13 +41561,13 @@ def ui_preview_html(
         const startRad = (currentAngle * Math.PI) / 180;
         const endRad = (endAngle * Math.PI) / 180;
 
-        const x1 = 50 + 40 * Math.cos(startRad);
-        const y1 = 50 + 40 * Math.sin(startRad);
-        const x2 = 50 + 40 * Math.cos(endRad);
-        const y2 = 50 + 40 * Math.sin(endRad);
+        const x1 = 50 + 38 * Math.cos(startRad);
+        const y1 = 50 + 38 * Math.sin(startRad);
+        const x2 = 50 + 38 * Math.cos(endRad);
+        const y2 = 50 + 38 * Math.sin(endRad);
 
         const largeArc = sliceAngle > 180 ? 1 : 0;
-        const pathData = `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`;
+        const pathData = `M 50 50 L ${x1} ${y1} A 38 38 0 ${largeArc} 1 ${x2} ${y2} Z`;
         const color = colors[idx % colors.length];
         const label = item.label || tNext("common.untitled", "Unknown");
 
@@ -41475,17 +41582,22 @@ def ui_preview_html(
         };
       });
 
-      const svgContent = slices.map(slice => `<path d="${escapeHtml(slice.path)}" fill="${escapeHtml(slice.color)}" stroke="white" stroke-width="2"/>`).join("");
+      // Create SVG with glassmorphic styling
+      const svgContent = slices.map((slice, idx) => {
+        const opacity = 0.85 + (idx % 2) * 0.1; // Slight variation for depth
+        return `<path d="${escapeHtml(slice.path)}" fill="${escapeHtml(slice.color)}" opacity="${opacity}" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>`;
+      }).join("");
+
       const legend = slices.map(slice => `
         <div class="stats-pie-legend-item">
-          <span class="stats-pie-color" style="background-color: ${escapeHtml(slice.color)}"></span>
-          <span>${escapeHtml(slice.label)} (${escapeHtml(slice.count)} - ${escapeHtml(slice.percentage)}%)</span>
+          <span class="stats-pie-color" style="background-color: ${escapeHtml(slice.color)};"></span>
+          <span>${escapeHtml(slice.label)} (${escapeHtml(slice.count)} • ${escapeHtml(slice.percentage)}%)</span>
         </div>
       `).join("");
 
       return `
-        <div class="stats-pie-chart">
-          <svg viewBox="0 0 100 100" class="stats-pie-svg">${svgContent}</svg>
+        <div class="stats-pie-chart-container">
+          <svg viewBox="0 0 100 100" class="stats-pie-svg" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>
           <div class="stats-pie-legend">${legend}</div>
         </div>
       `;
