@@ -9,9 +9,9 @@ from flask import Flask, request
 from psycopg.types.json import Jsonb
 
 try:  # pragma: no cover - exercised indirectly by both layouts
-    from .next_common import NextApiError, json_ready, parse_bool_value, parse_uuid, response, table_exists
+    from .next_common import NextApiError, json_ready, parse_bool_value, parse_int_arg, parse_uuid, response, table_exists
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
-    from next_common import NextApiError, json_ready, parse_bool_value, parse_uuid, response, table_exists
+    from next_common import NextApiError, json_ready, parse_bool_value, parse_int_arg, parse_uuid, response, table_exists
 
 
 NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
@@ -139,7 +139,7 @@ def create_user_notification(
 def register_next_notifications_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask integration
     @flask_app.get("/api/next/notifications")
     def next_notifications():
-        limit = min(max(int(request.args.get("limit", 100)), 1), 250)
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=250)
         with connect() as conn:
             actor = _next_app().require_next_authenticated_user(conn)
             user_id = actor.get("id")

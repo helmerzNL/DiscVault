@@ -121,7 +121,23 @@ def count_table(conn, table_name: str) -> int:
 
 
 def parse_int_arg(name: str, default: int, *, minimum: int = 0, maximum: int = 1000) -> int:
-    raw = request.args.get(name, str(default))
+    """Read a whole-number query argument: validated, then clamped.
+
+    Nineteen routes parsed their own with a bare ``int(request.args.get(...))``.
+    Most of them clamped afterwards, so the sizes were fine; what none of them
+    had was *validation*, and ``?limit=abc`` therefore raised ``ValueError``
+    inside the handler and reached the caller as a 500. A malformed request is
+    the caller's mistake and has to be told apart from the server's.
+
+    An **empty** value counts as absent. Five of those routes were written as
+    ``int(request.args.get("limit") or 100)``, which already meant that, and a
+    client emitting a bare ``?limit=`` should not start receiving 400s because
+    the parsing moved.
+    """
+
+    raw = request.args.get(name)
+    if raw is None or not str(raw).strip():
+        raw = default
     try:
         value = int(raw)
     except (TypeError, ValueError) as exc:
