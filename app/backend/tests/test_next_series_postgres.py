@@ -278,6 +278,13 @@ class SeriesMetadataRefreshPostgresTests(unittest.TestCase):
     def _clear(self):
         with self.connect() as conn, conn.cursor() as cur:
             cur.execute("DELETE FROM series WHERE title = %s", (self.TITLE,))
+            # Every test here builds its series with the same identifier and then
+            # substitutes a different source answer, so they all ask the provider
+            # layer the identical question. Provider lookups are cached now, so
+            # without this the second test in the class reads the first one's
+            # answer -- the cache is state these runs leave behind, exactly like
+            # the series rows above.
+            cur.execute("DELETE FROM metadata_lookup_cache")
 
     def setUp(self):
         self._clear()

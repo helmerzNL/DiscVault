@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Суб'єкти",
   "movieDetail.aggregateArtwork": "Графічний твір учасника",
   "movieDetail.applied": "Метадані оновлено.",
+  "movieDetail.applyFailed": "Не вдалося оновити метадані.",
   "movieDetail.releaseCandidatesHelp": "MovieVault розпізнав фільм, але не точне видання цього диска. Виберіть те, яке тримаєте в руках, щоб заповнити його дані.",
   "movieDetail.releaseCandidatesApplying": "Застосування цього видання до диска...",
   "movieDetail.releaseCandidatesApplied": "Видання застосовано до цього диска.",

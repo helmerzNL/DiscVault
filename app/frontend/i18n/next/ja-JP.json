@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "俳優",
   "movieDetail.aggregateArtwork": "メンバーのアートワーク",
   "movieDetail.applied": "メタデータを更新しました。",
+  "movieDetail.applyFailed": "メタデータの更新に失敗しました。",
   "movieDetail.releaseCandidatesHelp": "MovieVault は映画を特定しましたが、このディスクの正確なプレスは特定できませんでした。手元のプレスを選ぶと詳細が入力されます。",
   "movieDetail.releaseCandidatesApplying": "このエディションをディスクに適用しています...",
   "movieDetail.releaseCandidatesApplied": "エディションをこのディスクに適用しました。",

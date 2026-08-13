@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Παράγοντες",
   "movieDetail.aggregateArtwork": "Καλλιτεχνικό έργο μέλους",
   "movieDetail.applied": "Τα μεταδεδομένα ανανεώθηκαν.",
+  "movieDetail.applyFailed": "Η ανανέωση των μεταδεδομένων απέτυχε.",
   "movieDetail.releaseCandidatesHelp": "Το MovieVault αναγνώρισε την ταινία, αλλά όχι την ακριβή έκδοση αυτού του δίσκου. Επιλέξτε αυτήν που κρατάτε για να συμπληρωθούν τα στοιχεία της.",
   "movieDetail.releaseCandidatesApplying": "Εφαρμογή αυτής της έκδοσης στον δίσκο...",
   "movieDetail.releaseCandidatesApplied": "Η έκδοση εφαρμόστηκε σε αυτόν τον δίσκο.",

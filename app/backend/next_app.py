@@ -102,6 +102,7 @@ try:
     from .next_metadata import apply_season_poster_inheritance
     from .next_metadata import clear_orphaned_season_poster
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import release_read_transaction
     from .next_metadata import refresh_series_metadata
     from .next_metadata import refresh_season_episodes
     from .next_metadata import available_series_seasons
@@ -391,6 +392,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import apply_season_poster_inheritance
     from next_metadata import clear_orphaned_season_poster
     from next_metadata import refresh_movie_metadata
+    from next_metadata import release_read_transaction
     from next_metadata import refresh_series_metadata
     from next_metadata import refresh_season_episodes
     from next_metadata import available_series_seasons
@@ -2030,6 +2032,10 @@ def inspect_import_source_plugin(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     config = plugin_config_from_db(conn, str(plugin.get("id")))
     context = plugin_execution_context(conn, plugin, config, actor)
+    # Released here rather than earlier: the configuration read just
+    # above is what reopens the transaction, so anything sooner does
+    # not count. See release_read_transaction.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", payload or {}, context)
     return normalize_import_source_result(plugin, execution), execution
 
@@ -3529,6 +3535,10 @@ def inspect_import_source_selection(
         config = plugin_config_from_db(conn, plugin_id)
         context = plugin_execution_context(conn, plugin, config, actor)
     if source.get("readable") and "plan_import" in plugin_runtime_entrypoints(plugin) and context:
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         plan_execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
         if plan_execution.get("status") == "ok" and isinstance(plan_execution.get("result"), dict):
             plan = plan_execution["result"]
@@ -3544,6 +3554,10 @@ def inspect_import_source_selection(
             preview_payload["sourcePath"] = source.get("sourcePath")
         if source.get("sourceDatabaseHash"):
             preview_payload["sourceDatabaseHash"] = source.get("sourceDatabaseHash")
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         import_execution = run_plugin_entrypoint(plugin_id, "import_source", preview_payload, context)
         result = import_execution.get("result") if import_execution.get("status") == "ok" else {}
         items = result.get("items") if isinstance(result, dict) else []
@@ -4042,6 +4056,10 @@ def plan_migration_import_job(
         "importMediaReferences": options.get("importMediaReferences"),
         "ownerUsername": options.get("ownerUsername"),
     }
+    # Released here rather than earlier: the configuration read just
+    # above is what reopens the transaction, so anything sooner does
+    # not count. See release_read_transaction.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
     if execution.get("status") != "ok":
         raise NextApiError(
@@ -16034,8 +16052,11 @@ def _refresh_one_movie_person_credit(
     }
     try:
         with connect() as person_conn:
-            with person_conn.transaction():
-                result = refresh_person_metadata(person_conn, UUID(person_id), dry_run=dry_run, actor=actor, force=force)
+            # Not wrapped in a transaction block: refresh_person_metadata closes
+            # the read transaction before it reaches TMDB, and cannot do that
+            # from inside one. This is the path that matters most for it -- four
+            # workers walking the credits of one film, each holding a connection.
+            result = refresh_person_metadata(person_conn, UUID(person_id), dry_run=dry_run, actor=actor, force=force)
         cached = (result.get("execution") or {}).get("state") == "cached"
         entry["status"] = "cached" if cached else ("previewed" if dry_run else "refreshed")
         entry["plugin"] = (result.get("plugin") or {}).get("id")
@@ -16322,6 +16343,12 @@ def refresh_person_metadata(
         if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
             continue
         context = plugin_execution_context(conn, plugin, config, actor)
+        # After the two reads above, not before them: `plugin_config_from_db`
+        # and `plugin_execution_context` are what reopen the transaction, and a
+        # release placed any earlier is undone by them. This path calls the
+        # provider directly rather than through run_cached_plugin_entrypoint, so
+        # it needs its own release.
+        release_read_transaction(conn)
         execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
         if execution.get("status") != "ok":
             last_error = execution.get("error") or last_error
@@ -16611,6 +16638,10 @@ def refresh_person_filmography(
         raise NextApiError("Filmography plugin configuration is incomplete", 409)
 
     context = plugin_execution_context(conn, plugin, config, actor)
+    # Released here rather than earlier: the configuration read just
+    # above is what reopens the transaction, so anything sooner does
+    # not count. See release_read_transaction.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(str(plugin["id"]), "person_filmography", {"tmdbId": tmdb_id}, context)
     result = execution.get("result") or {}
     if execution.get("status") != "ok":
@@ -19146,6 +19177,10 @@ def fetch_box_set_artwork_from_sources(
         if plugin_requires_config_for_entrypoint(plugin, config, "box_set_candidates"):
             continue
         context = plugin_execution_context(conn, plugin, config, actor, ensure_movievault_token=True)
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         execution = run_plugin_entrypoint(plugin_id, "box_set_candidates", payload, context)
         if execution.get("status") != "ok":
             continue
@@ -25449,21 +25484,26 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Series tables are not available", 503)
             if series_entity(conn, series_uuid, with_seasons=False) is None:
                 raise NextApiError("Series not found", 404)
-            with conn.transaction():
-                # Runs in the request rather than through the queue: the caller is
-                # watching, and the job it would queue does the same never-overwrite
-                # work. Queueing would only add a wait with nothing to show for it.
-                result = refresh_series_metadata(conn, series_uuid)
-                audit_event(
-                    conn,
-                    event_type="metadata.series_refreshed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="series",
-                    target_id=series_uuid,
-                    summary="Refreshed series metadata",
-                    metadata=result,
-                )
+            # Runs in the request rather than through the queue: the caller is
+            # watching, and the job it would queue does the same never-overwrite
+            # work. Queueing would only add a wait with nothing to show for it.
+            #
+            # No enclosing transaction: refresh_series_metadata commits the reads
+            # above its source lookups before consulting TMDB, TVDB and Fanart
+            # over the network, and cannot do that from inside one. The audit
+            # event below commits with the connection on context exit, the same
+            # way the movie refresh route already works.
+            result = refresh_series_metadata(conn, series_uuid)
+            audit_event(
+                conn,
+                event_type="metadata.series_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="series",
+                target_id=series_uuid,
+                summary="Refreshed series metadata",
+                metadata=result,
+            )
             detail = series_detail_entity(conn, series_uuid, actor=actor)
         return response({"status": "ok", "result": result, "detail": detail})
 
@@ -25602,18 +25642,21 @@ def register_routes(flask_app: Flask) -> None:
             # Refreshed in the same request. The identifier exists to be used, and
             # a separate "now press refresh" step is a way to leave a series that
             # was just identified still looking empty.
-            with conn.transaction():
-                result = refresh_series_metadata(conn, series_uuid)
-                audit_event(
-                    conn,
-                    event_type="metadata.series_refreshed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="series",
-                    target_id=series_uuid,
-                    summary="Refreshed series metadata",
-                    metadata=result,
-                )
+            #
+            # Outside a transaction block, like the refresh route above: the
+            # identifier written by the block above is committed by the time the
+            # sources are consulted, which is what lets the refresh find it.
+            result = refresh_series_metadata(conn, series_uuid)
+            audit_event(
+                conn,
+                event_type="metadata.series_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="series",
+                target_id=series_uuid,
+                summary="Refreshed series metadata",
+                metadata=result,
+            )
             detail = series_detail_entity(conn, series_uuid, actor=actor)
         return response({"status": "ok", "result": result, "detail": detail})
 
@@ -29304,6 +29347,12 @@ def register_routes(flask_app: Flask) -> None:
                 ensure_movievault_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
             )
 
+        # No release needed, and none possible: the `with connect()` block above
+        # has already ended, so the connection is closed and handed back before
+        # the plugin is reached. That is strictly better than releasing the
+        # transaction -- this route was doing the right thing before any of this
+        # work, and briefly had a release bolted on that failed with "the
+        # connection is closed".
         execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
         status_code = 200 if execution.get("status") == "ok" else 422
         return response(
@@ -32541,18 +32590,20 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("People table is not available", 503)
             if not actor_can_view_person(conn, actor, person_uuid):
                 raise NextApiError("Person not found", 404)
-            with conn.transaction():
-                result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor, force=force)
-                audit_event(
-                    conn,
-                    event_type="metadata.person_previewed" if dry_run else "metadata.person_refreshed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="person",
-                    target_id=person_uuid,
-                    summary="Refreshed person metadata" if not dry_run else "Previewed person metadata refresh",
-                    metadata={"dryRun": dry_run, "result": result},
-                )
+            # No enclosing transaction: refresh_person_metadata commits its reads
+            # before reaching TMDB. The audit event commits with the connection
+            # on context exit, as on the movie and series refresh routes.
+            result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor, force=force)
+            audit_event(
+                conn,
+                event_type="metadata.person_previewed" if dry_run else "metadata.person_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="person",
+                target_id=person_uuid,
+                summary="Refreshed person metadata" if not dry_run else "Previewed person metadata refresh",
+                metadata={"dryRun": dry_run, "result": result},
+            )
         return response({"status": "ok", "metadata": result})
 
     @flask_app.post("/api/next/people/<person_id>/filmography/refresh")
@@ -34197,102 +34248,58 @@ def register_routes(flask_app: Flask) -> None:
                         existing_payload["container"] = container_detail_entity(conn, target_container_uuid)
                     return response(existing_payload)
 
-            with conn.transaction():
-                selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
-                metadata_result: dict[str, Any] = dict(provided_metadata_result)
-                box_set_proposal: dict[str, Any] = {}
-                provided_proposal = provided_box_set_body
-                if wants_box_set_import and isinstance(provided_proposal, dict):
-                    candidate = dict(provided_proposal)
-                    candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
-                    candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
-                    if selected_box_set_key:
-                        candidate["_proposalKey"] = selected_box_set_key
-                    else:
-                        candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
-                    candidate_members = box_set_proposal_members(candidate)
-                    body_members = normalized_box_set_members_from_body(body)
-                    if body_members:
-                        candidate["members"] = body_members
-                        candidate["movies"] = body_members
-                        candidate_members = body_members
-                    if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
-                        candidate["members"] = candidate_members
-                        candidate["movies"] = candidate_members
-                        box_set_proposal = candidate
-                if wants_box_set_import and not box_set_proposal and not metadata_result:
-                    metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
-                if wants_box_set_import and not box_set_proposal:
-                    box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
-                if wants_box_set_import and not box_set_proposal:
-                    if explicit_box_set_import:
-                        raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
-                    # Box-set import was only inferred (e.g. a collection was detected while
-                    # adding a single film); fall back to importing the movie instead of failing.
-                    wants_box_set_import = False
-                if wants_box_set_import and box_set_proposal:
-                    body_members = normalized_box_set_members_from_body(body)
-                    explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
-                    if box_set_proposal_is_candidate_only(box_set_proposal) and not explicit_review_payload:
-                        raise NextApiError("Box-set candidate members require review before import.", 422)
-                    box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
-                    box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
-                    box_set_receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_payload"}
-                    box_set_detail = box_set_import.get("container") if isinstance(box_set_import.get("container"), dict) else {}
-                    imported_container = box_set_detail.get("container") if isinstance(box_set_detail.get("container"), dict) else {}
-                    if imported_container:
-                        receiver_payload = container_receiver_payload(
-                            conn,
-                            imported_container,
-                            imported_container,
-                            force_members=True,
-                            member_overrides=box_set_import.get("receiverMembers") or [],
-                            replace_members=bool(box_set_import.get("memberSelectionReplaced")),
-                            source_label="DiscVault box-set import",
-                            source_provider="discvault_box_set_import",
-                        )
-                        if receiver_payload:
-                            box_set_receiver_summary = queue_receiver_payload_to_receivers(
-                                conn,
-                                payload=receiver_payload,
-                                actor=actor,
-                                reason="box_set_import",
-                            )
-                            audit_event(
-                                conn,
-                                event_type="metadata.receiver_queued",
-                                category="metadata",
-                                actor=actor,
-                                target_type="container",
-                                target_id=parse_uuid(imported_container.get("id"), "containerId"),
-                                summary=f"Queued imported box-set receiver payload for {imported_container.get('title')}",
-                                metadata={
-                                    "containerType": imported_container.get("container_type"),
-                                    "title": imported_container.get("title"),
-                                    "barcode": imported_container.get("barcode"),
-                                    "memberCount": len(receiver_payload.get("payload", {}).get("members") or []),
-                                    "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
-                                    "receiverSummary": box_set_receiver_summary,
-                                },
-                            )
-                    first_movie = (box_set_import.get("movies") or [{}])[0]
-                    box_set_state = "box_set_created" if box_set_import.get("containerCreated") else "already_exists"
-                    return response(
-                        {
-                            "status": "ok",
-                            "state": box_set_state,
-                            "movie": first_movie,
-                            "detail": movie_detail_entity(conn, first_movie.get("id")) if first_movie.get("id") else None,
-                            "boxSet": box_set_import.get("container"),
-                            "movies": box_set_import.get("movies") or [],
-                            "metadata": metadata_result,
-                            "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
-                            "queuedMetadataRefreshJobs": box_set_import.get("queuedMetadataRefreshJobs") or [],
-                            "decisionCounts": box_set_import.get("decisionCounts") or {},
-                            "receiverSummary": box_set_receiver_summary,
-                        },
-                        201,
-                    )
+            # The metadata lookups below reach TMDB, OMDb and MovieVault over
+            # the network, and one of them answering slowly is a normal event
+            # rather than a fault. connect() runs with autocommit=False, so the
+            # pre-checks above have already opened a transaction, and it would
+            # otherwise stay open for as long as those providers take -- which
+            # is what `idle in transaction` for 10.1 and 14.5 seconds meant in
+            # the samples that prompted this. Every branch that writes has
+            # already returned by here, so there is nothing to lose by closing
+            # it, and the whole resolution below now runs holding no snapshot
+            # and no lock.
+            conn.commit()
+
+            selected_box_set_key = clean_text(body.get("boxSetProposalKey") or body.get("box_set_proposal_key"))
+            metadata_result: dict[str, Any] = dict(provided_metadata_result)
+            box_set_proposal: dict[str, Any] = {}
+            provided_proposal = provided_box_set_body
+            if wants_box_set_import and isinstance(provided_proposal, dict):
+                candidate = dict(provided_proposal)
+                candidate.setdefault("provider", clean_text(candidate.get("provider") or candidate.get("source") or body.get("boxSetProvider")))
+                candidate.setdefault("title", clean_text(candidate.get("title") or candidate.get("name") or title))
+                if selected_box_set_key:
+                    candidate["_proposalKey"] = selected_box_set_key
+                else:
+                    candidate["_proposalKey"] = metadata_box_set_proposal_key(candidate)
+                candidate_members = box_set_proposal_members(candidate)
+                body_members = normalized_box_set_members_from_body(body)
+                if body_members:
+                    candidate["members"] = body_members
+                    candidate["movies"] = body_members
+                    candidate_members = body_members
+                if clean_text(candidate.get("title")) and len(candidate_members) >= 2:
+                    candidate["members"] = candidate_members
+                    candidate["movies"] = candidate_members
+                    box_set_proposal = candidate
+            if wants_box_set_import and not box_set_proposal and not metadata_result:
+                metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": True}, actor)
+            if wants_box_set_import and not box_set_proposal:
+                box_set_proposal = metadata_box_set_proposal(metadata_result, selected_box_set_key)
+            if wants_box_set_import and not box_set_proposal:
+                if explicit_box_set_import:
+                    raise NextApiError("No confirmed box-set proposal with at least two members was found.", 422)
+                # Box-set import was only inferred (e.g. a collection was detected while
+                # adding a single film); fall back to importing the movie instead of failing.
+                wants_box_set_import = False
+            importing_box_set = bool(wants_box_set_import and box_set_proposal)
+            if importing_box_set:
+                body_members = normalized_box_set_members_from_body(body)
+                explicit_review_payload = has_provided_box_set or bool(body_members) or bool(selected_box_set_key)
+                if box_set_proposal_is_candidate_only(box_set_proposal) and not explicit_review_payload:
+                    raise NextApiError("Box-set candidate members require review before import.", 422)
+                box_set_proposal = enrich_box_set_proposal_artwork(box_set_proposal, metadata_result, body)
+            else:
                 if not metadata_result:
                     metadata_result = lookup_metadata_sources(conn, {**body, "detectBoxSets": False}, actor)
                 selected_movie_candidate = selected_import_movie_candidate_from_body(body)
@@ -34352,6 +34359,77 @@ def register_routes(flask_app: Flask) -> None:
                 if not import_title:
                     raise NextApiError("No movie title was found for this import.", 422)
 
+            # The lookups opened a transaction of their own -- they read the
+            # plugin registry and write the metadata lookup cache. Close that
+            # one too, so the write below starts from nothing and takes its row
+            # locks on `movies`, `containers` and the global `sync_state` row
+            # for as long as the writing takes rather than for as long as a
+            # provider took.
+            conn.commit()
+
+            with conn.transaction():
+                if importing_box_set:
+                    box_set_import = import_box_set_proposal(conn, box_set_proposal, body, actor)
+                    box_set_receiver_summary: dict[str, Any] = {"skipped": True, "reason": "no_receiver_payload"}
+                    box_set_detail = box_set_import.get("container") if isinstance(box_set_import.get("container"), dict) else {}
+                    imported_container = box_set_detail.get("container") if isinstance(box_set_detail.get("container"), dict) else {}
+                    if imported_container:
+                        receiver_payload = container_receiver_payload(
+                            conn,
+                            imported_container,
+                            imported_container,
+                            force_members=True,
+                            member_overrides=box_set_import.get("receiverMembers") or [],
+                            replace_members=bool(box_set_import.get("memberSelectionReplaced")),
+                            source_label="DiscVault box-set import",
+                            source_provider="discvault_box_set_import",
+                        )
+                        if receiver_payload:
+                            box_set_receiver_summary = queue_receiver_payload_to_receivers(
+                                conn,
+                                payload=receiver_payload,
+                                actor=actor,
+                                reason="box_set_import",
+                            )
+                            audit_event(
+                                conn,
+                                event_type="metadata.receiver_queued",
+                                category="metadata",
+                                actor=actor,
+                                target_type="container",
+                                target_id=parse_uuid(imported_container.get("id"), "containerId"),
+                                summary=f"Queued imported box-set receiver payload for {imported_container.get('title')}",
+                                metadata={
+                                    "containerType": imported_container.get("container_type"),
+                                    "title": imported_container.get("title"),
+                                    "barcode": imported_container.get("barcode"),
+                                    "memberCount": len(receiver_payload.get("payload", {}).get("members") or []),
+                                    "changedFields": (receiver_payload.get("metadata") or {}).get("changedFields") or [],
+                                    "receiverSummary": box_set_receiver_summary,
+                                },
+                            )
+                    first_movie = (box_set_import.get("movies") or [{}])[0]
+                    box_set_state = "box_set_created" if box_set_import.get("containerCreated") else "already_exists"
+                    return response(
+                        {
+                            "status": "ok",
+                            "state": box_set_state,
+                            "movie": first_movie,
+                            "detail": movie_detail_entity(conn, first_movie.get("id")) if first_movie.get("id") else None,
+                            "boxSet": box_set_import.get("container"),
+                            "movies": box_set_import.get("movies") or [],
+                            "metadata": metadata_result,
+                            "applied": {"boxSet": box_set_import.get("appliedMembers") or []},
+                            "queuedMetadataRefreshJobs": box_set_import.get("queuedMetadataRefreshJobs") or [],
+                            "decisionCounts": box_set_import.get("decisionCounts") or {},
+                            "receiverSummary": box_set_receiver_summary,
+                        },
+                        201,
+                    )
+
+                # Reached only when the branch above did not return, i.e. a
+                # single-film import. Everything it needs was resolved before
+                # the transaction opened.
                 payload = dict(movie_updates)
                 payload["title"] = import_title
                 # Last resort only. A stated type -- the user's, or MovieVault's
@@ -34878,7 +34956,9 @@ def register_routes(flask_app: Flask) -> None:
             # applied proposal (movie rows + global sync_state lock) before the
             # receiver-plugin push and the person cascade run their network
             # I/O. The trailing audit/notification commits on context exit.
-            result = refresh_movie_metadata(conn, movie_uuid, dry_run=dry_run, actor=actor)
+            result = refresh_movie_metadata(
+                conn, movie_uuid, dry_run=dry_run, actor=actor, force=force
+            )
             result["personRefresh"] = (
                 refresh_movie_person_metadata_cascade(conn, movie_uuid, dry_run=dry_run, actor=actor, scope=person_refresh_scope, force=force)
                 if refresh_people

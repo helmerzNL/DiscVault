@@ -35,6 +35,15 @@ PLUGIN_AUTO_UPDATE_DISABLED_MARKER = ".auto_update_disabled"
 # Tracks install directories whose bundled-default upgrade check already ran in
 # this process, so the (rare) file copy work happens at most once per boot.
 _DEFAULT_PLUGIN_UPGRADE_DONE: set[str] = set()
+# Discovery and registry-sync memos, both keyed on a fingerprint of the plugin
+# files on disk. See `plugin_source_fingerprint` for why they are keyed that way
+# and what the memo deliberately does not protect against.
+_DISCOVERY_MEMO: dict[str, Any] = {"fingerprint": None, "result": None}
+_REGISTRY_SYNC_MEMO: dict[str, Any] = {"fingerprint": None, "result": None}
+# Loaded plugin modules, keyed by plugin id, each held with the stamp of the
+# file it came from. See `load_runtime_module` for why a module has to survive
+# between calls at all.
+_RUNTIME_MODULE_MEMO: dict[str, tuple] = {}
 # Optional in-process override of the auto-update preference, set by the app
 # layer from the database setting. ``None`` falls back to env/marker/default.
 _plugin_auto_update_override: bool | None = None
@@ -860,9 +869,43 @@ def load_runtime(manifest: dict[str, Any], plugin_dir: Path) -> tuple[Path | Non
     return module_path, runtime
 
 
+def _module_file_stamp(module_path: Path) -> tuple:
+    try:
+        stat = module_path.stat()
+    except OSError:
+        return (str(module_path), None, None)
+    return (str(module_path), stat.st_mtime_ns, stat.st_size)
+
+
 def load_runtime_module(plugin: PluginDiscovery):
+    """Load a plugin's module, once per process per version of its file.
+
+    This used to re-execute `plugin.py` on **every** entrypoint call. The
+    execution itself is cheap -- measured at 0.5 ms for the TMDB plugin and
+    2.1 ms for the largest one -- so that was never the problem. What it cost
+    was everything a module is allowed to keep.
+
+    Two plugins were written expecting a module to survive between calls, and
+    quietly got nothing: `tvdb` caches its auth token in `_TOKENS`, so it
+    re-authenticated on every single call, and `movievault_26` keeps a template
+    cache that never once produced a hit. Both are keyed by the configuration
+    they belong to (`api_key`, a context key), so persisting them shares nothing
+    across configurations -- their authors had already thought about that.
+
+    It also makes connection reuse possible at all: `requests.get` builds a new
+    connection per call, and a module-level `requests.Session` cannot help while
+    the module holding it is discarded a moment later.
+
+    Keyed on the file rather than a clock, so a plugin upgrade rewrites
+    `plugin.py` and the next call loads the new code -- the same rule
+    `plugin_source_fingerprint` uses for discovery.
+    """
     if not plugin.module_path:
         return None
+    stamp = _module_file_stamp(plugin.module_path)
+    cached = _RUNTIME_MODULE_MEMO.get(plugin.plugin_id)
+    if cached and cached[0] == stamp:
+        return cached[1]
     spec = importlib.util.spec_from_file_location(
         module_name_for(plugin.plugin_id, plugin.module_path),
         plugin.module_path,
@@ -870,11 +913,86 @@ def load_runtime_module(plugin: PluginDiscovery):
     if not spec or not spec.loader:
         raise RuntimeError("Could not create module spec")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Compile the source rather than letting the loader do it, because the
+    # loader may not. CPython validates a cached .pyc on the source's
+    # modification time *in whole seconds* plus its size -- so a plugin
+    # rewritten within the same second, to the same length, runs the previous
+    # version's bytecode. Reproduced here before this line existed.
+    #
+    # The image sets PYTHONDONTWRITEBYTECODE, so no .pyc is written and the
+    # hazard cannot arise in production today. That is a reason to be careful
+    # rather than relaxed: it means correctness rests on an environment
+    # variable someone could reasonably remove to speed up start-up, and the
+    # failure it would buy back is a plugin upgrade silently running the old
+    # code. Compiling here costs about two milliseconds for the largest plugin,
+    # once per process per version of the file.
+    source = plugin.module_path.read_text(encoding="utf-8")
+    exec(compile(source, str(plugin.module_path), "exec"), module.__dict__)
+    _RUNTIME_MODULE_MEMO[plugin.plugin_id] = (stamp, module)
     return module
 
 
+def plugin_source_fingerprint() -> tuple:
+    """Identify the plugin files on disk cheaply enough to check per request.
+
+    Discovery is expensive in a way that is easy to miss: it *executes* every
+    plugin's `plugin.py` to enumerate entrypoints, and the image sets
+    PYTHONDONTWRITEBYTECODE, so there is no `__pycache__` and roughly a megabyte
+    of Python is recompiled from source each time. Stat-ing the same files is
+    two syscalls per plugin.
+
+    Both the search paths and each plugin's two significant files are part of
+    the fingerprint. The paths matter because `plugin_paths` reads the
+    environment, so a caller can point discovery somewhere else between calls --
+    which is exactly what the runtime tests do. Size is included alongside the
+    modification time so a rewrite that lands inside the same clock tick is
+    still seen.
+    """
+    parts: list[tuple] = []
+    for base_path in plugin_paths():
+        parts.append((str(base_path),))
+        try:
+            entries = sorted(item for item in base_path.iterdir() if item.is_dir())
+        except OSError:
+            continue
+        for plugin_dir in entries:
+            for name in ("manifest.json", "plugin.py"):
+                candidate = plugin_dir / name
+                try:
+                    stat = candidate.stat()
+                except OSError:
+                    parts.append((str(candidate), None, None))
+                else:
+                    parts.append((str(candidate), stat.st_mtime_ns, stat.st_size))
+    return tuple(parts)
+
+
+def reset_plugin_discovery_cache() -> None:
+    """Forget both memos.
+
+    Needed when the `plugins` table can have changed without the files on disk
+    changing -- a restore, or a test that rebuilds the schema. Installing or
+    deleting a plugin does not need this: those rewrite the directory, so the
+    fingerprint moves on its own.
+    """
+    _DISCOVERY_MEMO.update({"fingerprint": None, "result": None})
+    _REGISTRY_SYNC_MEMO.update({"fingerprint": None, "result": None})
+    # Loaded modules go too: a test that rebuilds a plugin directory expects the
+    # next call to run the new code, and a module carrying a live HTTP session
+    # should not outlive the discovery it belonged to.
+    _RUNTIME_MODULE_MEMO.clear()
+
+
 def discover_plugins() -> dict[str, Any]:
+    fingerprint = plugin_source_fingerprint()
+    if _DISCOVERY_MEMO["fingerprint"] == fingerprint and _DISCOVERY_MEMO["result"] is not None:
+        return _DISCOVERY_MEMO["result"]
+    result = _discover_plugins_uncached()
+    _DISCOVERY_MEMO.update({"fingerprint": fingerprint, "result": result})
+    return result
+
+
+def _discover_plugins_uncached() -> dict[str, Any]:
     plugins: list[PluginDiscovery] = []
     errors: list[dict[str, Any]] = []
     seen_plugin_ids: set[str] = set()
@@ -1199,7 +1317,48 @@ def reconcile_plugin_replacements(
             continue
 
 
-def sync_plugin_registry(conn, table_exists: TableExists, Jsonb: JsonbFactory) -> dict[str, Any]:
+def sync_plugin_registry(
+    conn, table_exists: TableExists, Jsonb: JsonbFactory, *, force: bool = False
+) -> dict[str, Any]:
+    """Bring the `plugins` tables in step with the plugin files on disk.
+
+    Skipped entirely when the files have not changed since this process last
+    completed a sync, because the cost is not the discovery -- it is the writes.
+    Every call upserts a row per plugin, and those rows stay row-locked until
+    the surrounding transaction commits.
+
+    That mattered far more than it looks. Every "list the plugins" helper called
+    this, including ones on plain read paths (`collection_plugin_preview_entities`
+    behind the dashboard snapshot, `metadata_plugin_entities` behind the sync
+    bootstrap), so a page load was a writer on this table. Meanwhile the metadata
+    pipeline calls it too -- and then, inside the same transaction, waits on a
+    provider over the network. Observed on a live instance: one transaction idle
+    in transaction for 14.5 s holding those locks, and three page loads stalled
+    behind it on `INSERT INTO plugins`. A slow provider froze the whole app,
+    through a table none of those pages had any reason to write to.
+
+    Skipping on an unchanged fingerprint takes no locks at all, which is what
+    breaks that coupling. The memo is per process and keyed on the files, so a
+    plugin installed or deleted anywhere -- by another worker, or by hand --
+    changes the fingerprint and the next call syncs. It does *not* notice the
+    table being emptied while the files stay put; `reset_plugin_discovery_cache`
+    exists for that, and `force=True` for a caller that must not be skipped.
+    """
+    fingerprint = plugin_source_fingerprint()
+    if (
+        not force
+        and _REGISTRY_SYNC_MEMO["fingerprint"] == fingerprint
+        and _REGISTRY_SYNC_MEMO["result"] is not None
+    ):
+        return dict(_REGISTRY_SYNC_MEMO["result"])
+    result = _sync_plugin_registry_uncached(conn, table_exists, Jsonb)
+    _REGISTRY_SYNC_MEMO.update({"fingerprint": fingerprint, "result": dict(result)})
+    return result
+
+
+def _sync_plugin_registry_uncached(
+    conn, table_exists: TableExists, Jsonb: JsonbFactory
+) -> dict[str, Any]:
     discovery = discover_plugins()
     plugins: list[PluginDiscovery] = discovery["plugins"]
     synced_plugin_ids: list[str] = []

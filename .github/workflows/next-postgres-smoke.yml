@@ -112,6 +112,45 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
+      # Opening a film queues its refresh instead of waiting for it. The whole
+      # claim is that the *work* is unchanged and only its location moved, so
+      # these assertions are about what must not quietly disappear: the job
+      # still asks for people, the worker still runs the same cascade, and a
+      # job still running when the page stops polling is not reported as done.
+      # A version that refreshed less would feel faster still and be a
+      # regression rather than a fix.
+      - name: Test the queued movie-detail refresh
+        run: python -m unittest tests.test_next_movie_detail_lazy_refresh
+
+      # Three memos that each remove work a request was doing twice, and whose
+      # every risk is a *stale* answer rather than a slow one. The tests that
+      # matter here are the negative ones: a connection's memo must not outlive
+      # the connection, a request's must not outlive the request, and a failed
+      # sign-in must never be remembered as "nobody is here". Losing those
+      # assertions leaves something that still looks fast and starts answering
+      # yesterday's question.
+      - name: Test the request-scoped authentication memos
+        run: python -m unittest tests.test_next_request_scoped_auth
+
+      # Reading the plugin list must not make the reader a writer. Losing the
+      # memo would silently restore the coupling that let one slow provider call
+      # freeze every page load -- and nothing about that failure is visible in a
+      # test that only checks the registry ends up correct.
+      - name: Test the plugin registry cache
+        run: >-
+          python -m unittest
+          tests.test_next_plugin_registry_cache
+          tests.test_next_plugin_runtime
+          tests.test_next_plugin_runtime_module_reuse
+
+      # A cache is two properties that pull against each other: it has to be
+      # used, and it must never be the reason a lookup fails or replays a side
+      # effect. Most of that module is about what is deliberately not cached --
+      # pushes, imports, syncs, health checks -- and losing those assertions
+      # would not fail anything until something was replayed for real.
+      - name: Test the metadata lookup cache
+        run: python -m unittest tests.test_next_metadata_lookup_cache
+
       - name: Test MovieVault v3 secret recovery
         run: python -m unittest tests.test_next_movievault_v3
 
@@ -227,6 +266,28 @@ jobs:
 
       - name: Show migration status
         run: python next_database.py status
+
+      # Below the migrations for the reason the block further down gives, and
+      # for a second one specific to this pair: they do not merely read tables,
+      # they assert what PostgreSQL *does* -- which index the planner picks, and
+      # what the connection's transaction status is at the moment a provider is
+      # called. Neither question exists without the schema. Placed above the
+      # migrations first, where both died on `relation "people" does not exist`.
+      - name: Test the person-identifier lookup index
+        run: python -m unittest tests.test_next_person_identifier_index
+
+      - name: Test the import transaction boundary
+        run: python -m unittest tests.test_next_import_transaction_boundary
+
+      # The same rule one level deeper, and the one the user's own
+      # pg_stat_activity sample specified: five backends idle in transaction for
+      # three to five seconds, each having last run a read of a plugin's
+      # configuration. That read is what reopens the transaction, so this asserts
+      # from a second connection that nothing is idle in transaction at the
+      # moment a provider is called -- and structurally that every call site
+      # releases, because a new one is how this comes back.
+      - name: Test the provider-call transaction boundary
+        run: python -m unittest tests.test_next_provider_call_transaction_boundary
 
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres

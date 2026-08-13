@@ -46,11 +46,69 @@ def response(payload: dict[str, Any], status: int = 200):
     return jsonify(json_ready(payload)), status
 
 
+_TABLE_EXISTS_CACHE_ATTR = "_dv_table_exists_cache"
+
+
+def _table_exists_cache(conn) -> dict[str, bool] | None:
+    """The memo belonging to one connection, or None if it cannot hold one.
+
+    Attached to the connection object rather than kept in a module-level dict so
+    it dies with the connection, and so two requests running in the same worker
+    never share one. Callers hand this module stand-in objects in a few places
+    (the metadata pipeline runs with a connection-shaped object that has no
+    cursor), so an object that refuses attributes simply gets no memo instead of
+    an error -- a cache must never be the reason something fails.
+    """
+
+    try:
+        cache = getattr(conn, _TABLE_EXISTS_CACHE_ATTR, None)
+        if cache is None:
+            cache = {}
+            setattr(conn, _TABLE_EXISTS_CACHE_ATTR, cache)
+        return cache
+    except (AttributeError, TypeError):  # pragma: no cover - exotic stand-ins
+        return None
+
+
+def forget_table_existence(conn) -> None:
+    """Drop the memo, for the one caller that changes what exists.
+
+    Nothing in the request path creates or drops a table -- migrations run on
+    their own connection in ``next_database.py`` -- so this exists for restore
+    and for tests, not for normal operation.
+    """
+
+    try:
+        setattr(conn, _TABLE_EXISTS_CACHE_ATTR, None)
+    except (AttributeError, TypeError):  # pragma: no cover - exotic stand-ins
+        pass
+
+
 def table_exists(conn, table_name: str) -> bool:
+    """Is this table present? Memoised for the life of the connection.
+
+    This is asked far more often than it reads: a warm ``/api/next/app/snapshot``
+    issued 91 queries and 56 of them were this one round trip, repeated for the
+    same handful of table names. ``/api/next/collection/movies`` was 12 of 18.
+    Every one of them is a ``to_regclass`` lookup answering a question that
+    cannot change while the connection is open.
+
+    The memo is per connection, so a schema that changed between requests is
+    seen by the next request. Within a request it makes the answer *consistent*
+    as well as cheap -- previously a table created halfway through a request
+    would have been absent to the first caller and present to the second.
+    """
+
+    cache = _table_exists_cache(conn)
+    if cache is not None and table_name in cache:
+        return cache[table_name]
     with conn.cursor() as cur:
         cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
         row = cur.fetchone()
-    return bool(row and row["table_name"])
+    present = bool(row and row["table_name"])
+    if cache is not None:
+        cache[table_name] = present
+    return present
 
 
 def count_table(conn, table_name: str) -> int:

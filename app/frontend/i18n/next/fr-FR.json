@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Acteurs",
   "movieDetail.aggregateArtwork": "Visuel des membres",
   "movieDetail.applied": "Changements appliques.",
+  "movieDetail.applyFailed": "Echec de l'actualisation des metadonnees.",
   "movieDetail.releaseCandidatesHelp": "MovieVault a identifié le film, mais pas le pressage exact de ce disque. Choisissez celui que vous tenez pour remplir ses détails.",
   "movieDetail.releaseCandidatesApplying": "Application de cette édition au disque...",
   "movieDetail.releaseCandidatesApplied": "Édition appliquée à ce disque.",

@@ -22,6 +22,16 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from psycopg import OperationalError as _PsycopgOperationalError
+    from psycopg import ProgrammingError as _PsycopgProgrammingError
+except ModuleNotFoundError:  # pragma: no cover - allows policy tests without psycopg
+    class _PsycopgProgrammingError(Exception):  # type: ignore[no-redef]
+        pass
+
+    class _PsycopgOperationalError(Exception):  # type: ignore[no-redef]
+        pass
+
+try:
     from .dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from .dedup_identity import extract_identity_identifiers
     from .dedup_identity import MEDIA_TYPE_SHOW
@@ -29,6 +39,7 @@ try:
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
+    from .next_common import table_exists as _shared_table_exists
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from .next_movievault_connection import is_movievault_plugin
@@ -36,6 +47,7 @@ try:
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
     from .next_packaging import split_legacy_packaging
+    from .next_plugin_runtime import discovered_plugin
     from .next_plugin_runtime import run_plugin_entrypoint
     from .next_plugin_runtime import sync_plugin_registry
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
@@ -50,6 +62,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
+    from next_common import table_exists as _shared_table_exists
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from next_movievault_connection import is_movievault_plugin
@@ -57,6 +70,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
     from next_packaging import split_legacy_packaging
+    from next_plugin_runtime import discovered_plugin
     from next_plugin_runtime import run_plugin_entrypoint
     from next_plugin_runtime import sync_plugin_registry
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
@@ -492,10 +506,14 @@ MOVIE_FIELD_ALIASES = {
 
 
 def table_exists(conn, table_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
-        row = cur.fetchone()
-    return bool(row and row.get("table_name"))
+    """Delegates to the shared memoised implementation.
+
+    A metadata refresh asks this about the same dozen tables on every credit it
+    walks, so it benefits most from the connection's memo -- and keeping a
+    private copy meant it ran beside that memo rather than filling it.
+    """
+
+    return _shared_table_exists(conn, table_name)
 
 
 def json_ready(value: Any) -> Any:
@@ -3777,6 +3795,234 @@ def plugin_receiver_runtime_entrypoints(plugin: dict[str, Any]) -> set[str]:
     return {str(item) for item in (runtime.get("entrypoints") or []) if str(item)}
 
 
+# Entrypoints whose answer is a lookup against a provider's catalogue: the same
+# question gives the same answer until that catalogue moves. Everything else --
+# health checks, connection flows, pushes, imports, syncs, price checks -- either
+# has side effects or is about right now, and must always reach the provider.
+#
+# An allowlist rather than a denylist on purpose. A new entrypoint is not cached
+# until someone decides it may be, so the failure mode of forgetting is a missed
+# optimisation instead of a stale or replayed side effect.
+CACHEABLE_LOOKUP_ENTRYPOINTS = frozenset(
+    {
+        "search_title",
+        "search_barcode",
+        "lookup_external_id",
+        "movie_details",
+        "series_details",
+        "search_series",
+        "lookup_external_series_id",
+        "season_episodes",
+        "box_set_candidates",
+        "people_for_movie",
+        "person_details",
+        "person_filmography",
+        "person_awards",
+        "images_for_movie",
+        "videos_for_movie",
+        "technical_specs",
+    }
+)
+# How long a cached lookup stands. Provider catalogues move in days, not minutes,
+# and an explicit refresh bypasses this entirely (see `force` below), so the
+# ceiling only bounds how stale an *automatic* refresh may be. Deliberately not
+# an environment variable: that would make this a deployment change, and there is
+# no evidence yet that anyone needs to tune it.
+METADATA_LOOKUP_CACHE_TTL_SECONDS = 6 * 60 * 60
+
+
+def plugin_version_for_cache(plugin_id: str) -> str:
+    """The plugin's own version, so an upgrade invalidates its cached answers.
+
+    Without this, upgrading a source leaves answers produced by the previous
+    mapping standing for the rest of their TTL -- the one case where "the same
+    question" quietly stops meaning the same thing. Discovery is memoised on the
+    plugin files, so reading this costs nothing.
+    """
+    try:
+        plugin, _ = discovered_plugin(plugin_id)
+    except Exception:
+        return ""
+    if not plugin:
+        return ""
+    return str(plugin.manifest.get("version") or "")
+
+
+def metadata_lookup_cache_key(
+    plugin_id: str, entrypoint: str, payload: dict[str, Any] | None, context: dict[str, Any] | None
+) -> str:
+    """Derive an opaque key for one provider question.
+
+    Everything that can change the answer goes in, and nothing readable comes
+    out. The payload can carry what a person typed and the context carries
+    plugin configuration including secrets, so the key is a digest rather than
+    the values -- the table stores provider catalogue data, never the question
+    that produced it.
+
+    Configuration is part of the key because it changes answers: a different
+    API key, region or language setting is a different question, and treating
+    them as the same one would serve one tenant's answer for another's.
+    """
+    config = (context or {}).get("config")
+    material = json.dumps(
+        {
+            "pluginId": plugin_id,
+            "entrypoint": entrypoint,
+            "version": plugin_version_for_cache(plugin_id),
+            "payload": payload or {},
+            "config": config if isinstance(config, (dict, list)) else str(config or ""),
+        },
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(material.encode("utf-8")).hexdigest()
+
+
+def read_metadata_lookup_cache(conn, plugin_id: str, cache_key: str) -> dict[str, Any] | None:
+    try:
+        if not table_exists(conn, "metadata_lookup_cache"):
+            return None
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT payload
+                FROM metadata_lookup_cache
+                WHERE plugin_id=%s AND cache_key=%s AND expires_at > now()
+                """,
+                (plugin_id, cache_key),
+            )
+            row = cur.fetchone()
+    except Exception:
+        # A cache is never worth failing a lookup over, and the pipeline is
+        # deliberately callable with a stand-in connection that has no cursor --
+        # several callers do exactly that. Either way: no cache, carry on.
+        logger.debug("metadata lookup cache unavailable for %s", plugin_id, exc_info=True)
+        return None
+    if not row:
+        return None
+    payload = row["payload"] if isinstance(row, dict) else row[0]
+    return payload if isinstance(payload, dict) else None
+
+
+def write_metadata_lookup_cache(
+    conn, plugin_id: str, cache_key: str, execution: dict[str, Any]
+) -> None:
+    try:
+        if not table_exists(conn, "metadata_lookup_cache"):
+            return
+        with conn.cursor() as cur:
+            # Sweep on write rather than on a schedule: the expiry index makes it
+            # cheap, and it keeps the table from growing without adding another
+            # thing that has to be remembered to run.
+            cur.execute("DELETE FROM metadata_lookup_cache WHERE expires_at < now()")
+            cur.execute(
+                """
+                INSERT INTO metadata_lookup_cache (plugin_id, cache_key, payload, expires_at)
+                VALUES (%s, %s, %s, now() + make_interval(secs => %s))
+                ON CONFLICT (plugin_id, cache_key) DO UPDATE SET
+                    payload=EXCLUDED.payload,
+                    expires_at=EXCLUDED.expires_at,
+                    created_at=now()
+                """,
+                (plugin_id, cache_key, Jsonb(execution), METADATA_LOOKUP_CACHE_TTL_SECONDS),
+            )
+    except Exception:
+        # Two expected causes, neither of them a problem. The table references
+        # `metadata_plugins`, so a source not mirrored there cannot be cached;
+        # and the pipeline is callable with a stand-in connection that has no
+        # cursor. Either way: no cache, and the lookup itself is unaffected.
+        logger.debug("metadata lookup cache write skipped for %s", plugin_id, exc_info=True)
+
+
+def release_read_transaction(conn) -> bool:
+    """Close the transaction a lookup's own reads opened, before the network call.
+
+    This has to happen *immediately* before the provider is reached, not at the
+    top of whichever refresh function is running. `connect()` uses
+    `autocommit=False`, so every read reopens a transaction -- and the code
+    between "start refreshing" and "call the source" is nothing but reads: the
+    entity, the plugin list, each plugin's configuration, the lookup cache. A
+    commit placed any earlier is undone by the next `SELECT`, which is exactly
+    what a first attempt at this got wrong: the boundary moved and the provider
+    call was still measured as `INTRANS`.
+
+    Returns whether the transaction was actually released, and never raises.
+    Three callers legitimately cannot be released, and all three keep the
+    behaviour they had rather than failing:
+
+    * a connection-shaped **stand-in** with no `commit` -- the pipeline is
+      deliberately callable with one;
+    * a caller inside an explicit ``with conn.transaction():`` block, where
+      psycopg forbids committing. That caller has chosen atomicity across the
+      call, and silently breaking that choice would be worse than a long
+      transaction;
+    * a connection that is already **closed**, which is the best case of all:
+      ``execute_plugin`` ends its ``with connect()`` block before reaching the
+      plugin, so there is no transaction left to release and no connection held
+      either. Learned by breaking it -- a release added there answered every
+      request with "DiscVault is temporarily offline".
+
+    Like the lookup cache, this is an optimisation and must never be the reason
+    something fails.
+    """
+
+    try:
+        conn.commit()
+    except AttributeError:
+        return False
+    except _PsycopgProgrammingError:
+        logger.debug(
+            "provider call runs inside a caller's transaction block; "
+            "the read transaction stays open for its duration"
+        )
+        return False
+    except _PsycopgOperationalError:
+        # Already closed, or gone. Nothing is held, which is the outcome this
+        # function exists to produce.
+        logger.debug("no transaction to release: the connection is closed")
+        return False
+    return True
+
+
+def run_cached_plugin_entrypoint(
+    conn,
+    plugin_id: str,
+    entrypoint: str,
+    payload: dict[str, Any] | None,
+    context: dict[str, Any] | None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Ask a provider, unless the same question was already answered recently.
+
+    `metadata_lookup_cache` has existed since migration 003 -- with a cache key,
+    a payload, an expiry and a unique constraint -- and nothing in the codebase
+    ever read or wrote it. Every lookup went to the provider, every time, and on
+    a movie refresh that is one network round trip per credit.
+
+    `force` is what keeps "everything still refreshes" true. The refresh routes
+    already default it to True and only the automatic refresh-on-open sends
+    False, so pressing refresh reaches the provider exactly as before while
+    routine background work stops re-asking.
+    """
+    if force or entrypoint not in CACHEABLE_LOOKUP_ENTRYPOINTS:
+        release_read_transaction(conn)
+        return run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
+    cache_key = metadata_lookup_cache_key(plugin_id, entrypoint, payload, context)
+    cached = read_metadata_lookup_cache(conn, plugin_id, cache_key)
+    if cached is not None:
+        return cached
+    # After the cache read, which is itself a read and so reopened the
+    # transaction. A cache hit needs no release: it never touches the network.
+    release_read_transaction(conn)
+    execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
+    # Only a clean answer is worth keeping. Caching a failure would turn one bad
+    # minute at a provider into six bad hours.
+    if isinstance(execution, dict) and execution.get("status") == "ok":
+        write_metadata_lookup_cache(conn, plugin_id, cache_key, execution)
+    return execution
+
+
 def plugin_receiver_optional_detail(
     plugin: dict[str, Any],
     entrypoint: str,
@@ -3830,6 +4076,13 @@ def push_receiver_payload_to_receivers(
     for plugin in receivers:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
+        # Everything below this line in the loop body is network -- describe,
+        # receive, summarise -- and nothing in it reads from `conn` again. The
+        # caller commits before entering the push, but the two reads above
+        # reopened the transaction, which is exactly the mistake this whole
+        # change is about: a release is only worth anything at the last read
+        # before the call.
+        release_read_transaction(conn)
         details = plugin_receiver_optional_detail(plugin, "describe_payload", payload, context)
         if plugin_requires_config(plugin, config, "receive_metadata"):
             executions.append(
@@ -3927,6 +4180,7 @@ def run_metadata_source_pipeline(
     actor: dict[str, Any] | None = None,
     exclude_plugin_ids: set[str] | None = None,
     enable_metadata_lookup_bridge: bool = True,
+    force: bool = False,
 ) -> dict[str, Any]:
     excluded = {str(item) for item in (exclude_plugin_ids or set()) if str(item)}
     discovered_plugins = [
@@ -4005,7 +4259,9 @@ def run_metadata_source_pipeline(
                     }
                 )
                 continue
-            execution = run_plugin_entrypoint(plugin["id"], entrypoint, planned["payload"], context)
+            execution = run_cached_plugin_entrypoint(
+                conn, plugin["id"], entrypoint, planned["payload"], context, force=force
+            )
             execution_item = {
                 "pluginId": plugin["id"],
                 "entrypoint": entrypoint,
@@ -4176,8 +4432,8 @@ def run_metadata_source_pipeline(
                     appended = False
                     for planned in tmdb_plan:
                         entrypoint = planned["entrypoint"]
-                        plan_execution = run_plugin_entrypoint(
-                            TMDB_PLUGIN_ID, entrypoint, planned["payload"], context
+                        plan_execution = run_cached_plugin_entrypoint(
+                            conn, TMDB_PLUGIN_ID, entrypoint, planned["payload"], context, force=force
                         )
                         plan_item = {
                             "pluginId": TMDB_PLUGIN_ID,
@@ -4224,7 +4480,9 @@ def run_metadata_source_pipeline(
                     execution_item["candidateCount"] = preview_candidate_total
                     tmdb_enrichment["state"] = "enriched" if appended else "no_match"
                 else:
-                    execution = run_plugin_entrypoint(TMDB_PLUGIN_ID, "movie_details", enrichment_payload, context)
+                    execution = run_cached_plugin_entrypoint(
+                        conn, TMDB_PLUGIN_ID, "movie_details", enrichment_payload, context, force=force
+                    )
                     execution_item.update(
                         {
                             "status": execution.get("status"),
@@ -4342,7 +4600,13 @@ def run_metadata_source_pipeline(
     }
 
 
-def preview_movie_metadata(conn, movie_id: UUID | str, actor: dict[str, Any] | None = None) -> dict[str, Any]:
+def preview_movie_metadata(
+    conn,
+    movie_id: UUID | str,
+    actor: dict[str, Any] | None = None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
     movie_uuid = UUID(str(movie_id))
     context = movie_lookup_context(conn, movie_uuid)
     pipeline = run_metadata_source_pipeline(
@@ -4351,11 +4615,18 @@ def preview_movie_metadata(conn, movie_id: UUID | str, actor: dict[str, Any] | N
         current=context["movie"],
         technical_current=context["technicalSpecs"],
         actor=actor,
+        force=force,
     )
     return {"movie": context["movie"], "technicalSpecs": context["technicalSpecs"], **pipeline}
 
 
-def lookup_metadata_sources(conn, payload: dict[str, Any], actor: dict[str, Any] | None = None) -> dict[str, Any]:
+def lookup_metadata_sources(
+    conn,
+    payload: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
     query = query_from_payload(payload)
     return run_metadata_source_pipeline(
         conn,
@@ -4363,6 +4634,7 @@ def lookup_metadata_sources(conn, payload: dict[str, Any], actor: dict[str, Any]
         current={"format": query.get("format") or "", "metadata": {}},
         technical_current={},
         actor=actor,
+        force=force,
     )
 
 
@@ -5842,7 +6114,7 @@ def consult_plugins(
             continue
         context = plugin_execution_context(conn, plugin, plugin_config_from_db(conn, plugin_id))
         try:
-            execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
+            execution = run_cached_plugin_entrypoint(conn, plugin_id, entrypoint, payload, context)
         except Exception as exc:  # pragma: no cover - defensive, a source is not the job
             errors.append({"pluginId": plugin_id, "error": str(exc)})
             logger.warning("source %s failed on %s", plugin_id, entrypoint, exc_info=True)
@@ -6248,6 +6520,11 @@ def clear_orphaned_season_poster(cur, movie_uuid: UUID) -> None:
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     """Fill a series' description from whichever sources can describe it.
 
+    Owns its transaction boundary: the sources are consulted over the network,
+    so the reads above them are committed first and callers must not wrap this
+    in an explicit transaction block.
+
+
     This is the second half of the division of labour the feed established.
     MovieVault states *identity and structure* -- which series, which seasons --
     and stops there, deliberately: it is not licensed to redistribute provider
@@ -6296,6 +6573,10 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     if not series_detail_source_plugins(conn):
         return {"status": "skipped", "reason": "no series source"}
 
+    # The sources are consulted over the network. The transaction the reads
+    # above opened is released inside `run_cached_plugin_entrypoint`, at the
+    # last moment before each call -- see `release_read_transaction` for why it
+    # cannot be done here instead.
     results, errors = consult_series_sources(conn, row, identifiers)
 
     if not results:
@@ -6550,6 +6831,7 @@ def refresh_movie_metadata(
     *,
     dry_run: bool = False,
     actor: dict[str, Any] | None = None,
+    force: bool = False,
 ) -> dict[str, Any]:
     """Fetch, merge, apply and fan out provider metadata for one movie.
 
@@ -6560,8 +6842,16 @@ def refresh_movie_metadata(
     writer in the app until the API-side ``lock_timeout`` fires, which used to
     surface as a bogus "DiscVault is temporarily offline" error. Callers must
     pass a connection that is not inside an explicit transaction block.
+
+    That argument covered the *push* and silently skipped the *fetch*, which
+    reaches the same providers and takes just as long: the caller's own
+    pre-checks have opened a transaction before this function is entered, and
+    ``preview_movie_metadata`` ran inside it -- measured as ``INTRANS`` at the
+    provider call. The fetch is released by ``release_read_transaction`` at the
+    last moment before each provider call, which is the only place it can be
+    done; nothing between here and there does anything but read.
     """
-    preview = preview_movie_metadata(conn, movie_id, actor)
+    preview = preview_movie_metadata(conn, movie_id, actor, force=force)
     if dry_run:
         insert_metadata_audit_event(
             conn,
