@@ -11602,7 +11602,22 @@ def series_entity(conn, series_id: UUID, *, with_seasons: bool = True) -> dict[s
     return entity
 
 
-def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, Any]]:
+def series_list_entities(
+    conn, *, query: str | None = None, limit: int = 500, offset: int = 0
+) -> tuple[list[dict[str, Any]], bool]:
+    """One page of the series list, and whether another page follows.
+
+    The `LIMIT 500` here used to be the only bound and there was no way to ask
+    for the rest: a library above five hundred series was silently short, and
+    the response said nothing about it. That is the failure mode worth naming --
+    not that the answer was large, but that it was incomplete and looked
+    complete.
+
+    Returns `(rows, has_more)`. `has_more` is answered by asking for one row
+    more than the caller wanted and throwing it away, which is exact and costs
+    one row rather than a second `COUNT(*)` over the same joins.
+    """
+
     # Qualified with `s.`: the poster join below puts a second relation in the
     # FROM clause, and an unqualified column there is a future ambiguity error
     # rather than a present one.
@@ -11645,11 +11660,13 @@ def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, An
             ) poster_asset ON true
             WHERE {" AND ".join(filters)}
             ORDER BY lower(COALESCE(s.sort_title, s.title))
-            LIMIT 500
+            LIMIT %s OFFSET %s
             """,
-            tuple(params),
+            (*params, limit + 1, offset),
         )
         rows = cur.fetchall()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     return [
         {
             "id": str(row["id"]),
@@ -11663,7 +11680,7 @@ def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, An
             "posterUrl": series_poster_url(row),
         }
         for row in rows
-    ]
+    ], has_more
 
 
 def movie_series_payload(conn, movie_id: UUID) -> dict[str, Any] | None:
@@ -25171,11 +25188,32 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/series")
     def list_series():
         query = clean_text(request.args.get("q") or request.args.get("query"))
+        # 500 stays the default and the ceiling, so a client that sends nothing
+        # receives exactly what it received before. What is new is that a
+        # library larger than one page can now be reached at all, and that the
+        # response says when it has been cut -- it used to be silently short.
+        limit = parse_int_arg("limit", 500, minimum=1, maximum=500)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         with connect() as conn:
             require_next_permission(conn, "collection.view")
             if not series_tables_available(conn):
                 raise NextApiError("Series tables are not available", 503)
-            return response({"status": "ok", "series": series_list_entities(conn, query=query)})
+            series, has_more = series_list_entities(
+                conn, query=query, limit=limit, offset=offset
+            )
+            return response(
+                {
+                    "status": "ok",
+                    "series": series,
+                    "limit": limit,
+                    "offset": offset,
+                    "hasMore": has_more,
+                    # Null rather than absent when the list is complete: a client
+                    # looping "while nextOffset" then terminates on the value
+                    # itself instead of on a missing key.
+                    "nextOffset": offset + len(series) if has_more else None,
+                }
+            )
 
     @flask_app.get("/api/next/series/<series_id>")
     def get_series(series_id):

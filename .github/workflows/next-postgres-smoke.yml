@@ -140,6 +140,15 @@ jobs:
       - name: Test query-argument parsing
         run: python -m unittest tests.test_next_query_argument_parsing
 
+      # Needs the real PostgreSQL, because the property is about what the
+      # database returns across page boundaries rather than about the shape of
+      # the response. The assertion that matters is the negative one: a page
+      # that ends exactly on the boundary must not claim a further page, and a
+      # cut list must not look like a complete one -- which is precisely how
+      # this endpoint failed before.
+      - name: Test the series list paging
+        run: python -m unittest tests.test_next_series_paging
+
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
       # freeze every page load -- and nothing about that failure is visible in a
