@@ -3011,5 +3011,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Odebrat řadu ze seznamu ke zhlédnutí",
   "seriesDetail.seasonBulkHint": "Platí pro každou epizodu v tomto seznamu.",
   "seriesDetail.episodeImageFromSeason": "Obrázek řady",
-  "seriesDetail.episodeImageFromSeries": "Obrázek seriálu"
+  "seriesDetail.episodeImageFromSeries": "Obrázek seriálu",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }
