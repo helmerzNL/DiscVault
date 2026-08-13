@@ -121,6 +121,7 @@ jobs:
           python -m unittest
           tests.test_next_plugin_registry_cache
           tests.test_next_plugin_runtime
+          tests.test_next_plugin_runtime_module_reuse
 
       # A cache is two properties that pull against each other: it has to be
       # used, and it must never be the reason a lookup fails or replays a side

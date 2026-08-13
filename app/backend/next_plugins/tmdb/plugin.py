@@ -18,13 +18,58 @@ def _language(context):
     return str(_settings(context).get("language") or "en-US").strip() or "en-US"
 
 
-def _request(context, path, **params):
+_SESSION = None
+_SESSION_LOCK = __import__("threading").Lock()
+
+
+def _session():
+    """One connection pool for this process, instead of one per request.
+
+    `requests.get` builds a fresh connection every time, so a metadata refresh
+    paid a DNS lookup, a TCP handshake and a full TLS negotiation *per credit* --
+    and a movie with forty credits refreshes forty people. Measured over five
+    repeat calls, reusing the connection was several times faster than opening
+    one each time; the handshake is the whole difference.
+
+    Thread safety is not theoretical here: person credits are refreshed through
+    a ThreadPoolExecutor with four workers, so this session is used from several
+    threads at once. urllib3's pool is safe for that as long as nothing mutates
+    the session afterwards, which is why this only ever calls `get` and never
+    touches headers or auth on the shared object.
+
+    Cookies are refused outright. The session is shared across every user and
+    every configuration in the process, and a cookie jar is mutable state that
+    would carry between them. TMDB does not need cookies; nothing here should
+    accumulate them on its behalf.
+    """
+    global _SESSION
+    if _SESSION is not None:
+        return _SESSION
+    import http.cookiejar
+
     import requests
 
+    with _SESSION_LOCK:
+        if _SESSION is not None:
+            return _SESSION
+        session = requests.Session()
+        session.cookies.set_policy(http.cookiejar.DefaultCookiePolicy(allowed_domains=[]))
+        # Bounded: two hosts (api and images) and the four refresh threads.
+        # `max_retries=0` keeps today's behaviour -- a failed call fails, and the
+        # caller decides, exactly as it did before.
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=4, pool_maxsize=8, max_retries=0
+        )
+        session.mount("https://", adapter)
+        _SESSION = session
+    return _SESSION
+
+
+def _request(context, path, **params):
     api_key = _api_key(context)
     if not api_key:
         raise RuntimeError("TMDb API key is not configured")
-    response = requests.get(
+    response = _session().get(
         f"{TMDB_API}{path}",
         params={**params, "api_key": api_key},
         timeout=10,
