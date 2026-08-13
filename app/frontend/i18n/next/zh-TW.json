@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "演員",
   "movieDetail.aggregateArtwork": "成員圖片",
   "movieDetail.applied": "中繼資料已重新整理。",
+  "movieDetail.applyFailed": "中繼資料重新整理失敗。",
   "movieDetail.releaseCandidatesHelp": "MovieVault 已識別出影片，但無法確定這張光碟的確切版本。請選擇你手中的版本以填寫其詳細資訊。",
   "movieDetail.releaseCandidatesApplying": "正在將此版本套用到光碟...",
   "movieDetail.releaseCandidatesApplied": "版本已套用到此光碟。",

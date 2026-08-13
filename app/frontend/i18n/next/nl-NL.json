@@ -1745,6 +1745,7 @@
   "movieDetail.actors": "Acteurs",
   "movieDetail.aggregateArtwork": "Artwork van leden",
   "movieDetail.applied": "Metadata vernieuwd.",
+  "movieDetail.applyFailed": "Vernieuwen van metadata mislukt.",
   "movieDetail.releaseCandidatesHelp": "MovieVault herkende de film, maar niet de precieze persing van deze disc. Kies de persing die je vasthoudt om de details in te vullen.",
   "movieDetail.releaseCandidatesApplying": "Editie wordt op deze disc toegepast...",
   "movieDetail.releaseCandidatesApplied": "Editie toegepast op deze disc.",

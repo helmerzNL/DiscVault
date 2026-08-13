@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric.ec import (
     EllipticCurvePublicNumbers,
 )
 from cryptography.hazmat.primitives.hashes import SHA256
-from flask import Flask, jsonify, make_response, redirect, request
+from flask import Flask, g as flask_g, jsonify, make_response, redirect, request
 from psycopg import Error as PsycopgError
 from psycopg.types.json import Jsonb
 
@@ -80,6 +80,7 @@ try:
         verify_totp,
     )
     from .next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
+    from .next_common import table_exists as _shared_table_exists
     from .next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -129,6 +130,7 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
         verify_totp,
     )
     from next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
+    from next_common import table_exists as _shared_table_exists
     from next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -963,17 +965,121 @@ def next_auth_ready(conn, table_exists: TableExists) -> bool:
     return bool(row and row["ready"])
 
 
+_AUTH_ENABLED_ATTR = "_dv_auth_effective_enabled"
+
+
+def forget_auth_enabled() -> None:
+    """Drop the per-request answer to "is authentication on".
+
+    Called wherever ``auth_enabled`` is written, so a request that switches
+    authentication on or off does not go on reading its own stale answer.
+    """
+
+    try:
+        if hasattr(flask_g, _AUTH_ENABLED_ATTR):
+            delattr(flask_g, _AUTH_ENABLED_ATTR)
+    except RuntimeError:  # pragma: no cover - no application context
+        pass
+
+
 def next_auth_effective_enabled(conn, table_exists: TableExists) -> bool:
-    return next_auth_configured_enabled(conn, table_exists) and next_auth_ready(conn, table_exists)
+    """Is authentication both switched on and usable? Answered once per request.
+
+    Two queries -- the setting, then an EXISTS over ``users`` joined against the
+    credential tables -- and a warm ``/api/next/app/snapshot`` ran both of them
+    three times: once in the ``before_request`` gate and twice more inside the
+    handler, on a second connection, for an answer that had not moved.
+
+    Held in ``flask.g`` rather than on the connection because the point is to
+    span the two connections a single request opens. Anything that writes the
+    setting calls ``forget_auth_enabled``.
+    """
+
+    try:
+        remembered = getattr(flask_g, _AUTH_ENABLED_ATTR, None)
+    except RuntimeError:  # pragma: no cover - no application context (worker, tests)
+        remembered = None
+    if remembered is not None:
+        return bool(remembered)
+
+    enabled = next_auth_configured_enabled(conn, table_exists) and next_auth_ready(
+        conn, table_exists
+    )
+    try:
+        setattr(flask_g, _AUTH_ENABLED_ATTR, enabled)
+    except RuntimeError:  # pragma: no cover - no application context
+        pass
+    return enabled
+
+
+_REQUEST_ACTOR_ATTR = "_dv_request_actor"
+
+
+def _remembered_request_actor() -> dict[str, Any] | None:
+    try:
+        return getattr(flask_g, _REQUEST_ACTOR_ATTR, None)
+    except RuntimeError:  # pragma: no cover - no application context (worker, tests)
+        return None
+
+
+def _remember_request_actor(actor: dict[str, Any]) -> None:
+    try:
+        setattr(flask_g, _REQUEST_ACTOR_ATTR, actor)
+    except RuntimeError:  # pragma: no cover - no application context (worker, tests)
+        pass
+
+
+def forget_request_actor() -> None:
+    """Drop the memo so the next call resolves again.
+
+    For a request that changes who the caller is midway -- signing in, signing
+    out, revoking the very token it arrived on. Nothing else should need it.
+    """
+
+    try:
+        if hasattr(flask_g, _REQUEST_ACTOR_ATTR):
+            delattr(flask_g, _REQUEST_ACTOR_ATTR)
+    except RuntimeError:  # pragma: no cover - no application context
+        pass
 
 
 def next_auth_current_user(conn) -> dict[str, Any] | None:
+    """Who is making this request -- resolved once, then reused.
+
+    Every protected request authenticates twice. ``require_next_auth`` runs as a
+    ``before_request`` hook on its own connection and resolves the caller to
+    decide whether to answer 401 at all; the handler then opens its own
+    connection and resolves the same caller again from the same unchanged
+    header. The credentials cannot differ between the two -- a request's headers
+    and cookies are fixed for its lifetime -- so the second resolution can only
+    ever reach the same answer.
+
+    On a token it was not merely a repeated read: ``next_auth_current_api_token_user``
+    stamps ``last_used_at`` and the observed address, so a plain GET wrote to
+    ``api_access_tokens`` twice. It now writes once.
+
+    Only a successful resolution is remembered. A failure costs one query at
+    most, and caching "nobody" is the direction that could wrongly outlive a
+    sign-in happening inside the same request.
+
+    The memo is handed out as a copy because callers add to what they get --
+    ``require_admin`` writes ``role``, the profile routes write ``permissions``
+    -- and those are per-caller conclusions, not part of the identity.
+    """
+
+    remembered = _remembered_request_actor()
+    if remembered is not None:
+        return dict(remembered)
+
     payload = _current_user_payload()
     user_id = payload.get("sub") if payload else None
     if not user_id:
         api_token = _bearer_api_token()
         if api_token:
-            return next_auth_current_api_token_user(conn, api_token)
+            actor = next_auth_current_api_token_user(conn, api_token)
+            if actor is not None:
+                _remember_request_actor(actor)
+                return dict(actor)
         return None
     with conn.cursor() as cur:
         cur.execute(
@@ -984,14 +1090,23 @@ def next_auth_current_user(conn) -> dict[str, Any] | None:
             """,
             (user_id,),
         )
-        return cur.fetchone()
+        actor = cur.fetchone()
+    if actor is None:
+        return None
+    _remember_request_actor(actor)
+    return dict(actor)
 
 
 def _auth_table_exists(conn, table_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
-        row = cur.fetchone()
-    return bool(row and row["table_name"])
+    """The same question as ``next_common.table_exists``, so ask it there.
+
+    This module carried its own copy, which meant token authentication paid two
+    ``to_regclass`` round trips that the rest of the request had already paid and
+    memoised. Delegating shares the connection's memo instead of running beside
+    it.
+    """
+
+    return _shared_table_exists(conn, table_name)
 
 
 def _observed_request_ip() -> dict[str, str]:
@@ -1272,6 +1387,13 @@ def register_next_auth_routes(
                 """,
                 (key, Jsonb(value), is_secret),
             )
+        if key == "auth_enabled":
+            # The one setting a request caches for itself. Invalidated here
+            # rather than at each of the four call sites, so a new writer cannot
+            # forget: enabling authentication during first-owner bootstrap,
+            # disabling it when the last passkey is deleted, and the toggle
+            # route all go through this function.
+            forget_auth_enabled()
 
     def mobile_allowed_callback_schemes() -> set[str]:
         configured = os.environ.get("DISCVAULT_MOBILE_CALLBACK_SCHEMES", "")
@@ -1654,7 +1776,13 @@ def register_next_auth_routes(
         return next_auth_ready(conn, table_exists)
 
     def auth_enabled(conn) -> bool:
-        return configured_auth_enabled(conn) and auth_ready(conn)
+        """The same question the ``before_request`` gate already answered.
+
+        Delegating means the handler reads the gate's answer instead of running
+        both queries again on its own connection.
+        """
+
+        return next_auth_effective_enabled(conn, table_exists)
 
     def require_passkey_access() -> None:
         if not _passkey_access_valid():
@@ -2294,23 +2422,14 @@ def register_next_auth_routes(
         return int(row["count"] if row else 0)
 
     def current_user(conn) -> dict[str, Any] | None:
-        payload = _current_user_payload()
-        user_id = payload.get("sub") if payload else None
-        if not user_id:
-            api_token = _bearer_api_token()
-            if api_token:
-                return next_auth_current_api_token_user(conn, api_token)
-            return None
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, username, display_name, first_name, last_name, status, created_at, updated_at
-                FROM users
-                WHERE id=%s AND status='active'
-                """,
-                (user_id,),
-            )
-            return cur.fetchone()
+        """The same resolution as the module-level function, so share its memo.
+
+        This closure was a duplicate of ``next_auth_current_user``. Keeping the
+        copy would mean the handler resolved the caller again even though the
+        ``before_request`` gate had already done it a moment earlier.
+        """
+
+        return next_auth_current_user(conn)
 
     def user_roles(conn, user_id: UUID | str) -> list[dict[str, Any]]:
         if not table_exists(conn, "user_roles") or not table_exists(conn, "roles"):

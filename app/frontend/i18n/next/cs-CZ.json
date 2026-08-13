@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Herci",
   "movieDetail.aggregateArtwork": "Členská umělecká díla",
   "movieDetail.applied": "Metadata obnovena.",
+  "movieDetail.applyFailed": "Obnovení metadat selhalo.",
   "movieDetail.releaseCandidatesHelp": "MovieVault rozpoznal film, ale ne přesný lis tohoto disku. Vyberte ten, který držíte v ruce, a doplňte tak jeho údaje.",
   "movieDetail.releaseCandidatesApplying": "Použití této edice na disk...",
   "movieDetail.releaseCandidatesApplied": "Edice použita na tento disk.",

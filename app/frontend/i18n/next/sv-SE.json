@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Skadespelare",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Andringar tillampade.",
+  "movieDetail.applyFailed": "Uppdatering av metadata misslyckades.",
   "movieDetail.releaseCandidatesHelp": "MovieVault identifierade filmen, men inte den exakta pressningen av den här skivan. Välj den du håller i för att fylla i detaljerna.",
   "movieDetail.releaseCandidatesApplying": "Tillämpar den här utgåvan på skivan...",
   "movieDetail.releaseCandidatesApplied": "Utgåva tillämpad på den här skivan.",

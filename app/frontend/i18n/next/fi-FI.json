@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Nayttelijat",
   "movieDetail.aggregateArtwork": "Jasenten kuvitus",
   "movieDetail.applied": "Muutokset kaytetty.",
+  "movieDetail.applyFailed": "Metatietojen paivitys epaonnistui.",
   "movieDetail.releaseCandidatesHelp": "MovieVault tunnisti elokuvan, mutta ei tämän levyn tarkkaa painosta. Valitse kädessäsi oleva painos täyttääksesi sen tiedot.",
   "movieDetail.releaseCandidatesApplying": "Painosta sovelletaan levyyn...",
   "movieDetail.releaseCandidatesApplied": "Painos otettu käyttöön tälle levylle.",

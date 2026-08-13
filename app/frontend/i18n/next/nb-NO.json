@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Skuespillere",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Endringer brukt.",
+  "movieDetail.applyFailed": "Oppdatering av metadata feilet.",
   "movieDetail.releaseCandidatesHelp": "MovieVault gjenkjente filmen, men ikke den nøyaktige pressingen av denne discen. Velg den du holder i hånden for å fylle inn detaljene.",
   "movieDetail.releaseCandidatesApplying": "Bruker denne utgaven på discen...",
   "movieDetail.releaseCandidatesApplied": "Utgave brukt på denne discen.",

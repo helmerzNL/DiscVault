@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Oyuncular",
   "movieDetail.aggregateArtwork": "Üye görselleri",
   "movieDetail.applied": "Meta veriler yenilendi.",
+  "movieDetail.applyFailed": "Meta veri yenileme başarısız oldu.",
   "movieDetail.releaseCandidatesHelp": "MovieVault filmi tanıdı ancak bu diskin tam baskısını belirleyemedi. Ayrıntıları doldurmak için elinizde tuttuğunuz baskıyı seçin.",
   "movieDetail.releaseCandidatesApplying": "Bu sürüm diske uygulanıyor...",
   "movieDetail.releaseCandidatesApplied": "Sürüm bu diske uygulandı.",

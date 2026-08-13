@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Igralci",
   "movieDetail.aggregateArtwork": "Umetniško delo člana",
   "movieDetail.applied": "Metapodatki so osveženi.",
+  "movieDetail.applyFailed": "Osveževanje metapodatkov ni uspelo.",
   "movieDetail.releaseCandidatesHelp": "MovieVault je prepoznal film, ne pa tudi natančne izdaje tega diska. Izberite tisto, ki jo držite v roki, da izpolnite njene podatke.",
   "movieDetail.releaseCandidatesApplying": "Uporaba te izdaje na disku...",
   "movieDetail.releaseCandidatesApplied": "Izdaja uporabljena na tem disku.",

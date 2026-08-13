@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Actors",
   "movieDetail.aggregateArtwork": "Member artwork",
   "movieDetail.applied": "Metadata refreshed.",
+  "movieDetail.applyFailed": "Metadata refresh failed.",
   "movieDetail.releaseCandidatesHelp": "MovieVault identified the film but not this disc's exact pressing. Pick the one you are holding to fill in its details.",
   "movieDetail.releaseCandidatesApplying": "Applying this edition to the disc...",
   "movieDetail.releaseCandidatesApplied": "Edition applied to this disc.",

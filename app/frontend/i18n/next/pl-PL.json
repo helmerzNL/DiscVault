@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Podmioty",
   "movieDetail.aggregateArtwork": "Grafika dla członków",
   "movieDetail.applied": "Odświeżono metadane.",
+  "movieDetail.applyFailed": "Nie udało się odświeżyć metadanych.",
   "movieDetail.releaseCandidatesHelp": "MovieVault rozpoznał film, ale nie dokładne tłoczenie tej płyty. Wybierz to, które trzymasz w ręku, aby uzupełnić szczegóły.",
   "movieDetail.releaseCandidatesApplying": "Stosowanie tej edycji do płyty...",
   "movieDetail.releaseCandidatesApplied": "Edycja zastosowana do tej płyty.",
