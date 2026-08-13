@@ -11602,7 +11602,22 @@ def series_entity(conn, series_id: UUID, *, with_seasons: bool = True) -> dict[s
     return entity
 
 
-def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, Any]]:
+def series_list_entities(
+    conn, *, query: str | None = None, limit: int = 500, offset: int = 0
+) -> tuple[list[dict[str, Any]], bool]:
+    """One page of the series list, and whether another page follows.
+
+    The `LIMIT 500` here used to be the only bound and there was no way to ask
+    for the rest: a library above five hundred series was silently short, and
+    the response said nothing about it. That is the failure mode worth naming --
+    not that the answer was large, but that it was incomplete and looked
+    complete.
+
+    Returns `(rows, has_more)`. `has_more` is answered by asking for one row
+    more than the caller wanted and throwing it away, which is exact and costs
+    one row rather than a second `COUNT(*)` over the same joins.
+    """
+
     # Qualified with `s.`: the poster join below puts a second relation in the
     # FROM clause, and an unqualified column there is a future ambiguity error
     # rather than a present one.
@@ -11645,11 +11660,13 @@ def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, An
             ) poster_asset ON true
             WHERE {" AND ".join(filters)}
             ORDER BY lower(COALESCE(s.sort_title, s.title))
-            LIMIT 500
+            LIMIT %s OFFSET %s
             """,
-            tuple(params),
+            (*params, limit + 1, offset),
         )
         rows = cur.fetchall()
+    has_more = len(rows) > limit
+    rows = rows[:limit]
     return [
         {
             "id": str(row["id"]),
@@ -11663,7 +11680,7 @@ def series_list_entities(conn, *, query: str | None = None) -> list[dict[str, An
             "posterUrl": series_poster_url(row),
         }
         for row in rows
-    ]
+    ], has_more
 
 
 def movie_series_payload(conn, movie_id: UUID) -> dict[str, Any] | None:
@@ -23967,7 +23984,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/media-groups")
     def media_groups():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=1000)
         with connect() as conn:
             actor = require_next_permission(conn, "groups.view")
             return response({"status": "ok", "groups": media_group_entities(conn, limit=limit, actor=actor)})
@@ -25171,11 +25188,32 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/series")
     def list_series():
         query = clean_text(request.args.get("q") or request.args.get("query"))
+        # 500 stays the default and the ceiling, so a client that sends nothing
+        # receives exactly what it received before. What is new is that a
+        # library larger than one page can now be reached at all, and that the
+        # response says when it has been cut -- it used to be silently short.
+        limit = parse_int_arg("limit", 500, minimum=1, maximum=500)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         with connect() as conn:
             require_next_permission(conn, "collection.view")
             if not series_tables_available(conn):
                 raise NextApiError("Series tables are not available", 503)
-            return response({"status": "ok", "series": series_list_entities(conn, query=query)})
+            series, has_more = series_list_entities(
+                conn, query=query, limit=limit, offset=offset
+            )
+            return response(
+                {
+                    "status": "ok",
+                    "series": series,
+                    "limit": limit,
+                    "offset": offset,
+                    "hasMore": has_more,
+                    # Null rather than absent when the list is complete: a client
+                    # looping "while nextOffset" then terminates on the value
+                    # itself instead of on a missing key.
+                    "nextOffset": offset + len(series) if has_more else None,
+                }
+            )
 
     @flask_app.get("/api/next/series/<series_id>")
     def get_series(series_id):
@@ -26428,7 +26466,7 @@ def register_routes(flask_app: Flask) -> None:
             history = contribution_history(
                 conn,
                 actor_id=None if (everyone and is_owner) else (actor or {}).get("id"),
-                limit=int(request.args.get("limit") or 50),
+                limit=parse_int_arg("limit", 50, minimum=1, maximum=1000),
             )
             return response(
                 {
@@ -27552,8 +27590,8 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/digital-items")
     def digital_items():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
-        offset = max(int(request.args.get("offset", 0)), 0)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=1000)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         with connect() as conn:
             return response(
                 {
@@ -27583,8 +27621,8 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/movies")
     def public_api_movies():
-        limit = min(max(int(request.args.get("limit", 100)), 1), 1000)
-        offset = max(int(request.args.get("offset", 0)), 0)
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=1000)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         query = clean_text(request.args.get("q") or request.args.get("query"))
         media_format = clean_text(request.args.get("format"))
         raw_media_type = clean_text(request.args.get("media_type") or request.args.get("mediaType"))
@@ -28220,7 +28258,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/watchlist")
     def public_api_watchlist():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watchlist"))
             items = personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit)
@@ -28243,7 +28281,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/watched")
     def public_api_watched():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watch_history"))
             items = personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit)
@@ -29466,8 +29504,8 @@ def register_routes(flask_app: Flask) -> None:
         # /api/next/media-groups, /api/next/digital-items). The old 200 ceiling was a
         # leftover of the removed library cap and silently truncated any caller that
         # asked for more.
-        limit = min(max(int(request.args.get("limit", 50)), 1), 1000)
-        offset = max(int(request.args.get("offset", 0)), 0)
+        limit = parse_int_arg("limit", 50, minimum=1, maximum=1000)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         query = (request.args.get("q") or "").strip()
         with connect() as conn:
             actor = require_any_next_permission(
@@ -29769,10 +29807,13 @@ def register_routes(flask_app: Flask) -> None:
         movie_uuid = parse_uuid(movie_id, "movieId")
         if not movie_uuid:
             raise NextApiError("movieId is required", 400)
-        try:
-            limit = int(request.args.get("limit") or MOVIE_HISTORY_DEFAULT_LIMIT)
-        except (TypeError, ValueError):
-            raise NextApiError("limit must be a number", 400) from None
+        # Already refused a malformed value correctly; routed through the shared
+        # parser so the ceiling is stated at the route rather than only inside
+        # movie_change_history, and so there is one implementation to reason
+        # about rather than twenty.
+        limit = parse_int_arg(
+            "limit", MOVIE_HISTORY_DEFAULT_LIMIT, minimum=1, maximum=MOVIE_HISTORY_MAX_LIMIT
+        )
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
@@ -29968,7 +30009,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists")
     def personal_lists():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
@@ -29993,7 +30034,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists/watchlist")
     def personal_watchlist():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             return response(
@@ -30011,7 +30052,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists/watched")
     def personal_watched_list():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             return response(
@@ -31700,7 +31741,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/loans/borrowers/search")
     def search_loan_borrowers():
         query = clean_text(request.args.get("q") or request.args.get("query")) or ""
-        limit = min(max(int(request.args.get("limit", 10) or 10), 1), 25)
+        limit = parse_int_arg("limit", 10, minimum=1, maximum=25)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             if not table_exists(conn, "users"):
@@ -34815,7 +34856,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/admin/metadata/artwork-trash")
     def admin_metadata_artwork_trash():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             require_next_permission(conn, "metadata.manage_artwork_trash")
             with conn.transaction():
@@ -36430,22 +36471,52 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/sync/bootstrap")
     def sync_bootstrap():
         limit = parse_int_arg("limit", 1000, minimum=1, maximum=5000)
+        membership_limit = min(max(limit * 20, 1000), 200000)
+        identifier_limit = min(max(limit * 20, 1000), 200000)
+        credit_limit = min(max(limit * 80, 1000), 50000)
+
+        def page(rows: list[dict[str, Any]], cap: int) -> tuple[list[dict[str, Any]], bool]:
+            """Trim the extra row fetched to answer "was this cut?".
+
+            Every capped collection below is asked for one row more than it may
+            return. That extra row is the whole signal: with it the response can
+            say the list is short, and without it the client cannot tell a
+            complete bootstrap from a truncated one.
+            """
+
+            return rows[:cap], len(rows) > cap
+
         with connect() as conn:
             revision = current_revision(conn)
-            movie_people = all_movie_credit_entities(
-                conn,
-                movie_limit=limit,
-                credit_limit=min(max(limit * 80, 1000), 50000),
+            # Credits are scoped to the same movie window as `movies` -- the
+            # query orders both by sort title -- so a truncated movie list means
+            # a truncated credit list, and they are reported separately because
+            # either cap can bite first.
+            movie_people, credits_truncated = page(
+                all_movie_credit_entities(
+                    conn,
+                    movie_limit=limit,
+                    credit_limit=credit_limit + 1,
+                ),
+                credit_limit,
+            )
+            movies, movies_truncated = page(all_movie_entities(conn, limit=limit + 1), limit)
+            containers, containers_truncated = page(
+                all_container_entities(conn, limit=limit + 1), limit
+            )
+            membership, membership_truncated = page(
+                collection_container_membership_entities(conn, limit=membership_limit + 1),
+                membership_limit,
+            )
+            identifiers, identifiers_truncated = page(
+                all_movie_identifier_entities(conn, limit=identifier_limit + 1),
+                identifier_limit,
             )
             payload = {
-                "movies": all_movie_entities(conn, limit=limit),
-                "containers": all_container_entities(conn, limit=limit),
-                "containerMembership": collection_container_membership_entities(
-                    conn, limit=min(max(limit * 20, 1000), 200000)
-                ),
-                "movieIdentifiers": all_movie_identifier_entities(
-                    conn, limit=min(max(limit * 20, 1000), 200000)
-                ),
+                "movies": movies,
+                "containers": containers,
+                "containerMembership": membership,
+                "movieIdentifiers": identifiers,
                 # Unbounded by `limit`: the tree is at most four levels deep and
                 # a movie's `location_id` is meaningless without the row it
                 # points at, so truncating it would hand clients exactly the
@@ -36463,11 +36534,29 @@ def register_routes(flask_app: Flask) -> None:
                 "metadataPlugins": metadata_plugin_entities(conn),
                 "settings": non_secret_settings(conn),
             }
+        # The sync contract calls this a *complete* snapshot, and until now it
+        # could quietly not be one: with the default limit a collection above a
+        # thousand films returned a well-formed, short list and said nothing.
+        # A client had no way to tell that apart from having everything.
+        #
+        # `complete` is the field worth reading. `collections` names each capped
+        # list, what it was capped at, and whether that cap bit -- so a client
+        # that finds `complete: false` knows which list to distrust and can
+        # raise `limit` (up to 5000) to get further.
+        collections = {
+            "movies": {"limit": limit, "truncated": movies_truncated},
+            "containers": {"limit": limit, "truncated": containers_truncated},
+            "containerMembership": {"limit": membership_limit, "truncated": membership_truncated},
+            "movieIdentifiers": {"limit": identifier_limit, "truncated": identifiers_truncated},
+            "moviePeople": {"limit": credit_limit, "truncated": credits_truncated},
+        }
         return response(
             {
                 "status": "ok",
                 "currentRevision": revision,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "complete": not any(entry["truncated"] for entry in collections.values()),
+                "collections": collections,
                 "payload": payload,
             }
         )

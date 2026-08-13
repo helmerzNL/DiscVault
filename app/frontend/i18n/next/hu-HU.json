@@ -3013,5 +3013,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Évad eltávolítása a néznivalólistáról",
   "seriesDetail.seasonBulkHint": "Az itt felsorolt összes epizódra vonatkozik.",
   "seriesDetail.episodeImageFromSeason": "Évad képe",
-  "seriesDetail.episodeImageFromSeries": "Sorozat képe"
+  "seriesDetail.episodeImageFromSeries": "Sorozat képe",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

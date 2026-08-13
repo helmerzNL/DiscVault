@@ -3013,5 +3013,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Noņemt sezonu no skatāmā saraksta",
   "seriesDetail.seasonBulkHint": "Attiecas uz visām šeit uzskaitītajām sērijām.",
   "seriesDetail.episodeImageFromSeason": "Sezonas attēls",
-  "seriesDetail.episodeImageFromSeries": "Seriāla attēls"
+  "seriesDetail.episodeImageFromSeries": "Seriāla attēls",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

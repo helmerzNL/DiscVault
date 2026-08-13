@@ -3013,5 +3013,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Fjern sesong fra Watchlist",
   "seriesDetail.seasonBulkHint": "Gjelder alle episodene som vises her.",
   "seriesDetail.episodeImageFromSeason": "Sesongbilde",
-  "seriesDetail.episodeImageFromSeries": "Seriebilde"
+  "seriesDetail.episodeImageFromSeries": "Seriebilde",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

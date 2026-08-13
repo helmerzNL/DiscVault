@@ -43,7 +43,7 @@ try:  # pragma: no cover - exercised indirectly by both layouts
         next_generate_recovery_codes,
         next_replace_recovery_codes,
     )
-    from .next_common import NextApiError, parse_uuid, response, table_exists
+    from .next_common import NextApiError, parse_int_arg, parse_uuid, response, table_exists
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_api_token import (
@@ -67,7 +67,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         next_generate_recovery_codes,
         next_replace_recovery_codes,
     )
-    from next_common import NextApiError, parse_uuid, response, table_exists
+    from next_common import NextApiError, parse_int_arg, parse_uuid, response, table_exists
     from next_import import clean_text
 
 
@@ -437,11 +437,11 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
         token_uuid = None
         if token_id and token_id.lower() != "all":
             token_uuid = parse_uuid(token_id, "tokenId")
-        try:
-            limit = int(request.args.get("limit") or 100)
-        except (TypeError, ValueError):
-            limit = 100
-        limit = min(max(limit, 1), 250)
+        # Was a silent fallback to 100 on a malformed value -- the third of the
+        # three behaviours this route family had. Silently ignoring a parameter
+        # the caller did send is worse than refusing it: the response looks
+        # correct and answers a different question than the one asked.
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=250)
         with connect() as conn:
             actor = _app.require_next_authenticated_user(conn)
             actor["permissions"] = sorted(_app.next_user_permission_keys(conn, actor["id"]))

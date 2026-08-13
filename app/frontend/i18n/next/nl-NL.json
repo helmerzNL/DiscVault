@@ -3013,5 +3013,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Seizoen verwijderen uit Watchlist",
   "seriesDetail.seasonBulkHint": "Geldt voor elke aflevering in deze lijst.",
   "seriesDetail.episodeImageFromSeason": "Seizoensafbeelding",
-  "seriesDetail.episodeImageFromSeries": "Serieafbeelding"
+  "seriesDetail.episodeImageFromSeries": "Serieafbeelding",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

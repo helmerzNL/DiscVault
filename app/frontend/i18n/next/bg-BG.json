@@ -3013,5 +3013,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Премахни сезона от списъка за гледане",
   "seriesDetail.seasonBulkHint": "Прилага се за всеки епизод в този списък.",
   "seriesDetail.episodeImageFromSeason": "Изображение на сезона",
-  "seriesDetail.episodeImageFromSeries": "Изображение на сериала"
+  "seriesDetail.episodeImageFromSeries": "Изображение на сериала",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

@@ -3013,5 +3013,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Eemalda hooaeg vaatamisloendist",
   "seriesDetail.seasonBulkHint": "Kehtib kõigi siin loetletud osade kohta.",
   "seriesDetail.episodeImageFromSeason": "Hooaja pilt",
-  "seriesDetail.episodeImageFromSeries": "Sarja pilt"
+  "seriesDetail.episodeImageFromSeries": "Sarja pilt",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }
