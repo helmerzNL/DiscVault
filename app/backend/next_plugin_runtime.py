@@ -40,6 +40,10 @@ _DEFAULT_PLUGIN_UPGRADE_DONE: set[str] = set()
 # and what the memo deliberately does not protect against.
 _DISCOVERY_MEMO: dict[str, Any] = {"fingerprint": None, "result": None}
 _REGISTRY_SYNC_MEMO: dict[str, Any] = {"fingerprint": None, "result": None}
+# Loaded plugin modules, keyed by plugin id, each held with the stamp of the
+# file it came from. See `load_runtime_module` for why a module has to survive
+# between calls at all.
+_RUNTIME_MODULE_MEMO: dict[str, tuple] = {}
 # Optional in-process override of the auto-update preference, set by the app
 # layer from the database setting. ``None`` falls back to env/marker/default.
 _plugin_auto_update_override: bool | None = None
@@ -865,9 +869,43 @@ def load_runtime(manifest: dict[str, Any], plugin_dir: Path) -> tuple[Path | Non
     return module_path, runtime
 
 
+def _module_file_stamp(module_path: Path) -> tuple:
+    try:
+        stat = module_path.stat()
+    except OSError:
+        return (str(module_path), None, None)
+    return (str(module_path), stat.st_mtime_ns, stat.st_size)
+
+
 def load_runtime_module(plugin: PluginDiscovery):
+    """Load a plugin's module, once per process per version of its file.
+
+    This used to re-execute `plugin.py` on **every** entrypoint call. The
+    execution itself is cheap -- measured at 0.5 ms for the TMDB plugin and
+    2.1 ms for the largest one -- so that was never the problem. What it cost
+    was everything a module is allowed to keep.
+
+    Two plugins were written expecting a module to survive between calls, and
+    quietly got nothing: `tvdb` caches its auth token in `_TOKENS`, so it
+    re-authenticated on every single call, and `movievault_26` keeps a template
+    cache that never once produced a hit. Both are keyed by the configuration
+    they belong to (`api_key`, a context key), so persisting them shares nothing
+    across configurations -- their authors had already thought about that.
+
+    It also makes connection reuse possible at all: `requests.get` builds a new
+    connection per call, and a module-level `requests.Session` cannot help while
+    the module holding it is discarded a moment later.
+
+    Keyed on the file rather than a clock, so a plugin upgrade rewrites
+    `plugin.py` and the next call loads the new code -- the same rule
+    `plugin_source_fingerprint` uses for discovery.
+    """
     if not plugin.module_path:
         return None
+    stamp = _module_file_stamp(plugin.module_path)
+    cached = _RUNTIME_MODULE_MEMO.get(plugin.plugin_id)
+    if cached and cached[0] == stamp:
+        return cached[1]
     spec = importlib.util.spec_from_file_location(
         module_name_for(plugin.plugin_id, plugin.module_path),
         plugin.module_path,
@@ -875,7 +913,22 @@ def load_runtime_module(plugin: PluginDiscovery):
     if not spec or not spec.loader:
         raise RuntimeError("Could not create module spec")
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Compile the source rather than letting the loader do it, because the
+    # loader may not. CPython validates a cached .pyc on the source's
+    # modification time *in whole seconds* plus its size -- so a plugin
+    # rewritten within the same second, to the same length, runs the previous
+    # version's bytecode. Reproduced here before this line existed.
+    #
+    # The image sets PYTHONDONTWRITEBYTECODE, so no .pyc is written and the
+    # hazard cannot arise in production today. That is a reason to be careful
+    # rather than relaxed: it means correctness rests on an environment
+    # variable someone could reasonably remove to speed up start-up, and the
+    # failure it would buy back is a plugin upgrade silently running the old
+    # code. Compiling here costs about two milliseconds for the largest plugin,
+    # once per process per version of the file.
+    source = plugin.module_path.read_text(encoding="utf-8")
+    exec(compile(source, str(plugin.module_path), "exec"), module.__dict__)
+    _RUNTIME_MODULE_MEMO[plugin.plugin_id] = (stamp, module)
     return module
 
 
@@ -924,6 +977,10 @@ def reset_plugin_discovery_cache() -> None:
     """
     _DISCOVERY_MEMO.update({"fingerprint": None, "result": None})
     _REGISTRY_SYNC_MEMO.update({"fingerprint": None, "result": None})
+    # Loaded modules go too: a test that rebuilds a plugin directory expects the
+    # next call to run the new code, and a module carrying a live HTTP session
+    # should not outlive the discovery it belonged to.
+    _RUNTIME_MODULE_MEMO.clear()
 
 
 def discover_plugins() -> dict[str, Any]:
