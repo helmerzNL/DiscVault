@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Вилучити сезон зі списку для перегляду",
   "seriesDetail.seasonBulkHint": "Стосується всіх епізодів у цьому списку.",
   "seriesDetail.episodeImageFromSeason": "Зображення сезону",
-  "seriesDetail.episodeImageFromSeries": "Зображення серіалу",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Зображення серіалу"
 }

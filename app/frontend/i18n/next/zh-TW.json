@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "將本季從待看清單移除",
   "seriesDetail.seasonBulkHint": "適用於此處列出的所有集數。",
   "seriesDetail.episodeImageFromSeason": "本季圖片",
-  "seriesDetail.episodeImageFromSeries": "本劇圖片",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "本劇圖片"
 }

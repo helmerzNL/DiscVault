@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Odstrani sezono s seznama za ogled",
   "seriesDetail.seasonBulkHint": "Velja za vse epizode na tem seznamu.",
   "seriesDetail.episodeImageFromSeason": "Slika sezone",
-  "seriesDetail.episodeImageFromSeries": "Slika serije",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Slika serije"
 }

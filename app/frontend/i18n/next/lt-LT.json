@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Pašalinti sezoną iš žiūrėjimo sąrašo",
   "seriesDetail.seasonBulkHint": "Taikoma visiems čia išvardytiems epizodams.",
   "seriesDetail.episodeImageFromSeason": "Sezono paveikslėlis",
-  "seriesDetail.episodeImageFromSeries": "Serialo paveikslėlis",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Serialo paveikslėlis"
 }

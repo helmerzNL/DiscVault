@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "시즌을 시청 목록에서 제거",
   "seriesDetail.seasonBulkHint": "여기에 표시된 모든 에피소드에 적용됩니다.",
   "seriesDetail.episodeImageFromSeason": "시즌 이미지",
-  "seriesDetail.episodeImageFromSeries": "시리즈 이미지",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "시리즈 이미지"
 }

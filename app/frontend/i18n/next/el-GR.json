@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Αφαίρεση σεζόν από τη λίστα παρακολούθησης",
   "seriesDetail.seasonBulkHint": "Ισχύει για κάθε επεισόδιο αυτής της λίστας.",
   "seriesDetail.episodeImageFromSeason": "Εικόνα σεζόν",
-  "seriesDetail.episodeImageFromSeries": "Εικόνα σειράς",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Εικόνα σειράς"
 }

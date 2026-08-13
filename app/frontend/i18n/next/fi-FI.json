@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Poista kausi katselulistalta",
   "seriesDetail.seasonBulkHint": "Koskee kaikkia tässä lueteltuja jaksoja.",
   "seriesDetail.episodeImageFromSeason": "Kauden kuva",
-  "seriesDetail.episodeImageFromSeries": "Sarjan kuva",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Sarjan kuva"
 }

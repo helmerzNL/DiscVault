@@ -3013,7 +3013,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Elimină sezonul din lista de vizionare",
   "seriesDetail.seasonBulkHint": "Se aplică tuturor episoadelor listate aici.",
   "seriesDetail.episodeImageFromSeason": "Imaginea sezonului",
-  "seriesDetail.episodeImageFromSeries": "Imaginea serialului",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Imaginea serialului"
 }
