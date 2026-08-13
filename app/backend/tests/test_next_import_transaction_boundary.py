@@ -68,10 +68,55 @@ class ProviderCallsRunOutsideATransactionTests(unittest.TestCase):
         self.addCleanup(self._delete_probe_films)
 
     def _delete_probe_films(self):
+        """Remove the films *and the work they queued*.
+
+        Importing through the real route is the point of these tests, and a real
+        import queues a metadata refresh job for the film it created. Deleting
+        only the film leaves that job pointing at nothing, and the next thing to
+        run the worker -- in CI, a `next_worker.py run-once` step several
+        minutes later -- fails with "Movie not found" in a job nobody can trace
+        back to here.
+        """
+
         with psycopg.connect(DATABASE_URL, row_factory=dict_row) as conn:
             with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM movies WHERE title LIKE 'Transaction Boundary Probe %'"
+                )
+                movie_ids = [str(row["id"]) for row in cur.fetchall()]
+                if movie_ids:
+                    # Anywhere in the payload, not just `movieId`: an import can
+                    # queue more than the metadata refresh, and a job type added
+                    # later would otherwise reintroduce the same orphan quietly.
+                    cur.execute(
+                        """
+                        DELETE FROM background_jobs
+                        WHERE EXISTS (
+                            SELECT 1 FROM unnest(%s::text[]) AS probe(id)
+                            WHERE payload::text LIKE '%%' || probe.id || '%%'
+                        )
+                        """,
+                        (movie_ids,),
+                    )
                 cur.execute("DELETE FROM movies WHERE title LIKE 'Transaction Boundary Probe %'")
+                # Fail here rather than several minutes later in whatever runs
+                # the worker next, where the job cannot be traced back to us.
+                cur.execute(
+                    """
+                    SELECT count(*) AS orphans
+                    FROM background_jobs j
+                    WHERE j.payload->>'movieId' IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1 FROM movies m WHERE m.id::text = j.payload->>'movieId'
+                      )
+                    """
+                )
+                orphans = cur.fetchone()["orphans"]
             conn.commit()
+        assert orphans == 0, (
+            f"{orphans} background job(s) point at a movie that no longer exists; "
+            "a test that imports through the real route must remove the work it queued"
+        )
 
     def _import(self, spy, body=None):
         with mock.patch.object(next_app, "lookup_metadata_sources", spy):
