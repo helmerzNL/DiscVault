@@ -23967,7 +23967,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/media-groups")
     def media_groups():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=1000)
         with connect() as conn:
             actor = require_next_permission(conn, "groups.view")
             return response({"status": "ok", "groups": media_group_entities(conn, limit=limit, actor=actor)})
@@ -26428,7 +26428,7 @@ def register_routes(flask_app: Flask) -> None:
             history = contribution_history(
                 conn,
                 actor_id=None if (everyone and is_owner) else (actor or {}).get("id"),
-                limit=int(request.args.get("limit") or 50),
+                limit=parse_int_arg("limit", 50, minimum=1, maximum=1000),
             )
             return response(
                 {
@@ -27552,8 +27552,8 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/digital-items")
     def digital_items():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 1000)
-        offset = max(int(request.args.get("offset", 0)), 0)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=1000)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         with connect() as conn:
             return response(
                 {
@@ -27583,8 +27583,8 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/movies")
     def public_api_movies():
-        limit = min(max(int(request.args.get("limit", 100)), 1), 1000)
-        offset = max(int(request.args.get("offset", 0)), 0)
+        limit = parse_int_arg("limit", 100, minimum=1, maximum=1000)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         query = clean_text(request.args.get("q") or request.args.get("query"))
         media_format = clean_text(request.args.get("format"))
         raw_media_type = clean_text(request.args.get("media_type") or request.args.get("mediaType"))
@@ -28220,7 +28220,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/watchlist")
     def public_api_watchlist():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watchlist"))
             items = personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit)
@@ -28243,7 +28243,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/watched")
     def public_api_watched():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watch_history"))
             items = personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit)
@@ -29466,8 +29466,8 @@ def register_routes(flask_app: Flask) -> None:
         # /api/next/media-groups, /api/next/digital-items). The old 200 ceiling was a
         # leftover of the removed library cap and silently truncated any caller that
         # asked for more.
-        limit = min(max(int(request.args.get("limit", 50)), 1), 1000)
-        offset = max(int(request.args.get("offset", 0)), 0)
+        limit = parse_int_arg("limit", 50, minimum=1, maximum=1000)
+        offset = parse_int_arg("offset", 0, minimum=0, maximum=9_000_000)
         query = (request.args.get("q") or "").strip()
         with connect() as conn:
             actor = require_any_next_permission(
@@ -29769,10 +29769,13 @@ def register_routes(flask_app: Flask) -> None:
         movie_uuid = parse_uuid(movie_id, "movieId")
         if not movie_uuid:
             raise NextApiError("movieId is required", 400)
-        try:
-            limit = int(request.args.get("limit") or MOVIE_HISTORY_DEFAULT_LIMIT)
-        except (TypeError, ValueError):
-            raise NextApiError("limit must be a number", 400) from None
+        # Already refused a malformed value correctly; routed through the shared
+        # parser so the ceiling is stated at the route rather than only inside
+        # movie_change_history, and so there is one implementation to reason
+        # about rather than twenty.
+        limit = parse_int_arg(
+            "limit", MOVIE_HISTORY_DEFAULT_LIMIT, minimum=1, maximum=MOVIE_HISTORY_MAX_LIMIT
+        )
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
@@ -29968,7 +29971,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists")
     def personal_lists():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
@@ -29993,7 +29996,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists/watchlist")
     def personal_watchlist():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             return response(
@@ -30011,7 +30014,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists/watched")
     def personal_watched_list():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             return response(
@@ -31700,7 +31703,7 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/loans/borrowers/search")
     def search_loan_borrowers():
         query = clean_text(request.args.get("q") or request.args.get("query")) or ""
-        limit = min(max(int(request.args.get("limit", 10) or 10), 1), 25)
+        limit = parse_int_arg("limit", 10, minimum=1, maximum=25)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             if not table_exists(conn, "users"):
@@ -34737,7 +34740,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/admin/metadata/artwork-trash")
     def admin_metadata_artwork_trash():
-        limit = min(max(int(request.args.get("limit", 200)), 1), 500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
         with connect() as conn:
             require_next_permission(conn, "metadata.manage_artwork_trash")
             with conn.transaction():

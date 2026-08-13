@@ -286,8 +286,13 @@ class LibraryPagingSourceTests(unittest.TestCase):
         # Leftovers of the removed library cap: the legacy collection view asked for
         # 200 movies, and /api/next/movies clamped to 200 so the query string could
         # not have raised it anyway.
+        #
+        # The parsing moved to the shared parse_int_arg (PERF-04) so a malformed
+        # value answers 400 rather than 500. The numbers this test exists for --
+        # default 50, ceiling 1000, not 200 -- are unchanged, and are what is
+        # asserted here rather than the expression that carries them.
         self.assertIn(
-            'limit = min(max(int(request.args.get("limit", 50)), 1), 1000)',
+            'parse_int_arg("limit", 50, minimum=1, maximum=1000)',
             self.app_source,
         )
         legacy = os.path.join(BACKEND_DIR, "next_views_collection.py")

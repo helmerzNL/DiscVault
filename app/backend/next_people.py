@@ -15,10 +15,10 @@ from uuid import UUID
 from flask import Flask, request
 
 try:  # pragma: no cover - exercised indirectly by both layouts
-    from .next_common import NextApiError, parse_uuid, table_exists, response
+    from .next_common import NextApiError, parse_int_arg, parse_uuid, table_exists, response
     from .next_import import clean_text
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
-    from next_common import NextApiError, parse_uuid, table_exists, response
+    from next_common import NextApiError, parse_int_arg, parse_uuid, table_exists, response
     from next_import import clean_text
 
 
@@ -1260,7 +1260,11 @@ def register_next_people_routes(flask_app: Flask, *, connect) -> None:  # pragma
     def people_list():
         query = clean_text(request.args.get("q"))
         role = clean_text(request.args.get("role")) or "all"
-        limit = int(request.args.get("limit") or 120)
+        # 500 is the ceiling people_list_entities already enforced; stating it
+        # here is what makes the echoed `limit` below true. It used to report
+        # back whatever was asked for, so a client requesting 5000 was told
+        # `"limit": 5000` and handed 500 rows.
+        limit = parse_int_arg("limit", 120, minimum=1, maximum=500)
         with connect() as conn:
             actor = _app.require_any_next_permission(
                 conn,

@@ -132,6 +132,14 @@ jobs:
       - name: Test the request-scoped authentication memos
         run: python -m unittest tests.test_next_request_scoped_auth
 
+      # One parser, and nothing parses its own. The value here is the invariant
+      # rather than the nine unit cases: nineteen routes each had their own
+      # `int(request.args.get(...))`, three different behaviours between them,
+      # and a new route written the old way reintroduces a 500 on a typo without
+      # anything failing to say so.
+      - name: Test query-argument parsing
+        run: python -m unittest tests.test_next_query_argument_parsing
+
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
       # freeze every page load -- and nothing about that failure is visible in a
