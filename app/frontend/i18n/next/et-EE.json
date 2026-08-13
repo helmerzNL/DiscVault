@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Top 10 režissööri",
+  "stats.topActors": "Top 10 näitlejat",
   "stats.cardCollectionValue": "Kollektsiooni väärtus",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

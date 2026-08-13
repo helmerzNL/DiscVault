@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Κορυφαίοι 10 σκηνοθέτες",
+  "stats.topActors": "Κορυφαίοι 10 ηθοποιοί",
   "stats.cardCollectionValue": "Αξία της συλλογής",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

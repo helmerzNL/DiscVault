@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "10 populiariausių režisierių",
+  "stats.topActors": "10 populiariausių aktorių",
   "stats.cardCollectionValue": "Kolekcijos vertė",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

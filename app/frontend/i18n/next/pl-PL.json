@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Top 10 reżyserów",
+  "stats.topActors": "Top 10 aktorów",
   "stats.cardCollectionValue": "Wartość kolekcji",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

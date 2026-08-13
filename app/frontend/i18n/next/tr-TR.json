@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "En iyi 10 yönetmen",
+  "stats.topActors": "En iyi 10 oyuncu",
   "stats.cardCollectionValue": "Koleksiyon değeri",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

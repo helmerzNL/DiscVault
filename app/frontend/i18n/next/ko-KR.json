@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "감독 TOP 10",
+  "stats.topActors": "배우 TOP 10",
   "stats.cardCollectionValue": "컬렉션 가치",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
