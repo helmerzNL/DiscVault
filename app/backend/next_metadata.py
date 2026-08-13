@@ -22,6 +22,16 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from psycopg import OperationalError as _PsycopgOperationalError
+    from psycopg import ProgrammingError as _PsycopgProgrammingError
+except ModuleNotFoundError:  # pragma: no cover - allows policy tests without psycopg
+    class _PsycopgProgrammingError(Exception):  # type: ignore[no-redef]
+        pass
+
+    class _PsycopgOperationalError(Exception):  # type: ignore[no-redef]
+        pass
+
+try:
     from .dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from .dedup_identity import extract_identity_identifiers
     from .dedup_identity import MEDIA_TYPE_SHOW
@@ -3924,6 +3934,56 @@ def write_metadata_lookup_cache(
         logger.debug("metadata lookup cache write skipped for %s", plugin_id, exc_info=True)
 
 
+def release_read_transaction(conn) -> bool:
+    """Close the transaction a lookup's own reads opened, before the network call.
+
+    This has to happen *immediately* before the provider is reached, not at the
+    top of whichever refresh function is running. `connect()` uses
+    `autocommit=False`, so every read reopens a transaction -- and the code
+    between "start refreshing" and "call the source" is nothing but reads: the
+    entity, the plugin list, each plugin's configuration, the lookup cache. A
+    commit placed any earlier is undone by the next `SELECT`, which is exactly
+    what a first attempt at this got wrong: the boundary moved and the provider
+    call was still measured as `INTRANS`.
+
+    Returns whether the transaction was actually released, and never raises.
+    Three callers legitimately cannot be released, and all three keep the
+    behaviour they had rather than failing:
+
+    * a connection-shaped **stand-in** with no `commit` -- the pipeline is
+      deliberately callable with one;
+    * a caller inside an explicit ``with conn.transaction():`` block, where
+      psycopg forbids committing. That caller has chosen atomicity across the
+      call, and silently breaking that choice would be worse than a long
+      transaction;
+    * a connection that is already **closed**, which is the best case of all:
+      ``execute_plugin`` ends its ``with connect()`` block before reaching the
+      plugin, so there is no transaction left to release and no connection held
+      either. Learned by breaking it -- a release added there answered every
+      request with "DiscVault is temporarily offline".
+
+    Like the lookup cache, this is an optimisation and must never be the reason
+    something fails.
+    """
+
+    try:
+        conn.commit()
+    except AttributeError:
+        return False
+    except _PsycopgProgrammingError:
+        logger.debug(
+            "provider call runs inside a caller's transaction block; "
+            "the read transaction stays open for its duration"
+        )
+        return False
+    except _PsycopgOperationalError:
+        # Already closed, or gone. Nothing is held, which is the outcome this
+        # function exists to produce.
+        logger.debug("no transaction to release: the connection is closed")
+        return False
+    return True
+
+
 def run_cached_plugin_entrypoint(
     conn,
     plugin_id: str,
@@ -3946,11 +4006,15 @@ def run_cached_plugin_entrypoint(
     routine background work stops re-asking.
     """
     if force or entrypoint not in CACHEABLE_LOOKUP_ENTRYPOINTS:
+        release_read_transaction(conn)
         return run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
     cache_key = metadata_lookup_cache_key(plugin_id, entrypoint, payload, context)
     cached = read_metadata_lookup_cache(conn, plugin_id, cache_key)
     if cached is not None:
         return cached
+    # After the cache read, which is itself a read and so reopened the
+    # transaction. A cache hit needs no release: it never touches the network.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
     # Only a clean answer is worth keeping. Caching a failure would turn one bad
     # minute at a provider into six bad hours.
@@ -4012,6 +4076,13 @@ def push_receiver_payload_to_receivers(
     for plugin in receivers:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
+        # Everything below this line in the loop body is network -- describe,
+        # receive, summarise -- and nothing in it reads from `conn` again. The
+        # caller commits before entering the push, but the two reads above
+        # reopened the transaction, which is exactly the mistake this whole
+        # change is about: a release is only worth anything at the last read
+        # before the call.
+        release_read_transaction(conn)
         details = plugin_receiver_optional_detail(plugin, "describe_payload", payload, context)
         if plugin_requires_config(plugin, config, "receive_metadata"):
             executions.append(
@@ -6449,6 +6520,11 @@ def clear_orphaned_season_poster(cur, movie_uuid: UUID) -> None:
 def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     """Fill a series' description from whichever sources can describe it.
 
+    Owns its transaction boundary: the sources are consulted over the network,
+    so the reads above them are committed first and callers must not wrap this
+    in an explicit transaction block.
+
+
     This is the second half of the division of labour the feed established.
     MovieVault states *identity and structure* -- which series, which seasons --
     and stops there, deliberately: it is not licensed to redistribute provider
@@ -6497,6 +6573,10 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     if not series_detail_source_plugins(conn):
         return {"status": "skipped", "reason": "no series source"}
 
+    # The sources are consulted over the network. The transaction the reads
+    # above opened is released inside `run_cached_plugin_entrypoint`, at the
+    # last moment before each call -- see `release_read_transaction` for why it
+    # cannot be done here instead.
     results, errors = consult_series_sources(conn, row, identifiers)
 
     if not results:
@@ -6762,6 +6842,14 @@ def refresh_movie_metadata(
     writer in the app until the API-side ``lock_timeout`` fires, which used to
     surface as a bogus "DiscVault is temporarily offline" error. Callers must
     pass a connection that is not inside an explicit transaction block.
+
+    That argument covered the *push* and silently skipped the *fetch*, which
+    reaches the same providers and takes just as long: the caller's own
+    pre-checks have opened a transaction before this function is entered, and
+    ``preview_movie_metadata`` ran inside it -- measured as ``INTRANS`` at the
+    provider call. The fetch is released by ``release_read_transaction`` at the
+    last moment before each provider call, which is the only place it can be
+    done; nothing between here and there does anything but read.
     """
     preview = preview_movie_metadata(conn, movie_id, actor, force=force)
     if dry_run:

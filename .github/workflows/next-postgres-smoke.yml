@@ -279,6 +279,16 @@ jobs:
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
+      # The same rule one level deeper, and the one the user's own
+      # pg_stat_activity sample specified: five backends idle in transaction for
+      # three to five seconds, each having last run a read of a plugin's
+      # configuration. That read is what reopens the transaction, so this asserts
+      # from a second connection that nothing is idle in transaction at the
+      # moment a provider is called -- and structurally that every call site
+      # releases, because a new one is how this comes back.
+      - name: Test the provider-call transaction boundary
+        run: python -m unittest tests.test_next_provider_call_transaction_boundary
+
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
 
