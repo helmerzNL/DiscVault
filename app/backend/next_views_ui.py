@@ -4092,99 +4092,288 @@ def ui_preview_html(
     .stats-price-change.flat {
       color: var(--muted);
     }
-    /* Genre bar chart styling */
-    .stats-genres-chart {
-      display: grid;
-      gap: 14px;
-    }
-    .stats-genre-bar-item {
-      display: grid;
-      gap: 6px;
-    }
-    .stats-genre-bar-label {
+    /* ============================================================
+       Statistics charts — Apple-style "glass" material.
+
+       One material recipe is shared by every surface on this page:
+       a translucent tinted fill, a backdrop blur that saturates what
+       sits behind it, a hairline top highlight (the specular edge a
+       real pane of glass has) and a soft ambient shadow. Numbers are
+       set in tabular figures so columns of counts line up.
+       ============================================================ */
+    .stats-view-toolbar {
       display: flex;
-      justify-content: space-between;
+      flex-wrap: wrap;
       align-items: center;
-      gap: 8px;
-      font-size: .85rem;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 18px;
     }
-    .stats-genre-bar-title {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .stats-genre-bar-count {
+    .stats-period-note {
+      margin: 0;
       color: var(--muted);
-      flex: 0 0 auto;
       font-size: .8rem;
     }
-    .stats-genre-bar-container {
-      height: 24px;
-      border-radius: 12px;
-      background: color-mix(in srgb, var(--line) 40%, transparent);
+    /* Segmented control — the native control for switching a window. */
+    .stats-segmented {
+      position: relative;
+      display: inline-flex;
+      align-items: stretch;
+      padding: 3px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 45%, transparent);
+      isolation: isolate;
+    }
+    .stats-segmented-thumb {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 0;
+      width: 0;
+      border-radius: 999px;
+      background: var(--bg-solid);
+      box-shadow: 0 1px 3px rgba(0,0,0,.16), 0 3px 10px rgba(0,0,0,.10);
+      transition: transform .34s cubic-bezier(.32,.72,0,1), width .34s cubic-bezier(.32,.72,0,1);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .stats-segmented button {
+      position: relative;
+      appearance: none;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      padding: 7px 16px;
+      border-radius: 999px;
+      color: var(--muted);
+      font: inherit;
+      font-size: .84rem;
+      font-weight: 550;
+      letter-spacing: -.01em;
+      white-space: nowrap;
+      transition: color .2s ease;
+    }
+    .stats-segmented button:hover { color: var(--text); }
+    .stats-segmented button[aria-selected="true"] { color: var(--text); }
+    .stats-segmented button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    /* Chart surfaces. */
+    .stats-block {
+      position: relative;
       overflow: hidden;
+      /* The blocks sit in an auto-fit grid, so one can be 320px wide on one
+         screen and 700px on the next. Making each block its own query
+         container lets the charts lay themselves out from the width they
+         actually got, instead of guessing from the viewport. */
+      container-type: inline-size;
+      border-color: color-mix(in srgb, var(--line) 80%, transparent);
+      background:
+        linear-gradient(160deg,
+          color-mix(in srgb, var(--bg-elevated) 92%, transparent) 0%,
+          color-mix(in srgb, var(--bg-elevated) 64%, transparent) 100%);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: var(--shadow-soft), inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
     }
-    .stats-genre-bar {
-      height: 100%;
-      border-radius: 12px;
-      transition: width 0.3s ease;
+    .stats-block h2 {
+      letter-spacing: -.01em;
+      font-weight: 600;
     }
-    /* Pie chart styling with glassmorphism */
-    .stats-pie-chart {
+    .stat-card {
+      background:
+        linear-gradient(160deg,
+          color-mix(in srgb, var(--bg-elevated) 94%, transparent) 0%,
+          color-mix(in srgb, var(--bg-elevated) 68%, transparent) 100%);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: var(--shadow-soft), inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+    }
+    .stat-card strong {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.03em;
+      font-weight: 650;
+    }
+    /* ---- Donut ----
+       Stacked by default so the legend always has the full card width for
+       its labels; side by side only once the card is provably wide enough
+       for both. A browser without container queries keeps the stacked
+       layout, which is the readable one. */
+    .dv-donut {
       display: grid;
-      gap: 16px;
-      grid-template-columns: minmax(180px, auto) 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
       align-items: center;
-    }
-    .stats-pie-chart-container {
-      display: grid;
       gap: 16px;
     }
-    .stats-pie-svg {
+    @container (min-width: 430px) {
+      .dv-donut {
+        grid-template-columns: 168px minmax(0, 1fr);
+        justify-items: stretch;
+        gap: 20px;
+      }
+    }
+    .dv-donut-figure {
+      position: relative;
+      width: 100%;
+      max-width: 168px;
+      aspect-ratio: 1;
+    }
+    .dv-donut > .dv-legend { width: 100%; }
+    .dv-donut-svg {
       display: block;
       width: 100%;
-      max-width: 200px;
-      height: auto;
-      filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.1));
+      height: 100%;
+      overflow: visible;
     }
-    .stats-pie-legend {
+    .dv-donut-seg {
+      transform-origin: 100px 100px;
+      transition: opacity .22s ease, transform .22s cubic-bezier(.32,.72,0,1);
+    }
+    .dv-donut[data-active] .dv-donut-seg { opacity: .28; }
+    .dv-donut .dv-donut-seg.is-active {
+      opacity: 1;
+      transform: scale(1.045);
+    }
+    .dv-donut-center {
+      position: absolute;
+      inset: 0;
       display: grid;
-      gap: 8px;
-      font-size: .82rem;
+      place-content: center;
+      text-align: center;
+      pointer-events: none;
+      gap: 1px;
     }
-    .stats-pie-legend-item {
-      display: flex;
+    .dv-donut-center-value {
+      font-size: 1.6rem;
+      font-weight: 650;
+      letter-spacing: -.035em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .dv-donut-center-label {
+      font-size: .66rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .dv-legend {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .dv-legend-row {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto;
       align-items: center;
-      gap: 8px;
-      padding: 6px 8px;
-      border-radius: 8px;
-      background: color-mix(in srgb, var(--bg-elevated) 40%, transparent);
+      gap: 9px;
+      padding: 5px 8px;
+      border-radius: 9px;
+      font-size: .82rem;
+      background: transparent;
+      transition: background .18s ease;
+      cursor: default;
     }
-    .stats-pie-color {
-      flex: 0 0 12px;
-      height: 12px;
+    .dv-legend-row:hover {
+      background: color-mix(in srgb, var(--line) 42%, transparent);
+    }
+    .dv-legend-dot {
+      width: 10px;
+      height: 10px;
       border-radius: 3px;
-      display: block;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #000 10%, transparent) inset;
     }
-    .stats-pie-legend-item span:last-child {
+    .dv-legend-name {
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    /* Glassmorphism effect for stats blocks */
-    .stats-block {
-      backdrop-filter: blur(8px);
-      -webkit-backdrop-filter: blur(8px);
+    .dv-legend-value {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: .78rem;
     }
-    .stats-pie-chart-block {
-      background: linear-gradient(135deg,
-        color-mix(in srgb, var(--bg-elevated) 70%, transparent) 0%,
-        color-mix(in srgb, var(--bg-elevated) 50%, transparent) 100%);
-      backdrop-filter: blur(12px) saturate(180%);
-      -webkit-backdrop-filter: blur(12px) saturate(180%);
-      border: 1px solid color-mix(in srgb, var(--line) 30%, transparent);
+    .dv-legend-value b {
+      color: var(--text);
+      font-weight: 600;
+      font-size: .82rem;
+    }
+    /* ---- Horizontal bars (genres, decades) ---- */
+    .dv-bars {
+      display: grid;
+      gap: 11px;
+    }
+    .dv-bar-row {
+      display: grid;
+      gap: 5px;
+      min-width: 0;
+    }
+    .dv-bar-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: .82rem;
+    }
+    .dv-bar-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dv-bar-value {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: .8rem;
+    }
+    .dv-bar-track {
+      position: relative;
+      height: 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--line) 55%, transparent);
+      box-shadow: inset 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+      overflow: hidden;
+    }
+    .dv-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        color-mix(in srgb, var(--dv-bar-color) 78%, transparent) 0%,
+        var(--dv-bar-color) 100%);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 38%, transparent);
+      transform-origin: left center;
+      animation: dvBarGrow .62s cubic-bezier(.32,.72,0,1) both;
+    }
+    @keyframes dvBarGrow {
+      from { transform: scaleX(0); }
+      to   { transform: scaleX(1); }
+    }
+    @keyframes dvChartFade {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .dv-donut, .dv-bars {
+      animation: dvChartFade .4s cubic-bezier(.32,.72,0,1) both;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dv-bar-fill, .dv-donut, .dv-bars { animation: none; }
+      .dv-donut-seg, .stats-segmented-thumb { transition: none; }
+    }
+    @media (max-width: 560px) {
+      .stats-view-toolbar { justify-content: flex-start; }
+      .stats-segmented { width: 100%; }
+      .stats-segmented button { flex: 1 1 0; padding-inline: 8px; }
     }
     .detail-card-actions {
       display: flex;
@@ -15328,6 +15517,15 @@ def ui_preview_html(
             <p class="lists-subtitle" data-next-i18n="stats.subtitle">A breakdown of your personal collection and activity.</p>
           </div>
         </section>
+        <div class="stats-view-toolbar">
+          <div class="stats-segmented" id="statsPeriodControl" role="tablist" aria-label="Period" data-next-i18n-aria="stats.periodLabel">
+            <span class="stats-segmented-thumb" aria-hidden="true"></span>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-period="month" data-next-i18n="stats.periodMonth">Last month</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-period="year" data-next-i18n="stats.periodYear">Last year</button>
+            <button type="button" role="tab" aria-selected="true" tabindex="0" data-stats-period="all" data-next-i18n="stats.periodAll">All time</button>
+          </div>
+          <p class="stats-period-note" data-next-i18n="stats.periodNote">Added in the selected period</p>
+        </div>
         <div class="stats-cards" id="statsCards"></div>
         <div class="stats-sections">
           <div class="stats-block stats-pie-chart-block">
@@ -25493,6 +25691,9 @@ def ui_preview_html(
         node.setAttribute("title", tNext(node.dataset.nextI18nTitle, node.getAttribute("title") || ""));
       });
       renderAppRegistrationMode();
+      // Translated labels change the segment widths, so the sliding thumb has
+      // to be measured again against the text that is actually on screen.
+      renderStatsPeriodControl();
     }
     let lastPersistedLocale = null;
     function persistNextLocale(locale) {
@@ -41113,27 +41314,101 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
-    function statsBarsHtml(rows) {
-      const items = (rows || []).filter((row) => (row.count || 0) > 0);
-      if (!items.length) {
-        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false, period: "all"};
+    // --- Chart engine -------------------------------------------------
+    // Apple's system colours, vivid variants. They are picked so that
+    // neighbouring slices stay separable on both the light and the dark
+    // surface, and so that no two adjacent entries share a hue family.
+    const DV_CHART_COLORS = [
+      "#0A84FF", "#FF9F0A", "#30D158", "#BF5AF2", "#FF375F",
+      "#40C8E0", "#FFD60A", "#5E5CE6", "#FF6482", "#63E6E2",
+      "#AC8E68", "#66D4CF", "#DA8FFF", "#FFA766", "#8E8E93"
+    ];
+    function dvChartColor(index) {
+      return DV_CHART_COLORS[index % DV_CHART_COLORS.length];
+    }
+    function dvChartRows(rows) {
+      return (rows || []).filter((row) => Number(row && row.count) > 0);
+    }
+    function dvChartLabel(row) {
+      if (row && row.i18nKey) return tNext(row.i18nKey, row.label);
+      return (row && row.label) || tNext("common.untitled", "Unknown");
+    }
+    function dvChartEmptyHtml() {
+      return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+    }
+    function dvFormatCount(value) {
+      const numeric = Number(value) || 0;
+      return Number.isFinite(numeric) ? numeric.toLocaleString() : String(value);
+    }
+    // A point on the donut. Angles run clockwise from twelve o'clock, which
+    // is where a reader expects a chart like this to start.
+    function dvPolar(cx, cy, radius, degrees) {
+      const rad = ((degrees - 90) * Math.PI) / 180;
+      return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+    }
+    function dvAnnulusPath(startAngle, endAngle, outer, inner) {
+      // A slice that covers the whole circle would start and end on the same
+      // point, and SVG draws an arc with identical endpoints as nothing at
+      // all - so a collection holding a single category rendered an empty
+      // ring. A closed ring is emitted as two half arcs instead; the inner
+      // one runs the other way round so the non-zero fill rule punches the
+      // hole.
+      if (endAngle - startAngle >= 359.999) {
+        const ring = (radius, sweepFlag) => {
+          const [ax, ay] = dvPolar(100, 100, radius, 0);
+          const [bx, by] = dvPolar(100, 100, radius, 180);
+          return (
+            `M ${ax.toFixed(2)} ${ay.toFixed(2)} `
+            + `A ${radius} ${radius} 0 1 ${sweepFlag} ${bx.toFixed(2)} ${by.toFixed(2)} `
+            + `A ${radius} ${radius} 0 1 ${sweepFlag} ${ax.toFixed(2)} ${ay.toFixed(2)} Z`
+          );
+        };
+        return `${ring(outer, 1)} ${ring(inner, 0)}`;
       }
-      const max = items.reduce((acc, row) => Math.max(acc, row.count || 0), 0) || 1;
-      return items
-        .map((row) => {
-          const pct = Math.round(((row.count || 0) / max) * 100);
+      const [x1, y1] = dvPolar(100, 100, outer, startAngle);
+      const [x2, y2] = dvPolar(100, 100, outer, endAngle);
+      const [x3, y3] = dvPolar(100, 100, inner, endAngle);
+      const [x4, y4] = dvPolar(100, 100, inner, startAngle);
+      const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+      return [
+        `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+        `A ${outer} ${outer} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+        `L ${x3.toFixed(2)} ${y3.toFixed(2)}`,
+        `A ${inner} ${inner} 0 ${largeArc} 0 ${x4.toFixed(2)} ${y4.toFixed(2)}`,
+        "Z"
+      ].join(" ");
+    }
+    // Horizontal bars, one colour per row. Used for decades and genres: a
+    // bar chart answers "how do these compare" far better than a donut once
+    // there are more than a handful of categories.
+    function statsBarsHtml(rows, options) {
+      const settings = options || {};
+      const items = dvChartRows(rows);
+      if (!items.length) return dvChartEmptyHtml();
+      const max = items.reduce((acc, row) => Math.max(acc, Number(row.count) || 0), 0) || 1;
+      const body = items
+        .map((row, index) => {
+          const count = Number(row.count) || 0;
+          const width = Math.max((count / max) * 100, 1.5);
+          // A single accent keeps a sequence (decades) reading as one series;
+          // per-row colour is for an unordered set (genres).
+          const color = settings.monochrome ? "var(--accent)" : dvChartColor(index);
+          const delay = Math.min(index * 40, 320);
           return `
-            <div class="stats-bar-row">
-              <div class="stats-bar-head">
-                <span>${escapeHtml(row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown")))}</span>
-                <span>${escapeHtml(row.count || 0)}</span>
+            <div class="dv-bar-row">
+              <div class="dv-bar-head">
+                <span class="dv-bar-name">${escapeHtml(dvChartLabel(row))}</span>
+                <span class="dv-bar-value">${escapeHtml(dvFormatCount(count))}</span>
               </div>
-              <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
+              <div class="dv-bar-track">
+                <div class="dv-bar-fill" style="width:${width.toFixed(2)}%;--dv-bar-color:${escapeHtml(color)};animation-delay:${delay}ms"></div>
+              </div>
             </div>
           `;
         })
         .join("");
+      return `<div class="dv-bars">${body}</div>`;
     }
     function formatStatsPrice(value, currency = "EUR") {
       const numeric = Number(value);
@@ -41502,105 +41777,98 @@ def ui_preview_html(
       }
     }
     function statsGenresHtml(rows) {
-      const items = (rows || []).filter((row) => (row.count || 0) > 0);
-      if (!items.length) {
-        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+      return statsBarsHtml(rows);
+    }
+    // Donut, not pie: the hole carries the total, which is the number a
+    // reader wants first, and the ring makes the small slices easier to
+    // compare than wedges converging on a point.
+    function statsDonutChartHtml(rows) {
+      const all = dvChartRows(rows);
+      if (!all.length) return dvChartEmptyHtml();
+      // Beyond eight slices the ring stops being readable, so the tail is
+      // folded into one "Other" entry rather than shaved off - the total in
+      // the middle has to keep matching the data.
+      const MAX_SLICES = 8;
+      let items = all;
+      if (all.length > MAX_SLICES) {
+        const head = all.slice(0, MAX_SLICES - 1);
+        const tail = all.slice(MAX_SLICES - 1);
+        const rest = tail.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+        items = head.concat([{ label: tNext("stats.chartOther", "Other"), count: rest, _other: true }]);
       }
-      // Create a CSS color palette for genres - using vibrant, distinct colors
-      const colors = [
-        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
-        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A",
-        "#1890FF", "#FF85C0", "#FAAD14", "#13C2C2", "#EB2F96"
-      ];
-
-      // Find max count to calculate percentages
-      const maxCount = Math.max(...items.map((row) => row.count || 0));
-
+      const total = items.reduce((sum, row) => sum + (Number(row.count) || 0), 0) || 1;
+      const OUTER = 88;
+      const INNER = 56;
+      // A gap only fits when there is more than one slice; with a single
+      // category the ring is drawn closed so it does not show a seam.
+      const GAP = items.length > 1 ? 2 : 0;
+      let cursor = 0;
+      const slices = items.map((row, index) => {
+        const count = Number(row.count) || 0;
+        const sweep = (count / total) * 360;
+        const start = cursor;
+        cursor += sweep;
+        // Never let the gap eat a slice whole: a 0.4% slice must still show.
+        const inset = Math.min(GAP, Math.max(sweep - 0.6, 0)) / 2;
+        return {
+          label: row._other ? row.label : dvChartLabel(row),
+          count: count,
+          share: (count / total) * 100,
+          color: row._other ? "#8E8E93" : dvChartColor(index),
+          path: dvAnnulusPath(start + inset, start + sweep - inset, OUTER, INNER)
+        };
+      });
+      const segments = slices
+        .map((slice, index) => (
+          `<path class="dv-donut-seg" data-dv-slice="${index}" d="${escapeHtml(slice.path)}" `
+          + `fill="${escapeHtml(slice.color)}" stroke="${escapeHtml(slice.color)}" stroke-width="1" `
+          + `stroke-linejoin="round"><title>${escapeHtml(slice.label)}: ${escapeHtml(dvFormatCount(slice.count))} (${slice.share.toFixed(1)}%)</title></path>`
+        ))
+        .join("");
+      const legend = slices
+        .map((slice, index) => `
+          <div class="dv-legend-row" data-dv-slice="${index}">
+            <span class="dv-legend-dot" style="background:${escapeHtml(slice.color)}"></span>
+            <span class="dv-legend-name" title="${escapeHtml(slice.label)}">${escapeHtml(slice.label)}</span>
+            <span class="dv-legend-value"><b>${escapeHtml(dvFormatCount(slice.count))}</b>${escapeHtml(slice.share.toFixed(slice.share < 10 ? 1 : 0))}%</span>
+          </div>
+        `)
+        .join("");
+      const summary = slices
+        .map((slice) => `${slice.label} ${slice.share.toFixed(0)}%`)
+        .join(", ");
       return `
-        <div class="stats-genres-chart">
-          ${items
-            .map((row, idx) => {
-              const count = row.count || 0;
-              const percentage = maxCount > 0 ? Math.round((count / maxCount) * 100) : 0;
-              const color = colors[idx % colors.length];
-              const label = row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown"));
-              return `
-                <div class="stats-genre-bar-item">
-                  <div class="stats-genre-bar-label">
-                    <span class="stats-genre-bar-title">${escapeHtml(label)}</span>
-                    <span class="stats-genre-bar-count">${escapeHtml(count)}</span>
-                  </div>
-                  <div class="stats-genre-bar-container">
-                    <div class="stats-genre-bar" style="width: ${percentage}%; background-color: ${escapeHtml(color)};"></div>
-                  </div>
-                </div>
-              `;
-            })
-            .join("")}
+        <div class="dv-donut" data-dv-donut>
+          <div class="dv-donut-figure">
+            <svg class="dv-donut-svg" viewBox="0 0 200 200" role="img" aria-label="${escapeHtml(summary)}">${segments}</svg>
+            <div class="dv-donut-center">
+              <span class="dv-donut-center-value">${escapeHtml(dvFormatCount(total))}</span>
+              <span class="dv-donut-center-label">${escapeHtml(tNext("stats.chartTotal", "Total"))}</span>
+            </div>
+          </div>
+          <div class="dv-legend">${legend}</div>
         </div>
       `;
     }
-    function statsPieChartHtml(rows, chartId) {
-      const items = (rows || []).filter((row) => (row.count || 0) > 0);
-      if (!items.length) {
-        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
-      }
-      // Create pie chart with SVG - native Apple aesthetic colors
-      const total = items.reduce((sum, item) => sum + (item.count || 0), 0) || 1;
-      const colors = [
-        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
-        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A"
-      ];
-
-      let currentAngle = -90;
-      const slices = items.map((item, idx) => {
-        const percentage = (item.count || 0) / total;
-        const sliceAngle = percentage * 360;
-        const endAngle = currentAngle + sliceAngle;
-
-        const startRad = (currentAngle * Math.PI) / 180;
-        const endRad = (endAngle * Math.PI) / 180;
-
-        const x1 = 50 + 38 * Math.cos(startRad);
-        const y1 = 50 + 38 * Math.sin(startRad);
-        const x2 = 50 + 38 * Math.cos(endRad);
-        const y2 = 50 + 38 * Math.sin(endRad);
-
-        const largeArc = sliceAngle > 180 ? 1 : 0;
-        const pathData = `M 50 50 L ${x1} ${y1} A 38 38 0 ${largeArc} 1 ${x2} ${y2} Z`;
-        const color = colors[idx % colors.length];
-        const label = item.label || tNext("common.untitled", "Unknown");
-
-        currentAngle = endAngle;
-
-        return {
-          path: pathData,
-          color: color,
-          label: label,
-          count: item.count,
-          percentage: Math.round(percentage * 100)
-        };
-      });
-
-      // Create SVG with glassmorphic styling
-      const svgContent = slices.map((slice, idx) => {
-        const opacity = 0.85 + (idx % 2) * 0.1; // Slight variation for depth
-        return `<path d="${escapeHtml(slice.path)}" fill="${escapeHtml(slice.color)}" opacity="${opacity}" stroke="rgba(255,255,255,0.3)" stroke-width="1.5"/>`;
-      }).join("");
-
-      const legend = slices.map(slice => `
-        <div class="stats-pie-legend-item">
-          <span class="stats-pie-color" style="background-color: ${escapeHtml(slice.color)};"></span>
-          <span>${escapeHtml(slice.label)} (${escapeHtml(slice.count)} • ${escapeHtml(slice.percentage)}%)</span>
-        </div>
-      `).join("");
-
-      return `
-        <div class="stats-pie-chart-container">
-          <svg viewBox="0 0 100 100" class="stats-pie-svg" xmlns="http://www.w3.org/2000/svg">${svgContent}</svg>
-          <div class="stats-pie-legend">${legend}</div>
-        </div>
-      `;
+    // Hovering a legend row lifts its slice and dims the rest. Delegated so
+    // it keeps working after every re-render of the statistics view.
+    function bindStatsChartHighlight(root) {
+      if (!root || root.dataset.dvHighlightBound === "1") return;
+      root.dataset.dvHighlightBound = "1";
+      const setActive = (event, active) => {
+        const row = event.target.closest("[data-dv-slice]");
+        if (!row) return;
+        const donut = row.closest("[data-dv-donut]");
+        if (!donut) return;
+        const index = row.dataset.dvSlice;
+        if (active) donut.dataset.active = index;
+        else delete donut.dataset.active;
+        donut.querySelectorAll(".dv-donut-seg").forEach((segment) => {
+          segment.classList.toggle("is-active", active && segment.dataset.dvSlice === index);
+        });
+      };
+      root.addEventListener("mouseover", (event) => setActive(event, true));
+      root.addEventListener("mouseout", (event) => setActive(event, false));
     }
     function renderStatisticsView() {
       const data = statsState.data;
@@ -41633,18 +41901,73 @@ def ui_preview_html(
           .join("");
       }
       const byFormat = document.getElementById("statsByFormat");
-      if (byFormat) byFormat.innerHTML = statsPieChartHtml(data.byFormat, "formatPie");
+      if (byFormat) byFormat.innerHTML = statsDonutChartHtml(data.byFormat);
       const byGenre = document.getElementById("statsByGenre");
       if (byGenre) byGenre.innerHTML = statsGenresHtml(data.byGenre);
       const byDecade = document.getElementById("statsByDecade");
-      if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade);
+      // Decades are a sequence, so they read as one accented series.
+      if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade, {monochrome: true});
       const byTopDirectors = document.getElementById("statsByTopDirectors");
-      if (byTopDirectors) byTopDirectors.innerHTML = statsPieChartHtml(data.topDirectors, "directorsPie");
+      if (byTopDirectors) byTopDirectors.innerHTML = statsDonutChartHtml(data.topDirectors);
       const byTopActors = document.getElementById("statsByTopActors");
-      if (byTopActors) byTopActors.innerHTML = statsPieChartHtml(data.topActors, "actorsPie");
+      if (byTopActors) byTopActors.innerHTML = statsDonutChartHtml(data.topActors);
+      bindStatsChartHighlight(document.getElementById("statisticsView"));
       renderStatsPriceTrend(data);
       renderCollectionValueChart();
       if (empty) empty.classList.add("hidden");
+    }
+    function statsPeriodDays(period) {
+      if (period === "month") return 30;
+      if (period === "year") return 365;
+      return null;
+    }
+    function renderStatsPeriodControl() {
+      const control = document.getElementById("statsPeriodControl");
+      if (!control) return;
+      const buttons = Array.from(control.querySelectorAll("[data-stats-period]"));
+      const thumb = control.querySelector(".stats-segmented-thumb");
+      buttons.forEach((button) => {
+        const selected = button.dataset.statsPeriod === statsState.period;
+        button.setAttribute("aria-selected", selected ? "true" : "false");
+        button.tabIndex = selected ? 0 : -1;
+      });
+      const active = buttons.find((button) => button.dataset.statsPeriod === statsState.period);
+      // The sliding thumb is positioned from the real button box, so it stays
+      // correct whatever width the translated labels turn out to need.
+      if (thumb && active) {
+        thumb.style.width = active.offsetWidth + "px";
+        thumb.style.transform = "translateX(" + active.offsetLeft + "px)";
+      }
+    }
+    function setupStatsPeriodControl() {
+      const control = document.getElementById("statsPeriodControl");
+      if (!control || control.dataset.dvBound === "1") return;
+      control.dataset.dvBound = "1";
+      control.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-stats-period]");
+        if (!button) return;
+        const period = button.dataset.statsPeriod;
+        if (!period || period === statsState.period) return;
+        statsState.period = period;
+        renderStatsPeriodControl();
+        loadStatisticsView(true);
+      });
+      // Arrow keys move between segments, as they do in a native control.
+      control.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        const buttons = Array.from(control.querySelectorAll("[data-stats-period]"));
+        const current = buttons.findIndex((button) => button.dataset.statsPeriod === statsState.period);
+        if (current < 0) return;
+        const step = event.key === "ArrowRight" ? 1 : -1;
+        const next = buttons[(current + step + buttons.length) % buttons.length];
+        if (!next) return;
+        event.preventDefault();
+        statsState.period = next.dataset.statsPeriod;
+        renderStatsPeriodControl();
+        next.focus();
+        loadStatisticsView(true);
+      });
+      window.addEventListener("resize", renderStatsPeriodControl);
     }
     async function loadStatisticsView(force = false) {
       if (!hasPermission("watchlist.manage")) return;
@@ -41657,20 +41980,32 @@ def ui_preview_html(
         empty.textContent = tNext("collection.loading", "Loading...");
         empty.classList.remove("hidden");
       }
+      setupStatsPeriodControl();
+      renderStatsPeriodControl();
       try {
-        const payload = await authApiJson("/api/next/stats/personal");
+        const period = statsState.period || "all";
+        const payload = await authApiJson("/api/next/stats/personal?period=" + encodeURIComponent(period));
         statsState.data = payload;
         // Separate endpoint, and deliberately not fatal: the snapshot series is
         // a nice-to-have on this page, and losing it must not blank the counters
         // the user came for.
         try {
-          const history = await authApiJson("/api/next/stats/collection-value/history?scope=total");
+          // The value chart is a time series, so the period trims its window
+          // rather than re-valuing the collection.
+          const windowDays = statsPeriodDays(period);
+          let historyUrl = "/api/next/stats/collection-value/history?scope=total";
+          if (windowDays) {
+            const from = new Date(Date.now() - windowDays * 86400000);
+            historyUrl += "&from=" + encodeURIComponent(from.toISOString().slice(0, 10));
+          }
+          const history = await authApiJson(historyUrl);
           statsState.valueHistory = Array.isArray(history && history.points) ? history.points : [];
         } catch (historyError) {
           statsState.valueHistory = [];
         }
         statsState.loaded = true;
         renderStatisticsView();
+        renderStatsPeriodControl();
       } catch (error) {
         if (empty) {
           empty.textContent = error.message || String(error);

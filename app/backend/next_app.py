@@ -943,6 +943,16 @@ UPDATE_CHANNEL_SETTING_KEY = "update_channel"
 UPDATE_HTTP_TIMEOUT = 8.0
 UPDATE_USER_AGENT = "DiscVault-UpdateCheck"
 
+# Windows the statistics view can be narrowed to, in days. ``None`` means "no
+# lower bound", which is what the view asked for before a period existed - so
+# ``all`` reproduces the historical response byte for byte.
+STATS_PERIOD_ALL = "all"
+STATS_PERIOD_WINDOW_DAYS: dict[str, int | None] = {
+    "month": 30,
+    "year": 365,
+    STATS_PERIOD_ALL: None,
+}
+
 
 def _update_version_tuple(value: Any) -> tuple[int, ...]:
     """Parse a semver-ish string into a comparable integer tuple.
@@ -32203,10 +32213,41 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/stats/personal")
     def personal_statistics():
+        # The period narrows the statistics to what *happened* inside a window:
+        # a disc added, a film watched, a wish noted, a loan started. It is
+        # deliberately not applied to the collection's value, because a
+        # valuation is a state and not an event - "the value of what I bought
+        # last month" is a different question from "what my shelf is worth",
+        # and the card sits directly above a chart that answers the latter.
+        period = clean_text(request.args.get("period")).lower() or STATS_PERIOD_ALL
+        if period not in STATS_PERIOD_WINDOW_DAYS:
+            raise NextApiError(
+                f"period must be one of: {', '.join(sorted(STATS_PERIOD_WINDOW_DAYS))}",
+                400,
+            )
+        window_days = STATS_PERIOD_WINDOW_DAYS[period]
+        period_start = (
+            datetime.now(timezone.utc) - timedelta(days=window_days)
+            if window_days is not None
+            else None
+        )
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
-            where, params = visible_movie_where_sql(conn, actor, "m")
+            # Two shapes of the same visibility filter: the unscoped one keeps
+            # answering "what is the whole collection worth", the scoped one
+            # drives every count the period applies to.
+            value_where, value_params = visible_movie_where_sql(conn, actor, "m")
+            where, params = value_where, list(value_params)
+            if period_start is not None:
+                where = f"({where}) AND m.created_at >= %s"
+                params.append(period_start)
+
+            def _period_clause(column: str) -> tuple[str, list[Any]]:
+                """Extra AND-clause restricting an event table to the window."""
+                if period_start is None:
+                    return "", []
+                return f" AND {column} >= %s", [period_start]
 
             def _bucket_rows(sql: str) -> list[dict[str, Any]]:
                 with conn.cursor() as cur:
@@ -32329,17 +32370,18 @@ def register_routes(flask_app: Flask) -> None:
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
             if table_exists(conn, "watch_history"):
+                watch_clause, watch_params = _period_clause("watched_at")
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
+                        f"""
                         SELECT
                             COUNT(*)::int AS total,
                             COUNT(*) FILTER (WHERE date_part('year', watched_at) = date_part('year', now()))::int AS this_year,
                             COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'title'))::int AS distinct_movies
                         FROM watch_history
-                        WHERE user_id=%s
+                        WHERE user_id=%s{watch_clause}
                         """,
-                        (user_id,),
+                        (user_id, *watch_params),
                     )
                     row = cur.fetchone() or {}
                     watch["total"] = int(row.get("total") or 0)
@@ -32347,17 +32389,17 @@ def register_routes(flask_app: Flask) -> None:
                     watch["distinctMovies"] = int(row.get("distinct_movies") or 0)
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
+                        f"""
                         SELECT
                             COALESCE(snapshot->>'title', snapshot->>'movie_title', 'Unknown') AS title,
                             COUNT(*)::int AS count
                         FROM watch_history
-                        WHERE user_id=%s
+                        WHERE user_id=%s{watch_clause}
                         GROUP BY 1
                         ORDER BY count DESC, title
                         LIMIT 10
                         """,
-                        (user_id,),
+                        (user_id, *watch_params),
                     )
                     watch["topMovies"] = [
                         {"title": r.get("title"), "count": int(r.get("count") or 0)}
@@ -32366,23 +32408,28 @@ def register_routes(flask_app: Flask) -> None:
 
             wishlist_count = 0
             if table_exists(conn, "wishlist_items"):
+                wishlist_clause, wishlist_params = _period_clause("added_at")
                 with conn.cursor() as cur:
-                    cur.execute("SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s", (user_id,))
+                    cur.execute(
+                        f"SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s{wishlist_clause}",
+                        (user_id, *wishlist_params),
+                    )
                     wishlist_count = int((cur.fetchone() or {}).get("count") or 0)
 
             loans_stats = {"active": 0, "overdue": 0, "returned": 0}
             if table_exists(conn, "loans"):
+                loans_clause, loans_params = _period_clause("loaned_at")
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
+                        f"""
                         SELECT
                             COUNT(*) FILTER (WHERE returned_at IS NULL)::int AS active,
                             COUNT(*) FILTER (WHERE returned_at IS NULL AND due_at IS NOT NULL AND due_at < now())::int AS overdue,
                             COUNT(*) FILTER (WHERE returned_at IS NOT NULL)::int AS returned
                         FROM loans
-                        WHERE user_id=%s
+                        WHERE user_id=%s{loans_clause}
                         """,
-                        (user_id,),
+                        (user_id, *loans_params),
                     )
                     row = cur.fetchone() or {}
                     loans_stats = {
@@ -32477,8 +32524,8 @@ def register_routes(flask_app: Flask) -> None:
             container_where, container_params = visible_container_where_sql(conn, actor, "c")
             collection_value = compute_collection_value(
                 conn,
-                movie_where=where,
-                movie_params=params,
+                movie_where=value_where,
+                movie_params=value_params,
                 container_where=container_where,
                 container_params=container_params,
                 exchange_rates=dict(price_display_exchange_rates().get("exchangeRates") or {}),
@@ -32532,6 +32579,8 @@ def register_routes(flask_app: Flask) -> None:
             return response(
                 {
                     "status": "ok",
+                    "period": period,
+                    "periodStart": period_start.isoformat() if period_start else None,
                     "totalMovies": total,
                     "byFormat": by_format,
                     "byDecade": by_decade,
