@@ -102,6 +102,7 @@ try:
     from .next_metadata import apply_season_poster_inheritance
     from .next_metadata import clear_orphaned_season_poster
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import release_read_transaction
     from .next_metadata import refresh_series_metadata
     from .next_metadata import refresh_season_episodes
     from .next_metadata import available_series_seasons
@@ -391,6 +392,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import apply_season_poster_inheritance
     from next_metadata import clear_orphaned_season_poster
     from next_metadata import refresh_movie_metadata
+    from next_metadata import release_read_transaction
     from next_metadata import refresh_series_metadata
     from next_metadata import refresh_season_episodes
     from next_metadata import available_series_seasons
@@ -2030,6 +2032,10 @@ def inspect_import_source_plugin(
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     config = plugin_config_from_db(conn, str(plugin.get("id")))
     context = plugin_execution_context(conn, plugin, config, actor)
+    # Released here rather than earlier: the configuration read just
+    # above is what reopens the transaction, so anything sooner does
+    # not count. See release_read_transaction.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(str(plugin.get("id")), "inspect_source", payload or {}, context)
     return normalize_import_source_result(plugin, execution), execution
 
@@ -3529,6 +3535,10 @@ def inspect_import_source_selection(
         config = plugin_config_from_db(conn, plugin_id)
         context = plugin_execution_context(conn, plugin, config, actor)
     if source.get("readable") and "plan_import" in plugin_runtime_entrypoints(plugin) and context:
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         plan_execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
         if plan_execution.get("status") == "ok" and isinstance(plan_execution.get("result"), dict):
             plan = plan_execution["result"]
@@ -3544,6 +3554,10 @@ def inspect_import_source_selection(
             preview_payload["sourcePath"] = source.get("sourcePath")
         if source.get("sourceDatabaseHash"):
             preview_payload["sourceDatabaseHash"] = source.get("sourceDatabaseHash")
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         import_execution = run_plugin_entrypoint(plugin_id, "import_source", preview_payload, context)
         result = import_execution.get("result") if import_execution.get("status") == "ok" else {}
         items = result.get("items") if isinstance(result, dict) else []
@@ -4042,6 +4056,10 @@ def plan_migration_import_job(
         "importMediaReferences": options.get("importMediaReferences"),
         "ownerUsername": options.get("ownerUsername"),
     }
+    # Released here rather than earlier: the configuration read just
+    # above is what reopens the transaction, so anything sooner does
+    # not count. See release_read_transaction.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(plugin_id, "plan_import", payload, context)
     if execution.get("status") != "ok":
         raise NextApiError(
@@ -16034,8 +16052,11 @@ def _refresh_one_movie_person_credit(
     }
     try:
         with connect() as person_conn:
-            with person_conn.transaction():
-                result = refresh_person_metadata(person_conn, UUID(person_id), dry_run=dry_run, actor=actor, force=force)
+            # Not wrapped in a transaction block: refresh_person_metadata closes
+            # the read transaction before it reaches TMDB, and cannot do that
+            # from inside one. This is the path that matters most for it -- four
+            # workers walking the credits of one film, each holding a connection.
+            result = refresh_person_metadata(person_conn, UUID(person_id), dry_run=dry_run, actor=actor, force=force)
         cached = (result.get("execution") or {}).get("state") == "cached"
         entry["status"] = "cached" if cached else ("previewed" if dry_run else "refreshed")
         entry["plugin"] = (result.get("plugin") or {}).get("id")
@@ -16322,6 +16343,12 @@ def refresh_person_metadata(
         if plugin_requires_config_for_entrypoint(plugin, config, "person_details"):
             continue
         context = plugin_execution_context(conn, plugin, config, actor)
+        # After the two reads above, not before them: `plugin_config_from_db`
+        # and `plugin_execution_context` are what reopen the transaction, and a
+        # release placed any earlier is undone by them. This path calls the
+        # provider directly rather than through run_cached_plugin_entrypoint, so
+        # it needs its own release.
+        release_read_transaction(conn)
         execution = run_plugin_entrypoint(str(plugin["id"]), "person_details", {"tmdbId": tmdb_id}, context)
         if execution.get("status") != "ok":
             last_error = execution.get("error") or last_error
@@ -16611,6 +16638,10 @@ def refresh_person_filmography(
         raise NextApiError("Filmography plugin configuration is incomplete", 409)
 
     context = plugin_execution_context(conn, plugin, config, actor)
+    # Released here rather than earlier: the configuration read just
+    # above is what reopens the transaction, so anything sooner does
+    # not count. See release_read_transaction.
+    release_read_transaction(conn)
     execution = run_plugin_entrypoint(str(plugin["id"]), "person_filmography", {"tmdbId": tmdb_id}, context)
     result = execution.get("result") or {}
     if execution.get("status") != "ok":
@@ -19146,6 +19177,10 @@ def fetch_box_set_artwork_from_sources(
         if plugin_requires_config_for_entrypoint(plugin, config, "box_set_candidates"):
             continue
         context = plugin_execution_context(conn, plugin, config, actor, ensure_movievault_token=True)
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         execution = run_plugin_entrypoint(plugin_id, "box_set_candidates", payload, context)
         if execution.get("status") != "ok":
             continue
@@ -25449,21 +25484,26 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Series tables are not available", 503)
             if series_entity(conn, series_uuid, with_seasons=False) is None:
                 raise NextApiError("Series not found", 404)
-            with conn.transaction():
-                # Runs in the request rather than through the queue: the caller is
-                # watching, and the job it would queue does the same never-overwrite
-                # work. Queueing would only add a wait with nothing to show for it.
-                result = refresh_series_metadata(conn, series_uuid)
-                audit_event(
-                    conn,
-                    event_type="metadata.series_refreshed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="series",
-                    target_id=series_uuid,
-                    summary="Refreshed series metadata",
-                    metadata=result,
-                )
+            # Runs in the request rather than through the queue: the caller is
+            # watching, and the job it would queue does the same never-overwrite
+            # work. Queueing would only add a wait with nothing to show for it.
+            #
+            # No enclosing transaction: refresh_series_metadata commits the reads
+            # above its source lookups before consulting TMDB, TVDB and Fanart
+            # over the network, and cannot do that from inside one. The audit
+            # event below commits with the connection on context exit, the same
+            # way the movie refresh route already works.
+            result = refresh_series_metadata(conn, series_uuid)
+            audit_event(
+                conn,
+                event_type="metadata.series_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="series",
+                target_id=series_uuid,
+                summary="Refreshed series metadata",
+                metadata=result,
+            )
             detail = series_detail_entity(conn, series_uuid, actor=actor)
         return response({"status": "ok", "result": result, "detail": detail})
 
@@ -25602,18 +25642,21 @@ def register_routes(flask_app: Flask) -> None:
             # Refreshed in the same request. The identifier exists to be used, and
             # a separate "now press refresh" step is a way to leave a series that
             # was just identified still looking empty.
-            with conn.transaction():
-                result = refresh_series_metadata(conn, series_uuid)
-                audit_event(
-                    conn,
-                    event_type="metadata.series_refreshed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="series",
-                    target_id=series_uuid,
-                    summary="Refreshed series metadata",
-                    metadata=result,
-                )
+            #
+            # Outside a transaction block, like the refresh route above: the
+            # identifier written by the block above is committed by the time the
+            # sources are consulted, which is what lets the refresh find it.
+            result = refresh_series_metadata(conn, series_uuid)
+            audit_event(
+                conn,
+                event_type="metadata.series_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="series",
+                target_id=series_uuid,
+                summary="Refreshed series metadata",
+                metadata=result,
+            )
             detail = series_detail_entity(conn, series_uuid, actor=actor)
         return response({"status": "ok", "result": result, "detail": detail})
 
@@ -29304,6 +29347,10 @@ def register_routes(flask_app: Flask) -> None:
                 ensure_movievault_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
             )
 
+        # Released here rather than earlier: the configuration read just
+        # above is what reopens the transaction, so anything sooner does
+        # not count. See release_read_transaction.
+        release_read_transaction(conn)
         execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
         status_code = 200 if execution.get("status") == "ok" else 422
         return response(
@@ -32541,18 +32588,20 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("People table is not available", 503)
             if not actor_can_view_person(conn, actor, person_uuid):
                 raise NextApiError("Person not found", 404)
-            with conn.transaction():
-                result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor, force=force)
-                audit_event(
-                    conn,
-                    event_type="metadata.person_previewed" if dry_run else "metadata.person_refreshed",
-                    category="metadata",
-                    actor=actor,
-                    target_type="person",
-                    target_id=person_uuid,
-                    summary="Refreshed person metadata" if not dry_run else "Previewed person metadata refresh",
-                    metadata={"dryRun": dry_run, "result": result},
-                )
+            # No enclosing transaction: refresh_person_metadata commits its reads
+            # before reaching TMDB. The audit event commits with the connection
+            # on context exit, as on the movie and series refresh routes.
+            result = refresh_person_metadata(conn, person_uuid, dry_run=dry_run, actor=actor, force=force)
+            audit_event(
+                conn,
+                event_type="metadata.person_previewed" if dry_run else "metadata.person_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="person",
+                target_id=person_uuid,
+                summary="Refreshed person metadata" if not dry_run else "Previewed person metadata refresh",
+                metadata={"dryRun": dry_run, "result": result},
+            )
         return response({"status": "ok", "metadata": result})
 
     @flask_app.post("/api/next/people/<person_id>/filmography/refresh")
