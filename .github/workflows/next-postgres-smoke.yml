@@ -140,24 +140,6 @@ jobs:
       - name: Test query-argument parsing
         run: python -m unittest tests.test_next_query_argument_parsing
 
-      # Needs the real PostgreSQL, because the property is about what the
-      # database returns across page boundaries rather than about the shape of
-      # the response. The assertion that matters is the negative one: a page
-      # that ends exactly on the boundary must not claim a further page, and a
-      # cut list must not look like a complete one -- which is precisely how
-      # this endpoint failed before.
-      - name: Test the series list paging
-        run: python -m unittest tests.test_next_series_paging
-
-      # The sync contract calls the bootstrap a complete snapshot and it could
-      # quietly not be one. The assertions that matter are the two negative
-      # ones: a deliberately unbounded collection must not be listed as capped,
-      # and the probe row fetched to answer "was this cut?" must never reach the
-      # client. Both are the kind of mistake that leaves a passing endpoint
-      # returning subtly wrong data.
-      - name: Test bootstrap completeness reporting
-        run: python -m unittest tests.test_next_bootstrap_completeness
-
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
       # freeze every page load -- and nothing about that failure is visible in a
@@ -287,6 +269,12 @@ jobs:
       - name: Test series artwork merging
         run: python -m unittest tests.test_next_series_artwork
 
+      # ======================================================================
+      # EVERY STEP ABOVE THIS LINE RUNS AGAINST AN EMPTY DATABASE.
+      # A test that reads or writes any table belongs BELOW it, or it dies
+      # on `relation "..." does not exist`. This has caught two additions
+      # placed above by mistake; the comment is cheaper than the red run.
+      # ======================================================================
       - name: Apply Next migrations
         run: python next_database.py migrate
 
@@ -304,6 +292,24 @@ jobs:
 
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
+
+      # Needs the real PostgreSQL, because the property is about what the
+      # database returns across page boundaries rather than about the shape of
+      # the response. The assertion that matters is the negative one: a page
+      # that ends exactly on the boundary must not claim a further page, and a
+      # cut list must not look like a complete one -- which is precisely how
+      # this endpoint failed before.
+      - name: Test the series list paging
+        run: python -m unittest tests.test_next_series_paging
+
+      # The sync contract calls the bootstrap a complete snapshot and it could
+      # quietly not be one. The assertions that matter are the two negative
+      # ones: a deliberately unbounded collection must not be listed as capped,
+      # and the probe row fetched to answer "was this cut?" must never reach the
+      # client. Both are the kind of mistake that leaves a passing endpoint
+      # returning subtly wrong data.
+      - name: Test bootstrap completeness reporting
+        run: python -m unittest tests.test_next_bootstrap_completeness
 
       # The same rule one level deeper, and the one the user's own
       # pg_stat_activity sample specified: five backends idle in transaction for
