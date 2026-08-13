@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Топ-10 режисерів",
+  "stats.topActors": "Топ-10 акторів",
   "stats.cardCollectionValue": "Вартість колекції",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

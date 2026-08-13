@@ -2447,6 +2447,8 @@
   "stats.byFormat": "Per formaat",
   "stats.byGenre": "Per genre",
   "stats.byRating": "Per beoordeling",
+  "stats.topDirectors": "Top 10 regisseurs",
+  "stats.topActors": "Top 10 acteurs",
   "stats.cardCollectionValue": "Waarde van je collectie",
   "stats.cardMovies": "Films",
   "stats.cardOnLoan": "Uitgeleend",

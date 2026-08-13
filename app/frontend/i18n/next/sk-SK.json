@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Top 10 režisérov",
+  "stats.topActors": "Top 10 hercov",
   "stats.cardCollectionValue": "Hodnota zbierky",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

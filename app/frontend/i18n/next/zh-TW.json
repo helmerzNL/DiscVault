@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "導演 Top 10",
+  "stats.topActors": "演員 Top 10",
   "stats.cardCollectionValue": "收藏價值",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",

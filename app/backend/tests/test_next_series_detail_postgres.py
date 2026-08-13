@@ -437,7 +437,7 @@ class SeriesDetailRouteTests(SeriesDetailPostgresTests):
             with self.connect() as conn:
                 listed = next(
                     row
-                    for row in next_app.series_list_entities(conn)
+                    for row in next_app.series_list_entities(conn)[0]
                     if row["id"] == str(series_id)
                 )
 
@@ -449,7 +449,7 @@ class SeriesDetailRouteTests(SeriesDetailPostgresTests):
         with self.connect() as conn:
             series_id = self._series(conn)
             listed = next(
-                row for row in next_app.series_list_entities(conn) if row["id"] == str(series_id)
+                row for row in next_app.series_list_entities(conn)[0] if row["id"] == str(series_id)
             )
 
         self.assertIsNone(listed["posterUrl"])
