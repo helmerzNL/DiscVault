@@ -112,6 +112,15 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
+      # An index is only worth anything if the planner picks it, and nothing
+      # about a wrong one is visible from the schema: an index leading with the
+      # wrong column looks correct in pg_indexes and serves the query no better
+      # than none. So this asserts the plan, not the DDL -- which also makes it
+      # fail if the query in next_metadata.py drifts away from the index rather
+      # than the other way round.
+      - name: Test the person-identifier lookup index
+        run: python -m unittest tests.test_next_person_identifier_index
+
       # Needs the real PostgreSQL: the claim is about the connection's actual
       # transaction status at the moment a provider is called, which a stubbed
       # cursor cannot have. The structural half is there because the boundary
