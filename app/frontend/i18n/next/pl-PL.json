@@ -3011,5 +3011,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Usuń sezon z listy do obejrzenia",
   "seriesDetail.seasonBulkHint": "Dotyczy wszystkich odcinków na tej liście.",
   "seriesDetail.episodeImageFromSeason": "Obraz sezonu",
-  "seriesDetail.episodeImageFromSeries": "Obraz serialu"
+  "seriesDetail.episodeImageFromSeries": "Obraz serialu",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

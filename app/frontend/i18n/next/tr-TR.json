@@ -3011,5 +3011,7 @@
   "seriesDetail.removeSeasonFromWatchlist": "Sezonu izleme listesinden çıkar",
   "seriesDetail.seasonBulkHint": "Burada listelenen tüm bölümler için geçerlidir.",
   "seriesDetail.episodeImageFromSeason": "Sezon görseli",
-  "seriesDetail.episodeImageFromSeries": "Dizi görseli"
+  "seriesDetail.episodeImageFromSeries": "Dizi görseli",
+  "stats.topDirectors": "Top 10 Directors",
+  "stats.topActors": "Top 10 Actors"
 }

@@ -227,6 +227,31 @@ TOOLS = [
         "description": "List DiscVault media groups.",
         "inputSchema": {"type": "object", "properties": {}, "required": []},
     },
+    {
+        "name": "get_collection_stats_detailed",
+        "description": "Get detailed collection statistics including format breakdown, top genres, decades, ratings, and more.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_top_formats",
+        "description": "Get the top media formats in the DiscVault collection with counts.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_top_genres",
+        "description": "Get the top genres in the DiscVault collection.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_top_directors",
+        "description": "Get the top 10 directors in the DiscVault collection by number of films.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
+    {
+        "name": "get_top_actors",
+        "description": "Get the top 10 actors in the DiscVault collection by number of films.",
+        "inputSchema": {"type": "object", "properties": {}, "required": []},
+    },
 ]
 
 
@@ -355,6 +380,106 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
                 if group.get("description"):
                     line += f" - {group['description']}"
                 lines.append(line)
+            return "\n".join(lines)
+
+        if name == "get_collection_stats_detailed":
+            data = api_get("/api/next/stats/personal", bearer=bearer)
+            if not isinstance(data, dict):
+                return "Failed to retrieve collection statistics."
+            lines = ["Collection Statistics\n"]
+
+            # Total movies
+            total = data.get("totalMovies", 0)
+            lines.append(f"Total movies: {total}\n")
+
+            # Formats
+            formats = data.get("byFormat", [])
+            if formats:
+                lines.append("Formats:")
+                for fmt in formats:
+                    lines.append(f"  - {fmt.get('label')}: {fmt.get('count')}")
+                lines.append("")
+
+            # Genres (top 10-15)
+            genres = data.get("byGenre", [])
+            if genres:
+                lines.append("Top Genres:")
+                for genre in genres[:15]:
+                    lines.append(f"  - {genre.get('label')}: {genre.get('count')}")
+                lines.append("")
+
+            # Directors
+            directors = data.get("topDirectors", [])
+            if directors:
+                lines.append("Top Directors:")
+                for director in directors[:10]:
+                    lines.append(f"  - {director.get('label')}: {director.get('count')} films")
+                lines.append("")
+
+            # Actors
+            actors = data.get("topActors", [])
+            if actors:
+                lines.append("Top Actors:")
+                for actor in actors[:10]:
+                    lines.append(f"  - {actor.get('label')}: {actor.get('count')} films")
+                lines.append("")
+
+            # Watch statistics
+            watch = data.get("watch", {})
+            if watch:
+                lines.append("Watch Statistics:")
+                lines.append(f"  - Total watches: {watch.get('total', 0)}")
+                lines.append(f"  - This year: {watch.get('thisYear', 0)}")
+                lines.append(f"  - Distinct movies watched: {watch.get('distinctMovies', 0)}")
+
+            return "\n".join(lines)
+
+        if name == "get_top_formats":
+            data = api_get("/api/next/stats/personal", bearer=bearer)
+            formats = data.get("byFormat", []) if isinstance(data, dict) else []
+            if not formats:
+                return "No format data available."
+            lines = ["Media Formats in Collection:\n"]
+            for fmt in formats:
+                label = fmt.get("label", "Unknown")
+                count = fmt.get("count", 0)
+                lines.append(f"- {label}: {count} titles")
+            return "\n".join(lines)
+
+        if name == "get_top_genres":
+            data = api_get("/api/next/stats/personal", bearer=bearer)
+            genres = data.get("byGenre", []) if isinstance(data, dict) else []
+            if not genres:
+                return "No genre data available."
+            lines = ["Top Genres in Collection:\n"]
+            for genre in genres:
+                label = genre.get("label", "Unknown")
+                count = genre.get("count", 0)
+                lines.append(f"- {label}: {count} titles")
+            return "\n".join(lines)
+
+        if name == "get_top_directors":
+            data = api_get("/api/next/stats/personal", bearer=bearer)
+            directors = data.get("topDirectors", []) if isinstance(data, dict) else []
+            if not directors:
+                return "No director data available."
+            lines = ["Top 10 Directors in Collection:\n"]
+            for i, director in enumerate(directors, 1):
+                name_val = director.get("label", "Unknown")
+                count = director.get("count", 0)
+                lines.append(f"{i}. {name_val}: {count} films")
+            return "\n".join(lines)
+
+        if name == "get_top_actors":
+            data = api_get("/api/next/stats/personal", bearer=bearer)
+            actors = data.get("topActors", []) if isinstance(data, dict) else []
+            if not actors:
+                return "No actor data available."
+            lines = ["Top 10 Actors in Collection:\n"]
+            for i, actor in enumerate(actors, 1):
+                name_val = actor.get("label", "Unknown")
+                count = actor.get("count", 0)
+                lines.append(f"{i}. {name_val}: {count} films")
             return "\n".join(lines)
 
         return f"Unknown tool: {name}"
