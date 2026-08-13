@@ -36393,22 +36393,52 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/api/next/sync/bootstrap")
     def sync_bootstrap():
         limit = parse_int_arg("limit", 1000, minimum=1, maximum=5000)
+        membership_limit = min(max(limit * 20, 1000), 200000)
+        identifier_limit = min(max(limit * 20, 1000), 200000)
+        credit_limit = min(max(limit * 80, 1000), 50000)
+
+        def page(rows: list[dict[str, Any]], cap: int) -> tuple[list[dict[str, Any]], bool]:
+            """Trim the extra row fetched to answer "was this cut?".
+
+            Every capped collection below is asked for one row more than it may
+            return. That extra row is the whole signal: with it the response can
+            say the list is short, and without it the client cannot tell a
+            complete bootstrap from a truncated one.
+            """
+
+            return rows[:cap], len(rows) > cap
+
         with connect() as conn:
             revision = current_revision(conn)
-            movie_people = all_movie_credit_entities(
-                conn,
-                movie_limit=limit,
-                credit_limit=min(max(limit * 80, 1000), 50000),
+            # Credits are scoped to the same movie window as `movies` -- the
+            # query orders both by sort title -- so a truncated movie list means
+            # a truncated credit list, and they are reported separately because
+            # either cap can bite first.
+            movie_people, credits_truncated = page(
+                all_movie_credit_entities(
+                    conn,
+                    movie_limit=limit,
+                    credit_limit=credit_limit + 1,
+                ),
+                credit_limit,
+            )
+            movies, movies_truncated = page(all_movie_entities(conn, limit=limit + 1), limit)
+            containers, containers_truncated = page(
+                all_container_entities(conn, limit=limit + 1), limit
+            )
+            membership, membership_truncated = page(
+                collection_container_membership_entities(conn, limit=membership_limit + 1),
+                membership_limit,
+            )
+            identifiers, identifiers_truncated = page(
+                all_movie_identifier_entities(conn, limit=identifier_limit + 1),
+                identifier_limit,
             )
             payload = {
-                "movies": all_movie_entities(conn, limit=limit),
-                "containers": all_container_entities(conn, limit=limit),
-                "containerMembership": collection_container_membership_entities(
-                    conn, limit=min(max(limit * 20, 1000), 200000)
-                ),
-                "movieIdentifiers": all_movie_identifier_entities(
-                    conn, limit=min(max(limit * 20, 1000), 200000)
-                ),
+                "movies": movies,
+                "containers": containers,
+                "containerMembership": membership,
+                "movieIdentifiers": identifiers,
                 # Unbounded by `limit`: the tree is at most four levels deep and
                 # a movie's `location_id` is meaningless without the row it
                 # points at, so truncating it would hand clients exactly the
@@ -36426,11 +36456,29 @@ def register_routes(flask_app: Flask) -> None:
                 "metadataPlugins": metadata_plugin_entities(conn),
                 "settings": non_secret_settings(conn),
             }
+        # The sync contract calls this a *complete* snapshot, and until now it
+        # could quietly not be one: with the default limit a collection above a
+        # thousand films returned a well-formed, short list and said nothing.
+        # A client had no way to tell that apart from having everything.
+        #
+        # `complete` is the field worth reading. `collections` names each capped
+        # list, what it was capped at, and whether that cap bit -- so a client
+        # that finds `complete: false` knows which list to distrust and can
+        # raise `limit` (up to 5000) to get further.
+        collections = {
+            "movies": {"limit": limit, "truncated": movies_truncated},
+            "containers": {"limit": limit, "truncated": containers_truncated},
+            "containerMembership": {"limit": membership_limit, "truncated": membership_truncated},
+            "movieIdentifiers": {"limit": identifier_limit, "truncated": identifiers_truncated},
+            "moviePeople": {"limit": credit_limit, "truncated": credits_truncated},
+        }
         return response(
             {
                 "status": "ok",
                 "currentRevision": revision,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                "complete": not any(entry["truncated"] for entry in collections.values()),
+                "collections": collections,
                 "payload": payload,
             }
         )

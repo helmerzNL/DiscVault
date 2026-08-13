@@ -149,6 +149,15 @@ jobs:
       - name: Test the series list paging
         run: python -m unittest tests.test_next_series_paging
 
+      # The sync contract calls the bootstrap a complete snapshot and it could
+      # quietly not be one. The assertions that matter are the two negative
+      # ones: a deliberately unbounded collection must not be listed as capped,
+      # and the probe row fetched to answer "was this cut?" must never reach the
+      # client. Both are the kind of mistake that leaves a passing endpoint
+      # returning subtly wrong data.
+      - name: Test bootstrap completeness reporting
+        run: python -m unittest tests.test_next_bootstrap_completeness
+
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
       # freeze every page load -- and nothing about that failure is visible in a
