@@ -112,6 +112,16 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
+      # Three memos that each remove work a request was doing twice, and whose
+      # every risk is a *stale* answer rather than a slow one. The tests that
+      # matter here are the negative ones: a connection's memo must not outlive
+      # the connection, a request's must not outlive the request, and a failed
+      # sign-in must never be remembered as "nobody is here". Losing those
+      # assertions leaves something that still looks fast and starts answering
+      # yesterday's question.
+      - name: Test the request-scoped authentication memos
+        run: python -m unittest tests.test_next_request_scoped_auth
+
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
       # freeze every page load -- and nothing about that failure is visible in a

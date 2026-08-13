@@ -29,6 +29,7 @@ try:
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
+    from .next_common import table_exists as _shared_table_exists
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from .next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from .next_movievault_connection import is_movievault_plugin
@@ -51,6 +52,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
+    from next_common import table_exists as _shared_table_exists
     from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
     from next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
     from next_movievault_connection import is_movievault_plugin
@@ -494,10 +496,14 @@ MOVIE_FIELD_ALIASES = {
 
 
 def table_exists(conn, table_name: str) -> bool:
-    with conn.cursor() as cur:
-        cur.execute("SELECT to_regclass(%s) AS table_name", (f"public.{table_name}",))
-        row = cur.fetchone()
-    return bool(row and row.get("table_name"))
+    """Delegates to the shared memoised implementation.
+
+    A metadata refresh asks this about the same dozen tables on every credit it
+    walks, so it benefits most from the connection's memo -- and keeping a
+    private copy meant it ran beside that memo rather than filling it.
+    """
+
+    return _shared_table_exists(conn, table_name)
 
 
 def json_ready(value: Any) -> Any:
