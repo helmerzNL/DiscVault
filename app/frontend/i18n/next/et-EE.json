@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Näitlejad",
   "movieDetail.aggregateArtwork": "Liikmete kujundus",
   "movieDetail.applied": "Metaandmed värskendatud.",
+  "movieDetail.applyFailed": "Metaandmete värskendamine nurjus.",
   "movieDetail.releaseCandidatesHelp": "MovieVault tuvastas filmi, kuid mitte selle plaadi täpset trükki. Vali see, mida käes hoiad, et selle andmed täita.",
   "movieDetail.releaseCandidatesApplying": "Selle väljaande rakendamine plaadile...",
   "movieDetail.releaseCandidatesApplied": "Väljaanne rakendatud sellele plaadile.",

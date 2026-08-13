@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Actori",
   "movieDetail.aggregateArtwork": "Grafică pentru membri",
   "movieDetail.applied": "Metadatele au fost reîmprospătate.",
+  "movieDetail.applyFailed": "Reîmprospătarea metadatelor a eșuat.",
   "movieDetail.releaseCandidatesHelp": "MovieVault a identificat filmul, dar nu presarea exactă a acestui disc. Alege-o pe cea pe care o ții în mână pentru a-i completa detaliile.",
   "movieDetail.releaseCandidatesApplying": "Se aplică această ediție discului...",
   "movieDetail.releaseCandidatesApplied": "Ediție aplicată acestui disc.",

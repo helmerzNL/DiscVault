@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "演员",
   "movieDetail.aggregateArtwork": "成员图片",
   "movieDetail.applied": "元数据已刷新。",
+  "movieDetail.applyFailed": "元数据刷新失败。",
   "movieDetail.releaseCandidatesHelp": "MovieVault 识别出了影片，但无法确定这张光盘的确切版本。请选择你手中的版本以填写其详细信息。",
   "movieDetail.releaseCandidatesApplying": "正在将此版本应用到光盘...",
   "movieDetail.releaseCandidatesApplied": "版本已应用到此光盘。",

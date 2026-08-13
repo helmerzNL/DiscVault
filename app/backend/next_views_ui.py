@@ -32163,26 +32163,64 @@ def ui_preview_html(
       }
       if (loadedMovieDetail && hasPermission("metadata.refresh_one")
           && shouldLazyRefresh(`movie:${movieId}`, ENTITY_LAZY_REFRESH_COOLDOWN_MS)) {
-        // Visible, synchronous refresh -- same "Refreshing metadata..." feedback
-        // as the manual button. Safe to run inline now: cached people are
-        // skipped (force: false) and any live TMDB calls run concurrently
-        // (see refresh_movie_person_metadata_cascade), so this is fast in the
-        // common case instead of the multi-second cascade it used to be.
+        // Queued rather than run inline. The work is identical -- the worker
+        // calls the same refresh_movie_metadata with the same arguments, and
+        // the result is cached the same way -- but it no longer occupies one of
+        // the API's two gunicorn workers for as long as the providers take to
+        // answer. In the measurement that prompted this, opening a film held a
+        // transaction open for 10 to 14 seconds while every other request
+        // queued behind it, because "fast in the common case" is not a promise
+        // anything can make about a call to somebody else's server.
+        //
+        // Nothing is dropped and nothing becomes optional: the same refresh
+        // happens, the page just stops waiting for it.
         setMovieDetailMessage(tNext("movieDetail.applyingMetadata", "Refreshing metadata..."));
-        authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/refresh`, {
+        queueMovieDetailMetadataRefresh(movieId);
+      }
+    }
+    async function awaitMovieMetadataJob(jobId, movieId) {
+      // The worker claims pending jobs on a two-second cycle, so the first look
+      // is deliberately not immediate. The delays lengthen because a refresh
+      // that is still going after ten seconds is waiting on a provider, and
+      // polling it harder does not make that provider answer sooner.
+      const delays = [800, 800, 1200, 1600, 2000, 2500, 3000, 3000, 4000, 4000, 5000, 5000, 6000, 6000, 6000];
+      for (const delay of delays) {
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        if (activeDetailMovieId !== movieId) return null; // user navigated away
+        const payload = await authApiJson(`/api/next/jobs/${encodeURIComponent(jobId)}`);
+        const job = payload.job || {};
+        if (job.status === "completed" || job.status === "failed") return job;
+      }
+      return null;
+    }
+    async function queueMovieDetailMetadataRefresh(movieId) {
+      try {
+        const queued = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/metadata/jobs`, {
           method: "POST",
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({dryRun: false, refreshPeople: true, personRefreshScope: "all", force: false})
-        }).then(async () => {
-          if (activeDetailMovieId !== movieId) return; // user navigated away
-          const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
-          if (activeDetailMovieId !== movieId) return;
-          renderMovieDetail(refreshed.detail || {});
-          setMovieDetailMessage(tNext("movieDetail.applied", "Metadata refreshed."), "good");
-        }).catch((error) => {
-          if (activeDetailMovieId !== movieId) return;
-          setMovieDetailMessage(error.message || String(error), "bad");
         });
+        const jobId = ((queued || {}).job || {}).id;
+        if (!jobId) return;
+        const job = await awaitMovieMetadataJob(jobId, movieId);
+        if (activeDetailMovieId !== movieId) return;
+        if (!job) {
+          // Still running when we stopped looking. The refresh is not lost --
+          // the worker still holds it -- so the message stays "Refreshing
+          // metadata...", which is what is actually true.
+          return;
+        }
+        if (job.status === "failed") {
+          setMovieDetailMessage(job.error || tNext("movieDetail.applyFailed", "Metadata refresh failed."), "bad");
+          return;
+        }
+        const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}`);
+        if (activeDetailMovieId !== movieId) return;
+        renderMovieDetail(refreshed.detail || {});
+        setMovieDetailMessage(tNext("movieDetail.applied", "Metadata refreshed."), "good");
+      } catch (error) {
+        if (activeDetailMovieId !== movieId) return;
+        setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
     function closeAppMovieDetail(pushUrl = true) {

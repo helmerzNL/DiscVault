@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Sudionici",
   "movieDetail.aggregateArtwork": "Umjetničko djelo člana",
   "movieDetail.applied": "Metapodaci su osvježeni.",
+  "movieDetail.applyFailed": "Osvježavanje metapodataka nije uspjelo.",
   "movieDetail.releaseCandidatesHelp": "MovieVault je prepoznao film, ali ne i točno izdanje ovog diska. Odaberite ono koje držite u ruci kako biste popunili njegove podatke.",
   "movieDetail.releaseCandidatesApplying": "Primjena ovog izdanja na disk...",
   "movieDetail.releaseCandidatesApplied": "Izdanje primijenjeno na ovaj disk.",

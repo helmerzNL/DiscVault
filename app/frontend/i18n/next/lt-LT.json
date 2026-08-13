@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Aktoriai",
   "movieDetail.aggregateArtwork": "Narių iliustracijos",
   "movieDetail.applied": "Metaduomenys atnaujinti.",
+  "movieDetail.applyFailed": "Nepavyko atnaujinti metaduomenų.",
   "movieDetail.releaseCandidatesHelp": "MovieVault atpažino filmą, bet ne tikslų šio disko leidimą. Pasirinkite tą, kurį laikote rankoje, kad užpildytumėte jo duomenis.",
   "movieDetail.releaseCandidatesApplying": "Šis leidimas taikomas diskui...",
   "movieDetail.releaseCandidatesApplied": "Leidimas pritaikytas šiam diskui.",

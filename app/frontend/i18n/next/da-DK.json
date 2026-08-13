@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Skuespillere",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Aendringer anvendt.",
+  "movieDetail.applyFailed": "Opdatering af metadata mislykkedes.",
   "movieDetail.releaseCandidatesHelp": "MovieVault genkendte filmen, men ikke den præcise presning af denne disc. Vælg den, du holder i hånden, for at udfylde detaljerne.",
   "movieDetail.releaseCandidatesApplying": "Anvender denne udgave på discen...",
   "movieDetail.releaseCandidatesApplied": "Udgave anvendt på denne disc.",

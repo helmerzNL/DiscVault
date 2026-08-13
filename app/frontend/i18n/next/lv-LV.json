@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Aktieri",
   "movieDetail.aggregateArtwork": "Dalībnieku attēli",
   "movieDetail.applied": "Metadati atsvaidzināti.",
+  "movieDetail.applyFailed": "Neizdevās atsvaidzināt metadatus.",
   "movieDetail.releaseCandidatesHelp": "MovieVault atpazina filmu, bet ne precīzu šī diska izdevumu. Izvēlieties to, kuru turat rokā, lai aizpildītu tā datus.",
   "movieDetail.releaseCandidatesApplying": "Šis izdevums tiek piemērots diskam...",
   "movieDetail.releaseCandidatesApplied": "Izdevums piemērots šim diskam.",

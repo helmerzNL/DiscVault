@@ -1747,6 +1747,7 @@
   "movieDetail.actors": "Актьор",
   "movieDetail.aggregateArtwork": "Произведения на изкуството за членове",
   "movieDetail.applied": "Метаданните са обновени.",
+  "movieDetail.applyFailed": "Обновяването на метаданните е неуспешно.",
   "movieDetail.releaseCandidatesHelp": "MovieVault разпозна филма, но не и точното издание на този диск. Изберете това, което държите, за да попълните данните му.",
   "movieDetail.releaseCandidatesApplying": "Прилагане на това издание върху диска...",
   "movieDetail.releaseCandidatesApplied": "Изданието е приложено към този диск.",
