@@ -22,9 +22,13 @@ except ModuleNotFoundError:  # pragma: no cover - allows policy tests without ps
             self.value = value
 
 try:
+    from psycopg import OperationalError as _PsycopgOperationalError
     from psycopg import ProgrammingError as _PsycopgProgrammingError
 except ModuleNotFoundError:  # pragma: no cover - allows policy tests without psycopg
     class _PsycopgProgrammingError(Exception):  # type: ignore[no-redef]
+        pass
+
+    class _PsycopgOperationalError(Exception):  # type: ignore[no-redef]
         pass
 
 try:
@@ -3943,15 +3947,20 @@ def release_read_transaction(conn) -> bool:
     call was still measured as `INTRANS`.
 
     Returns whether the transaction was actually released, and never raises.
-    Two callers legitimately cannot be released, and both keep the behaviour
-    they had rather than failing:
+    Three callers legitimately cannot be released, and all three keep the
+    behaviour they had rather than failing:
 
     * a connection-shaped **stand-in** with no `commit` -- the pipeline is
       deliberately callable with one;
     * a caller inside an explicit ``with conn.transaction():`` block, where
       psycopg forbids committing. That caller has chosen atomicity across the
       call, and silently breaking that choice would be worse than a long
-      transaction.
+      transaction;
+    * a connection that is already **closed**, which is the best case of all:
+      ``execute_plugin`` ends its ``with connect()`` block before reaching the
+      plugin, so there is no transaction left to release and no connection held
+      either. Learned by breaking it -- a release added there answered every
+      request with "DiscVault is temporarily offline".
 
     Like the lookup cache, this is an optimisation and must never be the reason
     something fails.
@@ -3966,6 +3975,11 @@ def release_read_transaction(conn) -> bool:
             "provider call runs inside a caller's transaction block; "
             "the read transaction stays open for its duration"
         )
+        return False
+    except _PsycopgOperationalError:
+        # Already closed, or gone. Nothing is held, which is the outcome this
+        # function exists to produce.
+        logger.debug("no transaction to release: the connection is closed")
         return False
     return True
 

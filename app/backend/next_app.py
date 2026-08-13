@@ -29347,10 +29347,12 @@ def register_routes(flask_app: Flask) -> None:
                 ensure_movievault_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
             )
 
-        # Released here rather than earlier: the configuration read just
-        # above is what reopens the transaction, so anything sooner does
-        # not count. See release_read_transaction.
-        release_read_transaction(conn)
+        # No release needed, and none possible: the `with connect()` block above
+        # has already ended, so the connection is closed and handed back before
+        # the plugin is reached. That is strictly better than releasing the
+        # transaction -- this route was doing the right thing before any of this
+        # work, and briefly had a release bolted on that failed with "the
+        # connection is closed".
         execution = run_plugin_entrypoint(plugin_id, entrypoint, payload, context)
         status_code = 200 if execution.get("status") == "ok" else 422
         return response(

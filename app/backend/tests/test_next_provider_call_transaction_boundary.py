@@ -110,6 +110,16 @@ class ReleaseReadTransactionTests(unittest.TestCase):
                 cur.execute("SELECT 2 AS x")
                 self.assertEqual(cur.fetchone()["x"], 2, "the transaction must still be usable")
 
+    def test_a_closed_connection_is_refused_rather_than_raising(self):
+        # `execute_plugin` ends its `with connect()` block before reaching the
+        # plugin, which is better than releasing: nothing is held at all. A
+        # release was briefly added there anyway and every request came back
+        # "DiscVault is temporarily offline", because psycopg raises
+        # OperationalError on a closed connection.
+        conn = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=False)
+        conn.close()
+        self.assertFalse(next_metadata.release_read_transaction(conn))
+
     def test_a_cache_hit_needs_no_release(self):
         # A hit never reaches the network, so committing there would end a
         # caller's transaction for no reason at all.
@@ -209,9 +219,17 @@ class EveryProviderCallIsPrecededByAReleaseTests(unittest.TestCase):
         cls.metadata = (BACKEND / "next_metadata.py").read_text(encoding="utf-8")
         cls.app = (BACKEND / "next_app.py").read_text(encoding="utf-8")
 
-    # Takes no connection, so it cannot release anything; the loop that builds
-    # its context does it instead, once, before reaching any of the three calls.
+    # Two deliberate exceptions, for opposite reasons.
+    #
+    # `plugin_receiver_optional_detail` takes no connection, so it cannot
+    # release anything; the loop that builds its context does it instead, once,
+    # before reaching any of the three calls.
+    #
+    # `execute_plugin` does better than releasing: its `with connect()` block
+    # ends before the plugin is reached, so no transaction and no connection is
+    # held at all. A release added there raised on the closed connection.
     RELEASED_BY_ITS_CALLER = {"plugin_receiver_optional_detail"}
+    CLOSES_ITS_CONNECTION_INSTEAD = {"execute_plugin"}
 
     @staticmethod
     def _enclosing_function(source: str, offset: int) -> tuple[str, str]:
@@ -223,11 +241,28 @@ class EveryProviderCallIsPrecededByAReleaseTests(unittest.TestCase):
         end = source.find("\ndef ", start + 1)
         return name, source[start : offset if end == -1 else min(offset, end)]
 
+
+    @staticmethod
+    def _enclosing_route(source: str, offset: int) -> str:
+        """The nearest enclosing `def`, nested route functions included."""
+
+        starts = [m for m in re.finditer(r"^\s*def (\w+)\(", source, re.M) if m.start() < offset]
+        return starts[-1].group(1) if starts else ""
+
     def test_every_function_that_can_release_does_so_before_calling_a_provider(self):
         for module, source in (("next_metadata.py", self.metadata), ("next_app.py", self.app)):
             for match in re.finditer(r"^\s+.*\brun_plugin_entrypoint\(", source, re.M):
                 name, body_before_call = self._enclosing_function(source, match.start())
                 if name in self.RELEASED_BY_ITS_CALLER:
+                    continue
+                route = self._enclosing_route(source, match.start())
+                if route in self.CLOSES_ITS_CONNECTION_INSTEAD:
+                    self.assertNotIn(
+                        "release_read_transaction",
+                        source[source.rindex("def " + route, 0, match.start()) : match.start()],
+                        f"{route}() closes its connection before calling out; a release "
+                        "there raises on a closed connection",
+                    )
                     continue
                 self.assertIn(
                     "release_read_transaction",
