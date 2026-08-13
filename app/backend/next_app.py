@@ -32172,6 +32172,32 @@ def register_routes(flask_app: Flask) -> None:
                     cur.execute(sql, params)
                     return cur.fetchall()
 
+            def format_label(raw: str) -> str:
+                """Format display labels for media formats."""
+                if not raw or raw == "Unknown":
+                    return "Unknown"
+                # Replace underscores with spaces and capitalize properly
+                text = raw.replace("_", " ")
+                # Special cases for known formats
+                replacements = {
+                    "4K UHD": "4K UHD",
+                    "4K UHD BLURAY": "4K UHD + Blu-Ray",
+                    "BLURAY": "Blu-Ray",
+                    "HD DVD": "HD DVD",
+                    "UMD": "UMD",
+                    "DVD": "DVD",
+                    "VHS": "VHS",
+                    "VCD": "VCD",
+                    "SVCD": "SVCD",
+                }
+                # Check if any replacement matches
+                for key, value in replacements.items():
+                    if key.replace(" ", "_").replace("+", "").lower() == raw.replace(" ", "_").replace("+", "").lower():
+                        return value
+                    if key.lower() == text.lower():
+                        return value
+                return text
+
             total = 0
             by_format: list[dict[str, Any]] = []
             for row in _bucket_rows(
@@ -32184,7 +32210,9 @@ def register_routes(flask_app: Flask) -> None:
                 ORDER BY count DESC, label
                 """
             ):
-                by_format.append({"label": row.get("label"), "count": int(row.get("count") or 0)})
+                raw_label = row.get("label") or ""
+                formatted_label = format_label(raw_label)
+                by_format.append({"label": formatted_label, "count": int(row.get("count") or 0)})
                 total += int(row.get("count") or 0)
 
             by_decade = [
@@ -32250,8 +32278,12 @@ def register_routes(flask_app: Flask) -> None:
                     for key, count in genre_counts.items()
                 ],
                 key=lambda item: (-item["count"], item["label"]),
-            )[:20]
+            )[:15]
             if unknown_count:
+                by_genre.append({"label": "Unknown", "count": unknown_count})
+            # Sort genres by label (alphabetically) after limiting to top genres
+            by_genre = sorted(by_genre[:-1], key=lambda item: item["label"].lower())
+            if unknown_count and len(by_genre) < 16:
                 by_genre.append({"label": "Unknown", "count": unknown_count})
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
@@ -32412,6 +32444,50 @@ def register_routes(flask_app: Flask) -> None:
             )
             capture_collection_value_snapshot(conn, actor)
 
+            # Top directors
+            top_directors = []
+            if table_exists(conn, "movie_credits"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT p.name, COUNT(DISTINCT m.id)::int AS count
+                        FROM movies m
+                        JOIN movie_credits mc ON mc.movie_id = m.id
+                        JOIN people p ON p.id = mc.person_id
+                        WHERE {where} AND mc.job = 'director'
+                        GROUP BY p.name
+                        ORDER BY count DESC, p.name
+                        LIMIT 10
+                        """,
+                        params
+                    )
+                    top_directors = [
+                        {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
+                        for row in cur.fetchall()
+                    ]
+
+            # Top actors/cast
+            top_actors = []
+            if table_exists(conn, "movie_credits"):
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"""
+                        SELECT p.name, COUNT(DISTINCT m.id)::int AS count
+                        FROM movies m
+                        JOIN movie_credits mc ON mc.movie_id = m.id
+                        JOIN people p ON p.id = mc.person_id
+                        WHERE {where} AND mc.job = 'actor'
+                        GROUP BY p.name
+                        ORDER BY count DESC, p.name
+                        LIMIT 10
+                        """,
+                        params
+                    )
+                    top_actors = [
+                        {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
+                        for row in cur.fetchall()
+                    ]
+
             return response(
                 {
                     "status": "ok",
@@ -32425,6 +32501,8 @@ def register_routes(flask_app: Flask) -> None:
                     "loans": loans_stats,
                     "wishlistPriceTrend": wishlist_price_trend,
                     "collectionValue": collection_value,
+                    "topDirectors": top_directors,
+                    "topActors": top_actors,
                 }
             )
 

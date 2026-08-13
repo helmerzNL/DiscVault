@@ -15236,21 +15236,25 @@ def ui_preview_html(
         </section>
         <div class="stats-cards" id="statsCards"></div>
         <div class="stats-sections">
-          <div class="stats-block">
+          <div class="stats-block stats-pie-chart-block">
             <h2 data-next-i18n="stats.byFormat">By format</h2>
-            <div class="stats-bars" id="statsByFormat"></div>
-          </div>
-          <div class="stats-block">
-            <h2 data-next-i18n="stats.byGenre">By genre</h2>
-            <div class="stats-bars" id="statsByGenre"></div>
+            <div class="stats-pie-chart-container" id="statsByFormat"></div>
           </div>
           <div class="stats-block">
             <h2 data-next-i18n="stats.byDecade">By decade</h2>
             <div class="stats-bars" id="statsByDecade"></div>
           </div>
           <div class="stats-block">
-            <h2 data-next-i18n="stats.byRating">By rating</h2>
-            <div class="stats-bars" id="statsByRating"></div>
+            <h2 data-next-i18n="stats.byGenre">By genre</h2>
+            <div class="stats-genres" id="statsByGenre"></div>
+          </div>
+          <div class="stats-block stats-pie-chart-block">
+            <h2 data-next-i18n="stats.topDirectors">Top 10 Directors</h2>
+            <div class="stats-pie-chart-container" id="statsByTopDirectors"></div>
+          </div>
+          <div class="stats-block stats-pie-chart-block">
+            <h2 data-next-i18n="stats.topActors">Top 10 Actors</h2>
+            <div class="stats-pie-chart-container" id="statsByTopActors"></div>
           </div>
           <div class="stats-block stats-price-trend" id="statsCollectionValueChartSection">
             <div class="stats-price-toolbar">
@@ -41403,6 +41407,89 @@ def ui_preview_html(
           .join("");
       }
     }
+    function statsGenresHtml(rows) {
+      const items = (rows || []).filter((row) => (row.count || 0) > 0);
+      if (!items.length) {
+        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+      }
+      // Create a simple CSS color palette for genres
+      const colors = [
+        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
+        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A",
+        "#1890FF", "#FF85C0", "#FAAD14", "#13C2C2", "#EB2F96"
+      ];
+      return items
+        .map((row, idx) => {
+          const pct = (row.count || 0);
+          const color = colors[idx % colors.length];
+          const label = row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown"));
+          return `
+            <div class="stats-genre-item">
+              <span class="stats-genre-color" style="background-color: ${escapeHtml(color)}"></span>
+              <span class="stats-genre-label">${escapeHtml(label)}</span>
+              <span class="stats-genre-count">${escapeHtml(pct)}</span>
+            </div>
+          `;
+        })
+        .join("");
+    }
+    function statsPieChartHtml(rows, chartId) {
+      const items = (rows || []).filter((row) => (row.count || 0) > 0);
+      if (!items.length) {
+        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+      }
+      // Create pie chart with SVG
+      const total = items.reduce((sum, item) => sum + (item.count || 0), 0) || 1;
+      const colors = [
+        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
+        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A"
+      ];
+
+      let currentAngle = -90;
+      const slices = items.map((item, idx) => {
+        const percentage = (item.count || 0) / total;
+        const sliceAngle = percentage * 360;
+        const endAngle = currentAngle + sliceAngle;
+
+        const startRad = (currentAngle * Math.PI) / 180;
+        const endRad = (endAngle * Math.PI) / 180;
+
+        const x1 = 50 + 40 * Math.cos(startRad);
+        const y1 = 50 + 40 * Math.sin(startRad);
+        const x2 = 50 + 40 * Math.cos(endRad);
+        const y2 = 50 + 40 * Math.sin(endRad);
+
+        const largeArc = sliceAngle > 180 ? 1 : 0;
+        const pathData = `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`;
+        const color = colors[idx % colors.length];
+        const label = item.label || tNext("common.untitled", "Unknown");
+
+        currentAngle = endAngle;
+
+        return {
+          path: pathData,
+          color: color,
+          label: label,
+          count: item.count,
+          percentage: Math.round(percentage * 100)
+        };
+      });
+
+      const svgContent = slices.map(slice => `<path d="${escapeHtml(slice.path)}" fill="${escapeHtml(slice.color)}" stroke="white" stroke-width="2"/>`).join("");
+      const legend = slices.map(slice => `
+        <div class="stats-pie-legend-item">
+          <span class="stats-pie-color" style="background-color: ${escapeHtml(slice.color)}"></span>
+          <span>${escapeHtml(slice.label)} (${escapeHtml(slice.count)} - ${escapeHtml(slice.percentage)}%)</span>
+        </div>
+      `).join("");
+
+      return `
+        <div class="stats-pie-chart">
+          <svg viewBox="0 0 100 100" class="stats-pie-svg">${svgContent}</svg>
+          <div class="stats-pie-legend">${legend}</div>
+        </div>
+      `;
+    }
     function renderStatisticsView() {
       const data = statsState.data;
       const empty = document.getElementById("statsEmptyMessage");
@@ -41434,13 +41521,15 @@ def ui_preview_html(
           .join("");
       }
       const byFormat = document.getElementById("statsByFormat");
-      if (byFormat) byFormat.innerHTML = statsBarsHtml(data.byFormat);
+      if (byFormat) byFormat.innerHTML = statsPieChartHtml(data.byFormat, "formatPie");
       const byGenre = document.getElementById("statsByGenre");
-      if (byGenre) byGenre.innerHTML = statsBarsHtml(data.byGenre);
+      if (byGenre) byGenre.innerHTML = statsGenresHtml(data.byGenre);
       const byDecade = document.getElementById("statsByDecade");
       if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade);
-      const byRating = document.getElementById("statsByRating");
-      if (byRating) byRating.innerHTML = statsBarsHtml(data.byRating);
+      const byTopDirectors = document.getElementById("statsByTopDirectors");
+      if (byTopDirectors) byTopDirectors.innerHTML = statsPieChartHtml(data.topDirectors, "directorsPie");
+      const byTopActors = document.getElementById("statsByTopActors");
+      if (byTopActors) byTopActors.innerHTML = statsPieChartHtml(data.topActors, "actorsPie");
       renderStatsPriceTrend(data);
       renderCollectionValueChart();
       if (empty) empty.classList.add("hidden");
