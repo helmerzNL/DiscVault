@@ -343,6 +343,16 @@ jobs:
       - name: Test the statistics top-credit predicates
         run: python -m unittest tests.test_next_stats_top_credits_postgres
 
+      # What the same charts count as one thing. A shelf holds releases, so
+      # two editions of a film and a season box set are several rows, and
+      # counting rows scores a director once per disc owned. The assertions
+      # that matter are the negative ones - a shared title, a shared year, a
+      # shared director and a blank identifier must each merge nothing - since
+      # over-merging is the failure that silently deletes entries from a chart
+      # while still looking like a working page.
+      - name: Test the statistics work key and media filter
+        run: python -m unittest tests.test_next_stats_work_dedup_postgres
+
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
 
