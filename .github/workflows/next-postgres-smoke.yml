@@ -279,6 +279,17 @@ jobs:
       - name: Test crawler and AI-scraper exclusion
         run: python -m unittest tests.test_next_crawlers
 
+      # What the backup screen costs, and what it is allowed to report. The
+      # summary cache is the reason listing the archives is cheap; the older
+      # module beside it is the regression net for the validation the cache now
+      # stores, and had never been wired into any workflow. Both build their
+      # archives in a temporary directory, so neither needs the database.
+      - name: Test backup validation and the archive summary cache
+        run: >-
+          python -m unittest
+          tests.test_next_backup
+          tests.test_next_backup_summary_cache
+
       # ======================================================================
       # EVERY STEP ABOVE THIS LINE RUNS AGAINST AN EMPTY DATABASE.
       # A test that reads or writes any table belongs BELOW it, or it dies

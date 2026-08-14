@@ -36245,7 +36245,14 @@ def register_routes(flask_app: Flask) -> None:
                     latest_jobs = [job_row(row) for row in cur.fetchall()]
         data_dir = legacy_data_dir()
         backup_dir = backup_storage_dir(data_dir)
-        backups = list_backup_archives(backup_dir, limit=10)
+        # Each archive is summarised once and read from a sidecar afterwards.
+        # `?refresh=1` re-reads and re-hashes them, for an operator who suspects
+        # an archive changed in a way its size and timestamp did not record.
+        backups = list_backup_archives(
+            backup_dir,
+            limit=10,
+            refresh=parse_bool_value(request.args.get("refresh"), default=False),
+        )
         return response(
             {
                 "status": "ok",
