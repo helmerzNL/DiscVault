@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Alle",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "Tv-serie",
+  "stats.showInLibrary": "Vis i biblioteket",
   "uiPreview.activity": "Aktivitet",
   "uiPreview.activityDesign": "Lys og mork visning er aktive i forhåndsvisningen.",
   "uiPreview.activityMigration": "Migrerede samlingsdata er tilgaengelige i PostgreSQL.",

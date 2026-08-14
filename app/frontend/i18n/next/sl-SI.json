@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Vse",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "TV-serija",
+  "stats.showInLibrary": "Prikaži v knjižnici",
   "uiPreview.activity": "Dejavnost",
   "uiPreview.activityDesign": "Svetli in temni način videza sta omogočena za predogled.",
   "uiPreview.activityMigration": "Preseljeni podatki zbirke so na voljo v PostgreSQL.",

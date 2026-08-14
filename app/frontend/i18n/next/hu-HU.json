@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Mind",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "Tévésorozat",
+  "stats.showInLibrary": "Megjelenítés a könyvtárban",
   "uiPreview.activity": "Tevékenység",
   "uiPreview.activityDesign": "A világos és sötét megjelenési módok engedélyezve vannak az előnézethez.",
   "uiPreview.activityMigration": "A migrált gyűjteményadatok elérhetők a PostgreSQL-ben.",

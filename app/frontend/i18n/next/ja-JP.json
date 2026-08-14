@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "すべて",
   "stats.mediaMovies": "映画",
   "stats.mediaShows": "テレビ番組",
+  "stats.showInLibrary": "ライブラリで表示",
   "uiPreview.activity": "アクティビティ",
   "uiPreview.activityDesign": "プレビューではライト表示とダーク表示が有効です。",
   "uiPreview.activityMigration": "移行済みのコレクションデータは PostgreSQL で利用できます。",

@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Alla",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "TV-serie",
+  "stats.showInLibrary": "Visa i biblioteket",
   "uiPreview.activity": "Aktivitet",
   "uiPreview.activityDesign": "Ljust och morkt lage ar aktiva for forhandsvisningen.",
   "uiPreview.activityMigration": "Migrerad samlingsdata finns i PostgreSQL.",

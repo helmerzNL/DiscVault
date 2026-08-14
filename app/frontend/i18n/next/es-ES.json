@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Todo",
   "stats.mediaMovies": "Película",
   "stats.mediaShows": "Serie",
+  "stats.showInLibrary": "Ver en la biblioteca",
   "uiPreview.activity": "Actividad",
   "uiPreview.activityDesign": "Los modos claro y oscuro estan activos para la vista previa.",
   "uiPreview.activityMigration": "Los datos de coleccion migrados estan disponibles en PostgreSQL.",

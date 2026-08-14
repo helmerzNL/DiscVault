@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Sve",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "TV-serija",
+  "stats.showInLibrary": "Prikaži u biblioteci",
   "uiPreview.activity": "Aktivnost",
   "uiPreview.activityDesign": "Svijetli i tamni načini izgleda omogućeni su za pregled.",
   "uiPreview.activityMigration": "Migrirani podaci zbirke dostupni su u PostgreSQL-u.",

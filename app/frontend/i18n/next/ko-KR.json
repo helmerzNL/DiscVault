@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "전체",
   "stats.mediaMovies": "영화",
   "stats.mediaShows": "TV 프로그램",
+  "stats.showInLibrary": "라이브러리에서 보기",
   "uiPreview.activity": "활동",
   "uiPreview.activityDesign": "미리 보기에서 밝은 모드와 어두운 모드가 활성화되어 있습니다.",
   "uiPreview.activityMigration": "마이그레이션된 컬렉션 데이터는 PostgreSQL에서 사용할 수 있습니다.",

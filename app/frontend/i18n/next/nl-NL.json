@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Alles",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "TV-serie",
+  "stats.showInLibrary": "Toon in bibliotheek",
   "uiPreview.activity": "Activiteit",
   "uiPreview.activityDesign": "Lichte en donkere weergave staan aan voor de preview.",
   "uiPreview.activityMigration": "Gemigreerde collectiedata is beschikbaar in PostgreSQL.",

@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Kõik",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "Telesari",
+  "stats.showInLibrary": "Näita teegis",
   "uiPreview.activity": "Tegevus",
   "uiPreview.activityDesign": "Hele ja tume välimuserežiim on eelvaates lubatud.",
   "uiPreview.activityMigration": "Migreeritud kogu andmed on PostgreSQL-is saadaval.",

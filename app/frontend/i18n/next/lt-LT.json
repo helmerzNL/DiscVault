@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Viskas",
   "stats.mediaMovies": "Filmas",
   "stats.mediaShows": "TV serialas",
+  "stats.showInLibrary": "Rodyti bibliotekoje",
   "uiPreview.activity": "Veikla",
   "uiPreview.activityDesign": "Šviesus ir tamsus išvaizdos režimai įjungti peržiūrai.",
   "uiPreview.activityMigration": "Migruoti kolekcijos duomenys pasiekiami PostgreSQL.",
