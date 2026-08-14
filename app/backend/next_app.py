@@ -325,6 +325,7 @@ try:
     from .next_export import register_next_export_routes
     from .next_static import NEXT_SCRIPT_URL_PREFIX
     from .next_static import register_next_static_routes
+    from .next_crawlers import register_next_crawler_routes
     from .next_technical_specs import derive_release_technical_from_discs
     from .next_technical_specs import disc_union_snapshot
     from .next_technical_specs import drop_disc_derived_edits
@@ -614,6 +615,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_export import register_next_export_routes
     from next_static import NEXT_SCRIPT_URL_PREFIX
     from next_static import register_next_static_routes
+    from next_crawlers import register_next_crawler_routes
     from next_technical_specs import derive_release_technical_from_discs
     from next_technical_specs import disc_union_snapshot
     from next_technical_specs import drop_disc_derived_edits
@@ -1320,27 +1322,12 @@ def pwa_manifest_payload(asset_prefix: str = "/api/next/assets", start_url: str 
     }
 
 
-def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "/manifest.json") -> str:
-    assets = asset_prefix.rstrip("/")
-    return f"""
-  <meta name="application-name" content="DiscVault">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="DiscVault">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="format-detection" content="telephone=no">
-  <meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#090F1A" media="(prefers-color-scheme: dark)">
-  <meta name="msapplication-TileColor" content="#090F1A">
-  <meta name="msapplication-TileImage" content="{assets}/pwa-icon-192.png">
-  <link rel="manifest" href="{manifest_href}">
-  <link rel="apple-touch-icon" sizes="152x152" href="{assets}/apple-touch-icon-152.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="{assets}/apple-touch-icon-167.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="{assets}/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="{assets}/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="{assets}/pwa-icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="{assets}/pwa-icon-512.png">
-  <link rel="mask-icon" href="{assets}/icon.svg" color="#2A6FD6">""".rstrip()
+# ``pwa_head_tags`` used to be defined here as well as in ``next_push``, where
+# it moved. The copy was dead — the re-export a few thousand lines down
+# (``pwa_head_tags = _next_push.pwa_head_tags``) rebinds the name at import time,
+# so nothing could ever reach this one — but a second copy of the app's <head> is
+# a trap: adding the robots meta tag to the live one would have left this one
+# silently disagreeing about whether the app is indexable.
 
 
 def next_i18n_dir() -> Path:
@@ -23721,6 +23708,10 @@ _HTML_SHELL_ENDPOINTS = {"next_app_shell", "ui_preview"}
 
 
 def register_routes(flask_app: Flask) -> None:
+    # First, so its before_request gate answers a crawler before the auth gate
+    # opens a database connection for it. Flask runs before_request hooks in
+    # registration order, and a refused crawler must cost nothing.
+    register_next_crawler_routes(flask_app, connect=connect)
     register_next_auth_routes(
         flask_app,
         connect=connect,

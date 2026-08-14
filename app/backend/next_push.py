@@ -21,6 +21,7 @@ import jwt
 try:  # pragma: no cover - exercised indirectly by both layouts
     from .next_audit import audit_event
     from .next_common import NextApiError, json_ready, parse_bool_value, parse_uuid, response, table_exists
+    from .next_crawlers import ROBOTS_META_TAG
     from .next_import import clean_text
     from .next_notifications import (
         NOTIFICATION_PREF_DEFAULTS,
@@ -31,6 +32,7 @@ try:  # pragma: no cover - exercised indirectly by both layouts
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_audit import audit_event
     from next_common import NextApiError, json_ready, parse_bool_value, parse_uuid, response, table_exists
+    from next_crawlers import ROBOTS_META_TAG
     from next_import import clean_text
     from next_notifications import (
         NOTIFICATION_PREF_DEFAULTS,
@@ -173,6 +175,7 @@ def pwa_manifest_payload(asset_prefix: str = "/api/next/assets", start_url: str 
 def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "/manifest.json") -> str:
     assets = asset_prefix.rstrip("/")
     return f"""
+{ROBOTS_META_TAG}
   <meta name="application-name" content="DiscVault">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
