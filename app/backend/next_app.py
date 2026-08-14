@@ -717,6 +717,30 @@ MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
 IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
 IMPORT_ARCHIVE_EXTENSIONS = {".csv", ".tsv", ".json", ".xml"}
 MOVIE_ARTWORK_KINDS = {"poster", "backdrop"}
+
+# The user's own photographs of a release, container or series -- the case front
+# and back, the spine, the insert, the disc. Deliberately a `media_assets.kind`
+# of its own rather than a poster with a flag: a poster is a candidate for the
+# shelf cover and competes for that slot, while a scan is a record of the object
+# and never enters that competition. Sharing the kind would have made every
+# "list the posters" query answer with somebody's photograph of a spine.
+SCAN_MEDIA_KIND = "scan"
+SCAN_MEDIA_ROLE = "scan"
+UPLOADABLE_ARTWORK_KINDS = MOVIE_ARTWORK_KINDS | {SCAN_MEDIA_KIND}
+
+# What part of the packaging an image shows. This is a *display* vocabulary, not
+# a constraint: a client sending a word this build has not heard of gets an image
+# with an unfamiliar caption, which is recoverable, instead of a 400 that loses
+# the one photograph nobody can take again.
+SCAN_LABELS = ("front", "back", "spine", "insert", "disc", "other")
+MAX_SCAN_LABEL_LENGTH = 40
+
+# How many own images one entity may hold, beside its poster and backdrop.
+# Overridable per instance through `artwork_scan_limit_per_entity`; the ceiling
+# below is a guard against a typo turning into an unbounded disk, not a policy.
+DEFAULT_SCAN_LIMIT_PER_ENTITY = 10
+MAX_SCAN_LIMIT_PER_ENTITY = 200
+
 WISHLIST_POSTER_ASSET_SNAPSHOT_KEY = "_localPosterAssetId"
 NOTIFICATION_PREF_DEFAULTS: dict[str, bool] = {
     "app_updates": True,
@@ -15685,6 +15709,8 @@ def entity_media_asset_entities(
                 ma.sha256,
                 ma.metadata,
                 em.role,
+                em.label,
+                em.client_id,
                 em.is_primary,
                 em.sort_order,
                 em.hidden_at
@@ -15693,7 +15719,11 @@ def entity_media_asset_entities(
             WHERE em.entity_type=%s AND em.entity_id=%s
               AND em.deleted_at IS NULL
               {hidden_filter}
-            ORDER BY em.role, em.sort_order, ma.kind
+            -- `ma.id` closes the order. Without it, images sharing a role and a
+            -- sort_order -- which every batch upload produces -- come back in
+            -- whatever order the plan happened to build, so two devices draw
+            -- the same set in a different sequence with nothing having changed.
+            ORDER BY em.role, em.sort_order, ma.kind, ma.id
             """,
             (entity_type, entity_id),
         )
@@ -16177,6 +16207,15 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         "mediaAssets": entity_media_asset_entities(
             conn, "movie", movie_id, include_hidden=True
         ),
+        # The user's own images, read separately from `mediaAssets` rather than
+        # filtered out of it. `mediaAssets` carries hidden rows on a movie and
+        # not on a container or a series, so a shared read would have made an
+        # image hidden on one page unreachable -- and therefore impossible to
+        # un-hide -- on the other two.
+        "ownImages": entity_scan_entities(conn, "movie", movie_id),
+        # The ceiling, so the page can say "7 of 10" instead of only reporting
+        # the refusal after the eleventh upload.
+        "ownImageLimit": scan_limit_per_entity(conn),
         "digitalItems": movie_digital_item_entities(conn, movie_id),
         "metadataDebug": metadata_debug,
     }
@@ -17129,8 +17168,8 @@ def uploaded_artwork_file() -> tuple[Any, str | None]:
 
 
 def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
-    if kind not in MOVIE_ARTWORK_KINDS:
-        raise NextApiError("kind must be poster or backdrop", 400)
+    if kind not in UPLOADABLE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster, backdrop or scan", 400)
     try:
         upload.stream.seek(0)
         image = Image.open(upload.stream)
@@ -17157,7 +17196,7 @@ def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
         raise NextApiError("Artwork upload may not exceed 20 MB after processing", 413)
 
     digest = hashlib.sha256(data).hexdigest()
-    folder = "posters" if kind == "poster" else "backdrops"
+    folder = {"poster": "posters", "backdrop": "backdrops"}.get(kind, "scans")
     data_dir = legacy_data_dir().resolve()
     target_dir = data_dir / "media" / folder / "original" / digest[:2] / digest[2:4]
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -17892,6 +17931,720 @@ def create_uploaded_container_media_asset(
         upload_info=upload_info,
         primary=primary,
         actor=actor,
+    )
+
+
+# ---------------------------------------------------------------------------
+# The user's own images (`role='scan'` on `entity_media`)
+#
+# These are the only pictures in DiscVault that no source can supply a second
+# time, and that shapes every rule below. Two of them are worth stating once
+# here rather than at each call site:
+#
+# 1. **The set is a union.** An upload adds; it never replaces what another
+#    device uploaded. Five images pushed from a phone and three from the PWA
+#    make eight.
+# 2. **A genuine conflict is settled by arrival order.** Which image is the
+#    representative one, its place in the order, hidden or not, deleted or not
+#    -- for those the last writer wins, and the arbiter is the server revision
+#    rather than any device's clock, because the server is the only clock both
+#    sides already share.
+#
+# The two are compatible because of one asymmetry, and it is the whole design:
+# **downward the wire carries a full snapshot per entity, upward it carries
+# single acts.** A client that pushed its own idea of the whole set would delete
+# the other device's uploads every time it fell behind. See
+# `emit_entity_scan_change` for the downward half.
+# ---------------------------------------------------------------------------
+
+
+def scan_limit_per_entity(conn) -> int:
+    """How many own images one entity may hold.
+
+    A lowered limit never removes, hides or unsyncs an image already stored --
+    it only refuses the next one. That is the same rule the paid tiers follow:
+    a gate may stop a record being created and may never withhold one that
+    exists.
+    """
+    raw = app_setting_value(conn, "artwork_scan_limit_per_entity", DEFAULT_SCAN_LIMIT_PER_ENTITY)
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_SCAN_LIMIT_PER_ENTITY
+    if value < 0:
+        return 0
+    return min(value, MAX_SCAN_LIMIT_PER_ENTITY)
+
+
+def clean_scan_label(value: Any) -> str:
+    """Normalise a packaging label without rejecting an unknown one.
+
+    Lower-cased and trimmed so `Front` and `front` are one label, then truncated
+    rather than refused. `SCAN_LABELS` is what the UI offers; it is not a
+    whitelist, for the reason given at its definition.
+    """
+    text = (clean_text(value) or "").strip().lower()
+    return text[:MAX_SCAN_LABEL_LENGTH]
+
+
+def entity_scan_entities(
+    conn,
+    entity_type: str,
+    entity_id: UUID,
+    *,
+    include_deleted: bool = False,
+) -> list[dict[str, Any]]:
+    """Every own image of one entity, in a total order.
+
+    `sort_order` alone is not an order: images uploaded in one batch share one,
+    and two devices would then draw the same set in different sequences with
+    nothing having changed between them. `created_at` and the media id complete
+    it.
+
+    `include_deleted` is for the sync snapshot, which has to carry the
+    tombstones -- a delete that travels as an absence is indistinguishable from
+    a change that has not arrived yet, and the receiver would resurrect it.
+    """
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return []
+    deleted_filter = "" if include_deleted else "AND em.deleted_at IS NULL"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                ma.id,
+                ma.kind,
+                ma.storage_backend,
+                ma.storage_key,
+                ma.source_url,
+                ma.provider_id,
+                ma.content_type,
+                ma.width,
+                ma.height,
+                ma.size_bytes,
+                ma.sha256,
+                em.role,
+                em.label,
+                em.client_id,
+                em.is_primary,
+                em.sort_order,
+                em.hidden_at,
+                em.deleted_at,
+                em.created_at,
+                em.updated_at
+            FROM entity_media em
+            JOIN media_assets ma ON ma.id = em.media_id
+            WHERE em.entity_type=%s
+              AND em.entity_id=%s
+              AND em.role=%s
+              {deleted_filter}
+            ORDER BY em.sort_order, em.created_at, ma.id
+            """,
+            (entity_type, entity_id, SCAN_MEDIA_ROLE),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        row["url"] = media_asset_public_url(row)
+        row["hidden"] = bool(row.get("hidden_at"))
+        row["deleted"] = bool(row.get("deleted_at"))
+    return rows
+
+
+#: One sync entity type per owner, mirroring `movie_identifier` and
+#: `container_membership`: the change is keyed by the entity that owns the set,
+#: and its payload is that entity's whole set.
+SCAN_SYNC_ENTITY_TYPES = {
+    "movie": "movie_scans",
+    "container": "container_scans",
+    "series": "series_scans",
+}
+
+
+def emit_entity_scan_change(conn, entity_type: str, entity_id: UUID) -> int:
+    """Publish one entity's complete set of own images as a single change.
+
+    A snapshot rather than a per-image event, and that is what makes the last
+    writer win without any field-level merge: whoever wrote last wrote the
+    snapshot everybody receives, and a receiver replaces its local set for that
+    entity wholesale. Out-of-order or duplicated delivery converges on the same
+    state because the highest revision is complete by construction.
+
+    Tombstones ride along (`deleted: true`), because a delete that travels as an
+    absence cannot be told apart from a change still in flight.
+    """
+    sync_entity_type = SCAN_SYNC_ENTITY_TYPES.get(entity_type)
+    if not sync_entity_type:
+        return 0
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type=sync_entity_type,
+        entity_id=str(entity_id),
+        operation="upsert",
+        payload={
+            "entityType": entity_type,
+            "entityId": str(entity_id),
+            "images": entity_scan_sync_rows(conn, entity_type, entity_id, revision=revision),
+        },
+    )
+    return revision
+
+
+def entity_scan_sync_rows(
+    conn,
+    entity_type: str,
+    entity_id: UUID,
+    *,
+    revision: int = 0,
+) -> list[dict[str, Any]]:
+    """The wire shape of one entity's own images.
+
+    `sha256` and `sizeBytes` are on the wire so a client can tell "I already
+    hold these bytes" from "I must download them" without fetching first. That
+    matters more here than anywhere else in the payload: these images live on
+    phones, and re-downloading a set of ten photographs on every reconciliation
+    is the difference between a sync that runs on mobile data and one that does
+    not.
+
+    The URL stays a **server-relative path**. Absolutising it here would bake
+    whichever hostname this request arrived on into a value several clients
+    share; resolving it belongs at the edge that knows which server it is
+    talking to (`server-hosted-asset-paths.md`).
+    """
+    rows = entity_scan_entities(conn, entity_type, entity_id, include_deleted=True)
+    payload: list[dict[str, Any]] = []
+    for row in rows:
+        payload.append(
+            {
+                "mediaId": str(row.get("id")),
+                "clientId": row.get("client_id"),
+                "entityType": entity_type,
+                "entityId": str(entity_id),
+                "role": SCAN_MEDIA_ROLE,
+                "label": row.get("label") or "",
+                "url": row.get("url") or "",
+                "sha256": row.get("sha256"),
+                "sizeBytes": row.get("size_bytes"),
+                "width": row.get("width"),
+                "height": row.get("height"),
+                "contentType": row.get("content_type"),
+                "isPrimary": bool(row.get("is_primary")),
+                "sortOrder": int(row.get("sort_order") or 0),
+                "hidden": bool(row.get("hidden_at")),
+                "deleted": bool(row.get("deleted_at")),
+                "deletedAt": row.get("deleted_at"),
+                "createdAt": row.get("created_at"),
+                "updatedAt": row.get("updated_at"),
+                "revision": revision,
+            }
+        )
+    return payload
+
+
+def all_entity_scan_entities(conn, *, limit: int = 1000) -> list[dict[str, Any]]:
+    """Every entity that holds own images, each with its complete set.
+
+    Grouped exactly as the delta groups them, so a bootstrap and a delta hand a
+    client the same object and it needs one apply path rather than two.
+
+    Tombstones are **not** in the bootstrap. A snapshot is the whole truth for a
+    client that has nothing yet, and a record of things that no longer exist is
+    only meaningful to one that does.
+    """
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT entity_type, entity_id
+            FROM entity_media
+            WHERE role=%s AND deleted_at IS NULL
+            GROUP BY entity_type, entity_id
+            ORDER BY entity_type, entity_id
+            LIMIT %s
+            """,
+            (SCAN_MEDIA_ROLE, limit),
+        )
+        owners = cur.fetchall()
+    payload: list[dict[str, Any]] = []
+    for owner in owners:
+        entity_type = str(owner["entity_type"])
+        if entity_type not in SCAN_SYNC_ENTITY_TYPES:
+            continue
+        entity_id = owner["entity_id"]
+        images = [
+            row
+            for row in entity_scan_sync_rows(conn, entity_type, entity_id)
+            if not row.get("deleted")
+        ]
+        if not images:
+            continue
+        payload.append(
+            {
+                "entityType": entity_type,
+                "entityId": str(entity_id),
+                "images": images,
+            }
+        )
+    return payload
+
+
+def scan_entity_exists(conn, entity_type: str, entity_id: UUID) -> bool:
+    entity_table = entity_artwork_table(entity_type)
+    if not table_exists(conn, entity_table):
+        return False
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT id FROM {entity_table} WHERE id=%s", (entity_id,))
+        return bool(cur.fetchone())
+
+
+def _clear_other_primary_scans(conn, entity_type: str, entity_id: UUID, keep_media_id: UUID | None) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=false,
+                updated_at=now()
+            WHERE entity_type=%s
+              AND entity_id=%s
+              AND role=%s
+              AND is_primary=true
+              AND deleted_at IS NULL
+              AND (%s::uuid IS NULL OR media_id <> %s::uuid)
+            """,
+            (entity_type, entity_id, SCAN_MEDIA_ROLE, keep_media_id, keep_media_id),
+        )
+
+
+def _scan_link_row(conn, entity_type: str, entity_id: UUID, media_id: UUID) -> dict[str, Any] | None:
+    rows = entity_scan_entities(conn, entity_type, entity_id, include_deleted=True)
+    for row in rows:
+        if str(row.get("id")) == str(media_id):
+            return row
+    return None
+
+
+def _scan_result(conn, entity_type: str, entity_id: UUID, revision: int, **extra: Any) -> dict[str, Any]:
+    """The one answer every scan route returns.
+
+    Always the whole set, never just the row that moved. A caller that applied a
+    single delta would have to reconstruct the rest of the state anyway, and the
+    snapshot is what the sync feed carries -- returning something different here
+    is how the two would come to disagree about what "the images" are.
+    """
+    return {
+        "entityType": entity_type,
+        "entityId": str(entity_id),
+        "images": entity_scan_sync_rows(conn, entity_type, entity_id, revision=revision),
+        "limit": scan_limit_per_entity(conn),
+        "revision": revision,
+        **extra,
+    }
+
+
+def create_uploaded_entity_scan(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    upload_info: dict[str, Any],
+    label: str = "",
+    client_id: str = "",
+    primary: bool = False,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Store one own image against a movie, container or series.
+
+    Idempotent along two independent paths, which is what makes an upload safe
+    to retry over a connection that dropped mid-request:
+
+    - **the client token** (`client_id`, set-once exactly as `movies.client_id`
+      is). A retry after a timeout resolves to the row the first attempt already
+      created.
+    - **the content hash.** The same bytes are one `media_assets` row and one
+      link, so two devices photographing from the same file converge instead of
+      producing a duplicate pair.
+
+    The second path carries a trap that is easy to write and hard to see: if the
+    link was soft-deleted, a plain `DO NOTHING` leaves it deleted, and the user
+    uploads, gets a `201`, and sees nothing. The conflict clause below revives
+    the row rather than skipping it.
+    """
+    entity_table = entity_artwork_table(entity_type)
+    if (
+        not table_exists(conn, entity_table)
+        or not table_exists(conn, "entity_media")
+        or not table_exists(conn, "media_assets")
+    ):
+        raise NextApiError("Media asset tables are not available", 503)
+    if not scan_entity_exists(conn, entity_type, entity_id):
+        raise NextApiError("Item not found", 404)
+
+    storage_key = clean_text(upload_info.get("storageKey")) or ""
+    if not storage_key:
+        raise NextApiError("Uploaded image did not produce a storage key", 500)
+    label = clean_scan_label(label)
+    client_id = (clean_text(client_id) or "")[:100]
+    media_id = media_asset_uuid(storage_key)
+
+    with conn.cursor() as cur:
+        # A token already spent on this entity means this is a retry, not a new
+        # image; on a *different* entity it is a client bug, and the token is
+        # then ignored rather than raising -- losing the photograph over a
+        # bookkeeping value would be the worse failure (sync-contract §4.6).
+        existing_by_token = None
+        if client_id:
+            cur.execute(
+                """
+                SELECT entity_type, entity_id, media_id
+                FROM entity_media
+                WHERE client_id=%s
+                """,
+                (client_id,),
+            )
+            existing_by_token = cur.fetchone()
+            if existing_by_token and (
+                str(existing_by_token["entity_type"]) != entity_type
+                or str(existing_by_token["entity_id"]) != str(entity_id)
+            ):
+                client_id = ""
+                existing_by_token = None
+
+        cur.execute(
+            """
+            SELECT media_id, deleted_at
+            FROM entity_media
+            WHERE entity_type=%s AND entity_id=%s AND media_id=%s AND role=%s
+            """,
+            (entity_type, entity_id, media_id, SCAN_MEDIA_ROLE),
+        )
+        existing_link = cur.fetchone()
+        already_here = bool(existing_link and not existing_link.get("deleted_at")) or bool(existing_by_token)
+
+        # The ceiling counts only what is live, and only when this upload would
+        # actually add to it. A re-upload of an image already on this entity is
+        # not a new one and must not be refused at the boundary.
+        if not already_here:
+            limit = scan_limit_per_entity(conn)
+            cur.execute(
+                """
+                SELECT COUNT(*) AS live
+                FROM entity_media
+                WHERE entity_type=%s AND entity_id=%s AND role=%s AND deleted_at IS NULL
+                """,
+                (entity_type, entity_id, SCAN_MEDIA_ROLE),
+            )
+            live = int((cur.fetchone() or {}).get("live") or 0)
+            if live >= limit:
+                raise NextApiError(
+                    f"This item already holds the maximum of {limit} own images",
+                    409,
+                )
+
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id, kind, variant, storage_backend, storage_key, source_url,
+                provider_id, content_type, width, height, size_bytes, sha256, metadata
+            )
+            VALUES (%s, %s, 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                provider_id=EXCLUDED.provider_id,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes
+            RETURNING id
+            """,
+            (
+                media_id,
+                SCAN_MEDIA_KIND,
+                storage_key,
+                upload_info.get("contentType"),
+                upload_info.get("width"),
+                upload_info.get("height"),
+                upload_info.get("sizeBytes"),
+                upload_info.get("sha256"),
+                Jsonb(
+                    json_ready(
+                        {
+                            "source": "upload",
+                            "originalFilename": upload_info.get("originalFilename"),
+                            "uploadedBy": actor_job_payload(actor or {}) if actor else None,
+                        }
+                    )
+                ),
+            ),
+        )
+        stored = cur.fetchone()
+        media_id = stored["id"] if stored else media_id
+
+        cur.execute(
+            """
+            SELECT COALESCE(MAX(sort_order), 0) + 1 AS next_sort
+            FROM entity_media
+            WHERE entity_type=%s AND entity_id=%s AND role=%s AND deleted_at IS NULL
+            """,
+            (entity_type, entity_id, SCAN_MEDIA_ROLE),
+        )
+        sort_order = int((cur.fetchone() or {}).get("next_sort") or 1)
+
+        cur.execute(
+            """
+            INSERT INTO entity_media (
+                entity_type, entity_id, media_id, role, label, client_id,
+                is_primary, sort_order, created_by, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, NULLIF(%s, ''), %s, %s, %s, now())
+            ON CONFLICT (entity_type, entity_id, media_id, role) DO UPDATE SET
+                label=COALESCE(NULLIF(EXCLUDED.label, ''), entity_media.label),
+                -- Set-once: the first token to claim this row keeps it, so a
+                -- second device matching on content does not renumber a record
+                -- the first one is still tracking.
+                client_id=COALESCE(entity_media.client_id, EXCLUDED.client_id),
+                is_primary=EXCLUDED.is_primary OR entity_media.is_primary,
+                deleted_at=NULL,
+                deleted_by=NULL,
+                purge_after=NULL,
+                hidden_at=NULL,
+                restore_metadata='{}'::jsonb,
+                updated_at=now()
+            RETURNING (xmax = 0) AS inserted
+            """,
+            (
+                entity_type,
+                entity_id,
+                media_id,
+                SCAN_MEDIA_ROLE,
+                label,
+                client_id,
+                bool(primary),
+                sort_order,
+                actor.get("id") if actor else None,
+            ),
+        )
+        inserted_row = cur.fetchone()
+        created = bool(inserted_row and inserted_row.get("inserted"))
+
+    if primary:
+        _clear_other_primary_scans(conn, entity_type, entity_id, media_id)
+
+    with conn.cursor() as cur:
+        cur.execute(f"UPDATE {entity_table} SET updated_at=now() WHERE id=%s", (entity_id,))
+
+    revision = emit_entity_scan_change(conn, entity_type, entity_id)
+    return _scan_result(
+        conn,
+        entity_type,
+        entity_id,
+        revision,
+        mediaId=str(media_id),
+        created=created,
+    )
+
+
+def update_entity_scan(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    label: str | None = None,
+    sort_order: int | None = None,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Change what an own image is called, or where it sits in the order."""
+    entity_artwork_table(entity_type)
+    if not table_exists(conn, "entity_media"):
+        raise NextApiError("Media asset tables are not available", 503)
+    if _scan_link_row(conn, entity_type, entity_id, media_id) is None:
+        raise NextApiError("Image is not linked to this item", 404)
+    if label is None and sort_order is None:
+        raise NextApiError("Send a label or a sortOrder to change", 400)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET label=COALESCE(%s, label),
+                sort_order=COALESCE(%s, sort_order),
+                updated_at=now()
+            WHERE entity_type=%s AND entity_id=%s AND media_id=%s AND role=%s
+              AND deleted_at IS NULL
+            """,
+            (
+                clean_scan_label(label) if label is not None else None,
+                sort_order,
+                entity_type,
+                entity_id,
+                media_id,
+                SCAN_MEDIA_ROLE,
+            ),
+        )
+        if not cur.rowcount:
+            raise NextApiError("Image is not linked to this item", 404)
+    revision = emit_entity_scan_change(conn, entity_type, entity_id)
+    return _scan_result(conn, entity_type, entity_id, revision, mediaId=str(media_id))
+
+
+def set_primary_entity_scan(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Mark one own image as the representative one of its set.
+
+    This deliberately does **not** write the entity's `poster_url` /
+    `poster_locked`. Those two carry the shelf cover, and the sync contract has
+    one stored truth behind that pin already spelled four ways across the
+    server, the wire and the clients; a fifth writer would be the mistake that
+    section exists to prevent. "Primary" here means: the one image that stands
+    for the user's own photographs of this release.
+    """
+    entity_artwork_table(entity_type)
+    if not table_exists(conn, "entity_media"):
+        raise NextApiError("Media asset tables are not available", 503)
+    row = _scan_link_row(conn, entity_type, entity_id, media_id)
+    if row is None or row.get("deleted_at"):
+        raise NextApiError("Image is not linked to this item", 404)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET is_primary=true,
+                hidden_at=NULL,
+                updated_at=now()
+            WHERE entity_type=%s AND entity_id=%s AND media_id=%s AND role=%s
+              AND deleted_at IS NULL
+            """,
+            (entity_type, entity_id, media_id, SCAN_MEDIA_ROLE),
+        )
+    _clear_other_primary_scans(conn, entity_type, entity_id, media_id)
+    revision = emit_entity_scan_change(conn, entity_type, entity_id)
+    return _scan_result(conn, entity_type, entity_id, revision, mediaId=str(media_id))
+
+
+def set_entity_scan_hidden(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    hidden: bool,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Hide an own image from the gallery without discarding it.
+
+    Hiding is not deleting and must not become it: the image keeps syncing, it
+    stays in the backup, and it can be brought back. What it loses is its place
+    on the page -- and, if it held it, being the representative image.
+    """
+    entity_artwork_table(entity_type)
+    if not table_exists(conn, "entity_media"):
+        raise NextApiError("Media asset tables are not available", 503)
+    row = _scan_link_row(conn, entity_type, entity_id, media_id)
+    if row is None or row.get("deleted_at"):
+        raise NextApiError("Image is not linked to this item", 404)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET hidden_at=CASE WHEN %s THEN now() ELSE NULL END,
+                is_primary=CASE WHEN %s THEN false ELSE is_primary END,
+                updated_at=now()
+            WHERE entity_type=%s AND entity_id=%s AND media_id=%s AND role=%s
+              AND deleted_at IS NULL
+            """,
+            (hidden, hidden, entity_type, entity_id, media_id, SCAN_MEDIA_ROLE),
+        )
+        if not cur.rowcount:
+            raise NextApiError("Image is not linked to this item", 404)
+    revision = emit_entity_scan_change(conn, entity_type, entity_id)
+    return _scan_result(conn, entity_type, entity_id, revision, mediaId=str(media_id), hidden=hidden)
+
+
+def delete_entity_scan(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Remove an own image, through the artwork trash rather than outright.
+
+    Soft, for two reasons that both matter more here than for a poster. The
+    tombstone is what tells the other devices to stop showing it -- an absence
+    would read as "not received yet" and the image would come straight back. And
+    the retention window is the only undo there can be for a photograph that no
+    source can re-supply.
+
+    The stored file is never touched here even when nothing links to it any
+    more: `media_assets` is content-addressed, so the same bytes may be an image
+    of another release. The trash sweeper owns that decision.
+    """
+    entity_table = entity_artwork_table(entity_type)
+    if not table_exists(conn, "entity_media"):
+        raise NextApiError("Media asset tables are not available", 503)
+    row = _scan_link_row(conn, entity_type, entity_id, media_id)
+    if row is None or row.get("deleted_at"):
+        raise NextApiError("Image is not linked to this item", 404)
+    settings = artwork_trash_settings(conn)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE entity_media
+            SET deleted_at=now(),
+                deleted_by=%s,
+                purge_after=CASE WHEN %s THEN now() + (%s)::interval ELSE NULL END,
+                is_primary=false,
+                hidden_at=NULL,
+                restore_metadata=%s,
+                updated_at=now()
+            WHERE entity_type=%s AND entity_id=%s AND media_id=%s AND role=%s
+              AND deleted_at IS NULL
+            RETURNING purge_after
+            """,
+            (
+                actor.get("id") if actor else None,
+                settings["purgeEnabled"],
+                settings["retentionInterval"],
+                Jsonb(
+                    json_ready(
+                        {
+                            "wasPrimary": bool(row.get("is_primary")),
+                            "sortOrder": row.get("sort_order"),
+                            "label": row.get("label"),
+                        }
+                    )
+                ),
+                entity_type,
+                entity_id,
+                media_id,
+                SCAN_MEDIA_ROLE,
+            ),
+        )
+        trash_row = cur.fetchone()
+        if not trash_row:
+            raise NextApiError("Image is not linked to this item", 404)
+        cur.execute(f"UPDATE {entity_table} SET updated_at=now() WHERE id=%s", (entity_id,))
+    revision = emit_entity_scan_change(conn, entity_type, entity_id)
+    return _scan_result(
+        conn,
+        entity_type,
+        entity_id,
+        revision,
+        mediaId=str(media_id),
+        trashed=True,
+        purgeAfter=trash_row.get("purge_after"),
+        purgeEnabled=settings["purgeEnabled"],
     )
 
 
@@ -19724,6 +20477,8 @@ def container_detail_entity(conn, container_id: UUID, actor: dict[str, Any] | No
         "memberMovies": container_member_movie_entities(conn, container_id, actor=actor),
         "collectionItems": collection_item_entities(conn, container_id, actor=actor),
         "mediaAssets": entity_media_asset_entities(conn, "container", container_id),
+        "ownImages": entity_scan_entities(conn, "container", container_id),
+        "ownImageLimit": scan_limit_per_entity(conn),
         "aggregateMovies": aggregate_movies,
         "aggregateMediaAssets": aggregate_assets,
         "aggregateVideos": aggregate_videos,
@@ -19836,6 +20591,8 @@ def series_detail_entity(
         "discs": discs,
         "seasonCoverage": coverage,
         "mediaAssets": own_assets,
+        "ownImages": entity_scan_entities(conn, "series", series_id),
+        "ownImageLimit": scan_limit_per_entity(conn),
         "aggregateMovies": discs,
         "aggregateMediaAssets": aggregate_assets,
         "aggregateVideos": aggregate_videos,
@@ -22009,6 +22766,183 @@ def apply_container_movie_delete(
     }
 
 
+def own_image_reference(
+    conn,
+    *,
+    client_id: str,
+    payload: dict[str, Any],
+) -> tuple[str, UUID, UUID]:
+    """Resolve an ownImage mutation to (entityType, entityId, mediaId).
+
+    The image may be named by its server `mediaId` or by the `clientId` the
+    uploading device minted. Both are accepted because a queued mutation is
+    written before its upload is acknowledged: a device that hides an image
+    while offline has only its own token to name it with, and refusing that
+    would make the queue depend on the very round trip it exists to survive.
+    """
+    entity_type = str(payload.get("entityType") or payload.get("entity_type") or "").strip()
+    if entity_type not in SCAN_SYNC_ENTITY_TYPES:
+        raise NextApiError("ownImage entityType must be movie, container or series", 400)
+    entity_id = resolve_sync_entity_id(
+        conn,
+        client_id=client_id,
+        entity_type=entity_type,
+        raw_value=payload.get("entityId") or payload.get("entity_id"),
+    )
+    if not entity_id:
+        raise NextApiError("ownImage requires an entityId", 400)
+
+    media_id = parse_uuid(payload.get("mediaId") or payload.get("media_id"), "mediaId")
+    if not media_id:
+        token = (clean_text(payload.get("clientId") or payload.get("client_id")) or "")[:100]
+        if not token:
+            raise NextApiError("ownImage requires a mediaId or a clientId", 400)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT media_id
+                FROM entity_media
+                WHERE client_id=%s AND entity_type=%s AND entity_id=%s AND role=%s
+                """,
+                (token, entity_type, entity_id, SCAN_MEDIA_ROLE),
+            )
+            row = cur.fetchone()
+        if not row:
+            raise NextApiError("ownImage was not found for this item", 404)
+        media_id = row["media_id"]
+    return entity_type, entity_id, media_id
+
+
+def apply_own_image_update(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Apply one device's decision about an own image it already uploaded.
+
+    Only the decisions travel here -- label, order, which one represents the
+    set, hidden or not. The bytes never do: a multipart upload is the one way an
+    image enters, and a JSON envelope carrying base64 photographs would make
+    every mutation batch unboundedly large for a payload that has a route of its
+    own.
+
+    Every field is optional and an absent one means "no opinion", not "clear it"
+    -- the same absent/empty rule the rest of the contract uses. Which matters
+    most for `isPrimary`: a device that only renames an image must not silently
+    demote the one another device just promoted.
+    """
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("ownImage update payload must be an object", 400)
+    entity_type, entity_id, media_id = own_image_reference(conn, client_id=client_id, payload=payload)
+
+    label = payload.get("label")
+    sort_order = payload.get("sortOrder", payload.get("sort_order"))
+    if sort_order is not None:
+        try:
+            sort_order = int(sort_order)
+        except (TypeError, ValueError):
+            raise NextApiError("sortOrder must be a number", 400) from None
+    is_primary = payload.get("isPrimary", payload.get("is_primary"))
+    hidden = payload.get("hidden")
+
+    result: dict[str, Any] = {}
+    if label is not None or sort_order is not None:
+        result = update_entity_scan(
+            conn,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            media_id=media_id,
+            label=None if label is None else str(label),
+            sort_order=sort_order,
+            actor=actor,
+        )
+    if hidden is not None:
+        result = set_entity_scan_hidden(
+            conn,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            media_id=media_id,
+            hidden=parse_bool_value(hidden, default=False),
+            actor=actor,
+        )
+    if is_primary is not None and parse_bool_value(is_primary, default=False):
+        result = set_primary_entity_scan(
+            conn,
+            entity_type=entity_type,
+            entity_id=entity_id,
+            media_id=media_id,
+            actor=actor,
+        )
+    if not result:
+        result = _scan_result(conn, entity_type, entity_id, current_revision(conn), mediaId=str(media_id))
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "ownImage",
+        "operation": "update",
+        "entityId": entity_id,
+        "mediaId": str(media_id),
+        "images": result.get("images", []),
+        "revision": result.get("revision", 0),
+    }
+
+
+def apply_own_image_delete(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Remove an own image on behalf of a device that queued the removal.
+
+    Deleting an image that is already gone is a success, not a 404. A queued
+    delete may be offered again after a dropped connection, or after another
+    device removed the same image first, and either way the state the caller
+    asked for is the state that holds.
+    """
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("ownImage delete payload must be an object", 400)
+    entity_type, entity_id, media_id = own_image_reference(conn, client_id=client_id, payload=payload)
+    row = _scan_link_row(conn, entity_type, entity_id, media_id)
+    if row is None or row.get("deleted_at"):
+        return {
+            "clientMutationId": mutation["clientMutationId"],
+            "status": "applied",
+            "entityType": "ownImage",
+            "operation": "delete",
+            "entityId": entity_id,
+            "mediaId": str(media_id),
+            "changed": 0,
+            "images": entity_scan_sync_rows(conn, entity_type, entity_id),
+            "revision": current_revision(conn),
+        }
+    result = delete_entity_scan(
+        conn,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        media_id=media_id,
+        actor=actor,
+    )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "ownImage",
+        "operation": "delete",
+        "entityId": entity_id,
+        "mediaId": str(media_id),
+        "changed": 1,
+        "images": result.get("images", []),
+        "revision": result.get("revision", 0),
+    }
+
+
 def collection_item_reference(
     conn,
     *,
@@ -22217,6 +23151,17 @@ def apply_sync_mutation(
         result = apply_collection_item_upsert(conn, client_id=client_id, idem_key=key, mutation=mutation)
     elif entity_type == "collectionItem" and operation == "delete":
         result = apply_collection_item_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
+    # The bytes of an own image never come through here -- they have a multipart
+    # route. What a device queues while offline is its *decisions* about images
+    # it has already pushed, and those are these two.
+    elif entity_type == "ownImage" and operation == "update":
+        result = apply_own_image_update(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
+        )
+    elif entity_type == "ownImage" and operation == "delete":
+        result = apply_own_image_delete(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
+        )
     else:
         raise NextApiError(f"Unsupported mutation: {entity_type}.{operation}", 400)
 
@@ -33227,6 +34172,219 @@ def register_routes(flask_app: Flask) -> None:
                 )
         return response({"status": "ok", **result})
 
+    # ------------------------------------------------------------------
+    # The user's own images, for a release, a container or a series.
+    #
+    # A namespace of their own rather than `kind=scan` on the artwork routes
+    # above. Every one of those writes `{kind}_url` and `{kind}_locked` back
+    # onto the entity, because deciding the shelf cover is what they are for.
+    # That is exactly wrong for a photograph of a spine, so sharing them would
+    # have meant a role branch inside each -- and the branch nobody remembers to
+    # update is the one that puts a disc photo on the shelf.
+    #
+    # Every route answers with the entity's **whole** set, the same shape the
+    # sync feed publishes. See `emit_entity_scan_change`.
+    # ------------------------------------------------------------------
+    def scan_route_entity(entity_type: str, raw_id: str, field: str) -> UUID:
+        entity_uuid = parse_uuid(raw_id, field)
+        if not entity_uuid:
+            raise NextApiError(f"{field} is required", 400)
+        return entity_uuid
+
+    def authorize_scan_entity(conn, entity_type: str, entity_id: UUID, *, write: bool):
+        actor = require_next_permission(conn, "collection.edit_all" if write else "collection.view")
+        if entity_type == "movie":
+            movie = movie_entity(conn, entity_id)
+            visible = bool(movie) and (
+                actor_can_edit_visible_movie(conn, actor, movie)
+                if write
+                else actor_can_view_movie(conn, actor, entity_id)
+            )
+            if not visible:
+                raise NextApiError("Movie not found", 404)
+        elif entity_type == "container":
+            visible = (
+                actor_can_edit_visible_container(conn, actor, entity_id)
+                if write
+                else actor_can_view_container(conn, actor, entity_id)
+            )
+            if not visible:
+                raise NextApiError("Container not found", 404)
+        else:
+            if not series_tables_available(conn):
+                raise NextApiError("Series tables are not available", 503)
+            if not scan_entity_exists(conn, "series", entity_id):
+                raise NextApiError("Series not found", 404)
+        return actor
+
+    def register_scan_routes(entity_type: str, path_segment: str, id_field: str) -> None:
+        base = f"/api/next/{path_segment}/<entity_id>/images"
+
+        def list_route(entity_id: str):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            with connect() as conn:
+                authorize_scan_entity(conn, entity_type, entity_uuid, write=False)
+                result = _scan_result(conn, entity_type, entity_uuid, current_revision(conn))
+            return response({"status": "ok", **result})
+
+        def upload_route(entity_id: str):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
+                raise NextApiError("Image upload may not exceed 20 MB", 413)
+            upload, _inferred = uploaded_artwork_file()
+            label = request.form.get("label") or request.args.get("label") or ""
+            client_id = request.form.get("clientId") or request.form.get("client_id") or ""
+            primary = parse_bool_value(
+                request.form.get("primary") if request.form.get("primary") is not None else request.args.get("primary"),
+                default=False,
+            )
+            with connect() as conn:
+                actor = authorize_scan_entity(conn, entity_type, entity_uuid, write=True)
+                upload_info = save_uploaded_artwork_file(upload, kind=SCAN_MEDIA_KIND)
+                with conn.transaction():
+                    result = create_uploaded_entity_scan(
+                        conn,
+                        entity_type=entity_type,
+                        entity_id=entity_uuid,
+                        upload_info=upload_info,
+                        label=label,
+                        client_id=client_id,
+                        primary=primary,
+                        actor=actor,
+                    )
+                    audit_event(
+                        conn,
+                        event_type=f"{entity_type}.image_uploaded",
+                        category="admin",
+                        actor=actor,
+                        target_type=entity_type,
+                        target_id=entity_uuid,
+                        summary="Uploaded own image",
+                        metadata={
+                            "mediaId": result.get("mediaId"),
+                            "label": clean_scan_label(label),
+                            "created": result.get("created"),
+                        },
+                    )
+            return response({"status": "ok", **result}, 201)
+
+        def patch_route(entity_id: str, media_id: str):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            media_uuid = parse_uuid(media_id, "mediaId")
+            body = request.get_json(silent=True) or {}
+            if not isinstance(body, dict):
+                raise NextApiError("Image update body must be an object", 400)
+            label = body.get("label")
+            sort_order = body.get("sortOrder", body.get("sort_order"))
+            if sort_order is not None:
+                try:
+                    sort_order = int(sort_order)
+                except (TypeError, ValueError):
+                    raise NextApiError("sortOrder must be a number", 400) from None
+            with connect() as conn:
+                actor = authorize_scan_entity(conn, entity_type, entity_uuid, write=True)
+                with conn.transaction():
+                    result = update_entity_scan(
+                        conn,
+                        entity_type=entity_type,
+                        entity_id=entity_uuid,
+                        media_id=media_uuid,
+                        label=None if label is None else str(label),
+                        sort_order=sort_order,
+                        actor=actor,
+                    )
+            return response({"status": "ok", **result})
+
+        def primary_route(entity_id: str, media_id: str):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            media_uuid = parse_uuid(media_id, "mediaId")
+            with connect() as conn:
+                actor = authorize_scan_entity(conn, entity_type, entity_uuid, write=True)
+                with conn.transaction():
+                    result = set_primary_entity_scan(
+                        conn,
+                        entity_type=entity_type,
+                        entity_id=entity_uuid,
+                        media_id=media_uuid,
+                        actor=actor,
+                    )
+            return response({"status": "ok", **result})
+
+        def hide_route(entity_id: str, media_id: str):
+            return _scan_hidden_route(entity_id, media_id, hidden=True)
+
+        def unhide_route(entity_id: str, media_id: str):
+            return _scan_hidden_route(entity_id, media_id, hidden=False)
+
+        def _scan_hidden_route(entity_id: str, media_id: str, *, hidden: bool):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            media_uuid = parse_uuid(media_id, "mediaId")
+            with connect() as conn:
+                actor = authorize_scan_entity(conn, entity_type, entity_uuid, write=True)
+                with conn.transaction():
+                    result = set_entity_scan_hidden(
+                        conn,
+                        entity_type=entity_type,
+                        entity_id=entity_uuid,
+                        media_id=media_uuid,
+                        hidden=hidden,
+                        actor=actor,
+                    )
+            return response({"status": "ok", **result})
+
+        def delete_route(entity_id: str, media_id: str):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            media_uuid = parse_uuid(media_id, "mediaId")
+            with connect() as conn:
+                actor = authorize_scan_entity(conn, entity_type, entity_uuid, write=True)
+                with conn.transaction():
+                    result = delete_entity_scan(
+                        conn,
+                        entity_type=entity_type,
+                        entity_id=entity_uuid,
+                        media_id=media_uuid,
+                        actor=actor,
+                    )
+                    audit_event(
+                        conn,
+                        event_type=f"{entity_type}.image_deleted",
+                        category="admin",
+                        actor=actor,
+                        target_type=entity_type,
+                        target_id=entity_uuid,
+                        summary="Deleted own image",
+                        metadata={"mediaId": str(media_uuid)},
+                    )
+            return response({"status": "ok", **result})
+
+        # Explicit endpoint names: the decorator would take every closure's
+        # `__name__` from this one function and Flask refuses the second
+        # registration.
+        flask_app.add_url_rule(base, f"{entity_type}_images_list", list_route, methods=["GET"])
+        flask_app.add_url_rule(base, f"{entity_type}_images_upload", upload_route, methods=["POST"])
+        flask_app.add_url_rule(
+            f"{base}/<media_id>", f"{entity_type}_images_update", patch_route, methods=["PATCH"]
+        )
+        flask_app.add_url_rule(
+            f"{base}/<media_id>", f"{entity_type}_images_delete", delete_route, methods=["DELETE"]
+        )
+        flask_app.add_url_rule(
+            f"{base}/<media_id>/primary", f"{entity_type}_images_primary", primary_route, methods=["POST"]
+        )
+        flask_app.add_url_rule(
+            f"{base}/<media_id>/hide", f"{entity_type}_images_hide", hide_route, methods=["POST"]
+        )
+        flask_app.add_url_rule(
+            f"{base}/<media_id>/unhide", f"{entity_type}_images_unhide", unhide_route, methods=["POST"]
+        )
+
+    for _scan_entity_type, _scan_path_segment, _scan_id_field in (
+        ("movie", "movies", "movieId"),
+        ("container", "containers", "containerId"),
+        ("series", "series", "seriesId"),
+    ):
+        register_scan_routes(_scan_entity_type, _scan_path_segment, _scan_id_field)
+
     @flask_app.post("/api/next/containers/<container_id>/media/primary")
     def container_media_primary(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
@@ -36744,6 +37902,15 @@ def register_routes(flask_app: Flask) -> None:
                 all_movie_identifier_entities(conn, limit=identifier_limit + 1),
                 identifier_limit,
             )
+            # Own images are grouped per owning entity, so the cap counts
+            # entities rather than pictures. Capped against `membership_limit`
+            # for the same reason that one is generous: a collection can hold
+            # more entities-with-images than it holds films in a window, and the
+            # list is small per entity.
+            own_images, own_images_truncated = page(
+                all_entity_scan_entities(conn, limit=membership_limit + 1),
+                membership_limit,
+            )
             payload = {
                 "movies": movies,
                 "containers": containers,
@@ -36760,6 +37927,12 @@ def register_routes(flask_app: Flask) -> None:
                 # on a bootstrap.
                 "series": series_sync_entities(conn),
                 "seriesSeasons": series_season_sync_entities(conn),
+                # The user's own photographs of a release, container or series.
+                # In the bootstrap *and* in the delta, deliberately: a
+                # collection that only ever appeared in the bootstrap would
+                # reach a fresh install and never an existing one, which is how
+                # a field can be added and stay invisible forever.
+                "ownImages": own_images,
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
@@ -36781,6 +37954,7 @@ def register_routes(flask_app: Flask) -> None:
             "containerMembership": {"limit": membership_limit, "truncated": membership_truncated},
             "movieIdentifiers": {"limit": identifier_limit, "truncated": identifiers_truncated},
             "moviePeople": {"limit": credit_limit, "truncated": credits_truncated},
+            "ownImages": {"limit": membership_limit, "truncated": own_images_truncated},
         }
         return response(
             {
