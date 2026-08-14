@@ -19,6 +19,9 @@ concurrency:
 
 permissions:
   contents: write
+  # Needed to dispatch docker-publish.yml for the release snapshot; see the
+  # "Publish the version-pinned image" step for why a dispatch is required.
+  actions: write
 
 jobs:
   release:
@@ -90,3 +93,24 @@ jobs:
             --title "DiscVault ${TAG}" \
             --notes-file "${NOTES_FILE}" \
             --latest
+
+      # The tag push above does NOT start docker-publish.yml, even though that workflow
+      # lists `tags: v26.*.*` as a trigger. A push made with GITHUB_TOKEN deliberately
+      # creates no workflow run -- the same property docker-publish.yml relies on to stop
+      # its own bump commit from looping. Here it is not wanted: it means no release ever
+      # cut by this workflow produced a version-pinned image. v26.9.2, v26.9.20 and
+      # v26.9.41 all have :stable/:latest/:v26 from the push to main and no :v26.x.x
+      # snapshot at all, so nothing can be pinned back to a specific release.
+      #
+      # workflow_dispatch is the documented exception to that rule: a dispatch made with
+      # GITHUB_TOKEN *does* start a run. Dispatching on the tag itself is what makes the
+      # build a release snapshot -- docker-publish.yml keys its tags off github.ref_type
+      # and github.ref_name, so the tag ref is what tells it to publish :v26.x.x rather
+      # than a throwaway :dev image.
+      - name: Publish the version-pinned image for this tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh workflow run docker-publish.yml --ref "${TAG}"
+          echo "Dispatched docker-publish.yml on ${TAG}; it publishes ${TAG}, :v26 and :stable."
