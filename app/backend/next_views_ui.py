@@ -28035,7 +28035,10 @@ def ui_preview_html(
       if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
       if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu") || lower.includes("bd")) return "Blu-ray";
-      if (lower.includes("dvd")) return "DVD";
+      // "HD DVD" contains "dvd" and is not one. Without this guard the badge on
+      // an HD DVD read "DVD" while the library filter listed the same disc
+      // under "HD DVD" -- the two normalisers disagreeing about one shelf.
+      if (lower.includes("dvd") && !lower.includes("hd dvd")) return "DVD";
       return text;
     }
     function physicalFormatBadgeClass(value) {
