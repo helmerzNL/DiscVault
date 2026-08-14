@@ -160,5 +160,57 @@ class FoldingTests(unittest.TestCase):
         self.assertEqual(first, second)
 
 
+class NormaliserAgreementTests(unittest.TestCase):
+    """The PWA has two format normalisers; they must not disagree.
+
+    `physicalFormatLabel` decides how a format is *shown*, and
+    `normalizedMovieFormatValue` decides which of the seven filter options a
+    format *is*. Two functions answering "how is this spelled" drift, and they
+    had: an HD DVD's badge read "DVD" while the library filter listed the same
+    disc under "HD DVD". Neither was wrong on its own terms, which is why
+    nothing failed.
+
+    Pinned at source level rather than by running the JavaScript, so the check
+    needs nothing but Python and runs everywhere the rest of the suite does.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(backend_root, "next_views_ui.py"), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    @staticmethod
+    def _function(source, name):
+        start = source.index("function %s(" % name)
+        depth = 0
+        for index in range(source.index("{", start), len(source)):
+            if source[index] == "{":
+                depth += 1
+            elif source[index] == "}":
+                depth -= 1
+                if depth == 0:
+                    return source[start:index + 1]
+        raise AssertionError("unbalanced %s" % name)
+
+    def test_the_display_label_does_not_call_an_hd_dvd_a_dvd(self):
+        body = self._function(self.source, "physicalFormatLabel")
+        self.assertIn('!lower.includes("hd dvd")', body)
+
+    def test_the_filter_value_agrees(self):
+        body = self._function(self.source, "normalizedMovieFormatValue")
+        self.assertIn('lower.includes("hd dvd")', body)
+
+    def test_python_agrees_with_both(self):
+        self.assertEqual(physical_format_label("HD DVD"), "HD DVD")
+
+    def test_the_two_javascript_normalisers_are_documented_as_a_pair(self):
+        # A display label and a filter value may legitimately differ - the
+        # filter maps onto a fixed vocabulary. That is a decision, so it has to
+        # be written down where both are defined, or the next reader reads the
+        # difference as the bug it looks like.
+        body = self._function(self.source, "physicalFormatLabel")
+        self.assertIn("library filter", body)
+
+
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
