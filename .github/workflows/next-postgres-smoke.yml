@@ -498,6 +498,15 @@ jobs:
       - name: Test the inline script's scope
         run: python -m unittest tests.test_next_views_ui_scope
 
+      # The same shape one layer down: the PWA has no global tone classes, so a
+      # message container that grows a tone without the matching CSS renders it
+      # as the base muted style -- identical to passing no tone at all. Nothing
+      # can fail there on its own, because a missing rule is a default rather
+      # than an error, which is how every `warn` on every detail page read as
+      # ordinary grey text.
+      - name: Test that every message tone is styled
+        run: python -m unittest tests.test_next_views_message_tones
+
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as
       # the bootstrap/delta drift they exist to catch - a guard nobody invokes
