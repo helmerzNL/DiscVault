@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Ikke genkendt på stregkoden",
   "releaseFallback.pickEdition": "Hvilken presning er det her?",
   "releaseFallback.pickEditionHelp": "Filmen blev identificeret, men ingen af disse presninger bekræftede stregkoden. Vælg den, du står med.",
+  "releaseFallback.pickEditionHelpConfirmed": "Denne stregkode står på mere end én presning, så filmen er sikker, og presningen er det ikke. Vælg den, du står med.",
   "releaseFallback.unreviewed": "Disse oplysninger kommer fra en ekstern kilde og er endnu ikke gennemgået af MovieVault. Tjek dem, før du gemmer.",
   "releaseFallback.useEdition": "Brug denne udgave",
   "releaseFallback.editionChosen": "Valgt",

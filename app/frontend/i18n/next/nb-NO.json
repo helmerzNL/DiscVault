@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Ikke gjenkjent på strekkoden",
   "releaseFallback.pickEdition": "Hvilken pressing er dette?",
   "releaseFallback.pickEditionHelp": "Filmen ble identifisert, men ingen av disse pressingene bekreftet strekkoden. Velg den du holder i.",
+  "releaseFallback.pickEditionHelpConfirmed": "Denne strekkoden står på mer enn én pressing, så filmen er sikker og pressingen ikke. Velg den du holder i.",
   "releaseFallback.unreviewed": "Disse opplysningene kommer fra en ekstern kilde og er ennå ikke gjennomgått av MovieVault. Sjekk dem før du lagrer.",
   "releaseFallback.useEdition": "Bruk denne utgaven",
   "releaseFallback.editionChosen": "Valgt",

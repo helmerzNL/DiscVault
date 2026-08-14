@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Über den Barcode nicht erkannt",
   "releaseFallback.pickEdition": "Welche Pressung ist das?",
   "releaseFallback.pickEditionHelp": "Der Film wurde erkannt, aber keine dieser Pressungen hat den Barcode bestätigt. Wähle die aus, die du in der Hand hältst.",
+  "releaseFallback.pickEditionHelpConfirmed": "Dieser Barcode ist auf mehr als einer Pressung aufgedruckt, der Film steht also fest und die Pressung nicht. Wähle die aus, die du in der Hand hältst.",
   "releaseFallback.unreviewed": "Diese Angaben stammen aus einer externen Quelle und wurden von MovieVault noch nicht geprüft. Prüfe sie vor dem Speichern.",
   "releaseFallback.useEdition": "Diese Ausgabe verwenden",
   "releaseFallback.editionChosen": "Ausgewählt",

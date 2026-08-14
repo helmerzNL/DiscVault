@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Pēc svītrkoda netika atpazīts",
   "releaseFallback.pickEdition": "Kurš izdevums šis ir?",
   "releaseFallback.pickEditionHelp": "Filma tika atpazīta, taču neviens no šiem izdevumiem neapstiprināja svītrkodu. Izvēlies to, kas ir tavās rokās.",
+  "releaseFallback.pickEditionHelpConfirmed": "Šis svītrkods ir uzdrukāts uz vairāk nekā viena izdevuma, tāpēc filma ir skaidra, bet izdevums nav. Izvēlies to, kas ir tavās rokās.",
   "releaseFallback.unreviewed": "Šie dati nāk no ārēja avota, un MovieVault tos vēl nav pārbaudījis. Pārbaudi tos pirms saglabāšanas.",
   "releaseFallback.useEdition": "Izmantot šo izdevumu",
   "releaseFallback.editionChosen": "Izvēlēts",

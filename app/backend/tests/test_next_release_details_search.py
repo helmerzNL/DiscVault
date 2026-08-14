@@ -103,6 +103,55 @@ class ReleaseDetailsSearchPayloadTests(unittest.TestCase):
         self.assertEqual(row["discRegions"], ["B"])
         self.assertEqual(row["subtitleLanguages"], ["en"])
 
+    def test_barcode_confirmation_is_carried_over_when_movievault_states_it(self):
+        for confirmed in (True, False):
+            with self.subTest(confirmed=confirmed):
+                result = candidates_result()
+                result["barcodeConfirmed"] = confirmed
+                payload = next_app.release_details_search_payload(
+                    result,
+                    entrypoint="resolve",
+                )
+
+                self.assertEqual(payload["barcodeConfirmed"], confirmed)
+
+    def test_an_unstated_barcode_confirmation_stays_unstated(self):
+        """Absent is a third state, and the client has to be able to see it.
+
+        The picker's cautious line - "none of these pressings confirmed the
+        barcode" - is true on the title routes and false on the barcode one, so
+        the client picks between two sentences on this field. Defaulting the
+        absent case to `False` would put that claim in its hands on the say-so
+        of an older MovieVault that said nothing at all, so the key is left out
+        entirely and the client keeps the sentence that cannot be wrong.
+        """
+        for value in (None, "true", 1, {}):
+            with self.subTest(value=value):
+                result = candidates_result()
+                if value is not None:
+                    result["barcodeConfirmed"] = value
+                payload = next_app.release_details_search_payload(
+                    result,
+                    entrypoint="resolve",
+                )
+
+                self.assertNotIn("barcodeConfirmed", payload)
+
+    def test_barcode_confirmation_is_not_invented_for_a_single_release(self):
+        # It describes a choice between pressings. A `canonical_hit` presents no
+        # choice, so there is nothing for the field to qualify.
+        payload = next_app.release_details_search_payload(
+            {
+                "status": "canonical_hit",
+                "barcodeConfirmed": True,
+                "film": {"title": "Example Film", "year": 2024, "identifiers": {}},
+                "release": {"title": "Example Film", "format": "4K UHD"},
+            },
+            entrypoint="resolve",
+        )
+
+        self.assertNotIn("barcodeConfirmed", payload)
+
     def test_a_transport_failure_is_never_reported_as_answered(self):
         for code, kind, retryable in (
             ("release_details_unreachable", "transport", True),

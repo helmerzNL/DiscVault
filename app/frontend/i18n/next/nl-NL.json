@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Niet herkend op barcode",
   "releaseFallback.pickEdition": "Welke persing is dit?",
   "releaseFallback.pickEditionHelp": "De film is herkend, maar geen van deze persingen bevestigde de barcode. Kies de persing die je in handen hebt.",
+  "releaseFallback.pickEditionHelpConfirmed": "Deze barcode staat op meer dan één persing, dus de film staat vast en de persing niet. Kies de persing die je in handen hebt.",
   "releaseFallback.unreviewed": "Deze gegevens komen van een externe bron en zijn nog niet door MovieVault gecontroleerd. Controleer ze voordat je opslaat.",
   "releaseFallback.useEdition": "Deze uitgave gebruiken",
   "releaseFallback.editionChosen": "Gekozen",

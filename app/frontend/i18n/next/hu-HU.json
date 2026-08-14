@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Vonalkód alapján nem ismerhető fel",
   "releaseFallback.pickEdition": "Melyik kiadás ez?",
   "releaseFallback.pickEditionHelp": "A filmet azonosítottuk, de egyik kiadás sem erősítette meg a vonalkódot. Válaszd ki azt, amelyik a kezedben van.",
+  "releaseFallback.pickEditionHelpConfirmed": "Ez a vonalkód több kiadáson is szerepel, így a film biztos, a kiadás nem. Válaszd ki azt, amelyik a kezedben van.",
   "releaseFallback.unreviewed": "Ezek az adatok külső forrásból származnak, és a MovieVault még nem ellenőrizte őket. Mentés előtt nézd át őket.",
   "releaseFallback.useEdition": "Ezt a kiadást használom",
   "releaseFallback.editionChosen": "Kiválasztva",

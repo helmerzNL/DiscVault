@@ -10302,6 +10302,21 @@ def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -
         payload["releases"] = [
             item for item in (result.get("releases") or []) if isinstance(item, dict)
         ]
+        # Which of the two routes into the picker this was. `true` means the
+        # source indexes the scanned barcode on every pressing shown, so the
+        # code is right and only the pressing is open; `false` means they were
+        # found by title in spite of the barcode. The client cannot derive it:
+        # the provider's `barcode_unconfirmed` warning stops at the resolver,
+        # and a candidate's `barcodes` always carries the *scanned* code rather
+        # than the page's own.
+        #
+        # Absent is a third state and stays absent - the title routes carry no
+        # barcode to confirm, and an older MovieVault says nothing at all.
+        # Writing `false` there would put a claim in the client's hands that
+        # nobody made, so only a real boolean is carried over.
+        confirmed = result.get("barcodeConfirmed")
+        if isinstance(confirmed, bool):
+            payload["barcodeConfirmed"] = confirmed
     elif status in {"canonical_hit", "external_hit"}:
         release = result.get("release") if isinstance(result.get("release"), dict) else {}
         if release:

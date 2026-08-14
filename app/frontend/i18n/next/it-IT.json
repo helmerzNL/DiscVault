@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Non riconosciuto dal codice a barre",
   "releaseFallback.pickEdition": "Di quale stampa si tratta?",
   "releaseFallback.pickEditionHelp": "Il film è stato identificato, ma nessuna di queste stampe ha confermato il codice a barre. Scegli quella che hai in mano.",
+  "releaseFallback.pickEditionHelpConfirmed": "Questo codice a barre è stampato su più di una stampa, quindi il film è certo e la stampa no. Scegli quella che hai in mano.",
   "releaseFallback.unreviewed": "Questi dati provengono da una fonte esterna e MovieVault non li ha ancora verificati. Controllali prima di salvare.",
   "releaseFallback.useEdition": "Usa questa edizione",
   "releaseFallback.editionChosen": "Scelta",

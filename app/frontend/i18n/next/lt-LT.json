@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Pagal brūkšninį kodą neatpažinta",
   "releaseFallback.pickEdition": "Kuris tai leidimas?",
   "releaseFallback.pickEditionHelp": "Filmas atpažintas, bet nė vienas iš šių leidimų nepatvirtino brūkšninio kodo. Pasirink tą, kurį laikai rankose.",
+  "releaseFallback.pickEditionHelpConfirmed": "Šis brūkšninis kodas atspausdintas ant daugiau nei vieno leidimo, tad filmas žinomas, o leidimas – ne. Pasirink tą, kurį laikai rankose.",
   "releaseFallback.unreviewed": "Šie duomenys gauti iš išorinio šaltinio ir MovieVault jų dar nepatikrino. Peržiūrėk juos prieš išsaugodamas.",
   "releaseFallback.useEdition": "Naudoti šį leidimą",
   "releaseFallback.editionChosen": "Pasirinkta",

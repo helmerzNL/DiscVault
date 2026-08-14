@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Barkoddan tanınmadı",
   "releaseFallback.pickEdition": "Bu hangi baskı?",
   "releaseFallback.pickEditionHelp": "Film tanındı, ancak bu baskıların hiçbiri barkodu doğrulamadı. Elindekini seç.",
+  "releaseFallback.pickEditionHelpConfirmed": "Bu barkod birden fazla baskının üzerinde yazılı, yani film kesin ama baskı değil. Elindekini seç.",
   "releaseFallback.unreviewed": "Bu bilgiler dış bir kaynaktan geliyor ve MovieVault tarafından henüz incelenmedi. Kaydetmeden önce kontrol et.",
   "releaseFallback.useEdition": "Bu sürümü kullan",
   "releaseFallback.editionChosen": "Seçildi",

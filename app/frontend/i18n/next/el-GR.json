@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Δεν αναγνωρίστηκε από το barcode",
   "releaseFallback.pickEdition": "Ποια έκδοση είναι αυτή;",
   "releaseFallback.pickEditionHelp": "Η ταινία αναγνωρίστηκε, αλλά καμία από αυτές τις εκδόσεις δεν επιβεβαίωσε το barcode. Διάλεξε αυτή που κρατάς.",
+  "releaseFallback.pickEditionHelpConfirmed": "Αυτό το barcode είναι τυπωμένο σε περισσότερες από μία εκδόσεις, οπότε η ταινία είναι βέβαιη και η έκδοση όχι. Διάλεξε αυτή που κρατάς.",
   "releaseFallback.unreviewed": "Αυτά τα στοιχεία προέρχονται από εξωτερική πηγή και δεν έχουν ελεγχθεί ακόμη από το MovieVault. Έλεγξέ τα πριν αποθηκεύσεις.",
   "releaseFallback.useEdition": "Χρήση αυτής της έκδοσης",
   "releaseFallback.editionChosen": "Επιλέχθηκε",

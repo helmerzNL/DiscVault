@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Kändes inte igen på streckkoden",
   "releaseFallback.pickEdition": "Vilken pressning är det här?",
   "releaseFallback.pickEditionHelp": "Filmen identifierades, men ingen av dessa pressningar bekräftade streckkoden. Välj den du håller i.",
+  "releaseFallback.pickEditionHelpConfirmed": "Den här streckkoden står på mer än en pressning, så filmen är säker men inte pressningen. Välj den du håller i.",
   "releaseFallback.unreviewed": "Uppgifterna kommer från en extern källa och har ännu inte granskats av MovieVault. Kontrollera dem innan du sparar.",
   "releaseFallback.useEdition": "Använd den här utgåvan",
   "releaseFallback.editionChosen": "Vald",

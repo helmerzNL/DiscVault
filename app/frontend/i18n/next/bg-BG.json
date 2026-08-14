@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Не е разпознат по баркода",
   "releaseFallback.pickEdition": "Кое издание е това?",
   "releaseFallback.pickEditionHelp": "Филмът беше разпознат, но нито едно от тези издания не потвърди баркода. Избери това, което държиш.",
+  "releaseFallback.pickEditionHelpConfirmed": "Този баркод е отпечатан върху повече от едно издание, така че филмът е сигурен, а изданието не. Избери това, което държиш.",
   "releaseFallback.unreviewed": "Тези данни идват от външен източник и още не са проверени от MovieVault. Провери ги, преди да запишеш.",
   "releaseFallback.useEdition": "Използвай това издание",
   "releaseFallback.editionChosen": "Избрано",

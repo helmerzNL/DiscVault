@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Не розпізнано за штрихкодом",
   "releaseFallback.pickEdition": "Яке це видання?",
   "releaseFallback.pickEditionHelp": "Фільм розпізнано, але жодне з цих видань не підтвердило штрихкод. Обери те, яке тримаєш у руках.",
+  "releaseFallback.pickEditionHelpConfirmed": "Цей штрихкод надруковано на кількох виданнях, тож фільм відомий, а видання — ні. Обери те, яке тримаєш у руках.",
   "releaseFallback.unreviewed": "Ці дані надійшли із зовнішнього джерела і ще не перевірені MovieVault. Перевір їх перед збереженням.",
   "releaseFallback.useEdition": "Використати це видання",
   "releaseFallback.editionChosen": "Обрано",

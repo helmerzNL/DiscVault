@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "条形码未能识别",
   "releaseFallback.pickEdition": "这是哪个版本？",
   "releaseFallback.pickEditionHelp": "影片已识别，但这些版本都没有确认该条形码。请选择你手上的那张。",
+  "releaseFallback.pickEditionHelpConfirmed": "这个条形码印在不止一个版本上，所以影片是确定的，版本不是。请选择你手上的那张。",
   "releaseFallback.unreviewed": "这些信息来自外部来源，MovieVault 尚未审核。保存前请先核对。",
   "releaseFallback.useEdition": "使用此版本",
   "releaseFallback.editionChosen": "已选择",

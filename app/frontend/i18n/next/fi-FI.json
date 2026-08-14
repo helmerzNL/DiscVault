@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Ei tunnistettu viivakoodista",
   "releaseFallback.pickEdition": "Mikä painos tämä on?",
   "releaseFallback.pickEditionHelp": "Elokuva tunnistettiin, mutta mikään näistä painoksista ei vahvistanut viivakoodia. Valitse se, joka sinulla on kädessä.",
+  "releaseFallback.pickEditionHelpConfirmed": "Tämä viivakoodi on painettu useampaan kuin yhteen painokseen, joten elokuva on varma ja painos ei. Valitse se, joka sinulla on kädessä.",
   "releaseFallback.unreviewed": "Nämä tiedot ovat ulkoisesta lähteestä eikä MovieVault ole vielä tarkistanut niitä. Tarkista ne ennen tallennusta.",
   "releaseFallback.useEdition": "Käytä tätä laitosta",
   "releaseFallback.editionChosen": "Valittu",
