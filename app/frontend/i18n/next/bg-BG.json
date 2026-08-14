@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Всички",
   "stats.mediaMovies": "Филм",
   "stats.mediaShows": "Телевизионен сериал",
+  "stats.showInLibrary": "Показване в библиотеката",
   "uiPreview.activity": "Активност",
   "uiPreview.activityDesign": "Светлият и тъмният режим са включени за преглед.",
   "uiPreview.activityMigration": "Мигрираните данни за колекцията са налични в PostgreSQL.",

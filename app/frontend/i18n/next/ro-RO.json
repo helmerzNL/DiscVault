@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Toate",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "Serial TV",
+  "stats.showInLibrary": "Afișează în bibliotecă",
   "uiPreview.activity": "Activitate",
   "uiPreview.activityDesign": "Modurile de aspect luminos și întunecat sunt activate pentru previzualizare.",
   "uiPreview.activityMigration": "Datele colecției migrate sunt disponibile în PostgreSQL.",

@@ -4360,6 +4360,46 @@ def ui_preview_html(
     .dv-legend-row:hover {
       background: color-mix(in srgb, var(--line) 42%, transparent);
     }
+    /* A row that opens the library is a real button, so it needs the default
+       button box stripped and a pointer to say it can be pressed. */
+    button.dv-legend-row,
+    button.dv-bar-row {
+      width: 100%;
+      border: 0;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      appearance: none;
+    }
+    .dv-legend-row.is-linked,
+    .dv-bar-row.is-linked {
+      cursor: pointer;
+      background: transparent;
+    }
+    .dv-bar-row.is-linked {
+      padding: 4px 6px;
+      margin: -4px -6px;
+      border-radius: 9px;
+      transition: background .18s ease;
+    }
+    .dv-bar-row.is-linked:hover {
+      background: color-mix(in srgb, var(--line) 42%, transparent);
+    }
+    .dv-legend-row.is-linked:focus-visible,
+    .dv-bar-row.is-linked:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .dv-legend-row.is-linked .dv-legend-name,
+    .dv-bar-row.is-linked .dv-bar-name {
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, currentColor 28%, transparent);
+      text-underline-offset: 3px;
+    }
+    .dv-legend-row.is-linked:hover .dv-legend-name,
+    .dv-bar-row.is-linked:hover .dv-bar-name {
+      text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
+    }
     .dv-legend-dot {
       width: 10px;
       height: 10px;
@@ -42011,16 +42051,23 @@ def ui_preview_html(
           const count = Number(row.count) || 0;
           const width = Math.max((count / max) * 100, 1.5);
           const color = ordinal ? dvOrdinalColor(index, Math.min(all.length, DV_SERIES_SLOTS)) : dvChartColor(index);
+          const label = dvChartLabel(row);
+          const linked = !!settings.searchable;
+          const tag = linked ? "button" : "div";
+          const attrs = linked
+            ? ` type="button" data-stats-search="${escapeHtml(label)}"`
+              + ` title="${escapeHtml(tNext("stats.showInLibrary", "Show in library"))}: ${escapeHtml(label)}"`
+            : "";
           return `
-            <div class="dv-bar-row">
+            <${tag} class="dv-bar-row${linked ? " is-linked" : ""}"${attrs}>
               <div class="dv-bar-head">
-                <span class="dv-bar-name">${escapeHtml(dvChartLabel(row))}</span>
+                <span class="dv-bar-name">${escapeHtml(label)}</span>
                 <span class="dv-bar-value">${escapeHtml(dvFormatCount(count))}</span>
               </div>
               <div class="dv-bar-track">
                 <div class="dv-bar-fill" style="width:${width.toFixed(2)}%;--dv-bar-color:${escapeHtml(color)};animation-delay:${Math.min(index * 35, 280)}ms"></div>
               </div>
-            </div>
+            </${tag}>
           `;
         })
         .join("");
@@ -42069,22 +42116,49 @@ def ui_preview_html(
     // One place that knows which container, which slice of the payload, and
     // whether the chart is ordered - so a re-render after a toggle goes
     // through exactly the same path as the first draw.
+    // `searchable` means an entry's label, typed into the library search box,
+    // finds exactly the films behind it. That holds for genres and for people
+    // because `movieMatchesSearch` already folds the translated genre labels
+    // and `search_credits` into its haystack.
+    //
+    // Format and decade are deliberately not searchable. A format is stored as
+    // "BLURAY" and shown as "Blu-Ray", so the pretty label matches nothing,
+    // and "2010s" is not a year any film carries. Linking either would hand
+    // the reader an empty list and call it a filter.
     const STATS_CHARTS = {
       format: { target: "statsByFormat", field: "byFormat" },
       // Decades are ordered, so they take the single-hue ramp rather than
       // eight unrelated hues, which would throw that order away.
       decade: { target: "statsByDecade", field: "byDecade", ordinal: true },
-      genre: { target: "statsByGenre", field: "byGenre" },
-      directors: { target: "statsByTopDirectors", field: "topDirectors" },
-      actors: { target: "statsByTopActors", field: "topActors" }
+      genre: { target: "statsByGenre", field: "byGenre", searchable: true },
+      directors: { target: "statsByTopDirectors", field: "topDirectors", searchable: true },
+      actors: { target: "statsByTopActors", field: "topActors", searchable: true }
     };
+    // Opening the library on one label. The term goes through the same input
+    // and the same render path a typed search uses, so there is no second
+    // definition of what a search means.
+    function openLibraryForStatsLabel(label) {
+      const term = String(label || "").trim();
+      if (!term) return;
+      // The term is set before the view is shown, so the library renders
+      // already filtered rather than flashing the whole collection first.
+      syncCollectionSearchInputs(term);
+      showLibraryPage(true);
+      renderCollectionSurface();
+      const input = document.getElementById("previewSearch");
+      if (input) input.focus();
+      scrollPreviewTop();
+    }
     function renderStatsChart(key) {
       const spec = STATS_CHARTS[key];
       if (!spec) return;
       const host = document.getElementById(spec.target);
       if (!host) return;
       const data = statsState.data || {};
-      host.innerHTML = statsChartHtml(key, data[spec.field], spec.ordinal ? { ordinal: true } : {});
+      host.innerHTML = statsChartHtml(key, data[spec.field], {
+        ordinal: !!spec.ordinal,
+        searchable: !!spec.searchable
+      });
       const toggle = document.querySelector('[data-stats-chart-toggle="' + key + '"]');
       if (toggle) {
         if (!toggle.childElementCount) toggle.innerHTML = statsChartToggleButtonsHtml();
@@ -42107,6 +42181,11 @@ def ui_preview_html(
           if (statsChartView(key).mode === modeButton.dataset.statsChartMode) return;
           setStatsChartMode(key, modeButton.dataset.statsChartMode);
           renderStatsChart(key);
+          return;
+        }
+        const searchButton = event.target.closest("[data-stats-search]");
+        if (searchButton) {
+          openLibraryForStatsLabel(searchButton.dataset.statsSearch);
           return;
         }
         const moreButton = event.target.closest("[data-dv-bars-toggle]");
@@ -42193,6 +42272,7 @@ def ui_preview_html(
         const inset = Math.min(GAP, Math.max(sweep - 0.6, 0)) / 2;
         return {
           label: row._other || row._literal ? row.label : dvChartLabel(row),
+          folded: !!(row._other || row._literal),
           count: count,
           share: (count / total) * 100,
           color: row._other
@@ -42211,13 +42291,23 @@ def ui_preview_html(
         ))
         .join("");
       const legend = slices
-        .map((slice, index) => `
-          <div class="dv-legend-row" data-dv-slice="${index}">
+        .map((slice, index) => {
+          // A folded entry stands for several things at once, so there is no
+          // single term that would find them - it stays a plain row.
+          const linked = settings.searchable && !slice.folded;
+          const tag = linked ? "button" : "div";
+          const attrs = linked
+            ? ` type="button" data-stats-search="${escapeHtml(slice.label)}"`
+              + ` title="${escapeHtml(tNext("stats.showInLibrary", "Show in library"))}: ${escapeHtml(slice.label)}"`
+            : ` title="${escapeHtml(slice.label)}"`;
+          return `
+          <${tag} class="dv-legend-row${linked ? " is-linked" : ""}" data-dv-slice="${index}"${attrs}>
             <span class="dv-legend-dot" style="background:${escapeHtml(slice.color)}"></span>
-            <span class="dv-legend-name" title="${escapeHtml(slice.label)}">${escapeHtml(slice.label)}</span>
+            <span class="dv-legend-name">${escapeHtml(slice.label)}</span>
             <span class="dv-legend-value"><b>${escapeHtml(dvFormatCount(slice.count))}</b>${escapeHtml(slice.share.toFixed(slice.share < 10 ? 1 : 0))}%</span>
-          </div>
-        `)
+          </${tag}>
+        `;
+        })
         .join("");
       const summary = slices
         .map((slice) => `${slice.label} ${slice.share.toFixed(0)}%`)

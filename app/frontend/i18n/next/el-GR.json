@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Όλα",
   "stats.mediaMovies": "Ταινία",
   "stats.mediaShows": "Τηλεοπτική σειρά",
+  "stats.showInLibrary": "Εμφάνιση στη βιβλιοθήκη",
   "uiPreview.activity": "Δραστηριότητα",
   "uiPreview.activityDesign": "Οι φωτεινές και σκοτεινές λειτουργίες εμφάνισης είναι ενεργές για την προεπισκόπηση.",
   "uiPreview.activityMigration": "Τα μεταφερμένα δεδομένα συλλογής είναι διαθέσιμα στο PostgreSQL.",

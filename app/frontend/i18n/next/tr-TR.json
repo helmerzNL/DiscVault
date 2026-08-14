@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Tümü",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "TV dizisi",
+  "stats.showInLibrary": "Kitaplıkta göster",
   "uiPreview.activity": "Etkinlik",
   "uiPreview.activityDesign": "Açık ve koyu görünüm modları önizleme için etkin.",
   "uiPreview.activityMigration": "Taşınan koleksiyon verileri PostgreSQL'de kullanılabilir.",

@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Viss",
   "stats.mediaMovies": "Filma",
   "stats.mediaShows": "TV seriāls",
+  "stats.showInLibrary": "Rādīt bibliotēkā",
   "uiPreview.activity": "Aktivitāte",
   "uiPreview.activityDesign": "Gaišais un tumšais izskata režīms ir ieslēgts priekšskatījumam.",
   "uiPreview.activityMigration": "Migrētie kolekcijas dati ir pieejami PostgreSQL.",

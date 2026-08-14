@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "Vše",
   "stats.mediaMovies": "Film",
   "stats.mediaShows": "Seriál",
+  "stats.showInLibrary": "Zobrazit v knihovně",
   "uiPreview.activity": "Aktivita",
   "uiPreview.activityDesign": "Světlý a tmavý režim vzhledu jsou v náhledu zapnuté.",
   "uiPreview.activityMigration": "Migrovaná data sbírky jsou dostupná v PostgreSQL.",

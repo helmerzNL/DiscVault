@@ -2494,6 +2494,7 @@
   "stats.mediaAll": "全部",
   "stats.mediaMovies": "電影",
   "stats.mediaShows": "電視劇",
+  "stats.showInLibrary": "在資料庫中顯示",
   "uiPreview.activity": "活動",
   "uiPreview.activityDesign": "預覽已啟用淺色與深色外觀模式。",
   "uiPreview.activityMigration": "已移轉的收藏資料可在 PostgreSQL 中使用。",
