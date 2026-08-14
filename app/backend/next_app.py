@@ -188,6 +188,7 @@ try:
     from .next_common import count_table
     from .next_common import json_ready
     from .next_common import parse_bool_value
+    from .next_common import physical_format_label
     from .next_common import parse_int_arg
     from .next_common import parse_uuid
     from .next_common import parse_uuid_list
@@ -479,6 +480,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import count_table
     from next_common import json_ready
     from next_common import parse_bool_value
+    from next_common import physical_format_label
     from next_common import parse_int_arg
     from next_common import parse_uuid
     from next_common import parse_uuid_list
@@ -32456,34 +32458,14 @@ def register_routes(flask_app: Flask) -> None:
             )
             works = f"COUNT(DISTINCT {work_key})::int"
 
-            def format_label(raw: str) -> str:
-                """Format display labels for media formats."""
-                if not raw or raw == "Unknown":
-                    return "Unknown"
-                # Replace underscores with spaces and capitalize properly
-                text = raw.replace("_", " ")
-                # Special cases for known formats
-                replacements = {
-                    "4K UHD": "4K UHD",
-                    "4K UHD BLURAY": "4K UHD + Blu-Ray",
-                    "BLURAY": "Blu-Ray",
-                    "HD DVD": "HD DVD",
-                    "UMD": "UMD",
-                    "DVD": "DVD",
-                    "VHS": "VHS",
-                    "VCD": "VCD",
-                    "SVCD": "SVCD",
-                }
-                # Check if any replacement matches
-                for key, value in replacements.items():
-                    if key.replace(" ", "_").replace("+", "").lower() == raw.replace(" ", "_").replace("+", "").lower():
-                        return value
-                    if key.lower() == text.lower():
-                        return value
-                return text
-
+            # Grouped on the raw column and folded afterwards, because the
+            # spelling is decided in Python: `movies.format` is free text, so
+            # one format arrives as `4K_UHD_BLURAY`, as `4K UHD + Blu-ray`, and
+            # as whatever a person typed. Reporting those as separate formats
+            # is what listed one format twice on this page. `total` is summed
+            # from the same buckets, so it cannot drift from them.
             total = 0
-            by_format: list[dict[str, Any]] = []
+            format_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
                 SELECT COALESCE(NULLIF(TRIM(m.format), ''), 'Unknown') AS label,
@@ -32494,10 +32476,16 @@ def register_routes(flask_app: Flask) -> None:
                 ORDER BY count DESC, label
                 """
             ):
-                raw_label = row.get("label") or ""
-                formatted_label = format_label(raw_label)
-                by_format.append({"label": formatted_label, "count": int(row.get("count") or 0)})
-                total += int(row.get("count") or 0)
+                count = int(row.get("count") or 0)
+                label = physical_format_label(row.get("label") or "") or "Unknown"
+                format_counts[label] = format_counts.get(label, 0) + count
+                total += count
+            by_format = [
+                {"label": label, "count": count}
+                for label, count in sorted(
+                    format_counts.items(), key=lambda item: (-item[1], item[0].lower())
+                )
+            ]
 
             by_decade = [
                 {"label": (f"{row.get('decade')}s" if row.get("decade") is not None else "Unknown"),
