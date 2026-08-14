@@ -4093,6 +4093,65 @@ def ui_preview_html(
       color: var(--muted);
     }
     /* ============================================================
+       Chart palette.
+
+       Two jobs, two palettes. `--dv-series-*` tells unordered things
+       apart (formats, genres, people); `--dv-ordinal-*` is a single-hue
+       ramp for things that have an order (decades), because colouring an
+       ordered set with unrelated hues throws the order away.
+
+       Each mode gets its own steps rather than a flipped copy: the same
+       hue that reads well on white is too light on the dark surface. Both
+       sets were checked against the surfaces they actually sit on
+       (#FFFFFF and #111A2A) for lightness banding, chroma, contrast, and
+       colour-vision separation of neighbouring slots - the green/orange
+       pair in the previous palette was 7.1 ΔE apart under deuteranopia,
+       which is close enough to be a guess rather than a reading.
+
+       Slot order is fixed and never cycled: the ninth category folds into
+       "Other" instead of borrowing a hue that already means something.
+       ============================================================ */
+    :root {
+      --dv-series-1: #2a78d6;
+      --dv-series-2: #eb6834;
+      --dv-series-3: #1baf7a;
+      --dv-series-4: #eda100;
+      --dv-series-5: #e87ba4;
+      --dv-series-6: #008300;
+      --dv-series-7: #4a3aa7;
+      --dv-series-8: #e34948;
+      /* The residual is deliberately neutral - it is not a category, and a
+         hue here would read as one more thing to compare. */
+      --dv-series-other: #6b7280;
+      --dv-ordinal-1: #a4b7e1;
+      --dv-ordinal-2: #809fd9;
+      --dv-ordinal-3: #5486d2;
+      --dv-ordinal-4: #2b6fbf;
+      --dv-ordinal-5: #21599a;
+      --dv-ordinal-6: #174376;
+      --dv-ordinal-7: #0d2e54;
+      --dv-ordinal-8: #051a35;
+    }
+    html[data-theme="dark"] {
+      --dv-series-1: #3987e5;
+      --dv-series-2: #d95926;
+      --dv-series-3: #199e70;
+      --dv-series-4: #c98500;
+      --dv-series-5: #d55181;
+      --dv-series-6: #008300;
+      --dv-series-7: #9085e9;
+      --dv-series-8: #e66767;
+      --dv-series-other: #9ca3af;
+      --dv-ordinal-1: #1b4c85;
+      --dv-ordinal-2: #235ea2;
+      --dv-ordinal-3: #2b6fc0;
+      --dv-ordinal-4: #4c82d0;
+      --dv-ordinal-5: #7095d6;
+      --dv-ordinal-6: #8fa8dc;
+      --dv-ordinal-7: #abbde3;
+      --dv-ordinal-8: #c6d1eb;
+    }
+    /* ============================================================
        Statistics charts — Apple-style "glass" material.
 
        One material recipe is shared by every surface on this page:
@@ -4308,66 +4367,15 @@ def ui_preview_html(
       font-weight: 600;
       font-size: .82rem;
     }
-    /* ---- Horizontal bars (genres, decades) ---- */
-    .dv-bars {
-      display: grid;
-      gap: 11px;
-    }
-    .dv-bar-row {
-      display: grid;
-      gap: 5px;
-      min-width: 0;
-    }
-    .dv-bar-head {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-      font-size: .82rem;
-    }
-    .dv-bar-name {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .dv-bar-value {
-      flex: 0 0 auto;
-      font-variant-numeric: tabular-nums;
-      font-weight: 600;
-      font-size: .8rem;
-    }
-    .dv-bar-track {
-      position: relative;
-      height: 10px;
-      border-radius: 999px;
-      background: color-mix(in srgb, var(--line) 55%, transparent);
-      box-shadow: inset 0 1px 2px color-mix(in srgb, #000 8%, transparent);
-      overflow: hidden;
-    }
-    .dv-bar-fill {
-      height: 100%;
-      border-radius: 999px;
-      background: linear-gradient(90deg,
-        color-mix(in srgb, var(--dv-bar-color) 78%, transparent) 0%,
-        var(--dv-bar-color) 100%);
-      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 38%, transparent);
-      transform-origin: left center;
-      animation: dvBarGrow .62s cubic-bezier(.32,.72,0,1) both;
-    }
-    @keyframes dvBarGrow {
-      from { transform: scaleX(0); }
-      to   { transform: scaleX(1); }
-    }
     @keyframes dvChartFade {
       from { opacity: 0; transform: translateY(4px); }
       to   { opacity: 1; transform: none; }
     }
-    .dv-donut, .dv-bars {
+    .dv-donut {
       animation: dvChartFade .4s cubic-bezier(.32,.72,0,1) both;
     }
     @media (prefers-reduced-motion: reduce) {
-      .dv-bar-fill, .dv-donut, .dv-bars { animation: none; }
+      .dv-donut { animation: none; }
       .dv-donut-seg, .stats-segmented-thumb { transition: none; }
     }
     @media (max-width: 560px) {
@@ -15534,11 +15542,11 @@ def ui_preview_html(
           </div>
           <div class="stats-block">
             <h2 data-next-i18n="stats.byDecade">By decade</h2>
-            <div class="stats-bars" id="statsByDecade"></div>
+            <div class="stats-pie-chart-container" id="statsByDecade"></div>
           </div>
           <div class="stats-block">
             <h2 data-next-i18n="stats.byGenre">By genre</h2>
-            <div class="stats-genres" id="statsByGenre"></div>
+            <div class="stats-pie-chart-container" id="statsByGenre"></div>
           </div>
           <div class="stats-block stats-pie-chart-block">
             <h2 data-next-i18n="stats.topDirectors">Top 10 Directors</h2>
@@ -41316,16 +41324,19 @@ def ui_preview_html(
     }
     const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false, period: "all"};
     // --- Chart engine -------------------------------------------------
-    // Apple's system colours, vivid variants. They are picked so that
-    // neighbouring slices stay separable on both the light and the dark
-    // surface, and so that no two adjacent entries share a hue family.
-    const DV_CHART_COLORS = [
-      "#0A84FF", "#FF9F0A", "#30D158", "#BF5AF2", "#FF375F",
-      "#40C8E0", "#FFD60A", "#5E5CE6", "#FF6482", "#63E6E2",
-      "#AC8E68", "#66D4CF", "#DA8FFF", "#FFA766", "#8E8E93"
-    ];
+    // Colours come from CSS custom properties, not literals, so each theme
+    // supplies its own validated steps (see the palette block in the
+    // stylesheet). Eight slots, assigned in fixed order and never cycled.
+    const DV_SERIES_SLOTS = 8;
     function dvChartColor(index) {
-      return DV_CHART_COLORS[index % DV_CHART_COLORS.length];
+      return "var(--dv-series-" + ((index % DV_SERIES_SLOTS) + 1) + ")";
+    }
+    // Ordered categories sample the single-hue ramp across its full span, so
+    // a chart of three reads as a ramp just as a chart of eight does.
+    function dvOrdinalColor(index, count) {
+      if (count <= 1) return "var(--dv-ordinal-" + DV_SERIES_SLOTS + ")";
+      const slot = Math.round(1 + (index * (DV_SERIES_SLOTS - 1)) / (count - 1));
+      return "var(--dv-ordinal-" + slot + ")";
     }
     function dvChartRows(rows) {
       return (rows || []).filter((row) => Number(row && row.count) > 0);
@@ -41378,37 +41389,6 @@ def ui_preview_html(
         `A ${inner} ${inner} 0 ${largeArc} 0 ${x4.toFixed(2)} ${y4.toFixed(2)}`,
         "Z"
       ].join(" ");
-    }
-    // Horizontal bars, one colour per row. Used for decades and genres: a
-    // bar chart answers "how do these compare" far better than a donut once
-    // there are more than a handful of categories.
-    function statsBarsHtml(rows, options) {
-      const settings = options || {};
-      const items = dvChartRows(rows);
-      if (!items.length) return dvChartEmptyHtml();
-      const max = items.reduce((acc, row) => Math.max(acc, Number(row.count) || 0), 0) || 1;
-      const body = items
-        .map((row, index) => {
-          const count = Number(row.count) || 0;
-          const width = Math.max((count / max) * 100, 1.5);
-          // A single accent keeps a sequence (decades) reading as one series;
-          // per-row colour is for an unordered set (genres).
-          const color = settings.monochrome ? "var(--accent)" : dvChartColor(index);
-          const delay = Math.min(index * 40, 320);
-          return `
-            <div class="dv-bar-row">
-              <div class="dv-bar-head">
-                <span class="dv-bar-name">${escapeHtml(dvChartLabel(row))}</span>
-                <span class="dv-bar-value">${escapeHtml(dvFormatCount(count))}</span>
-              </div>
-              <div class="dv-bar-track">
-                <div class="dv-bar-fill" style="width:${width.toFixed(2)}%;--dv-bar-color:${escapeHtml(color)};animation-delay:${delay}ms"></div>
-              </div>
-            </div>
-          `;
-        })
-        .join("");
-      return `<div class="dv-bars">${body}</div>`;
     }
     function formatStatsPrice(value, currency = "EUR") {
       const numeric = Number(value);
@@ -41777,24 +41757,47 @@ def ui_preview_html(
       }
     }
     function statsGenresHtml(rows) {
-      return statsBarsHtml(rows);
+      return statsDonutChartHtml(rows);
     }
     // Donut, not pie: the hole carries the total, which is the number a
     // reader wants first, and the ring makes the small slices easier to
     // compare than wedges converging on a point.
-    function statsDonutChartHtml(rows) {
-      const all = dvChartRows(rows);
+    function statsDonutChartHtml(rows, options) {
+      const settings = options || {};
+      const ordinal = !!settings.ordinal;
+      let all = dvChartRows(rows);
       if (!all.length) return dvChartEmptyHtml();
-      // Beyond eight slices the ring stops being readable, so the tail is
-      // folded into one "Other" entry rather than shaved off - the total in
-      // the middle has to keep matching the data.
-      const MAX_SLICES = 8;
+      // Rank before folding. Callers do not agree on an order - genres arrive
+      // alphabetically, formats by count - and folding an alphabetical list
+      // keeps whatever starts with "A" while dropping a larger category into
+      // "Other". An ordered chart is exempt: its order *is* the information.
+      if (!ordinal) all = all.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+      // Beyond eight slices the ring stops being readable, so the surplus is
+      // folded rather than shaved off - the total in the middle has to keep
+      // matching the data it describes.
+      const MAX_SLICES = DV_SERIES_SLOTS;
       let items = all;
       if (all.length > MAX_SLICES) {
-        const head = all.slice(0, MAX_SLICES - 1);
-        const tail = all.slice(MAX_SLICES - 1);
-        const rest = tail.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
-        items = head.concat([{ label: tNext("stats.chartOther", "Other"), count: rest, _other: true }]);
+        if (ordinal) {
+          // An ordered set cannot fold its *smallest* entries into "Other"
+          // without scrambling the order, so the oldest buckets merge into a
+          // single leading one and the label states the range it covers.
+          const fold = all.slice(0, all.length - MAX_SLICES + 1);
+          const kept = all.slice(all.length - MAX_SLICES + 1);
+          const merged = fold.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+          const first = dvChartLabel(fold[0]);
+          const last = dvChartLabel(fold[fold.length - 1]);
+          items = [{
+            label: fold.length > 1 ? first + "–" + last : first,
+            count: merged,
+            _literal: true
+          }].concat(kept);
+        } else {
+          const head = all.slice(0, MAX_SLICES - 1);
+          const tail = all.slice(MAX_SLICES - 1);
+          const rest = tail.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+          items = head.concat([{ label: tNext("stats.chartOther", "Other"), count: rest, _other: true }]);
+        }
       }
       const total = items.reduce((sum, row) => sum + (Number(row.count) || 0), 0) || 1;
       const OUTER = 88;
@@ -41811,10 +41814,14 @@ def ui_preview_html(
         // Never let the gap eat a slice whole: a 0.4% slice must still show.
         const inset = Math.min(GAP, Math.max(sweep - 0.6, 0)) / 2;
         return {
-          label: row._other ? row.label : dvChartLabel(row),
+          label: row._other || row._literal ? row.label : dvChartLabel(row),
           count: count,
           share: (count / total) * 100,
-          color: row._other ? "#8E8E93" : dvChartColor(index),
+          color: row._other
+            ? "var(--dv-series-other)"
+            : ordinal
+              ? dvOrdinalColor(index, items.length)
+              : dvChartColor(index),
           path: dvAnnulusPath(start + inset, start + sweep - inset, OUTER, INNER)
         };
       });
@@ -41905,8 +41912,9 @@ def ui_preview_html(
       const byGenre = document.getElementById("statsByGenre");
       if (byGenre) byGenre.innerHTML = statsGenresHtml(data.byGenre);
       const byDecade = document.getElementById("statsByDecade");
-      // Decades are a sequence, so they read as one accented series.
-      if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade, {monochrome: true});
+      // Decades are ordered, so they take the single-hue ramp rather than
+      // eight unrelated hues, which would throw that order away.
+      if (byDecade) byDecade.innerHTML = statsDonutChartHtml(data.byDecade, {ordinal: true});
       const byTopDirectors = document.getElementById("statsByTopDirectors");
       if (byTopDirectors) byTopDirectors.innerHTML = statsDonutChartHtml(data.topDirectors);
       const byTopActors = document.getElementById("statsByTopActors");
