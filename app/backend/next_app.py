@@ -955,6 +955,27 @@ STATS_PERIOD_WINDOW_DAYS: dict[str, int | None] = {
     STATS_PERIOD_ALL: None,
 }
 
+# Which `movie_credits` rows count as a director and which as an actor.
+#
+# A credit is stored across two columns and which one carries the answer
+# depends on where the row came from. A metadata refresh normalises
+# `credit_type` to 'actor' or 'crew' and leaves the provider's own wording in
+# `job` - TMDB writes 'Director', with a capital D, and gives cast rows no job
+# at all. The legacy importer copies the old database's role straight into
+# `credit_type` without normalising it, so there 'director' can be the
+# credit_type itself.
+#
+# `job` is compared for equality rather than by substring on purpose:
+# 'Director of Photography' and 'Assistant Director' both contain the word and
+# neither directed the film.
+#
+# Module level so the test can pin these exact predicates rather than a copy of
+# them that can drift; `mc` is the movie_credits alias the query uses.
+STATS_TOP_CREDIT_FILTERS: dict[str, str] = {
+    "director": "(lower(mc.job) = 'director' OR lower(mc.credit_type) = 'director')",
+    "actor": "(lower(mc.credit_type) IN ('actor', 'cast'))",
+}
+
 
 def _update_version_tuple(value: Any) -> tuple[int, ...]:
     """Parse a semver-ish string into a comparable integer tuple.
@@ -32538,49 +32559,34 @@ def register_routes(flask_app: Flask) -> None:
             )
             capture_collection_value_snapshot(conn, actor)
 
-            # Top directors
-            top_directors = []
+            # Matching only `job = 'director'` found nothing on either storage
+            # shape - see STATS_TOP_CREDIT_FILTERS: refreshed rows differ by
+            # case, imported ones keep the value in the other column, and no
+            # cast row has ever had job = 'actor'. Both charts read empty on a
+            # collection that was full.
+            top_credits: dict[str, list[dict[str, Any]]] = {"director": [], "actor": []}
             if table_exists(conn, "movie_credits"):
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"""
-                        SELECT p.name, COUNT(DISTINCT m.id)::int AS count
-                        FROM movies m
-                        JOIN movie_credits mc ON mc.movie_id = m.id
-                        JOIN people p ON p.id = mc.person_id
-                        WHERE {where} AND mc.job = 'director'
-                        GROUP BY p.name
-                        ORDER BY count DESC, p.name
-                        LIMIT 10
-                        """,
-                        params
-                    )
-                    top_directors = [
-                        {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
-                        for row in cur.fetchall()
-                    ]
-
-            # Top actors/cast
-            top_actors = []
-            if table_exists(conn, "movie_credits"):
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"""
-                        SELECT p.name, COUNT(DISTINCT m.id)::int AS count
-                        FROM movies m
-                        JOIN movie_credits mc ON mc.movie_id = m.id
-                        JOIN people p ON p.id = mc.person_id
-                        WHERE {where} AND mc.job = 'actor'
-                        GROUP BY p.name
-                        ORDER BY count DESC, p.name
-                        LIMIT 10
-                        """,
-                        params
-                    )
-                    top_actors = [
-                        {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
-                        for row in cur.fetchall()
-                    ]
+                for credit_key, credit_filter in STATS_TOP_CREDIT_FILTERS.items():
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            f"""
+                            SELECT p.name, COUNT(DISTINCT m.id)::int AS count
+                            FROM movies m
+                            JOIN movie_credits mc ON mc.movie_id = m.id
+                            JOIN people p ON p.id = mc.person_id
+                            WHERE {where} AND {credit_filter}
+                            GROUP BY p.name
+                            ORDER BY count DESC, p.name
+                            LIMIT 10
+                            """,
+                            params,
+                        )
+                        top_credits[credit_key] = [
+                            {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
+                            for row in cur.fetchall()
+                        ]
+            top_directors = top_credits["director"]
+            top_actors = top_credits["actor"]
 
             return response(
                 {
