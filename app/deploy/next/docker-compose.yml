@@ -51,6 +51,10 @@ services:
       # Only next-api terminates HTTP, so only next-api needs to know which hop
       # may speak for a client. Empty means no forwarding header is believed.
       DISCVAULT_TRUSTED_PROXIES: ${DISCVAULT_TRUSTED_PROXIES:-}
+      # Only next-api serves pages, so only next-api can be crawled. Default on:
+      # known search-engine and AI-crawler user agents get a 403, every response
+      # carries X-Robots-Tag: noindex, and /robots.txt disallows everything.
+      DISCVAULT_BLOCK_CRAWLERS: ${DISCVAULT_BLOCK_CRAWLERS:-true}
       DISCVAULT_NEXT_ENABLE_TEST_RESET: ${DISCVAULT_NEXT_ENABLE_TEST_RESET:-false}
       DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED: ${DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED:-false}
       DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS: ${DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS:-10000}
