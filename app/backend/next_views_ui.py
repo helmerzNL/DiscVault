@@ -4179,6 +4179,13 @@ def ui_preview_html(
       gap: 12px;
       margin: 0;
     }
+    .stats-filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
     .stats-period-note {
       margin: 0;
       color: var(--muted);
@@ -15644,12 +15651,20 @@ def ui_preview_html(
           </div>
         </section>
         <div class="stats-view-toolbar">
-          <div class="stats-segmented" id="statsPeriodControl" role="tablist" aria-label="Period" data-next-i18n-aria="stats.periodLabel">
+          <div class="stats-filter-group">
+            <div class="stats-segmented" data-stats-filter="period" role="tablist" aria-label="Period" data-next-i18n-aria="stats.periodLabel">
             <span class="stats-segmented-thumb" aria-hidden="true"></span>
-            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-period="month" data-next-i18n="stats.periodMonth">Last month</button>
-            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-period="year" data-next-i18n="stats.periodYear">Last year</button>
-            <button type="button" role="tab" aria-selected="true" tabindex="0" data-stats-period="all" data-next-i18n="stats.periodAll">All time</button>
-          </div>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="month" data-next-i18n="stats.periodMonth">Last month</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="year" data-next-i18n="stats.periodYear">Last year</button>
+            <button type="button" role="tab" aria-selected="true" tabindex="0" data-stats-value="all" data-next-i18n="stats.periodAll">All time</button>
+            </div>
+            <div class="stats-segmented" data-stats-filter="mediaType" role="tablist" aria-label="Type" data-next-i18n-aria="stats.mediaLabel">
+            <span class="stats-segmented-thumb" aria-hidden="true"></span>
+            <button type="button" role="tab" aria-selected="true" tabindex="0" data-stats-value="all" data-next-i18n="stats.mediaAll">All</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="movie" data-next-i18n="stats.mediaMovies">Movie</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="show" data-next-i18n="stats.mediaShows">TV Show</button>
+            </div>
+            </div>
           <p class="stats-period-note" data-next-i18n="stats.periodNote">Added in the selected period</p>
         </div>
         <div class="stats-cards" id="statsCards"></div>
@@ -25834,7 +25849,7 @@ def ui_preview_html(
       renderAppRegistrationMode();
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
-      renderStatsPeriodControl();
+      renderStatsSegmented();
     }
     let lastPersistedLocale = null;
     function persistNextLocale(locale) {
@@ -41539,7 +41554,7 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false, period: "all"};
+    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false, period: "all", mediaType: "all"};
     // --- Chart engine -------------------------------------------------
     // Colours come from CSS custom properties, not literals, so each theme
     // supplies its own validated steps (see the palette block in the
@@ -42286,53 +42301,62 @@ def ui_preview_html(
       if (period === "year") return 365;
       return null;
     }
-    function renderStatsPeriodControl() {
-      const control = document.getElementById("statsPeriodControl");
-      if (!control) return;
-      const buttons = Array.from(control.querySelectorAll("[data-stats-period]"));
-      const thumb = control.querySelector(".stats-segmented-thumb");
-      buttons.forEach((button) => {
-        const selected = button.dataset.statsPeriod === statsState.period;
-        button.setAttribute("aria-selected", selected ? "true" : "false");
-        button.tabIndex = selected ? 0 : -1;
+    // One implementation for both segmented controls. Each is keyed by the
+    // statsState field it drives, so adding a third filter is markup plus a
+    // default - not another copy of this logic.
+    function renderStatsSegmented() {
+      document.querySelectorAll("#statisticsView [data-stats-filter]").forEach((control) => {
+        const field = control.dataset.statsFilter;
+        const buttons = Array.from(control.querySelectorAll("[data-stats-value]"));
+        buttons.forEach((button) => {
+          const selected = button.dataset.statsValue === statsState[field];
+          button.setAttribute("aria-selected", selected ? "true" : "false");
+          button.tabIndex = selected ? 0 : -1;
+        });
+        const active = buttons.find((button) => button.dataset.statsValue === statsState[field]);
+        const thumb = control.querySelector(".stats-segmented-thumb");
+        // The sliding thumb is positioned from the real button box, so it stays
+        // correct whatever width the translated labels turn out to need.
+        if (thumb && active) {
+          thumb.style.width = active.offsetWidth + "px";
+          thumb.style.transform = "translateX(" + active.offsetLeft + "px)";
+        }
       });
-      const active = buttons.find((button) => button.dataset.statsPeriod === statsState.period);
-      // The sliding thumb is positioned from the real button box, so it stays
-      // correct whatever width the translated labels turn out to need.
-      if (thumb && active) {
-        thumb.style.width = active.offsetWidth + "px";
-        thumb.style.transform = "translateX(" + active.offsetLeft + "px)";
-      }
     }
-    function setupStatsPeriodControl() {
-      const control = document.getElementById("statsPeriodControl");
-      if (!control || control.dataset.dvBound === "1") return;
-      control.dataset.dvBound = "1";
-      control.addEventListener("click", (event) => {
-        const button = event.target.closest("[data-stats-period]");
-        if (!button) return;
-        const period = button.dataset.statsPeriod;
-        if (!period || period === statsState.period) return;
-        statsState.period = period;
-        renderStatsPeriodControl();
+    function setupStatsSegmented() {
+      const root = document.getElementById("statisticsView");
+      if (!root || root.dataset.dvSegmentedBound === "1") return;
+      root.dataset.dvSegmentedBound = "1";
+      const select = (control, value) => {
+        const field = control.dataset.statsFilter;
+        if (!field || statsState[field] === value) return false;
+        statsState[field] = value;
+        renderStatsSegmented();
         loadStatisticsView(true);
+        return true;
+      };
+      root.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-stats-value]");
+        const control = button && button.closest("[data-stats-filter]");
+        if (!control) return;
+        select(control, button.dataset.statsValue);
       });
       // Arrow keys move between segments, as they do in a native control.
-      control.addEventListener("keydown", (event) => {
+      root.addEventListener("keydown", (event) => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
-        const buttons = Array.from(control.querySelectorAll("[data-stats-period]"));
-        const current = buttons.findIndex((button) => button.dataset.statsPeriod === statsState.period);
+        const control = event.target.closest("[data-stats-filter]");
+        if (!control) return;
+        const field = control.dataset.statsFilter;
+        const buttons = Array.from(control.querySelectorAll("[data-stats-value]"));
+        const current = buttons.findIndex((button) => button.dataset.statsValue === statsState[field]);
         if (current < 0) return;
         const step = event.key === "ArrowRight" ? 1 : -1;
         const next = buttons[(current + step + buttons.length) % buttons.length];
         if (!next) return;
         event.preventDefault();
-        statsState.period = next.dataset.statsPeriod;
-        renderStatsPeriodControl();
-        next.focus();
-        loadStatisticsView(true);
+        if (select(control, next.dataset.statsValue)) next.focus();
       });
-      window.addEventListener("resize", renderStatsPeriodControl);
+      window.addEventListener("resize", renderStatsSegmented);
     }
     async function loadStatisticsView(force = false) {
       if (!hasPermission("watchlist.manage")) return;
@@ -42345,11 +42369,15 @@ def ui_preview_html(
         empty.textContent = tNext("collection.loading", "Loading...");
         empty.classList.remove("hidden");
       }
-      setupStatsPeriodControl();
-      renderStatsPeriodControl();
+      setupStatsSegmented();
+      renderStatsSegmented();
       try {
         const period = statsState.period || "all";
-        const payload = await authApiJson("/api/next/stats/personal?period=" + encodeURIComponent(period));
+        const mediaType = statsState.mediaType || "all";
+        const payload = await authApiJson(
+          "/api/next/stats/personal?period=" + encodeURIComponent(period)
+          + "&mediaType=" + encodeURIComponent(mediaType)
+        );
         statsState.data = payload;
         // Separate endpoint, and deliberately not fatal: the snapshot series is
         // a nice-to-have on this page, and losing it must not blank the counters
@@ -42370,7 +42398,7 @@ def ui_preview_html(
         }
         statsState.loaded = true;
         renderStatisticsView();
-        renderStatsPeriodControl();
+        renderStatsSegmented();
       } catch (error) {
         if (empty) {
           empty.textContent = error.message || String(error);

@@ -955,6 +955,58 @@ STATS_PERIOD_WINDOW_DAYS: dict[str, int | None] = {
     STATS_PERIOD_ALL: None,
 }
 
+# The three slices the statistics view can be narrowed to. The value is what
+# `movies.media_type` stores, or None for "do not filter".
+STATS_MEDIA_ALL = "all"
+STATS_MEDIA_TYPES: dict[str, str | None] = {
+    "movie": "MOVIE",
+    "show": "SHOW",
+    STATS_MEDIA_ALL: None,
+}
+
+# What counts as *one thing* when a chart is about a work rather than a disc.
+#
+# A shelf holds releases, not works: two editions of the same film are two
+# `movies` rows, and a season box set is one row per disc. Counting rows makes
+# a director score twice for owning a film twice, and a series' cast score once
+# per season - which says more about how the collection was bought than about
+# what is in it.
+#
+# The key follows the identity ladder the rest of the server already uses
+# (`dedup_identity.select_tmdb_identifier`), one rung at a time:
+#
+#   1. every disc of one series is that series, so a box set counts once;
+#   2. editions of one film share a TMDB movie_id, so they collapse together;
+#   3. anything else stands for itself, which is the old behaviour.
+#
+# Under-merging is the safe direction and is what happens without metadata: a
+# film nobody resolved keeps its own key. Over-merging would need two different
+# works to carry the same TMDB id, which the ladder does not allow.
+#
+# The prefixes keep the rungs in separate namespaces, so a series id can never
+# collide with a row id.
+STATS_WORK_KEY_SQL = (
+    "COALESCE('series:' || m.series_id::text, "
+    "'tmdb:' || stats_work_tmdb.identifier, "
+    "'row:' || m.id::text)"
+)
+
+# Resolves rung 2 for the row in hand. LATERAL rather than a correlated scalar
+# subquery so it is evaluated once per movie even when the query groups.
+STATS_WORK_KEY_JOIN = """
+LEFT JOIN LATERAL (
+    SELECT mi.identifier
+    FROM movie_identifiers mi
+    WHERE mi.movie_id = m.id
+      AND lower(mi.provider_id) = 'tmdb'
+      AND lower(mi.identifier_type) = 'movie_id'
+      AND NULLIF(TRIM(mi.identifier), '') IS NOT NULL
+    ORDER BY mi.identifier
+    LIMIT 1
+) stats_work_tmdb ON TRUE
+"""
+
+
 # Which `movie_credits` rows count as a director and which as an actor.
 #
 # A credit is stored across two columns and which one carries the answer
@@ -32359,6 +32411,12 @@ def register_routes(flask_app: Flask) -> None:
             if window_days is not None
             else None
         )
+        media_type = clean_text(request.args.get("mediaType")).lower() or STATS_MEDIA_ALL
+        if media_type not in STATS_MEDIA_TYPES:
+            raise NextApiError(
+                f"mediaType must be one of: {', '.join(sorted(STATS_MEDIA_TYPES))}",
+                400,
+            )
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
@@ -32370,6 +32428,10 @@ def register_routes(flask_app: Flask) -> None:
             if period_start is not None:
                 where = f"({where}) AND m.created_at >= %s"
                 params.append(period_start)
+            stored_media_type = STATS_MEDIA_TYPES[media_type]
+            if stored_media_type is not None:
+                where = f"({where}) AND m.media_type = %s"
+                params.append(stored_media_type)
 
             def _period_clause(column: str) -> tuple[str, list[Any]]:
                 """Extra AND-clause restricting an event table to the window."""
@@ -32381,6 +32443,18 @@ def register_routes(flask_app: Flask) -> None:
                 with conn.cursor() as cur:
                     cur.execute(sql, params)
                     return cur.fetchall()
+
+            # Rung 2 needs the identifier table; without it the key degrades to
+            # series-or-row, which still fixes the box set and leaves editions
+            # counted separately - the direction that under-merges.
+            has_identifiers = table_exists(conn, "movie_identifiers")
+            work_join = STATS_WORK_KEY_JOIN if has_identifiers else ""
+            work_key = (
+                STATS_WORK_KEY_SQL
+                if has_identifiers
+                else "COALESCE('series:' || m.series_id::text, 'row:' || m.id::text)"
+            )
+            works = f"COUNT(DISTINCT {work_key})::int"
 
             def format_label(raw: str) -> str:
                 """Format display labels for media formats."""
@@ -32431,8 +32505,9 @@ def register_routes(flask_app: Flask) -> None:
                 for row in _bucket_rows(
                     f"""
                     SELECT (NULLIF(substring(m.year from '[0-9]{{4}}'), '')::int / 10 * 10) AS decade,
-                           COUNT(*)::int AS count
+                           {works} AS count
                     FROM movies m
+                    {work_join}
                     WHERE {where}
                     GROUP BY 1
                     ORDER BY decade NULLS LAST
@@ -32445,8 +32520,9 @@ def register_routes(flask_app: Flask) -> None:
                 for row in _bucket_rows(
                     f"""
                     SELECT COALESCE(NULLIF(TRIM(m.rating), ''), 'Unrated') AS label,
-                           COUNT(*)::int AS count
+                           {works} AS count
                     FROM movies m
+                    {work_join}
                     WHERE {where}
                     GROUP BY 1
                     ORDER BY count DESC, label
@@ -32457,9 +32533,10 @@ def register_routes(flask_app: Flask) -> None:
             genre_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
-                SELECT mg.genre_key AS genre, COUNT(DISTINCT m.id)::int AS count
+                SELECT mg.genre_key AS genre, {works} AS count
                 FROM movies m
                 JOIN movie_genres mg ON mg.movie_id = m.id
+                {work_join}
                 WHERE {where}
                 GROUP BY mg.genre_key
                 """
@@ -32472,13 +32549,14 @@ def register_routes(flask_app: Flask) -> None:
                     genre_counts[key] = genre_counts.get(key, 0) + count
             unknown_genre_sql = (
                 f"""
-                SELECT COUNT(*)::int AS count
+                SELECT {works} AS count
                 FROM movies m
+                {work_join}
                 WHERE {where}
                   AND NOT EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id)
                 """
                 if table_exists(conn, "movie_genres")
-                else f"SELECT COUNT(*)::int AS count FROM movies m WHERE {where}"
+                else f"SELECT {works} AS count FROM movies m {work_join} WHERE {where}"
             )
             unknown_rows = _bucket_rows(unknown_genre_sql)
             unknown_count = int(unknown_rows[0].get("count") or 0) if unknown_rows else 0
@@ -32671,10 +32749,11 @@ def register_routes(flask_app: Flask) -> None:
                     with conn.cursor() as cur:
                         cur.execute(
                             f"""
-                            SELECT p.name, COUNT(DISTINCT m.id)::int AS count
+                            SELECT p.name, {works} AS count
                             FROM movies m
                             JOIN movie_credits mc ON mc.movie_id = m.id
                             JOIN people p ON p.id = mc.person_id
+                            {work_join}
                             WHERE {where} AND {credit_filter}
                             GROUP BY p.name
                             ORDER BY count DESC, p.name
@@ -32694,6 +32773,7 @@ def register_routes(flask_app: Flask) -> None:
                     "status": "ok",
                     "period": period,
                     "periodStart": period_start.isoformat() if period_start else None,
+                    "mediaType": media_type,
                     "totalMovies": total,
                     "byFormat": by_format,
                     "byDecade": by_decade,
