@@ -10947,6 +10947,44 @@ def movie_clears(mutation: dict[str, Any], payload: dict[str, Any]) -> dict[str,
     return updated
 
 
+def apply_pin_marker_writes(payload: dict[str, Any], metadata: dict[str, Any]) -> None:
+    """Fold an incoming §4.8b pin marker onto the key the server stores it under.
+
+    §4.8b splits the marker the way this contract splits every field: the write
+    key is camelCase (`metadata.posterIsPinned`), the read key is snake_case.
+    Here that meets a third name -- `{kind}_locked`, what the server has always
+    stored -- so the translation lands on the stored truth and the wire spelling
+    is never persisted. Letting `posterIsPinned` through untranslated would sit
+    in `movies.metadata` looking authoritative while every reader of the pin,
+    server and PWA alike, went on consulting `poster_locked`.
+
+    **Presence-keyed, not truthiness-keyed**, for the same reason as
+    `technical_edits` and `discs`: the client metadata object is sparse (§4.8),
+    an omitted key is "no opinion", and the upsert's `||` merge leaves it alone.
+    A build predating §4.8b sends no key and must not unpin a collection. An
+    explicit `false` is a real unpin and is written as one.
+
+    The pitfall guard deliberately does *not* live here. A client may pin
+    without resending a URL it never changed, so refusing the write would drop a
+    legitimate pin; the marker is instead withheld at publication by
+    `movie_pin_markers`, which is what every consumer actually reads.
+    """
+    for wire_key, camel_key, locked_key, _url_key in _MOVIE_PIN_MARKERS:
+        for source in (metadata, payload):
+            present = next(
+                (key for key in (camel_key, wire_key) if key in source),
+                None,
+            )
+            if present is None:
+                continue
+            metadata[locked_key] = parse_bool_value(source[present])
+            # The wire spelling never reaches storage, whichever object carried
+            # it -- `metadata` is merged into the column as-is.
+            metadata.pop(camel_key, None)
+            metadata.pop(wire_key, None)
+            break
+
+
 def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -10959,6 +10997,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     ):
         if payload.get(source):
             metadata[target] = payload[source]
+    apply_pin_marker_writes(payload, metadata)
     release_date = storage_optional_date(payload.get("releaseDate") or payload.get("release_date"))
     purchase_date = storage_optional_date(payload.get("purchaseDate") or payload.get("purchase_date"))
     return {
@@ -12445,6 +12484,65 @@ def movie_edit_receiver_proposal(
     }
 
 
+# The two markers of sync-contract §4.8b: the read key, the camelCase write key,
+# the metadata key that already carries the same fact, and the URL that has to
+# back it. Spelled out rather than derived -- §4.8a is a standing record of what
+# guessing a key's other spelling costs here.
+#
+# §4.8b names `poster_is_pinned`/`backdrop_is_pinned`, but the server has been
+# recording a pinned primary as `{kind}_locked` since long before the section
+# existed: every path that pins one -- the artwork picker's "use this one", an
+# upload, a trash-with-replacement -- writes `{kind}_url` and `{kind}_locked`
+# in the same statement. So this is a rename on the wire, not a new fact, and
+# the two names must never be allowed to disagree. Derived on read rather than
+# stored, so there is exactly one stored truth.
+_MOVIE_PIN_MARKERS: tuple[tuple[str, str, str, str], ...] = (
+    ("poster_is_pinned", "posterIsPinned", "poster_locked", "poster_url"),
+    ("backdrop_is_pinned", "backdropIsPinned", "backdrop_locked", "backdrop_url"),
+)
+
+
+def movie_pin_markers(metadata: Any) -> dict[str, bool]:
+    """The §4.8b pin markers a movie's metadata implies.
+
+    Only ever returns `True`. Absent means "not pinned" in §4.8b -- explicitly
+    not "unknown" -- so an unpinned movie carries no key at all and an install
+    that predates this behaves exactly as it did.
+
+    The URL check is the §4.8b pitfall, enforced at the producer instead of
+    trusted to every consumer: a marker with nothing behind it is worse than no
+    marker, because a client that believes it stops falling back. `{kind}_url`
+    can legitimately be empty here -- `media_asset_public_url` returns "" for an
+    asset it cannot address -- and that combination must read as unpinned.
+    """
+    if not isinstance(metadata, dict):
+        return {}
+    markers: dict[str, bool] = {}
+    for wire_key, _camel_key, locked_key, url_key in _MOVIE_PIN_MARKERS:
+        if not parse_bool_value(metadata.get(locked_key)):
+            continue
+        if not first_usable_image(metadata.get(url_key)):
+            continue
+        markers[wire_key] = True
+    return markers
+
+
+def attach_movie_pin_markers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fold the §4.8b markers into each row's published `metadata`.
+
+    Called from both sync payload builders. `movie_entity` also feeds the delta
+    (a sync change stores the entity verbatim), so folding here covers bootstrap
+    and delta together -- the drift `_MOVIE_SYNC_COLUMNS` below exists to stop.
+    """
+    for row in rows:
+        metadata = row.get("metadata")
+        markers = movie_pin_markers(metadata)
+        if not markers:
+            continue
+        row["metadata"] = {**metadata, **markers}
+    return rows
+
+
 # The `movies` columns every sync payload carries, shared by the two builders
 # below so they cannot drift apart again.
 #
@@ -12534,6 +12632,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         attach_movie_technical_specs(conn, [row])
         attach_movie_seasons(conn, [row])
         attach_movie_discs(conn, [row])
+        attach_movie_pin_markers([row])
     return row
 
 
@@ -19707,11 +19806,13 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_discs(
-            conn,
-            attach_movie_seasons(
-                conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
-            ),
+        return attach_movie_pin_markers(
+            attach_movie_discs(
+                conn,
+                attach_movie_seasons(
+                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+                ),
+            )
         )
 
 
