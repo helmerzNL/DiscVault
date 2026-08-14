@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Κορυφαίοι 10 σκηνοθέτες",
+  "stats.topActors": "Κορυφαίοι 10 ηθοποιοί",
   "stats.cardCollectionValue": "Αξία της συλλογής",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Αφαίρεση σεζόν από τη λίστα παρακολούθησης",
   "seriesDetail.seasonBulkHint": "Ισχύει για κάθε επεισόδιο αυτής της λίστας.",
   "seriesDetail.episodeImageFromSeason": "Εικόνα σεζόν",
-  "seriesDetail.episodeImageFromSeries": "Εικόνα σειράς",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Εικόνα σειράς"
 }

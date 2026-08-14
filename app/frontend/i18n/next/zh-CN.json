@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "导演 Top 10",
+  "stats.topActors": "演员 Top 10",
   "stats.cardCollectionValue": "收藏价值",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "将本季从待看列表移除",
   "seriesDetail.seasonBulkHint": "适用于此处列出的所有剧集。",
   "seriesDetail.episodeImageFromSeason": "本季图片",
-  "seriesDetail.episodeImageFromSeries": "本剧图片",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "本剧图片"
 }

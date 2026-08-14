@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Top 10 Regisseure",
+  "stats.topActors": "Top 10 Schauspieler",
   "stats.cardCollectionValue": "Sammlungswert",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Staffel von der Watchlist entfernen",
   "seriesDetail.seasonBulkHint": "Gilt für jede hier aufgeführte Episode.",
   "seriesDetail.episodeImageFromSeason": "Staffelbild",
-  "seriesDetail.episodeImageFromSeries": "Serienbild",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Serienbild"
 }

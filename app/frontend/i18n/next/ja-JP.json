@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "監督トップ10",
+  "stats.topActors": "俳優トップ10",
   "stats.cardCollectionValue": "コレクションの価値",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "シーズンをウォッチリストから削除",
   "seriesDetail.seasonBulkHint": "ここに表示されているすべてのエピソードに適用されます。",
   "seriesDetail.episodeImageFromSeason": "シーズンの画像",
-  "seriesDetail.episodeImageFromSeries": "シリーズの画像",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "シリーズの画像"
 }

@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Top 10 režiserjev",
+  "stats.topActors": "Top 10 igralcev",
   "stats.cardCollectionValue": "Vrednost zbirke",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Odstrani sezono s seznama za ogled",
   "seriesDetail.seasonBulkHint": "Velja za vse epizode na tem seznamu.",
   "seriesDetail.episodeImageFromSeason": "Slika sezone",
-  "seriesDetail.episodeImageFromSeries": "Slika serije",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Slika serije"
 }

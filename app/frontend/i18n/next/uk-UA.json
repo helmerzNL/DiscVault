@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Топ-10 режисерів",
+  "stats.topActors": "Топ-10 акторів",
   "stats.cardCollectionValue": "Вартість колекції",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Вилучити сезон зі списку для перегляду",
   "seriesDetail.seasonBulkHint": "Стосується всіх епізодів у цьому списку.",
   "seriesDetail.episodeImageFromSeason": "Зображення сезону",
-  "seriesDetail.episodeImageFromSeries": "Зображення серіалу",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Зображення серіалу"
 }

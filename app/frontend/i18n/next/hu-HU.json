@@ -2449,6 +2449,8 @@
   "stats.byFormat": "By format",
   "stats.byGenre": "By genre",
   "stats.byRating": "By rating",
+  "stats.topDirectors": "Top 10 rendező",
+  "stats.topActors": "Top 10 színész",
   "stats.cardCollectionValue": "A gyűjtemény értéke",
   "stats.cardMovies": "Movies",
   "stats.cardOnLoan": "On loan",
@@ -3028,7 +3030,5 @@
   "seriesDetail.removeSeasonFromWatchlist": "Évad eltávolítása a néznivalólistáról",
   "seriesDetail.seasonBulkHint": "Az itt felsorolt összes epizódra vonatkozik.",
   "seriesDetail.episodeImageFromSeason": "Évad képe",
-  "seriesDetail.episodeImageFromSeries": "Sorozat képe",
-  "stats.topDirectors": "Top 10 Directors",
-  "stats.topActors": "Top 10 Actors"
+  "seriesDetail.episodeImageFromSeries": "Sorozat képe"
 }
