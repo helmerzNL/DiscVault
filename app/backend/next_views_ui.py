@@ -3906,11 +3906,22 @@ def ui_preview_html(
       gap: 12px;
       margin-bottom: 14px;
     }
+    /* Every other top-level view is a grid whose gap does the spacing between
+       hero, toolbar and content. The statistics view was left as plain flow,
+       so the period control sat flush on the hero's bottom border with no gap
+       at all - which is why it read as sitting on top of the banner. The
+       spacing lives here rather than as a margin on each child, so a block
+       added later is spaced without having to know about it. */
+    .statistics-view {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      align-content: start;
+    }
     .stats-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 14px;
-      margin-bottom: 20px;
     }
     .stat-card {
       border: 1px solid var(--line);
@@ -4091,6 +4102,444 @@ def ui_preview_html(
     }
     .stats-price-change.flat {
       color: var(--muted);
+    }
+    /* ============================================================
+       Chart palette.
+
+       Two jobs, two palettes. `--dv-series-*` tells unordered things
+       apart (formats, genres, people); `--dv-ordinal-*` is a single-hue
+       ramp for things that have an order (decades), because colouring an
+       ordered set with unrelated hues throws the order away.
+
+       Each mode gets its own steps rather than a flipped copy: the same
+       hue that reads well on white is too light on the dark surface. Both
+       sets were checked against the surfaces they actually sit on
+       (#FFFFFF and #111A2A) for lightness banding, chroma, contrast, and
+       colour-vision separation of neighbouring slots - the green/orange
+       pair in the previous palette was 7.1 ΔE apart under deuteranopia,
+       which is close enough to be a guess rather than a reading.
+
+       Slot order is fixed and never cycled: the ninth category folds into
+       "Other" instead of borrowing a hue that already means something.
+       ============================================================ */
+    :root {
+      --dv-series-1: #2a78d6;
+      --dv-series-2: #eb6834;
+      --dv-series-3: #1baf7a;
+      --dv-series-4: #eda100;
+      --dv-series-5: #e87ba4;
+      --dv-series-6: #008300;
+      --dv-series-7: #4a3aa7;
+      --dv-series-8: #e34948;
+      /* The residual is deliberately neutral - it is not a category, and a
+         hue here would read as one more thing to compare. */
+      --dv-series-other: #6b7280;
+      --dv-ordinal-1: #a4b7e1;
+      --dv-ordinal-2: #809fd9;
+      --dv-ordinal-3: #5486d2;
+      --dv-ordinal-4: #2b6fbf;
+      --dv-ordinal-5: #21599a;
+      --dv-ordinal-6: #174376;
+      --dv-ordinal-7: #0d2e54;
+      --dv-ordinal-8: #051a35;
+    }
+    html[data-theme="dark"] {
+      --dv-series-1: #3987e5;
+      --dv-series-2: #d95926;
+      --dv-series-3: #199e70;
+      --dv-series-4: #c98500;
+      --dv-series-5: #d55181;
+      --dv-series-6: #008300;
+      --dv-series-7: #9085e9;
+      --dv-series-8: #e66767;
+      --dv-series-other: #9ca3af;
+      --dv-ordinal-1: #1b4c85;
+      --dv-ordinal-2: #235ea2;
+      --dv-ordinal-3: #2b6fc0;
+      --dv-ordinal-4: #4c82d0;
+      --dv-ordinal-5: #7095d6;
+      --dv-ordinal-6: #8fa8dc;
+      --dv-ordinal-7: #abbde3;
+      --dv-ordinal-8: #c6d1eb;
+    }
+    /* ============================================================
+       Statistics charts — Apple-style "glass" material.
+
+       One material recipe is shared by every surface on this page:
+       a translucent tinted fill, a backdrop blur that saturates what
+       sits behind it, a hairline top highlight (the specular edge a
+       real pane of glass has) and a soft ambient shadow. Numbers are
+       set in tabular figures so columns of counts line up.
+       ============================================================ */
+    .stats-view-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0;
+    }
+    .stats-filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .stats-period-note {
+      margin: 0;
+      color: var(--muted);
+      font-size: .8rem;
+    }
+    /* Segmented control — the native control for switching a window. */
+    .stats-segmented {
+      position: relative;
+      display: inline-flex;
+      align-items: stretch;
+      padding: 3px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg-elevated) 70%, transparent);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 45%, transparent);
+      isolation: isolate;
+    }
+    .stats-segmented-thumb {
+      position: absolute;
+      top: 3px;
+      bottom: 3px;
+      left: 0;
+      width: 0;
+      border-radius: 999px;
+      background: var(--bg-solid);
+      box-shadow: 0 1px 3px rgba(0,0,0,.16), 0 3px 10px rgba(0,0,0,.10);
+      transition: transform .34s cubic-bezier(.32,.72,0,1), width .34s cubic-bezier(.32,.72,0,1);
+      pointer-events: none;
+      z-index: -1;
+    }
+    .stats-segmented button {
+      position: relative;
+      appearance: none;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      padding: 7px 16px;
+      border-radius: 999px;
+      color: var(--muted);
+      font: inherit;
+      font-size: .84rem;
+      font-weight: 550;
+      letter-spacing: -.01em;
+      white-space: nowrap;
+      transition: color .2s ease;
+    }
+    .stats-segmented button:hover { color: var(--text); }
+    .stats-segmented button[aria-selected="true"] { color: var(--text); }
+    .stats-segmented button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    /* Chart surfaces. */
+    .stats-block {
+      position: relative;
+      overflow: hidden;
+      /* The blocks sit in an auto-fit grid, so one can be 320px wide on one
+         screen and 700px on the next. Making each block its own query
+         container lets the charts lay themselves out from the width they
+         actually got, instead of guessing from the viewport. */
+      container-type: inline-size;
+      border-color: color-mix(in srgb, var(--line) 80%, transparent);
+      background:
+        linear-gradient(160deg,
+          color-mix(in srgb, var(--bg-elevated) 92%, transparent) 0%,
+          color-mix(in srgb, var(--bg-elevated) 64%, transparent) 100%);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: var(--shadow-soft), inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+    }
+    .stats-block h2 {
+      letter-spacing: -.01em;
+      font-weight: 600;
+    }
+    .stat-card {
+      background:
+        linear-gradient(160deg,
+          color-mix(in srgb, var(--bg-elevated) 94%, transparent) 0%,
+          color-mix(in srgb, var(--bg-elevated) 68%, transparent) 100%);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: var(--shadow-soft), inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+    }
+    .stat-card strong {
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.03em;
+      font-weight: 650;
+    }
+    /* ---- Donut ----
+       Stacked by default so the legend always has the full card width for
+       its labels; side by side only once the card is provably wide enough
+       for both. A browser without container queries keeps the stacked
+       layout, which is the readable one. */
+    .dv-donut {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      justify-items: center;
+      align-items: center;
+      gap: 16px;
+    }
+    @container (min-width: 430px) {
+      .dv-donut {
+        grid-template-columns: 168px minmax(0, 1fr);
+        justify-items: stretch;
+        gap: 20px;
+      }
+    }
+    .dv-donut-figure {
+      position: relative;
+      width: 100%;
+      max-width: 168px;
+      aspect-ratio: 1;
+    }
+    .dv-donut > .dv-legend { width: 100%; }
+    .dv-donut-svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+    .dv-donut-seg {
+      transform-origin: 100px 100px;
+      transition: opacity .22s ease, transform .22s cubic-bezier(.32,.72,0,1);
+    }
+    .dv-donut[data-active] .dv-donut-seg { opacity: .28; }
+    .dv-donut .dv-donut-seg.is-active {
+      opacity: 1;
+      transform: scale(1.045);
+    }
+    .dv-donut-center {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-content: center;
+      text-align: center;
+      pointer-events: none;
+      gap: 1px;
+    }
+    .dv-donut-center-value {
+      font-size: 1.6rem;
+      font-weight: 650;
+      letter-spacing: -.035em;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    .dv-donut-center-label {
+      font-size: .66rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .dv-legend {
+      display: grid;
+      gap: 2px;
+      min-width: 0;
+    }
+    .dv-legend-row {
+      display: grid;
+      grid-template-columns: 10px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      padding: 5px 8px;
+      border-radius: 9px;
+      font-size: .82rem;
+      background: transparent;
+      transition: background .18s ease;
+      cursor: default;
+    }
+    .dv-legend-row:hover {
+      background: color-mix(in srgb, var(--line) 42%, transparent);
+    }
+    /* A row that opens the library is a real button, so it needs the default
+       button box stripped and a pointer to say it can be pressed. */
+    button.dv-legend-row,
+    button.dv-bar-row {
+      width: 100%;
+      border: 0;
+      font: inherit;
+      color: inherit;
+      text-align: left;
+      appearance: none;
+    }
+    .dv-legend-row.is-linked,
+    .dv-bar-row.is-linked {
+      cursor: pointer;
+      background: transparent;
+    }
+    .dv-bar-row.is-linked {
+      padding: 4px 6px;
+      margin: -4px -6px;
+      border-radius: 9px;
+      transition: background .18s ease;
+    }
+    .dv-bar-row.is-linked:hover {
+      background: color-mix(in srgb, var(--line) 42%, transparent);
+    }
+    .dv-legend-row.is-linked:focus-visible,
+    .dv-bar-row.is-linked:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .dv-legend-row.is-linked .dv-legend-name,
+    .dv-bar-row.is-linked .dv-bar-name {
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, currentColor 28%, transparent);
+      text-underline-offset: 3px;
+    }
+    .dv-legend-row.is-linked:hover .dv-legend-name,
+    .dv-bar-row.is-linked:hover .dv-bar-name {
+      text-decoration-color: color-mix(in srgb, currentColor 65%, transparent);
+    }
+    .dv-legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      box-shadow: 0 0 0 1px color-mix(in srgb, #000 10%, transparent) inset;
+    }
+    .dv-legend-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dv-legend-value {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 6px;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      font-size: .78rem;
+    }
+    .dv-legend-value b {
+      color: var(--text);
+      font-weight: 600;
+      font-size: .82rem;
+    }
+    /* ---- Chart header + form toggle ---- */
+    .stats-block-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .stats-block-head h2 { margin: 0; }
+    .stats-chart-toggle {
+      display: inline-flex;
+      flex: 0 0 auto;
+      padding: 2px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+    }
+    .stats-chart-toggle button {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .18s ease, color .18s ease;
+    }
+    .stats-chart-toggle button svg { width: 15px; height: 15px; fill: currentColor; display: block; }
+    .stats-chart-toggle button:hover { color: var(--text); }
+    .stats-chart-toggle button[aria-pressed="true"] {
+      color: var(--text);
+      background: var(--bg-solid);
+      box-shadow: 0 1px 3px rgba(0,0,0,.14);
+    }
+    .stats-chart-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    /* ---- Horizontal bars ---- */
+    .dv-bars { display: grid; gap: 11px; }
+    .dv-bar-row { display: grid; gap: 5px; min-width: 0; }
+    .dv-bar-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: .82rem;
+    }
+    .dv-bar-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dv-bar-value {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: .8rem;
+    }
+    .dv-bar-track {
+      position: relative;
+      height: 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--line) 55%, transparent);
+      box-shadow: inset 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+      overflow: hidden;
+    }
+    .dv-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        color-mix(in srgb, var(--dv-bar-color) 78%, transparent) 0%,
+        var(--dv-bar-color) 100%);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 38%, transparent);
+      transform-origin: left center;
+      animation: dvBarGrow .55s cubic-bezier(.32,.72,0,1) both;
+    }
+    .dv-bars-more {
+      justify-self: start;
+      margin-top: 2px;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+      color: var(--muted);
+      font: inherit;
+      font-size: .76rem;
+      font-weight: 550;
+      cursor: pointer;
+      transition: color .18s ease, border-color .18s ease;
+    }
+    .dv-bars-more:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+    .dv-bars-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @keyframes dvBarGrow {
+      from { transform: scaleX(0); }
+      to   { transform: scaleX(1); }
+    }
+    @keyframes dvChartFade {
+      from { opacity: 0; transform: translateY(4px); }
+      to   { opacity: 1; transform: none; }
+    }
+    .dv-donut, .dv-bars {
+      animation: dvChartFade .4s cubic-bezier(.32,.72,0,1) both;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .dv-donut, .dv-bars, .dv-bar-fill { animation: none; }
+      .dv-donut-seg, .stats-segmented-thumb { transition: none; }
+    }
+    @media (max-width: 560px) {
+      .stats-view-toolbar { justify-content: flex-start; }
+      .stats-segmented { width: 100%; }
+      .stats-segmented button { flex: 1 1 0; padding-inline: 8px; }
     }
     .detail-card-actions {
       display: flex;
@@ -6734,6 +7183,13 @@ def ui_preview_html(
     .release-fallback-film-links {
       font-size: .8rem;
       white-space: nowrap;
+    }
+    .release-fallback-poster img {
+      display: block;
+      width: 120px;
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--line);
     }
     #movieDetailReleaseCandidates:not(:empty) {
       margin: 0 0 16px;
@@ -15234,26 +15690,58 @@ def ui_preview_html(
             <p class="lists-subtitle" data-next-i18n="stats.subtitle">A breakdown of your personal collection and activity.</p>
           </div>
         </section>
+        <div class="stats-view-toolbar">
+          <div class="stats-filter-group">
+            <div class="stats-segmented" data-stats-filter="period" role="tablist" aria-label="Period" data-next-i18n-aria="stats.periodLabel">
+            <span class="stats-segmented-thumb" aria-hidden="true"></span>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="month" data-next-i18n="stats.periodMonth">Last month</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="year" data-next-i18n="stats.periodYear">Last year</button>
+            <button type="button" role="tab" aria-selected="true" tabindex="0" data-stats-value="all" data-next-i18n="stats.periodAll">All time</button>
+            </div>
+            <div class="stats-segmented" data-stats-filter="mediaType" role="tablist" aria-label="Type" data-next-i18n-aria="stats.mediaLabel">
+            <span class="stats-segmented-thumb" aria-hidden="true"></span>
+            <button type="button" role="tab" aria-selected="true" tabindex="0" data-stats-value="all" data-next-i18n="stats.mediaAll">All</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="movie" data-next-i18n="stats.mediaMovies">Movie</button>
+            <button type="button" role="tab" aria-selected="false" tabindex="-1" data-stats-value="show" data-next-i18n="stats.mediaShows">TV Show</button>
+            </div>
+            </div>
+          <p class="stats-period-note" data-next-i18n="stats.periodNote">Added in the selected period</p>
+        </div>
         <div class="stats-cards" id="statsCards"></div>
         <div class="stats-sections">
-          <div class="stats-block stats-pie-chart-block">
-            <h2 data-next-i18n="stats.byFormat">By format</h2>
+          <div class="stats-block stats-pie-chart-block" data-stats-chart-block="format">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.byFormat">By format</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="format"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByFormat"></div>
           </div>
-          <div class="stats-block">
-            <h2 data-next-i18n="stats.byDecade">By decade</h2>
-            <div class="stats-bars" id="statsByDecade"></div>
+          <div class="stats-block" data-stats-chart-block="decade">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.byDecade">By decade</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="decade"></div>
+            </div>
+            <div class="stats-pie-chart-container" id="statsByDecade"></div>
           </div>
-          <div class="stats-block">
-            <h2 data-next-i18n="stats.byGenre">By genre</h2>
-            <div class="stats-genres" id="statsByGenre"></div>
+          <div class="stats-block" data-stats-chart-block="genre">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.byGenre">By genre</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="genre"></div>
+            </div>
+            <div class="stats-pie-chart-container" id="statsByGenre"></div>
           </div>
-          <div class="stats-block stats-pie-chart-block">
-            <h2 data-next-i18n="stats.topDirectors">Top 10 Directors</h2>
+          <div class="stats-block stats-pie-chart-block" data-stats-chart-block="directors">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.topDirectors">Top 10 Directors</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="directors"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByTopDirectors"></div>
           </div>
-          <div class="stats-block stats-pie-chart-block">
-            <h2 data-next-i18n="stats.topActors">Top 10 Actors</h2>
+          <div class="stats-block stats-pie-chart-block" data-stats-chart-block="actors">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.topActors">Top 10 Actors</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="actors"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByTopActors"></div>
           </div>
           <div class="stats-block stats-price-trend" id="statsCollectionValueChartSection">
@@ -25399,6 +25887,9 @@ def ui_preview_html(
         node.setAttribute("title", tNext(node.dataset.nextI18nTitle, node.getAttribute("title") || ""));
       });
       renderAppRegistrationMode();
+      // Translated labels change the segment widths, so the sliding thumb has
+      // to be measured again against the text that is actually on screen.
+      renderStatsSegmented();
     }
     let lastPersistedLocale = null;
     function persistNextLocale(locale) {
@@ -27544,7 +28035,10 @@ def ui_preview_html(
       if (movieFormatIsFourKBlurayCombo(text)) return "4K UHD + Blu-ray";
       if (lower.includes("4k") || lower.includes("uhd") || lower.includes("ultra hd")) return "4K UHD";
       if (lower.includes("blu") || lower.includes("bd")) return "Blu-ray";
-      if (lower.includes("dvd")) return "DVD";
+      // "HD DVD" contains "dvd" and is not one. Without this guard the badge on
+      // an HD DVD read "DVD" while the library filter listed the same disc
+      // under "HD DVD" -- the two normalisers disagreeing about one shelf.
+      if (lower.includes("dvd") && !lower.includes("hd dvd")) return "DVD";
       return text;
     }
     function physicalFormatBadgeClass(value) {
@@ -38273,6 +38767,73 @@ def ui_preview_html(
       const candidates = releaseFallbackCandidates();
       return Number.isInteger(index) && index >= 0 && index < candidates.length ? candidates[index] : null;
     }
+    // One picture for the film, not one per row. Two 4K pressings of the same
+    // film share a front cover, so a poster per candidate would draw a
+    // difference that is not there and push the pressings themselves off the
+    // screen.
+    //
+    // MovieVault is not asked for it. Its contract forbids artwork on a
+    // `candidates` answer - a poster may only come from an approved catalogue
+    // publication, which by definition does not exist for a disc it could not
+    // pin down. DiscVault fetches it from the metadata sources it already has,
+    // by the identifier MovieVault did resolve.
+    //
+    // `resolvedIdentity` is what keeps that lookup honest. MovieVault already
+    // tied the barcode to a film, so the namespace is settled; without the flag
+    // the television namespace is queried too and an unrelated series turns up
+    // beside the right film, with nobody having asked about television.
+    async function loadReleaseFallbackPoster() {
+      const token = importCenter.releaseFallback;
+      const film = token?.film || {};
+      const imdbId = String(film.imdbId || "").trim();
+      // The identity enrichment does not run past the ambiguous terminal, so
+      // `imdbId` is the identifier to count on here and `tmdbMovieId` is a
+      // bonus that is usually absent.
+      const tmdbId = String(film.tmdbMovieId || "").trim();
+      if (!token || (!imdbId && !tmdbId)) return;
+      if (!Array.isArray(token.releases) || !token.releases.length) return;
+      const request = {resolvedIdentity: true, detectBoxSets: false, previewMode: true};
+      if (imdbId) request.imdbId = imdbId;
+      if (tmdbId) request.tmdbId = tmdbId;
+      try {
+        const payload = await authApiJson("/api/next/metadata/lookup", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: 15000,
+          body: JSON.stringify(request)
+        });
+        const poster = importSourceMetadataSuggestionsFromLookup(payload.metadata || {})
+          .map((suggestion) => suggestion.posterUrl)
+          .find(Boolean);
+        // A second scan may have replaced the picker while this was in flight;
+        // painting this poster onto it would label the new film with the old
+        // one's cover.
+        if (!poster || importCenter.releaseFallback !== token) return;
+        importCenter.releaseFallback.posterUrl = poster;
+        renderReleaseFallback();
+      } catch (error) {
+        // Decoration. A picker without a poster is complete, so a failed
+        // lookup is noted and nothing else changes.
+        console.warn("release-details poster lookup failed", error);
+      }
+    }
+    // True only when the source stands behind the scanned code on the pressings
+    // it is showing. `false` and absent both fall back to the cautious line:
+    // without a statement, the sentence that cannot be wrong is the one that
+    // claims the least, which is also what keeps an older MovieVault reading
+    // exactly as it did before.
+    function releaseFallbackPickEditionHelp() {
+      if (importCenter.releaseFallback?.barcodeConfirmed === true) {
+        return tNext(
+          "releaseFallback.pickEditionHelpConfirmed",
+          "This barcode is printed on more than one pressing, so the film is certain and the pressing is not. Pick the one you are holding."
+        );
+      }
+      return tNext(
+        "releaseFallback.pickEditionHelp",
+        "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."
+      );
+    }
     function setImportFormatValue(value) {
       const select = document.getElementById("importFormatInput");
       const normalized = normalizedMovieFormatValue(value || "");
@@ -38516,11 +39077,15 @@ def ui_preview_html(
         return;
       }
       const filmLine = [film.title, film.year ? `(${film.year})` : ""].filter(Boolean).join(" ");
+      const posterUrl = String(fallback.posterUrl || "").trim();
       host.innerHTML = `
         <div class="release-fallback-card">
           <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
           <div><strong>${escapeHtml(filmLine)}</strong> ${releaseCandidateFilmLinksHtml(film)}</div>
-          <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.pickEditionHelp", "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."))}</div>
+          ${posterUrl
+            ? `<div class="release-fallback-poster"><img src="${escapeHtml(posterUrl)}" alt="${escapeHtml(film.title || "")}" loading="lazy"></div>`
+            : ""}
+          <div class="release-fallback-meta">${escapeHtml(releaseFallbackPickEditionHelp())}</div>
           ${fallback.verificationStatus === "unreviewed_external"
             ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
             : ""}
@@ -38554,6 +39119,8 @@ def ui_preview_html(
         stageIndex: 0,
         film: {},
         releases: [],
+        barcodeConfirmed: null,
+        posterUrl: "",
         chosenIndex: -1,
         manual: false
       };
@@ -38576,9 +39143,18 @@ def ui_preview_html(
           failureKind: String(result.failureKind || ""),
           errorCode: String(result.errorCode || ""),
           verificationStatus: String(result.verificationStatus || ""),
+          // Tri-state, and it has to stay one. `true` says the source indexes
+          // the scanned barcode on the pressings shown, `false` says they were
+          // found by title anyway, and `null` says nobody made a claim - which
+          // is what an older MovieVault and every title route answer. Coercing
+          // absent to `false` would let the client assert the barcode is
+          // unconfirmed on the strength of silence.
+          barcodeConfirmed: typeof result.barcodeConfirmed === "boolean" ? result.barcodeConfirmed : null,
           film: result.film || {},
-          releases: Array.isArray(result.releases) ? result.releases : []
+          releases: Array.isArray(result.releases) ? result.releases : [],
+          posterUrl: ""
         };
+        loadReleaseFallbackPoster();
         return importCenter.releaseFallback;
       } catch (error) {
         // The route answers resolver failures in its body, so only a
@@ -38594,6 +39170,8 @@ def ui_preview_html(
           failureKind: "transport",
           errorCode: "request_failed",
           message: error.message || String(error),
+          barcodeConfirmed: null,
+          posterUrl: "",
           film: {},
           releases: []
         };
@@ -41019,27 +41597,73 @@ def ui_preview_html(
       };
       render();
     }
-    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false};
-    function statsBarsHtml(rows) {
-      const items = (rows || []).filter((row) => (row.count || 0) > 0);
-      if (!items.length) {
-        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+    const statsState = {loaded: false, data: null, valueHistory: [], selectedPriceTrendMovieId: null, showPriceTrendFigures: false, period: "all", mediaType: "all"};
+    // --- Chart engine -------------------------------------------------
+    // Colours come from CSS custom properties, not literals, so each theme
+    // supplies its own validated steps (see the palette block in the
+    // stylesheet). Eight slots, assigned in fixed order and never cycled.
+    const DV_SERIES_SLOTS = 8;
+    function dvChartColor(index) {
+      return "var(--dv-series-" + ((index % DV_SERIES_SLOTS) + 1) + ")";
+    }
+    // Ordered categories sample the single-hue ramp across its full span, so
+    // a chart of three reads as a ramp just as a chart of eight does.
+    function dvOrdinalColor(index, count) {
+      if (count <= 1) return "var(--dv-ordinal-" + DV_SERIES_SLOTS + ")";
+      const slot = Math.round(1 + (index * (DV_SERIES_SLOTS - 1)) / (count - 1));
+      return "var(--dv-ordinal-" + slot + ")";
+    }
+    function dvChartRows(rows) {
+      return (rows || []).filter((row) => Number(row && row.count) > 0);
+    }
+    function dvChartLabel(row) {
+      if (row && row.i18nKey) return tNext(row.i18nKey, row.label);
+      return (row && row.label) || tNext("common.untitled", "Unknown");
+    }
+    function dvChartEmptyHtml() {
+      return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+    }
+    function dvFormatCount(value) {
+      const numeric = Number(value) || 0;
+      return Number.isFinite(numeric) ? numeric.toLocaleString() : String(value);
+    }
+    // A point on the donut. Angles run clockwise from twelve o'clock, which
+    // is where a reader expects a chart like this to start.
+    function dvPolar(cx, cy, radius, degrees) {
+      const rad = ((degrees - 90) * Math.PI) / 180;
+      return [cx + radius * Math.cos(rad), cy + radius * Math.sin(rad)];
+    }
+    function dvAnnulusPath(startAngle, endAngle, outer, inner) {
+      // A slice that covers the whole circle would start and end on the same
+      // point, and SVG draws an arc with identical endpoints as nothing at
+      // all - so a collection holding a single category rendered an empty
+      // ring. A closed ring is emitted as two half arcs instead; the inner
+      // one runs the other way round so the non-zero fill rule punches the
+      // hole.
+      if (endAngle - startAngle >= 359.999) {
+        const ring = (radius, sweepFlag) => {
+          const [ax, ay] = dvPolar(100, 100, radius, 0);
+          const [bx, by] = dvPolar(100, 100, radius, 180);
+          return (
+            `M ${ax.toFixed(2)} ${ay.toFixed(2)} `
+            + `A ${radius} ${radius} 0 1 ${sweepFlag} ${bx.toFixed(2)} ${by.toFixed(2)} `
+            + `A ${radius} ${radius} 0 1 ${sweepFlag} ${ax.toFixed(2)} ${ay.toFixed(2)} Z`
+          );
+        };
+        return `${ring(outer, 1)} ${ring(inner, 0)}`;
       }
-      const max = items.reduce((acc, row) => Math.max(acc, row.count || 0), 0) || 1;
-      return items
-        .map((row) => {
-          const pct = Math.round(((row.count || 0) / max) * 100);
-          return `
-            <div class="stats-bar-row">
-              <div class="stats-bar-head">
-                <span>${escapeHtml(row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown")))}</span>
-                <span>${escapeHtml(row.count || 0)}</span>
-              </div>
-              <div class="stats-bar-track"><div class="stats-bar-fill" style="width:${pct}%"></div></div>
-            </div>
-          `;
-        })
-        .join("");
+      const [x1, y1] = dvPolar(100, 100, outer, startAngle);
+      const [x2, y2] = dvPolar(100, 100, outer, endAngle);
+      const [x3, y3] = dvPolar(100, 100, inner, endAngle);
+      const [x4, y4] = dvPolar(100, 100, inner, startAngle);
+      const largeArc = endAngle - startAngle > 180 ? 1 : 0;
+      return [
+        `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+        `A ${outer} ${outer} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+        `L ${x3.toFixed(2)} ${y3.toFixed(2)}`,
+        `A ${inner} ${inner} 0 ${largeArc} 0 ${x4.toFixed(2)} ${y4.toFixed(2)}`,
+        "Z"
+      ].join(" ");
     }
     function formatStatsPrice(value, currency = "EUR") {
       const numeric = Number(value);
@@ -41407,88 +42031,322 @@ def ui_preview_html(
           .join("");
       }
     }
-    function statsGenresHtml(rows) {
-      const items = (rows || []).filter((row) => (row.count || 0) > 0);
-      if (!items.length) {
-        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
-      }
-      // Create a simple CSS color palette for genres
-      const colors = [
-        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
-        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A",
-        "#1890FF", "#FF85C0", "#FAAD14", "#13C2C2", "#EB2F96"
-      ];
-      return items
-        .map((row, idx) => {
-          const pct = (row.count || 0);
-          const color = colors[idx % colors.length];
-          const label = row.i18nKey ? tNext(row.i18nKey, row.label) : (row.label || tNext("common.untitled", "Unknown"));
+    // Bars name every category, which is the one thing a ring cannot do once
+    // there are more than eight. Long lists stay collapsed so a genre chart
+    // does not push the blocks beside it out of line before anyone asked it
+    // to; the fold is a disclosure, never a cap - the count on the button
+    // says exactly how much is behind it.
+    const DV_BARS_COLLAPSED = 6;
+    function statsBarsHtml(rows, options) {
+      const settings = options || {};
+      const ordinal = !!settings.ordinal;
+      let all = dvChartRows(rows);
+      if (!all.length) return dvChartEmptyHtml();
+      if (!ordinal) all = all.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+      const expanded = !!settings.expanded;
+      const collapsible = all.length > DV_BARS_COLLAPSED;
+      const items = collapsible && !expanded ? all.slice(0, DV_BARS_COLLAPSED) : all;
+      // Scale against the whole set, not the visible slice, so expanding the
+      // list never rescales the bars that were already on screen.
+      const max = all.reduce((acc, row) => Math.max(acc, Number(row.count) || 0), 0) || 1;
+      const body = items
+        .map((row, index) => {
+          const count = Number(row.count) || 0;
+          const width = Math.max((count / max) * 100, 1.5);
+          const color = ordinal ? dvOrdinalColor(index, Math.min(all.length, DV_SERIES_SLOTS)) : dvChartColor(index);
+          const label = dvChartLabel(row);
+          const linked = !!settings.searchable;
+          const tag = linked ? "button" : "div";
+          const attrs = linked
+            ? ` type="button" data-stats-search="${escapeHtml(label)}"`
+              + ` title="${escapeHtml(tNext("stats.showInLibrary", "Show in library"))}: ${escapeHtml(label)}"`
+            : "";
           return `
-            <div class="stats-genre-item">
-              <span class="stats-genre-color" style="background-color: ${escapeHtml(color)}"></span>
-              <span class="stats-genre-label">${escapeHtml(label)}</span>
-              <span class="stats-genre-count">${escapeHtml(pct)}</span>
-            </div>
+            <${tag} class="dv-bar-row${linked ? " is-linked" : ""}"${attrs}>
+              <div class="dv-bar-head">
+                <span class="dv-bar-name">${escapeHtml(label)}</span>
+                <span class="dv-bar-value">${escapeHtml(dvFormatCount(count))}</span>
+              </div>
+              <div class="dv-bar-track">
+                <div class="dv-bar-fill" style="width:${width.toFixed(2)}%;--dv-bar-color:${escapeHtml(color)};animation-delay:${Math.min(index * 35, 280)}ms"></div>
+              </div>
+            </${tag}>
           `;
         })
         .join("");
+      const toggle = collapsible
+        ? `<button type="button" class="dv-bars-more" data-dv-bars-toggle>${
+            expanded
+              ? escapeHtml(tNext("stats.chartShowLess", "Show less"))
+              : escapeHtml(tNext("stats.chartShowAll", "Show all")) + " (" + escapeHtml(dvFormatCount(all.length)) + ")"
+          }</button>`
+        : "";
+      return `<div class="dv-bars">${body}${toggle}</div>`;
     }
-    function statsPieChartHtml(rows, chartId) {
-      const items = (rows || []).filter((row) => (row.count || 0) > 0);
-      if (!items.length) {
-        return `<p class="stats-empty">${escapeHtml(tNext("stats.noData", "No data yet."))}</p>`;
+    // Which form each chart is currently drawn in. Remembered per chart, so a
+    // reader who prefers bars for genres does not have to say so again on
+    // every visit - but "expanded" deliberately is not remembered, because a
+    // page that reopens fully unfolded is the layout problem the collapse
+    // exists to avoid.
+    const statsChartViews = {};
+    function statsChartView(key) {
+      if (!statsChartViews[key]) {
+        let stored = "";
+        try {
+          stored = localStorage.getItem("dv_next_chart_view_" + key) || "";
+        } catch (error) {
+          stored = "";
+        }
+        statsChartViews[key] = { mode: stored === "bars" ? "bars" : "donut", expanded: false };
       }
-      // Create pie chart with SVG
-      const total = items.reduce((sum, item) => sum + (item.count || 0), 0) || 1;
-      const colors = [
-        "#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8",
-        "#F7DC6F", "#BB8FCE", "#85C1E2", "#F8B739", "#52C41A"
-      ];
-
-      let currentAngle = -90;
-      const slices = items.map((item, idx) => {
-        const percentage = (item.count || 0) / total;
-        const sliceAngle = percentage * 360;
-        const endAngle = currentAngle + sliceAngle;
-
-        const startRad = (currentAngle * Math.PI) / 180;
-        const endRad = (endAngle * Math.PI) / 180;
-
-        const x1 = 50 + 40 * Math.cos(startRad);
-        const y1 = 50 + 40 * Math.sin(startRad);
-        const x2 = 50 + 40 * Math.cos(endRad);
-        const y2 = 50 + 40 * Math.sin(endRad);
-
-        const largeArc = sliceAngle > 180 ? 1 : 0;
-        const pathData = `M 50 50 L ${x1} ${y1} A 40 40 0 ${largeArc} 1 ${x2} ${y2} Z`;
-        const color = colors[idx % colors.length];
-        const label = item.label || tNext("common.untitled", "Unknown");
-
-        currentAngle = endAngle;
-
+      return statsChartViews[key];
+    }
+    function setStatsChartMode(key, mode) {
+      const view = statsChartView(key);
+      view.mode = mode === "bars" ? "bars" : "donut";
+      view.expanded = false;
+      try {
+        localStorage.setItem("dv_next_chart_view_" + key, view.mode);
+      } catch (error) {
+        /* a browser refusing storage must not break the toggle */
+      }
+    }
+    function statsChartHtml(key, rows, options) {
+      const view = statsChartView(key);
+      const settings = Object.assign({}, options || {}, { expanded: view.expanded });
+      return view.mode === "bars" ? statsBarsHtml(rows, settings) : statsDonutChartHtml(rows, settings);
+    }
+    // One place that knows which container, which slice of the payload, and
+    // whether the chart is ordered - so a re-render after a toggle goes
+    // through exactly the same path as the first draw.
+    // `searchable` means an entry's label, typed into the library search box,
+    // finds exactly the films behind it. That holds for genres and for people
+    // because `movieMatchesSearch` already folds the translated genre labels
+    // and `search_credits` into its haystack.
+    //
+    // Format and decade are deliberately not searchable. A format is stored as
+    // "BLURAY" and shown as "Blu-Ray", so the pretty label matches nothing,
+    // and "2010s" is not a year any film carries. Linking either would hand
+    // the reader an empty list and call it a filter.
+    const STATS_CHARTS = {
+      format: { target: "statsByFormat", field: "byFormat" },
+      // Decades are ordered, so they take the single-hue ramp rather than
+      // eight unrelated hues, which would throw that order away.
+      decade: { target: "statsByDecade", field: "byDecade", ordinal: true },
+      genre: { target: "statsByGenre", field: "byGenre", searchable: true },
+      directors: { target: "statsByTopDirectors", field: "topDirectors", searchable: true },
+      actors: { target: "statsByTopActors", field: "topActors", searchable: true }
+    };
+    // Opening the library on one label. The term goes through the same input
+    // and the same render path a typed search uses, so there is no second
+    // definition of what a search means.
+    function openLibraryForStatsLabel(label) {
+      const term = String(label || "").trim();
+      if (!term) return;
+      // The term is set before the view is shown, so the library renders
+      // already filtered rather than flashing the whole collection first.
+      syncCollectionSearchInputs(term);
+      showLibraryPage(true);
+      renderCollectionSurface();
+      const input = document.getElementById("previewSearch");
+      if (input) input.focus();
+      scrollPreviewTop();
+    }
+    function renderStatsChart(key) {
+      const spec = STATS_CHARTS[key];
+      if (!spec) return;
+      const host = document.getElementById(spec.target);
+      if (!host) return;
+      const data = statsState.data || {};
+      host.innerHTML = statsChartHtml(key, data[spec.field], {
+        ordinal: !!spec.ordinal,
+        searchable: !!spec.searchable
+      });
+      const toggle = document.querySelector('[data-stats-chart-toggle="' + key + '"]');
+      if (toggle) {
+        if (!toggle.childElementCount) toggle.innerHTML = statsChartToggleButtonsHtml();
+        const mode = statsChartView(key).mode;
+        toggle.querySelectorAll("[data-stats-chart-mode]").forEach((button) => {
+          button.setAttribute("aria-pressed", button.dataset.statsChartMode === mode ? "true" : "false");
+        });
+      }
+    }
+    function setupStatsChartToggles() {
+      const root = document.getElementById("statisticsView");
+      if (!root || root.dataset.dvChartTogglesBound === "1") return;
+      root.dataset.dvChartTogglesBound = "1";
+      root.addEventListener("click", (event) => {
+        const modeButton = event.target.closest("[data-stats-chart-mode]");
+        if (modeButton) {
+          const group = modeButton.closest("[data-stats-chart-toggle]");
+          if (!group) return;
+          const key = group.dataset.statsChartToggle;
+          if (statsChartView(key).mode === modeButton.dataset.statsChartMode) return;
+          setStatsChartMode(key, modeButton.dataset.statsChartMode);
+          renderStatsChart(key);
+          return;
+        }
+        const searchButton = event.target.closest("[data-stats-search]");
+        if (searchButton) {
+          openLibraryForStatsLabel(searchButton.dataset.statsSearch);
+          return;
+        }
+        const moreButton = event.target.closest("[data-dv-bars-toggle]");
+        if (moreButton) {
+          const block = moreButton.closest("[data-stats-chart-block]");
+          if (!block) return;
+          const key = block.dataset.statsChartBlock;
+          const view = statsChartView(key);
+          view.expanded = !view.expanded;
+          renderStatsChart(key);
+        }
+      });
+    }
+    // The buttons carry the i18n attributes rather than resolved text, so the
+    // existing translation pass keeps their labels current when the locale
+    // changes without this chart having to re-render.
+    function statsChartToggleButtonsHtml() {
+      const button = (mode, labelKey, fallback, path) => (
+        `<button type="button" data-stats-chart-mode="${escapeHtml(mode)}" aria-pressed="false"`
+        + ` aria-label="${escapeHtml(tNext(labelKey, fallback))}" title="${escapeHtml(tNext(labelKey, fallback))}"`
+        + ` data-next-i18n-aria="${escapeHtml(labelKey)}" data-next-i18n-title="${escapeHtml(labelKey)}">`
+        + `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></button>`
+      );
+      return (
+        button("donut", "stats.chartViewDonut", "Pie chart",
+               "M11,2V22C5.9,21.5 2,17.2 2,12C2,6.8 5.9,2.5 11,2M13,2V11H22C21.5,6.2 17.8,2.5 13,2M13,13V22C17.7,21.5 21.5,17.8 22,13H13Z")
+        + button("bars", "stats.chartViewBars", "Bar chart",
+                 "M3,5H21V7H3V5M3,11H15V13H3V11M3,17H9V19H3V17Z")
+      );
+    }
+    // Donut, not pie: the hole carries the total, which is the number a
+    // reader wants first, and the ring makes the small slices easier to
+    // compare than wedges converging on a point.
+    function statsDonutChartHtml(rows, options) {
+      const settings = options || {};
+      const ordinal = !!settings.ordinal;
+      let all = dvChartRows(rows);
+      if (!all.length) return dvChartEmptyHtml();
+      // Rank before folding. Callers do not agree on an order - genres arrive
+      // alphabetically, formats by count - and folding an alphabetical list
+      // keeps whatever starts with "A" while dropping a larger category into
+      // "Other". An ordered chart is exempt: its order *is* the information.
+      if (!ordinal) all = all.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+      // Beyond eight slices the ring stops being readable, so the surplus is
+      // folded rather than shaved off - the total in the middle has to keep
+      // matching the data it describes.
+      const MAX_SLICES = DV_SERIES_SLOTS;
+      let items = all;
+      if (all.length > MAX_SLICES) {
+        if (ordinal) {
+          // An ordered set cannot fold its *smallest* entries into "Other"
+          // without scrambling the order, so the oldest buckets merge into a
+          // single leading one and the label states the range it covers.
+          const fold = all.slice(0, all.length - MAX_SLICES + 1);
+          const kept = all.slice(all.length - MAX_SLICES + 1);
+          const merged = fold.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+          const first = dvChartLabel(fold[0]);
+          const last = dvChartLabel(fold[fold.length - 1]);
+          items = [{
+            label: fold.length > 1 ? first + "–" + last : first,
+            count: merged,
+            _literal: true
+          }].concat(kept);
+        } else {
+          const head = all.slice(0, MAX_SLICES - 1);
+          const tail = all.slice(MAX_SLICES - 1);
+          const rest = tail.reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+          items = head.concat([{ label: tNext("stats.chartOther", "Other"), count: rest, _other: true }]);
+        }
+      }
+      const total = items.reduce((sum, row) => sum + (Number(row.count) || 0), 0) || 1;
+      const OUTER = 88;
+      const INNER = 56;
+      // A gap only fits when there is more than one slice; with a single
+      // category the ring is drawn closed so it does not show a seam.
+      const GAP = items.length > 1 ? 2 : 0;
+      let cursor = 0;
+      const slices = items.map((row, index) => {
+        const count = Number(row.count) || 0;
+        const sweep = (count / total) * 360;
+        const start = cursor;
+        cursor += sweep;
+        // Never let the gap eat a slice whole: a 0.4% slice must still show.
+        const inset = Math.min(GAP, Math.max(sweep - 0.6, 0)) / 2;
         return {
-          path: pathData,
-          color: color,
-          label: label,
-          count: item.count,
-          percentage: Math.round(percentage * 100)
+          label: row._other || row._literal ? row.label : dvChartLabel(row),
+          folded: !!(row._other || row._literal),
+          count: count,
+          share: (count / total) * 100,
+          color: row._other
+            ? "var(--dv-series-other)"
+            : ordinal
+              ? dvOrdinalColor(index, items.length)
+              : dvChartColor(index),
+          path: dvAnnulusPath(start + inset, start + sweep - inset, OUTER, INNER)
         };
       });
-
-      const svgContent = slices.map(slice => `<path d="${escapeHtml(slice.path)}" fill="${escapeHtml(slice.color)}" stroke="white" stroke-width="2"/>`).join("");
-      const legend = slices.map(slice => `
-        <div class="stats-pie-legend-item">
-          <span class="stats-pie-color" style="background-color: ${escapeHtml(slice.color)}"></span>
-          <span>${escapeHtml(slice.label)} (${escapeHtml(slice.count)} - ${escapeHtml(slice.percentage)}%)</span>
-        </div>
-      `).join("");
-
+      const segments = slices
+        .map((slice, index) => (
+          `<path class="dv-donut-seg" data-dv-slice="${index}" d="${escapeHtml(slice.path)}" `
+          + `fill="${escapeHtml(slice.color)}" stroke="${escapeHtml(slice.color)}" stroke-width="1" `
+          + `stroke-linejoin="round"><title>${escapeHtml(slice.label)}: ${escapeHtml(dvFormatCount(slice.count))} (${slice.share.toFixed(1)}%)</title></path>`
+        ))
+        .join("");
+      const legend = slices
+        .map((slice, index) => {
+          // A folded entry stands for several things at once, so there is no
+          // single term that would find them - it stays a plain row.
+          const linked = settings.searchable && !slice.folded;
+          const tag = linked ? "button" : "div";
+          const attrs = linked
+            ? ` type="button" data-stats-search="${escapeHtml(slice.label)}"`
+              + ` title="${escapeHtml(tNext("stats.showInLibrary", "Show in library"))}: ${escapeHtml(slice.label)}"`
+            : ` title="${escapeHtml(slice.label)}"`;
+          return `
+          <${tag} class="dv-legend-row${linked ? " is-linked" : ""}" data-dv-slice="${index}"${attrs}>
+            <span class="dv-legend-dot" style="background:${escapeHtml(slice.color)}"></span>
+            <span class="dv-legend-name">${escapeHtml(slice.label)}</span>
+            <span class="dv-legend-value"><b>${escapeHtml(dvFormatCount(slice.count))}</b>${escapeHtml(slice.share.toFixed(slice.share < 10 ? 1 : 0))}%</span>
+          </${tag}>
+        `;
+        })
+        .join("");
+      const summary = slices
+        .map((slice) => `${slice.label} ${slice.share.toFixed(0)}%`)
+        .join(", ");
       return `
-        <div class="stats-pie-chart">
-          <svg viewBox="0 0 100 100" class="stats-pie-svg">${svgContent}</svg>
-          <div class="stats-pie-legend">${legend}</div>
+        <div class="dv-donut" data-dv-donut>
+          <div class="dv-donut-figure">
+            <svg class="dv-donut-svg" viewBox="0 0 200 200" role="img" aria-label="${escapeHtml(summary)}">${segments}</svg>
+            <div class="dv-donut-center">
+              <span class="dv-donut-center-value">${escapeHtml(dvFormatCount(total))}</span>
+              <span class="dv-donut-center-label">${escapeHtml(tNext("stats.chartTotal", "Total"))}</span>
+            </div>
+          </div>
+          <div class="dv-legend">${legend}</div>
         </div>
       `;
+    }
+    // Hovering a legend row lifts its slice and dims the rest. Delegated so
+    // it keeps working after every re-render of the statistics view.
+    function bindStatsChartHighlight(root) {
+      if (!root || root.dataset.dvHighlightBound === "1") return;
+      root.dataset.dvHighlightBound = "1";
+      const setActive = (event, active) => {
+        const row = event.target.closest("[data-dv-slice]");
+        if (!row) return;
+        const donut = row.closest("[data-dv-donut]");
+        if (!donut) return;
+        const index = row.dataset.dvSlice;
+        if (active) donut.dataset.active = index;
+        else delete donut.dataset.active;
+        donut.querySelectorAll(".dv-donut-seg").forEach((segment) => {
+          segment.classList.toggle("is-active", active && segment.dataset.dvSlice === index);
+        });
+      };
+      root.addEventListener("mouseover", (event) => setActive(event, true));
+      root.addEventListener("mouseout", (event) => setActive(event, false));
     }
     function renderStatisticsView() {
       const data = statsState.data;
@@ -41520,19 +42378,78 @@ def ui_preview_html(
           `)
           .join("");
       }
-      const byFormat = document.getElementById("statsByFormat");
-      if (byFormat) byFormat.innerHTML = statsPieChartHtml(data.byFormat, "formatPie");
-      const byGenre = document.getElementById("statsByGenre");
-      if (byGenre) byGenre.innerHTML = statsGenresHtml(data.byGenre);
-      const byDecade = document.getElementById("statsByDecade");
-      if (byDecade) byDecade.innerHTML = statsBarsHtml(data.byDecade);
-      const byTopDirectors = document.getElementById("statsByTopDirectors");
-      if (byTopDirectors) byTopDirectors.innerHTML = statsPieChartHtml(data.topDirectors, "directorsPie");
-      const byTopActors = document.getElementById("statsByTopActors");
-      if (byTopActors) byTopActors.innerHTML = statsPieChartHtml(data.topActors, "actorsPie");
+      renderStatsChart("format");
+      renderStatsChart("decade");
+      renderStatsChart("genre");
+      renderStatsChart("directors");
+      renderStatsChart("actors");
+      bindStatsChartHighlight(document.getElementById("statisticsView"));
+      setupStatsChartToggles();
       renderStatsPriceTrend(data);
       renderCollectionValueChart();
       if (empty) empty.classList.add("hidden");
+    }
+    function statsPeriodDays(period) {
+      if (period === "month") return 30;
+      if (period === "year") return 365;
+      return null;
+    }
+    // One implementation for both segmented controls. Each is keyed by the
+    // statsState field it drives, so adding a third filter is markup plus a
+    // default - not another copy of this logic.
+    function renderStatsSegmented() {
+      document.querySelectorAll("#statisticsView [data-stats-filter]").forEach((control) => {
+        const field = control.dataset.statsFilter;
+        const buttons = Array.from(control.querySelectorAll("[data-stats-value]"));
+        buttons.forEach((button) => {
+          const selected = button.dataset.statsValue === statsState[field];
+          button.setAttribute("aria-selected", selected ? "true" : "false");
+          button.tabIndex = selected ? 0 : -1;
+        });
+        const active = buttons.find((button) => button.dataset.statsValue === statsState[field]);
+        const thumb = control.querySelector(".stats-segmented-thumb");
+        // The sliding thumb is positioned from the real button box, so it stays
+        // correct whatever width the translated labels turn out to need.
+        if (thumb && active) {
+          thumb.style.width = active.offsetWidth + "px";
+          thumb.style.transform = "translateX(" + active.offsetLeft + "px)";
+        }
+      });
+    }
+    function setupStatsSegmented() {
+      const root = document.getElementById("statisticsView");
+      if (!root || root.dataset.dvSegmentedBound === "1") return;
+      root.dataset.dvSegmentedBound = "1";
+      const select = (control, value) => {
+        const field = control.dataset.statsFilter;
+        if (!field || statsState[field] === value) return false;
+        statsState[field] = value;
+        renderStatsSegmented();
+        loadStatisticsView(true);
+        return true;
+      };
+      root.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-stats-value]");
+        const control = button && button.closest("[data-stats-filter]");
+        if (!control) return;
+        select(control, button.dataset.statsValue);
+      });
+      // Arrow keys move between segments, as they do in a native control.
+      root.addEventListener("keydown", (event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        const control = event.target.closest("[data-stats-filter]");
+        if (!control) return;
+        const field = control.dataset.statsFilter;
+        const buttons = Array.from(control.querySelectorAll("[data-stats-value]"));
+        const current = buttons.findIndex((button) => button.dataset.statsValue === statsState[field]);
+        if (current < 0) return;
+        const step = event.key === "ArrowRight" ? 1 : -1;
+        const next = buttons[(current + step + buttons.length) % buttons.length];
+        if (!next) return;
+        event.preventDefault();
+        if (select(control, next.dataset.statsValue)) next.focus();
+      });
+      window.addEventListener("resize", renderStatsSegmented);
     }
     async function loadStatisticsView(force = false) {
       if (!hasPermission("watchlist.manage")) return;
@@ -41545,20 +42462,36 @@ def ui_preview_html(
         empty.textContent = tNext("collection.loading", "Loading...");
         empty.classList.remove("hidden");
       }
+      setupStatsSegmented();
+      renderStatsSegmented();
       try {
-        const payload = await authApiJson("/api/next/stats/personal");
+        const period = statsState.period || "all";
+        const mediaType = statsState.mediaType || "all";
+        const payload = await authApiJson(
+          "/api/next/stats/personal?period=" + encodeURIComponent(period)
+          + "&mediaType=" + encodeURIComponent(mediaType)
+        );
         statsState.data = payload;
         // Separate endpoint, and deliberately not fatal: the snapshot series is
         // a nice-to-have on this page, and losing it must not blank the counters
         // the user came for.
         try {
-          const history = await authApiJson("/api/next/stats/collection-value/history?scope=total");
+          // The value chart is a time series, so the period trims its window
+          // rather than re-valuing the collection.
+          const windowDays = statsPeriodDays(period);
+          let historyUrl = "/api/next/stats/collection-value/history?scope=total";
+          if (windowDays) {
+            const from = new Date(Date.now() - windowDays * 86400000);
+            historyUrl += "&from=" + encodeURIComponent(from.toISOString().slice(0, 10));
+          }
+          const history = await authApiJson(historyUrl);
           statsState.valueHistory = Array.isArray(history && history.points) ? history.points : [];
         } catch (historyError) {
           statsState.valueHistory = [];
         }
         statsState.loaded = true;
         renderStatisticsView();
+        renderStatsSegmented();
       } catch (error) {
         if (empty) {
           empty.textContent = error.message || String(error);

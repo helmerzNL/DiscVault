@@ -60,7 +60,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
 
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
@@ -206,6 +206,7 @@ jobs:
           tests.test_next_release_details_search
           tests.test_next_release_details_subtitles
           tests.test_next_release_details_finishes
+          tests.test_next_release_fallback_ui
 
       # Translations are part of "done" in this repository, and this suite is
       # what makes that checkable: it holds all 29 locales to the exact key set
@@ -269,6 +270,15 @@ jobs:
       - name: Test series artwork merging
         run: python -m unittest tests.test_next_series_artwork
 
+      # Two self-hosted instances were findable in Google without anything being
+      # misconfigured, and every layer that now prevents it can regress silently:
+      # a robots.txt that stops disallowing, a noindex header that stops being
+      # applied, or a user-agent refusal that starts matching the health check and
+      # reports a live instance as down. No database -- it asserts on strings and
+      # a user agent -- so it runs up here.
+      - name: Test crawler and AI-scraper exclusion
+        run: python -m unittest tests.test_next_crawlers
+
       # ======================================================================
       # EVERY STEP ABOVE THIS LINE RUNS AGAINST AN EMPTY DATABASE.
       # A test that reads or writes any table belongs BELOW it, or it dies
@@ -320,6 +330,28 @@ jobs:
       # releases, because a new one is how this comes back.
       - name: Test the provider-call transaction boundary
         run: python -m unittest tests.test_next_provider_call_transaction_boundary
+
+      # The statistics page had no coverage here at all, which is how its two
+      # credit charts shipped reading empty on a full collection: the query
+      # asked `job` for both, but a metadata refresh writes the crew role into
+      # `credit_type` and leaves 'Director' capitalised in `job`, while a cast
+      # row has no job at all. Only a real database answers which rows a
+      # predicate selects, and the negative cases matter as much as the
+      # positive ones - 'Director of Photography' contains the word and did
+      # not direct the film, so a substring match would refill these charts
+      # with the wrong people and still look fixed.
+      - name: Test the statistics top-credit predicates
+        run: python -m unittest tests.test_next_stats_top_credits_postgres
+
+      # What the same charts count as one thing. A shelf holds releases, so
+      # two editions of a film and a season box set are several rows, and
+      # counting rows scores a director once per disc owned. The assertions
+      # that matter are the negative ones - a shared title, a shared year, a
+      # shared director and a blank identifier must each merge nothing - since
+      # over-merging is the failure that silently deletes entries from a chart
+      # while still looking like a working page.
+      - name: Test the statistics work key and media filter
+        run: python -m unittest tests.test_next_stats_work_dedup_postgres
 
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres

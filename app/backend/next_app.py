@@ -188,6 +188,7 @@ try:
     from .next_common import count_table
     from .next_common import json_ready
     from .next_common import parse_bool_value
+    from .next_common import physical_format_label
     from .next_common import parse_int_arg
     from .next_common import parse_uuid
     from .next_common import parse_uuid_list
@@ -325,6 +326,7 @@ try:
     from .next_export import register_next_export_routes
     from .next_static import NEXT_SCRIPT_URL_PREFIX
     from .next_static import register_next_static_routes
+    from .next_crawlers import register_next_crawler_routes
     from .next_technical_specs import derive_release_technical_from_discs
     from .next_technical_specs import disc_union_snapshot
     from .next_technical_specs import drop_disc_derived_edits
@@ -478,6 +480,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import count_table
     from next_common import json_ready
     from next_common import parse_bool_value
+    from next_common import physical_format_label
     from next_common import parse_int_arg
     from next_common import parse_uuid
     from next_common import parse_uuid_list
@@ -614,6 +617,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_export import register_next_export_routes
     from next_static import NEXT_SCRIPT_URL_PREFIX
     from next_static import register_next_static_routes
+    from next_crawlers import register_next_crawler_routes
     from next_technical_specs import derive_release_technical_from_discs
     from next_technical_specs import disc_union_snapshot
     from next_technical_specs import drop_disc_derived_edits
@@ -942,6 +946,89 @@ UPDATE_CHANNEL_BRANCH = {"beta": "release/v26-beta", "stable": "main"}
 UPDATE_CHANNEL_SETTING_KEY = "update_channel"
 UPDATE_HTTP_TIMEOUT = 8.0
 UPDATE_USER_AGENT = "DiscVault-UpdateCheck"
+
+# Windows the statistics view can be narrowed to, in days. ``None`` means "no
+# lower bound", which is what the view asked for before a period existed - so
+# ``all`` reproduces the historical response byte for byte.
+STATS_PERIOD_ALL = "all"
+STATS_PERIOD_WINDOW_DAYS: dict[str, int | None] = {
+    "month": 30,
+    "year": 365,
+    STATS_PERIOD_ALL: None,
+}
+
+# The three slices the statistics view can be narrowed to. The value is what
+# `movies.media_type` stores, or None for "do not filter".
+STATS_MEDIA_ALL = "all"
+STATS_MEDIA_TYPES: dict[str, str | None] = {
+    "movie": "MOVIE",
+    "show": "SHOW",
+    STATS_MEDIA_ALL: None,
+}
+
+# What counts as *one thing* when a chart is about a work rather than a disc.
+#
+# A shelf holds releases, not works: two editions of the same film are two
+# `movies` rows, and a season box set is one row per disc. Counting rows makes
+# a director score twice for owning a film twice, and a series' cast score once
+# per season - which says more about how the collection was bought than about
+# what is in it.
+#
+# The key follows the identity ladder the rest of the server already uses
+# (`dedup_identity.select_tmdb_identifier`), one rung at a time:
+#
+#   1. every disc of one series is that series, so a box set counts once;
+#   2. editions of one film share a TMDB movie_id, so they collapse together;
+#   3. anything else stands for itself, which is the old behaviour.
+#
+# Under-merging is the safe direction and is what happens without metadata: a
+# film nobody resolved keeps its own key. Over-merging would need two different
+# works to carry the same TMDB id, which the ladder does not allow.
+#
+# The prefixes keep the rungs in separate namespaces, so a series id can never
+# collide with a row id.
+STATS_WORK_KEY_SQL = (
+    "COALESCE('series:' || m.series_id::text, "
+    "'tmdb:' || stats_work_tmdb.identifier, "
+    "'row:' || m.id::text)"
+)
+
+# Resolves rung 2 for the row in hand. LATERAL rather than a correlated scalar
+# subquery so it is evaluated once per movie even when the query groups.
+STATS_WORK_KEY_JOIN = """
+LEFT JOIN LATERAL (
+    SELECT mi.identifier
+    FROM movie_identifiers mi
+    WHERE mi.movie_id = m.id
+      AND lower(mi.provider_id) = 'tmdb'
+      AND lower(mi.identifier_type) = 'movie_id'
+      AND NULLIF(TRIM(mi.identifier), '') IS NOT NULL
+    ORDER BY mi.identifier
+    LIMIT 1
+) stats_work_tmdb ON TRUE
+"""
+
+
+# Which `movie_credits` rows count as a director and which as an actor.
+#
+# A credit is stored across two columns and which one carries the answer
+# depends on where the row came from. A metadata refresh normalises
+# `credit_type` to 'actor' or 'crew' and leaves the provider's own wording in
+# `job` - TMDB writes 'Director', with a capital D, and gives cast rows no job
+# at all. The legacy importer copies the old database's role straight into
+# `credit_type` without normalising it, so there 'director' can be the
+# credit_type itself.
+#
+# `job` is compared for equality rather than by substring on purpose:
+# 'Director of Photography' and 'Assistant Director' both contain the word and
+# neither directed the film.
+#
+# Module level so the test can pin these exact predicates rather than a copy of
+# them that can drift; `mc` is the movie_credits alias the query uses.
+STATS_TOP_CREDIT_FILTERS: dict[str, str] = {
+    "director": "(lower(mc.job) = 'director' OR lower(mc.credit_type) = 'director')",
+    "actor": "(lower(mc.credit_type) IN ('actor', 'cast'))",
+}
 
 
 def _update_version_tuple(value: Any) -> tuple[int, ...]:
@@ -1310,27 +1397,12 @@ def pwa_manifest_payload(asset_prefix: str = "/api/next/assets", start_url: str 
     }
 
 
-def pwa_head_tags(asset_prefix: str = "/api/next/assets", manifest_href: str = "/manifest.json") -> str:
-    assets = asset_prefix.rstrip("/")
-    return f"""
-  <meta name="application-name" content="DiscVault">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="DiscVault">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="format-detection" content="telephone=no">
-  <meta name="theme-color" content="#F4F7FB" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#090F1A" media="(prefers-color-scheme: dark)">
-  <meta name="msapplication-TileColor" content="#090F1A">
-  <meta name="msapplication-TileImage" content="{assets}/pwa-icon-192.png">
-  <link rel="manifest" href="{manifest_href}">
-  <link rel="apple-touch-icon" sizes="152x152" href="{assets}/apple-touch-icon-152.png">
-  <link rel="apple-touch-icon" sizes="167x167" href="{assets}/apple-touch-icon-167.png">
-  <link rel="apple-touch-icon" sizes="180x180" href="{assets}/apple-touch-icon.png">
-  <link rel="icon" type="image/png" sizes="32x32" href="{assets}/favicon-32.png">
-  <link rel="icon" type="image/png" sizes="192x192" href="{assets}/pwa-icon-192.png">
-  <link rel="icon" type="image/png" sizes="512x512" href="{assets}/pwa-icon-512.png">
-  <link rel="mask-icon" href="{assets}/icon.svg" color="#2A6FD6">""".rstrip()
+# ``pwa_head_tags`` used to be defined here as well as in ``next_push``, where
+# it moved. The copy was dead — the re-export a few thousand lines down
+# (``pwa_head_tags = _next_push.pwa_head_tags``) rebinds the name at import time,
+# so nothing could ever reach this one — but a second copy of the app's <head> is
+# a trap: adding the robots meta tag to the live one would have left this one
+# silently disagreeing about whether the app is indexable.
 
 
 def next_i18n_dir() -> Path:
@@ -10292,6 +10364,21 @@ def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -
         payload["releases"] = [
             item for item in (result.get("releases") or []) if isinstance(item, dict)
         ]
+        # Which of the two routes into the picker this was. `true` means the
+        # source indexes the scanned barcode on every pressing shown, so the
+        # code is right and only the pressing is open; `false` means they were
+        # found by title in spite of the barcode. The client cannot derive it:
+        # the provider's `barcode_unconfirmed` warning stops at the resolver,
+        # and a candidate's `barcodes` always carries the *scanned* code rather
+        # than the page's own.
+        #
+        # Absent is a third state and stays absent - the title routes carry no
+        # barcode to confirm, and an older MovieVault says nothing at all.
+        # Writing `false` there would put a claim in the client's hands that
+        # nobody made, so only a real boolean is carried over.
+        confirmed = result.get("barcodeConfirmed")
+        if isinstance(confirmed, bool):
+            payload["barcodeConfirmed"] = confirmed
     elif status in {"canonical_hit", "external_hit"}:
         release = result.get("release") if isinstance(result.get("release"), dict) else {}
         if release:
@@ -10914,6 +11001,44 @@ def movie_clears(mutation: dict[str, Any], payload: dict[str, Any]) -> dict[str,
     return updated
 
 
+def apply_pin_marker_writes(payload: dict[str, Any], metadata: dict[str, Any]) -> None:
+    """Fold an incoming §4.8b pin marker onto the key the server stores it under.
+
+    §4.8b splits the marker the way this contract splits every field: the write
+    key is camelCase (`metadata.posterIsPinned`), the read key is snake_case.
+    Here that meets a third name -- `{kind}_locked`, what the server has always
+    stored -- so the translation lands on the stored truth and the wire spelling
+    is never persisted. Letting `posterIsPinned` through untranslated would sit
+    in `movies.metadata` looking authoritative while every reader of the pin,
+    server and PWA alike, went on consulting `poster_locked`.
+
+    **Presence-keyed, not truthiness-keyed**, for the same reason as
+    `technical_edits` and `discs`: the client metadata object is sparse (§4.8),
+    an omitted key is "no opinion", and the upsert's `||` merge leaves it alone.
+    A build predating §4.8b sends no key and must not unpin a collection. An
+    explicit `false` is a real unpin and is written as one.
+
+    The pitfall guard deliberately does *not* live here. A client may pin
+    without resending a URL it never changed, so refusing the write would drop a
+    legitimate pin; the marker is instead withheld at publication by
+    `movie_pin_markers`, which is what every consumer actually reads.
+    """
+    for wire_key, camel_key, locked_key, _url_key in _MOVIE_PIN_MARKERS:
+        for source in (metadata, payload):
+            present = next(
+                (key for key in (camel_key, wire_key) if key in source),
+                None,
+            )
+            if present is None:
+                continue
+            metadata[locked_key] = parse_bool_value(source[present])
+            # The wire spelling never reaches storage, whichever object carried
+            # it -- `metadata` is merged into the column as-is.
+            metadata.pop(camel_key, None)
+            metadata.pop(wire_key, None)
+            break
+
+
 def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     metadata = payload.get("metadata")
     if not isinstance(metadata, dict):
@@ -10926,6 +11051,7 @@ def movie_payload_fields(payload: dict[str, Any]) -> dict[str, Any]:
     ):
         if payload.get(source):
             metadata[target] = payload[source]
+    apply_pin_marker_writes(payload, metadata)
     release_date = storage_optional_date(payload.get("releaseDate") or payload.get("release_date"))
     purchase_date = storage_optional_date(payload.get("purchaseDate") or payload.get("purchase_date"))
     return {
@@ -12412,6 +12538,65 @@ def movie_edit_receiver_proposal(
     }
 
 
+# The two markers of sync-contract §4.8b: the read key, the camelCase write key,
+# the metadata key that already carries the same fact, and the URL that has to
+# back it. Spelled out rather than derived -- §4.8a is a standing record of what
+# guessing a key's other spelling costs here.
+#
+# §4.8b names `poster_is_pinned`/`backdrop_is_pinned`, but the server has been
+# recording a pinned primary as `{kind}_locked` since long before the section
+# existed: every path that pins one -- the artwork picker's "use this one", an
+# upload, a trash-with-replacement -- writes `{kind}_url` and `{kind}_locked`
+# in the same statement. So this is a rename on the wire, not a new fact, and
+# the two names must never be allowed to disagree. Derived on read rather than
+# stored, so there is exactly one stored truth.
+_MOVIE_PIN_MARKERS: tuple[tuple[str, str, str, str], ...] = (
+    ("poster_is_pinned", "posterIsPinned", "poster_locked", "poster_url"),
+    ("backdrop_is_pinned", "backdropIsPinned", "backdrop_locked", "backdrop_url"),
+)
+
+
+def movie_pin_markers(metadata: Any) -> dict[str, bool]:
+    """The §4.8b pin markers a movie's metadata implies.
+
+    Only ever returns `True`. Absent means "not pinned" in §4.8b -- explicitly
+    not "unknown" -- so an unpinned movie carries no key at all and an install
+    that predates this behaves exactly as it did.
+
+    The URL check is the §4.8b pitfall, enforced at the producer instead of
+    trusted to every consumer: a marker with nothing behind it is worse than no
+    marker, because a client that believes it stops falling back. `{kind}_url`
+    can legitimately be empty here -- `media_asset_public_url` returns "" for an
+    asset it cannot address -- and that combination must read as unpinned.
+    """
+    if not isinstance(metadata, dict):
+        return {}
+    markers: dict[str, bool] = {}
+    for wire_key, _camel_key, locked_key, url_key in _MOVIE_PIN_MARKERS:
+        if not parse_bool_value(metadata.get(locked_key)):
+            continue
+        if not first_usable_image(metadata.get(url_key)):
+            continue
+        markers[wire_key] = True
+    return markers
+
+
+def attach_movie_pin_markers(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Fold the §4.8b markers into each row's published `metadata`.
+
+    Called from both sync payload builders. `movie_entity` also feeds the delta
+    (a sync change stores the entity verbatim), so folding here covers bootstrap
+    and delta together -- the drift `_MOVIE_SYNC_COLUMNS` below exists to stop.
+    """
+    for row in rows:
+        metadata = row.get("metadata")
+        markers = movie_pin_markers(metadata)
+        if not markers:
+            continue
+        row["metadata"] = {**metadata, **markers}
+    return rows
+
+
 # The `movies` columns every sync payload carries, shared by the two builders
 # below so they cannot drift apart again.
 #
@@ -12501,6 +12686,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         attach_movie_technical_specs(conn, [row])
         attach_movie_seasons(conn, [row])
         attach_movie_discs(conn, [row])
+        attach_movie_pin_markers([row])
     return row
 
 
@@ -19674,11 +19860,13 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             """,
             (*visibility_params, limit),
         )
-        return attach_movie_discs(
-            conn,
-            attach_movie_seasons(
-                conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
-            ),
+        return attach_movie_pin_markers(
+            attach_movie_discs(
+                conn,
+                attach_movie_seasons(
+                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+                ),
+            )
         )
 
 
@@ -23696,6 +23884,10 @@ _HTML_SHELL_ENDPOINTS = {"next_app_shell", "ui_preview"}
 
 
 def register_routes(flask_app: Flask) -> None:
+    # First, so its before_request gate answers a crawler before the auth gate
+    # opens a database connection for it. Flask runs before_request hooks in
+    # registration order, and a refused crawler must cost nothing.
+    register_next_crawler_routes(flask_app, connect=connect)
     register_next_auth_routes(
         flask_app,
         connect=connect,
@@ -32203,44 +32395,77 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/stats/personal")
     def personal_statistics():
+        # The period narrows the statistics to what *happened* inside a window:
+        # a disc added, a film watched, a wish noted, a loan started. It is
+        # deliberately not applied to the collection's value, because a
+        # valuation is a state and not an event - "the value of what I bought
+        # last month" is a different question from "what my shelf is worth",
+        # and the card sits directly above a chart that answers the latter.
+        period = clean_text(request.args.get("period")).lower() or STATS_PERIOD_ALL
+        if period not in STATS_PERIOD_WINDOW_DAYS:
+            raise NextApiError(
+                f"period must be one of: {', '.join(sorted(STATS_PERIOD_WINDOW_DAYS))}",
+                400,
+            )
+        window_days = STATS_PERIOD_WINDOW_DAYS[period]
+        period_start = (
+            datetime.now(timezone.utc) - timedelta(days=window_days)
+            if window_days is not None
+            else None
+        )
+        media_type = clean_text(request.args.get("mediaType")).lower() or STATS_MEDIA_ALL
+        if media_type not in STATS_MEDIA_TYPES:
+            raise NextApiError(
+                f"mediaType must be one of: {', '.join(sorted(STATS_MEDIA_TYPES))}",
+                400,
+            )
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
-            where, params = visible_movie_where_sql(conn, actor, "m")
+            # Two shapes of the same visibility filter: the unscoped one keeps
+            # answering "what is the whole collection worth", the scoped one
+            # drives every count the period applies to.
+            value_where, value_params = visible_movie_where_sql(conn, actor, "m")
+            where, params = value_where, list(value_params)
+            if period_start is not None:
+                where = f"({where}) AND m.created_at >= %s"
+                params.append(period_start)
+            stored_media_type = STATS_MEDIA_TYPES[media_type]
+            if stored_media_type is not None:
+                where = f"({where}) AND m.media_type = %s"
+                params.append(stored_media_type)
+
+            def _period_clause(column: str) -> tuple[str, list[Any]]:
+                """Extra AND-clause restricting an event table to the window."""
+                if period_start is None:
+                    return "", []
+                return f" AND {column} >= %s", [period_start]
 
             def _bucket_rows(sql: str) -> list[dict[str, Any]]:
                 with conn.cursor() as cur:
                     cur.execute(sql, params)
                     return cur.fetchall()
 
-            def format_label(raw: str) -> str:
-                """Format display labels for media formats."""
-                if not raw or raw == "Unknown":
-                    return "Unknown"
-                # Replace underscores with spaces and capitalize properly
-                text = raw.replace("_", " ")
-                # Special cases for known formats
-                replacements = {
-                    "4K UHD": "4K UHD",
-                    "4K UHD BLURAY": "4K UHD + Blu-Ray",
-                    "BLURAY": "Blu-Ray",
-                    "HD DVD": "HD DVD",
-                    "UMD": "UMD",
-                    "DVD": "DVD",
-                    "VHS": "VHS",
-                    "VCD": "VCD",
-                    "SVCD": "SVCD",
-                }
-                # Check if any replacement matches
-                for key, value in replacements.items():
-                    if key.replace(" ", "_").replace("+", "").lower() == raw.replace(" ", "_").replace("+", "").lower():
-                        return value
-                    if key.lower() == text.lower():
-                        return value
-                return text
+            # Rung 2 needs the identifier table; without it the key degrades to
+            # series-or-row, which still fixes the box set and leaves editions
+            # counted separately - the direction that under-merges.
+            has_identifiers = table_exists(conn, "movie_identifiers")
+            work_join = STATS_WORK_KEY_JOIN if has_identifiers else ""
+            work_key = (
+                STATS_WORK_KEY_SQL
+                if has_identifiers
+                else "COALESCE('series:' || m.series_id::text, 'row:' || m.id::text)"
+            )
+            works = f"COUNT(DISTINCT {work_key})::int"
 
+            # Grouped on the raw column and folded afterwards, because the
+            # spelling is decided in Python: `movies.format` is free text, so
+            # one format arrives as `4K_UHD_BLURAY`, as `4K UHD + Blu-ray`, and
+            # as whatever a person typed. Reporting those as separate formats
+            # is what listed one format twice on this page. `total` is summed
+            # from the same buckets, so it cannot drift from them.
             total = 0
-            by_format: list[dict[str, Any]] = []
+            format_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
                 SELECT COALESCE(NULLIF(TRIM(m.format), ''), 'Unknown') AS label,
@@ -32251,10 +32476,16 @@ def register_routes(flask_app: Flask) -> None:
                 ORDER BY count DESC, label
                 """
             ):
-                raw_label = row.get("label") or ""
-                formatted_label = format_label(raw_label)
-                by_format.append({"label": formatted_label, "count": int(row.get("count") or 0)})
-                total += int(row.get("count") or 0)
+                count = int(row.get("count") or 0)
+                label = physical_format_label(row.get("label") or "") or "Unknown"
+                format_counts[label] = format_counts.get(label, 0) + count
+                total += count
+            by_format = [
+                {"label": label, "count": count}
+                for label, count in sorted(
+                    format_counts.items(), key=lambda item: (-item[1], item[0].lower())
+                )
+            ]
 
             by_decade = [
                 {"label": (f"{row.get('decade')}s" if row.get("decade") is not None else "Unknown"),
@@ -32262,8 +32493,9 @@ def register_routes(flask_app: Flask) -> None:
                 for row in _bucket_rows(
                     f"""
                     SELECT (NULLIF(substring(m.year from '[0-9]{{4}}'), '')::int / 10 * 10) AS decade,
-                           COUNT(*)::int AS count
+                           {works} AS count
                     FROM movies m
+                    {work_join}
                     WHERE {where}
                     GROUP BY 1
                     ORDER BY decade NULLS LAST
@@ -32276,8 +32508,9 @@ def register_routes(flask_app: Flask) -> None:
                 for row in _bucket_rows(
                     f"""
                     SELECT COALESCE(NULLIF(TRIM(m.rating), ''), 'Unrated') AS label,
-                           COUNT(*)::int AS count
+                           {works} AS count
                     FROM movies m
+                    {work_join}
                     WHERE {where}
                     GROUP BY 1
                     ORDER BY count DESC, label
@@ -32288,9 +32521,10 @@ def register_routes(flask_app: Flask) -> None:
             genre_counts: dict[str, int] = {}
             for row in _bucket_rows(
                 f"""
-                SELECT mg.genre_key AS genre, COUNT(DISTINCT m.id)::int AS count
+                SELECT mg.genre_key AS genre, {works} AS count
                 FROM movies m
                 JOIN movie_genres mg ON mg.movie_id = m.id
+                {work_join}
                 WHERE {where}
                 GROUP BY mg.genre_key
                 """
@@ -32303,13 +32537,14 @@ def register_routes(flask_app: Flask) -> None:
                     genre_counts[key] = genre_counts.get(key, 0) + count
             unknown_genre_sql = (
                 f"""
-                SELECT COUNT(*)::int AS count
+                SELECT {works} AS count
                 FROM movies m
+                {work_join}
                 WHERE {where}
                   AND NOT EXISTS (SELECT 1 FROM movie_genres mg WHERE mg.movie_id = m.id)
                 """
                 if table_exists(conn, "movie_genres")
-                else f"SELECT COUNT(*)::int AS count FROM movies m WHERE {where}"
+                else f"SELECT {works} AS count FROM movies m {work_join} WHERE {where}"
             )
             unknown_rows = _bucket_rows(unknown_genre_sql)
             unknown_count = int(unknown_rows[0].get("count") or 0) if unknown_rows else 0
@@ -32329,17 +32564,18 @@ def register_routes(flask_app: Flask) -> None:
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
             if table_exists(conn, "watch_history"):
+                watch_clause, watch_params = _period_clause("watched_at")
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
+                        f"""
                         SELECT
                             COUNT(*)::int AS total,
                             COUNT(*) FILTER (WHERE date_part('year', watched_at) = date_part('year', now()))::int AS this_year,
                             COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'title'))::int AS distinct_movies
                         FROM watch_history
-                        WHERE user_id=%s
+                        WHERE user_id=%s{watch_clause}
                         """,
-                        (user_id,),
+                        (user_id, *watch_params),
                     )
                     row = cur.fetchone() or {}
                     watch["total"] = int(row.get("total") or 0)
@@ -32347,17 +32583,17 @@ def register_routes(flask_app: Flask) -> None:
                     watch["distinctMovies"] = int(row.get("distinct_movies") or 0)
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
+                        f"""
                         SELECT
                             COALESCE(snapshot->>'title', snapshot->>'movie_title', 'Unknown') AS title,
                             COUNT(*)::int AS count
                         FROM watch_history
-                        WHERE user_id=%s
+                        WHERE user_id=%s{watch_clause}
                         GROUP BY 1
                         ORDER BY count DESC, title
                         LIMIT 10
                         """,
-                        (user_id,),
+                        (user_id, *watch_params),
                     )
                     watch["topMovies"] = [
                         {"title": r.get("title"), "count": int(r.get("count") or 0)}
@@ -32366,23 +32602,28 @@ def register_routes(flask_app: Flask) -> None:
 
             wishlist_count = 0
             if table_exists(conn, "wishlist_items"):
+                wishlist_clause, wishlist_params = _period_clause("added_at")
                 with conn.cursor() as cur:
-                    cur.execute("SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s", (user_id,))
+                    cur.execute(
+                        f"SELECT COUNT(*)::int AS count FROM wishlist_items WHERE user_id=%s{wishlist_clause}",
+                        (user_id, *wishlist_params),
+                    )
                     wishlist_count = int((cur.fetchone() or {}).get("count") or 0)
 
             loans_stats = {"active": 0, "overdue": 0, "returned": 0}
             if table_exists(conn, "loans"):
+                loans_clause, loans_params = _period_clause("loaned_at")
                 with conn.cursor() as cur:
                     cur.execute(
-                        """
+                        f"""
                         SELECT
                             COUNT(*) FILTER (WHERE returned_at IS NULL)::int AS active,
                             COUNT(*) FILTER (WHERE returned_at IS NULL AND due_at IS NOT NULL AND due_at < now())::int AS overdue,
                             COUNT(*) FILTER (WHERE returned_at IS NOT NULL)::int AS returned
                         FROM loans
-                        WHERE user_id=%s
+                        WHERE user_id=%s{loans_clause}
                         """,
-                        (user_id,),
+                        (user_id, *loans_params),
                     )
                     row = cur.fetchone() or {}
                     loans_stats = {
@@ -32477,61 +32718,50 @@ def register_routes(flask_app: Flask) -> None:
             container_where, container_params = visible_container_where_sql(conn, actor, "c")
             collection_value = compute_collection_value(
                 conn,
-                movie_where=where,
-                movie_params=params,
+                movie_where=value_where,
+                movie_params=value_params,
                 container_where=container_where,
                 container_params=container_params,
                 exchange_rates=dict(price_display_exchange_rates().get("exchangeRates") or {}),
             )
             capture_collection_value_snapshot(conn, actor)
 
-            # Top directors
-            top_directors = []
+            # Matching only `job = 'director'` found nothing on either storage
+            # shape - see STATS_TOP_CREDIT_FILTERS: refreshed rows differ by
+            # case, imported ones keep the value in the other column, and no
+            # cast row has ever had job = 'actor'. Both charts read empty on a
+            # collection that was full.
+            top_credits: dict[str, list[dict[str, Any]]] = {"director": [], "actor": []}
             if table_exists(conn, "movie_credits"):
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"""
-                        SELECT p.name, COUNT(DISTINCT m.id)::int AS count
-                        FROM movies m
-                        JOIN movie_credits mc ON mc.movie_id = m.id
-                        JOIN people p ON p.id = mc.person_id
-                        WHERE {where} AND mc.job = 'director'
-                        GROUP BY p.name
-                        ORDER BY count DESC, p.name
-                        LIMIT 10
-                        """,
-                        params
-                    )
-                    top_directors = [
-                        {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
-                        for row in cur.fetchall()
-                    ]
-
-            # Top actors/cast
-            top_actors = []
-            if table_exists(conn, "movie_credits"):
-                with conn.cursor() as cur:
-                    cur.execute(
-                        f"""
-                        SELECT p.name, COUNT(DISTINCT m.id)::int AS count
-                        FROM movies m
-                        JOIN movie_credits mc ON mc.movie_id = m.id
-                        JOIN people p ON p.id = mc.person_id
-                        WHERE {where} AND mc.job = 'actor'
-                        GROUP BY p.name
-                        ORDER BY count DESC, p.name
-                        LIMIT 10
-                        """,
-                        params
-                    )
-                    top_actors = [
-                        {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
-                        for row in cur.fetchall()
-                    ]
+                for credit_key, credit_filter in STATS_TOP_CREDIT_FILTERS.items():
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            f"""
+                            SELECT p.name, {works} AS count
+                            FROM movies m
+                            JOIN movie_credits mc ON mc.movie_id = m.id
+                            JOIN people p ON p.id = mc.person_id
+                            {work_join}
+                            WHERE {where} AND {credit_filter}
+                            GROUP BY p.name
+                            ORDER BY count DESC, p.name
+                            LIMIT 10
+                            """,
+                            params,
+                        )
+                        top_credits[credit_key] = [
+                            {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
+                            for row in cur.fetchall()
+                        ]
+            top_directors = top_credits["director"]
+            top_actors = top_credits["actor"]
 
             return response(
                 {
                     "status": "ok",
+                    "period": period,
+                    "periodStart": period_start.isoformat() if period_start else None,
+                    "mediaType": media_type,
                     "totalMovies": total,
                     "byFormat": by_format,
                     "byDecade": by_decade,
@@ -35810,6 +36040,8 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.get("/app/profile")
     @flask_app.get("/lists")
     @flask_app.get("/app/lists")
+    @flask_app.get("/statistics")
+    @flask_app.get("/app/statistics")
     @flask_app.get("/discover")
     @flask_app.get("/app/discover")
     @flask_app.get("/discover/<discover_media_type>/<discover_id>")

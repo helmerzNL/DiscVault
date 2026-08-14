@@ -26,6 +26,7 @@ import uuid
 from typing import Any
 
 try:
+    from .next_common import physical_format_label
     from .next_metadata import movie_identifiers
     from .next_metadata import movie_locked_fields
     from .next_metadata import movie_technical_specs
@@ -33,6 +34,7 @@ try:
     from .next_movievault_connection import _table_exists, _text
     from .next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 except ImportError:  # pragma: no cover - supports direct module execution
+    from next_common import physical_format_label
     from next_metadata import movie_identifiers
     from next_metadata import movie_locked_fields
     from next_metadata import movie_technical_specs
@@ -395,22 +397,17 @@ def _normalise_country(value: Any) -> Any:
 
 
 #: The display spellings MovieVault's free-text `format` actually holds.
-#: Mirrors `physicalFormatLabel` in the PWA, deliberately: a contribution is a
-#: *display* of the value to another system, and `movies.format` is an
-#: unconstrained column that providers and sync clients write raw codes into --
-#: `4K_UHD`, `BLURAY` -- which is why every screen already routes through that
-#: function. The correction sheet was the one surface that read the column raw
-#: and sent it onward, so a shelf holding `4K_UHD` proposed replacing the
-#: catalogue's `4K UHD` with an underscore.
-_FOUR_K = ("4k", "uhd", "ultra hd")
-_BLURAY_PATTERN = re.compile(r"blu[\s-]?ray|(?:^|[^a-z])bd(?:[^a-z]|$)")
-_COMBO_PATTERN = re.compile(r"[+/&]")
-
-
+#: A contribution is a *display* of the value to another system, and
+#: `movies.format` is an unconstrained column that providers and sync clients
+#: write raw codes into -- `4K_UHD`, `BLURAY` -- which is why every screen
+#: already routes through one spelling function. That function now lives in
+#: `next_common` so the statistics page and this sheet cannot drift apart:
+#: they did, and the charts listed "4K UHD + Blu-Ray" beside
+#: "4K UHD + Blu-ray" as two formats.
 def _format_display(value: Any) -> Any:
     """One physical format, spelled the way the catalogue spells it.
 
-    Only the four shapes both sides agree on are rewritten. Anything else is
+    Only the shapes both sides agree on are rewritten. Anything else is
     returned untouched: the column is free text on purpose, a person may have
     typed something this does not know, and inventing a spelling for it would
     propose a correction nobody can defend.
@@ -418,18 +415,7 @@ def _format_display(value: Any) -> Any:
     text = _clean(value)
     if text is None:
         return None
-    lowered = str(text).lower()
-    has_four_k = any(token in lowered for token in _FOUR_K)
-    has_bluray = bool(_BLURAY_PATTERN.search(lowered))
-    if has_four_k and has_bluray and _COMBO_PATTERN.search(lowered):
-        return "4K UHD + Blu-ray"
-    if has_four_k:
-        return "4K UHD"
-    if has_bluray:
-        return "Blu-ray"
-    if "dvd" in lowered and "hd dvd" not in lowered:
-        return "DVD"
-    return text
+    return physical_format_label(text)
 
 
 def _mirror_disc_regions(value: Any) -> list[str] | None:
