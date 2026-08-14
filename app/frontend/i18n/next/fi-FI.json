@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Nayttelijat",
   "movieDetail.aggregateArtwork": "Jasenten kuvitus",
   "movieDetail.applied": "Muutokset kaytetty.",
+  "movieDetail.formatBlockedFields": "{count} kenttää ei otettu käyttöön, koska lähde kuvaa eri formaattia kuin tämä levy. Korjaa formaatti tai valitse oikea painos ja päivitä uudelleen.",
+  "movieDetail.formatCorrectedRefreshAgain": "Tämän levyn formaatti korjattiin muotoon {format}. Päivitä vielä kerran, niin saat ne {count} kenttää, jotka vanha formaatti esti.",
   "movieDetail.applyFailed": "Metatietojen paivitys epaonnistui.",
   "movieDetail.releaseCandidatesHelp": "MovieVault tunnisti elokuvan, mutta ei tämän levyn tarkkaa painosta. Valitse kädessäsi oleva painos täyttääksesi sen tiedot.",
   "movieDetail.releaseCandidatesApplying": "Painosta sovelletaan levyyn...",

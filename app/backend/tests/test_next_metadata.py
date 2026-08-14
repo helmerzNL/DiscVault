@@ -31,6 +31,7 @@ from app.backend.next_metadata import _parse_import_country
 from app.backend.next_metadata import external_metadata_barcode
 from app.backend.next_metadata import field_format_safe
 from app.backend.next_metadata import should_apply_field
+from app.backend.next_metadata import should_apply_format
 from app.backend.next_metadata import filter_locked_artwork_updates
 from app.backend.next_metadata import filter_hidden_artwork_updates
 from app.backend.next_metadata import metadata_field_decisions_with_write_state
@@ -2284,6 +2285,131 @@ box_set_candidates = _lookup
         self.assertEqual(normalize_media_format("Betamax"), "")
         allowed, _reason = field_format_safe("audio_tracks", "Betamax", "Blu-ray")
         self.assertFalse(allowed)
+
+    def _format_decision(self, current, incoming, **overrides):
+        options = {
+            "overwrite_enabled": False,
+            "release_priority": True,
+            "entrypoint": "search_barcode",
+        }
+        options.update(overrides)
+        return should_apply_format(
+            current_value=current,
+            incoming_value=incoming,
+            **options,
+        )
+
+    def test_a_combo_pack_recorded_as_one_of_its_discs_is_corrected(self):
+        """The reported defect, with the values it was reported with.
+
+        MovieVault holds barcode 5051888274439 as `4K Ultra HD + Blu-ray` and
+        the disc was stored as `4K_UHD`. The generic rules judged that release
+        field by comparing the movie's format with the source's, so the field
+        was gated on its own stale value and could never be corrected - and the
+        same veto then rejected every other release field from that source, so
+        the disc received nothing at all.
+        """
+        allowed, reason = self._format_decision("4K_UHD", "4K Ultra HD + Blu-ray")
+
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "a release names the fuller pack this disc belongs to")
+
+    def test_a_contributed_correction_reaches_a_disc_matched_by_identity(self):
+        """A correction that no device can receive is a one-way contribution.
+
+        DiscVault contributes field corrections to MovieVault, so a catalog
+        value that changed has to be able to arrive - otherwise the field most
+        likely to have been corrected is the one nothing could overwrite.
+        """
+        for entrypoint in ("search_barcode", "movie_details"):
+            with self.subTest(entrypoint=entrypoint):
+                allowed, reason = self._format_decision(
+                    "Blu-ray", "4K UHD", entrypoint=entrypoint
+                )
+
+                self.assertTrue(allowed)
+                self.assertEqual(
+                    reason, "the release this disc was matched to states another format"
+                )
+
+    def test_a_title_search_may_not_restate_the_format(self):
+        # A title search can return a different pressing of the same film, and
+        # the format is what gates every technical field - so a wrong one here
+        # attaches another disc's specs silently.
+        allowed, reason = self._format_decision(
+            "Blu-ray", "4K UHD", entrypoint="search_title"
+        )
+
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "existing value retained")
+
+    def test_a_refinement_needs_no_identity_entrypoint(self):
+        # Naming the pack a disc is a leg of cannot attach specs for a disc the
+        # user does not own, so this direction is safe from any release source.
+        allowed, reason = self._format_decision(
+            "4K UHD", "4K UHD + Blu-ray", entrypoint="search_title"
+        )
+
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "a release names the fuller pack this disc belongs to")
+
+    def test_a_refresh_may_not_narrow_a_combo_pack(self):
+        allowed, reason = self._format_decision("4K UHD + Blu-ray", "Blu-ray")
+
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "a refresh may not narrow a combo pack to one of its discs")
+        # The operator escape hatch every other field has still applies.
+        allowed, _reason = self._format_decision(
+            "4K UHD + Blu-ray", "Blu-ray", overwrite_enabled=True
+        )
+        self.assertTrue(allowed)
+
+    def test_two_spellings_of_one_format_are_not_a_change(self):
+        # `movies.format` is free text and sync clients write raw codes into it,
+        # so `4K_UHD` and `4K UHD` must compare equal or every refresh would
+        # rewrite the column and report a change it did not make.
+        allowed, reason = self._format_decision("4K_UHD", "4K UHD")
+
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "existing value retained")
+
+    def test_a_format_outside_the_vocabulary_is_never_stored(self):
+        # An unrecognised value normalizes to "", which `field_format_safe`
+        # reads as "no format" and which blocks every technical field. Writing
+        # one would trade a wrong format for no format at all.
+        allowed, reason = self._format_decision("4K UHD", "Betamax")
+
+        self.assertFalse(allowed)
+        self.assertEqual(reason, "incoming format is not a known media format")
+
+    def test_a_film_level_source_may_not_name_a_format(self):
+        allowed, _reason = self._format_decision(
+            "Blu-ray", "4K UHD", release_priority=False
+        )
+
+        self.assertFalse(allowed)
+
+    def test_an_empty_format_is_still_filled(self):
+        allowed, reason = self._format_decision("", "4K Ultra HD + Blu-ray")
+
+        self.assertTrue(allowed)
+        self.assertEqual(reason, "current field is empty")
+
+    def test_correcting_the_format_does_not_move_the_identity_key(self):
+        """The property that makes the correction safe, and nothing pinned it.
+
+        Tiers 3 and 4 key on `physical_media_format_key`, which tests
+        `"ultra hd"` before anything else and has no combo branch. Both
+        spellings therefore produce the same key, so writing the fuller one
+        re-keys nothing. If that function ever learns about combos, this
+        correction starts moving records between identities.
+        """
+        from app.backend.next_app import physical_media_format_key
+
+        self.assertEqual(
+            physical_media_format_key("4K_UHD"),
+            physical_media_format_key("4K Ultra HD + Blu-ray"),
+        )
 
     def test_combo_pack_may_refresh_existing_technical_specs(self):
         allowed, reason = should_apply_field(

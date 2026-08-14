@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Skuespillere",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Endringer brukt.",
+  "movieDetail.formatBlockedFields": "{count} felt ble ikke brukt fordi kilden beskriver et annet format enn denne platen. Rett formatet, eller velg riktig pressing, og oppdater på nytt.",
+  "movieDetail.formatCorrectedRefreshAgain": "Formatet på denne platen ble rettet til {format}. Oppdater én gang til for å hente de {count} feltene som det gamle formatet blokkerte.",
   "movieDetail.applyFailed": "Oppdatering av metadata feilet.",
   "movieDetail.releaseCandidatesHelp": "MovieVault gjenkjente filmen, men ikke den nøyaktige pressingen av denne discen. Velg den du holder i hånden for å fylle inn detaljene.",
   "movieDetail.releaseCandidatesApplying": "Bruker denne utgaven på discen...",

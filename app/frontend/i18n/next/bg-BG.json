@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Актьор",
   "movieDetail.aggregateArtwork": "Произведения на изкуството за членове",
   "movieDetail.applied": "Метаданните са обновени.",
+  "movieDetail.formatBlockedFields": "{count} поле(та) не бяха приложени, защото източникът описва различен формат от този диск. Коригирайте формата или изберете правилното издание и опреснете отново.",
+  "movieDetail.formatCorrectedRefreshAgain": "Форматът на този диск беше коригиран на {format}. Опреснете още веднъж, за да получите {count} поле(та), които старият формат блокираше.",
   "movieDetail.applyFailed": "Обновяването на метаданните е неуспешно.",
   "movieDetail.releaseCandidatesHelp": "MovieVault разпозна филма, но не и точното издание на този диск. Изберете това, което държите, за да попълните данните му.",
   "movieDetail.releaseCandidatesApplying": "Прилагане на това издание върху диска...",
