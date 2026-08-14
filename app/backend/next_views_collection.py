@@ -1406,7 +1406,6 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <h3>Security</h3>
             <div class="admin-controls">
               <button type="button" id="adminAuthToggle" data-admin-action="toggle-auth">Toggle Authentication</button>
-              <button type="button" id="adminMovieVaultReceiverToggle" data-admin-action="toggle-movievault-receiver">Toggle MovieVault Receiver</button>
               <button type="button" id="adminMovieVaultContributionToggle" data-admin-action="toggle-movievault-contribution">Toggle Release Contribution</button>
             </div>
             <p class="muted">Choose how new users can join this DiscVault environment.</p>
@@ -3296,12 +3295,8 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       const stateLine = document.getElementById("adminSecurityState");
       const authButton = document.getElementById("adminAuthToggle");
       const registrationMode = authState.registration_enabled ? "public" : "invite";
-      const movieVaultReceiverButton = document.getElementById("adminMovieVaultReceiverToggle");
       if (stateLine) {
-        const receiverText = authState.role === "owner"
-          ? ` MovieVault receiver ${ownerSettings.movievault_contribution_enabled ? "on" : "off"}.`
-          : "";
-        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration mode ${authState.registration_enabled ? "public registration" : "invite-only login"}.${receiverText}`;
+        stateLine.textContent = `Auth ${authState.configured_auth_enabled ? "configured on" : "configured off"}; active ${authState.auth_enabled ? "yes" : "no"}; registration mode ${authState.registration_enabled ? "public registration" : "invite-only login"}.`;
       }
       if (authButton) authButton.textContent = authState.configured_auth_enabled ? "Disable Auth" : "Enable Auth";
       document.querySelectorAll("[data-admin-registration-mode]").forEach((button) => {
@@ -3309,12 +3304,6 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
         button.classList.toggle("active", active);
         button.setAttribute("aria-pressed", active ? "true" : "false");
       });
-      if (movieVaultReceiverButton) {
-        movieVaultReceiverButton.classList.toggle("hidden", authState.role !== "owner");
-        movieVaultReceiverButton.textContent = ownerSettings.movievault_contribution_enabled
-          ? "Disable MovieVault Receiver"
-          : "Enable MovieVault Receiver";
-      }
       const movieVaultContributionButton = document.getElementById("adminMovieVaultContributionToggle");
       if (movieVaultContributionButton) {
         movieVaultContributionButton.classList.toggle("hidden", authState.role !== "owner");
@@ -3418,19 +3407,6 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
       ownerSettings = payload.settings || {};
       renderAdminSecurity();
       setAdminStatus(`Release contribution ${enabled ? "enabled" : "disabled"}.`, "good");
-    }
-    async function setMovieVaultReceiver(enabled) {
-      if (authState.role !== "owner") {
-        setAdminStatus("Only the owner can change MovieVault receiver mode.", "bad");
-        return;
-      }
-      const payload = await authJson("/api/next/auth/owner/settings", {
-        method: "POST",
-        body: JSON.stringify({movievault_contribution_enabled: enabled})
-      });
-      ownerSettings = payload.settings || {};
-      renderAdminSecurity();
-      setAdminStatus(`MovieVault receiver ${enabled ? "enabled" : "disabled"}.`, "good");
     }
     async function setRbacMode(mode) {
       await authJson("/api/next/auth/rbac", {
@@ -3769,8 +3745,6 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
           task = setAuthConfigured(!authState.configured_auth_enabled);
         } else if (action === "toggle-invite-only") {
           task = setInviteOnly(!!authState.registration_enabled);
-        } else if (action === "toggle-movievault-receiver") {
-          task = setMovieVaultReceiver(!ownerSettings.movievault_contribution_enabled);
         } else if (action === "toggle-movievault-contribution") {
           task = setMovieVaultContribution(!ownerSettings.movievault_v2_contribution_enabled);
         } else if (action === "create-invite") {

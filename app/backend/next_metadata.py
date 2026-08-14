@@ -40,10 +40,6 @@ try:
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
     from .next_common import table_exists as _shared_table_exists
-    from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
-    from .next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
-    from .next_movievault_connection import is_movievault_plugin
-    from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
     from .next_packaging import split_legacy_packaging
@@ -63,10 +59,6 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
     from next_common import table_exists as _shared_table_exists
-    from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
-    from next_movievault_connection import MOVIEVAULT_PLUGIN_IDS
-    from next_movievault_connection import is_movievault_plugin
-    from next_movievault_connection import movievault_plugin_context
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
     from next_packaging import split_legacy_packaging
@@ -735,7 +727,10 @@ def plugin_capabilities(plugin: dict[str, Any]) -> set[str]:
 
 
 def is_movievault_identity_source(plugin_id: str) -> bool:
-    return plugin_id == MOVIEVAULT_V2_PLUGIN_ID or is_movievault_plugin(plugin_id)
+    # Only movievault_v2 is left: the `movievault_26` plugin and the v25
+    # `movievault` plugin it replaced were both removed, so v2 is the sole
+    # MovieVault identity source DiscVault can run.
+    return plugin_id == MOVIEVAULT_V2_PLUGIN_ID
 
 
 def plugin_is_bootstrap_metadata_source(plugin: dict[str, Any]) -> bool:
@@ -820,13 +815,6 @@ def plugin_execution_context(
         },
     }
     plugin_id = str(plugin.get("id") or "")
-    context = movievault_plugin_context(
-        conn,
-        plugin_id,
-        context,
-        ensure_token=is_movievault_plugin(plugin_id),
-        actor_id=actor.get("id") if actor else None,
-    )
     return movievault_v2_plugin_context(conn, plugin_id, context)
 
 
@@ -837,8 +825,6 @@ def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entry
     if plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
         # The v2 endpoint is enforced (not user-supplied), so v2 never requires
         # user configuration.
-        return False
-    if is_movievault_plugin(plugin_id):
         return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
@@ -4279,7 +4265,6 @@ def run_metadata_source_pipeline(
     technical_current: dict[str, Any] | None = None,
     actor: dict[str, Any] | None = None,
     exclude_plugin_ids: set[str] | None = None,
-    enable_metadata_lookup_bridge: bool = True,
     force: bool = False,
 ) -> dict[str, Any]:
     excluded = {str(item) for item in (exclude_plugin_ids or set()) if str(item)}
@@ -4307,29 +4292,11 @@ def run_metadata_source_pipeline(
     normalized_results: list[dict[str, Any]] = []
     target_format = query.get("format") or (current or {}).get("format") or ""
 
-    def metadata_lookup_bridge(
-        lookup_payload: dict[str, Any] | None = None,
-        *,
-        excludeProviders: list[str] | tuple[str, ...] | set[str] | None = None,
-        excludePluginIds: list[str] | tuple[str, ...] | set[str] | None = None,
-    ) -> dict[str, Any]:
-        payload = lookup_payload if isinstance(lookup_payload, dict) else {}
-        bridge_excluded = set(MOVIEVAULT_PLUGIN_IDS)
-        bridge_excluded.update(str(item) for item in (excludeProviders or []) if str(item))
-        bridge_excluded.update(str(item) for item in (excludePluginIds or []) if str(item))
-        bridge_query = query_from_payload(payload)
-        if not bridge_query.get("format") and query.get("format"):
-            bridge_query["format"] = query.get("format")
-            bridge_query["normalizedFormat"] = normalize_media_format(query.get("format"))
-        return run_metadata_source_pipeline(
-            conn,
-            query=bridge_query,
-            current={"format": bridge_query.get("format") or "", "metadata": {}},
-            technical_current={},
-            actor=actor,
-            exclude_plugin_ids=bridge_excluded,
-            enable_metadata_lookup_bridge=False,
-        )
+    # The `metadataLookup` bridge that used to live here was handed to the
+    # `movievault_26` plugin alone, so that it could ask DiscVault to run the
+    # other sources on its behalf. That plugin has been removed and
+    # `movievault_v2` never received the bridge - it resolves against its own
+    # synced index - so nothing is left to call it.
 
     def run_source_plan(
         plugin: dict[str, Any],
@@ -4421,8 +4388,6 @@ def run_metadata_source_pipeline(
     for plugin in initial_plugins:
         config = plugin_config_from_db(conn, plugin["id"])
         context = plugin_execution_context(conn, plugin, config, actor)
-        if enable_metadata_lookup_bridge and is_movievault_plugin(str(plugin.get("id") or "")):
-            context["metadataLookup"] = metadata_lookup_bridge
         plan = (
             movievault_identification_plan(plugin, query)
             if is_movievault_identity_source(str(plugin.get("id") or ""))

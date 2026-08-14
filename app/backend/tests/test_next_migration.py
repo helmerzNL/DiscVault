@@ -99,6 +99,77 @@ class NextMigrationContractTests(unittest.TestCase):
         self.assertIn("'metadata.refresh_movie'", migration)
         self.assertIn("existing.status IN ('pending', 'running')", migration)
 
+    def test_movievault_26_removal_migration_uninstalls_and_repromotes_v2(self):
+        """The removal is an uninstall, not a disable, and v2 moves to the top.
+
+        Deleting the plugin directory only makes sync_plugin_registry() flip the
+        row to installed=false; the row, its settings, its cached lookups and its
+        stored MovieVault credentials all survive that. What this migration is
+        for is everything the file deletion does not do, so the assertions are
+        about each of those surviving pieces by name.
+        """
+        migration = (
+            Path(__file__).resolve().parents[1]
+            / "migrations_next"
+            / "080_remove_movievault_26_plugin.sql"
+        ).read_text(encoding="utf-8")
+
+        # Guarded so it is a no-op where the tables do not exist yet.
+        for table in (
+            "public.plugins",
+            "public.metadata_plugins",
+            "public.plugin_settings",
+            "public.metadata_plugin_settings",
+            "public.metadata_lookup_cache",
+            "public.metadata_field_provenance",
+            "public.app_settings",
+            "public.background_jobs",
+        ):
+            self.assertIn(f"to_regclass('{table}')", migration)
+
+        # Both ids go: `movievault_26` and the v25 `movievault` it replaced.
+        for statement in (
+            "DELETE FROM metadata_field_provenance",
+            "DELETE FROM metadata_lookup_cache",
+            "DELETE FROM metadata_plugin_settings",
+            "DELETE FROM plugin_settings",
+            "DELETE FROM metadata_plugins",
+            "DELETE FROM plugins",
+        ):
+            self.assertIn(statement, migration)
+        # Six deletes plus the queued-job step, which names the same two ids.
+        self.assertEqual(migration.count("IN ('movievault_26', 'movievault')"), 7)
+        self.assertIn("UPDATE background_jobs", migration)
+        self.assertIn("WHERE status = 'pending'", migration)
+
+        # Provenance is deleted before the registry row it references, because
+        # that foreign key is ON DELETE RESTRICT and would otherwise refuse.
+        self.assertLess(
+            migration.index("DELETE FROM metadata_field_provenance"),
+            migration.index("DELETE FROM metadata_plugins"),
+        )
+
+        # The stored connection is destroyed, not left at rest.
+        for key in (
+            "'plugin_secret:movievault_26:token'",
+            "'movievault_instance_private_key'",
+            "'movievault_v3_api_token'",
+            "'movievault_contribution_enabled'",
+        ):
+            self.assertIn(key, migration)
+        # ...but nothing belonging to the plugin that stays, nor the v25 flag the
+        # one-shot legacy import reconciliation still reads.
+        self.assertNotIn("'movievault_v2_contribution_enabled'", migration)
+        self.assertNotIn("'movievault_enabled'", migration)
+
+        # v2 becomes the highest-priority source in both registry tables, which
+        # sync_plugin_registry() mirrors one into the other.
+        self.assertEqual(migration.count("order_index = 5"), 2)
+        self.assertEqual(migration.count("WHERE id = 'movievault_v2'"), 2)
+        # Idempotent: the flip is conditional on the row not already matching.
+        self.assertIn("enabled IS DISTINCT FROM true", migration)
+        self.assertIn("order_index IS DISTINCT FROM 5", migration)
+
     def test_recovery_code_migration_unifies_passkey_and_legacy_codes(self):
         migration = (
             Path(__file__).resolve().parents[1]
