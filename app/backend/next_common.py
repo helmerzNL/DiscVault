@@ -9,6 +9,7 @@ same names from ``next_app``).
 
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
@@ -186,3 +187,40 @@ def parse_uuid_list(values: Any, field_name: str, *, maximum: int = 250) -> list
             parsed.append(item)
             seen.add(item)
     return parsed
+
+
+# One spelling for one physical format, mirroring `physicalFormatLabel` in the
+# PWA and used by every surface that shows a format to a person.
+#
+# `movies.format` is free text on purpose: providers and sync clients write raw
+# codes into it (`4K_UHD`, `BLURAY`), a person can type their own, and the
+# column never constrained any of it. So the same shelf holds several spellings
+# of one format, and anything that groups on the raw value reports them as
+# different things - which is how the statistics page came to show both
+# "4K UHD + Blu-Ray" and "4K UHD + Blu-ray".
+#
+# Only the four shapes the app agrees on are rewritten. Anything else is
+# returned as it was typed: inventing a spelling for a value nobody recognises
+# would merge things that are not the same, and that mistake is invisible.
+_FOUR_K_TOKENS = ("4k", "uhd", "ultra hd")
+_BLURAY_RE = re.compile(r"blu[\s-]?ray|(?:^|[^a-z])bd(?:[^a-z]|$)")
+_FORMAT_COMBO_RE = re.compile(r"[+/&]")
+
+
+def physical_format_label(value: Any) -> str:
+    """The display spelling of one physical format."""
+    text = " ".join(str(value or "").split())
+    if not text:
+        return ""
+    lowered = text.lower()
+    has_four_k = any(token in lowered for token in _FOUR_K_TOKENS)
+    has_bluray = bool(_BLURAY_RE.search(lowered))
+    if has_four_k and has_bluray and _FORMAT_COMBO_RE.search(lowered):
+        return "4K UHD + Blu-ray"
+    if has_four_k:
+        return "4K UHD"
+    if has_bluray:
+        return "Blu-ray"
+    if "dvd" in lowered and "hd dvd" not in lowered:
+        return "DVD"
+    return text
