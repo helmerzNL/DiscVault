@@ -2844,6 +2844,95 @@ def should_apply_field(
     return False, "existing value retained"
 
 
+# Entrypoints that reach a release through an identifier the disc itself
+# carries -- its barcode, or the catalog id it is already bound to -- rather
+# than through its name. Only these may correct a stored format: a title search
+# can return a different pressing of the same film, and a format written from
+# one would attach that pressing's technical profile to this disc.
+METADATA_IDENTITY_ENTRYPOINTS = frozenset({"search_barcode", "movie_details"})
+
+
+def should_apply_format(
+    *,
+    current_value: Any,
+    incoming_value: Any,
+    overwrite_enabled: bool,
+    release_priority: bool,
+    entrypoint: str = "",
+) -> tuple[bool, str]:
+    """Decide a proposed ``format`` against the stored one, asymmetrically.
+
+    The generic rules cannot carry this field either, and for a sharper reason
+    than ``media_type``: they judge a release field by comparing the movie's
+    format with the source's, so applying them to ``format`` gates the field on
+    its own stale value. A blank format could be filled and a *wrong* one could
+    never be corrected -- and because the veto is evaluated per field against
+    the same pair, one wrong format silently rejected every other release field
+    from that source too. That is how a 4K UHD + Blu-ray pack recorded as plain
+    ``4K_UHD`` came to receive nothing at all from MovieVault.
+
+    That also broke the contribution round trip, which is the reason this is a
+    correction rule and not merely a refinement one. DiscVault contributes
+    field corrections *to* MovieVault; a correction that the catalog accepts and
+    no other device can then receive is a one-way street, and the field most
+    likely to be corrected is the one nothing could overwrite.
+
+    So the field is decided here, before ``field_format_safe`` sees it:
+
+    - **A source that found this disc by identity may correct it.** `entrypoint`
+      is the discriminator: ``search_barcode`` and ``movie_details`` reach a
+      release through the disc's own barcode or the catalog id it is already
+      bound to, so they describe *this* pressing. ``search_title`` can return a
+      different pressing of the same film, and a format taken from one would
+      attach the wrong technical profile -- silently, because format is what
+      gates technical data.
+    - **Refinement is allowed from any release-backed source.** A combo pack
+      names the disc a single-format entry is a leg of, so `4K UHD` ->
+      `4K UHD + Blu-ray` describes the same product more precisely rather than
+      contradicting it. That direction cannot attach specs for a disc the user
+      does not own, so it does not need the identity gate.
+    - **Narrowing is refused.** A source describing one leg of a pack must never
+      demote the pack to it -- the same asymmetry ``FORMAT_COMBO_MEMBERS``
+      states for technical data, and the same reason: the receiving entry has to
+      stay the superset. An operator who has turned on preferred-provider
+      overwrite still gets it, like every other field.
+
+    Correcting the format is safe for identity: tiers 3 and 4 key on
+    ``physical_media_format_key``, which has no combo branch, so both spellings
+    map to ``ultra_hd_blu_ray`` and the ladder key does not move.
+
+    The technical data itself arrives on the *next* refresh. ``target_format``
+    is read once before the merge loop, so a format corrected mid-pass cannot
+    retroactively unblock fields already judged against the old one -- and
+    recomputing it mid-pass would make field iteration order significant across
+    three buckets and several results.
+    """
+    incoming = normalize_media_format(incoming_value)
+    current = normalize_media_format(current_value)
+    if not value_present(incoming_value):
+        return False, "incoming value is empty"
+    if not incoming:
+        # Unrecognised vocabulary. Storing it would blank a known format into
+        # something `field_format_safe` reads as "no format", which blocks every
+        # technical field.
+        return False, "incoming format is not a known media format"
+    if not current:
+        return True, "current field is empty"
+    if incoming == current:
+        return False, "existing value retained"
+    if incoming in FORMAT_COMBO_MEMBERS.get(current, ()):
+        if overwrite_enabled:
+            return True, "preferred provider overwrite is enabled"
+        return False, "a refresh may not narrow a combo pack to one of its discs"
+    if current in FORMAT_COMBO_MEMBERS.get(incoming, ()) and release_priority:
+        return True, "a release names the fuller pack this disc belongs to"
+    if release_priority and entrypoint in METADATA_IDENTITY_ENTRYPOINTS:
+        return True, "the release this disc was matched to states another format"
+    if overwrite_enabled:
+        return True, "preferred provider overwrite is enabled"
+    return False, "existing value retained"
+
+
 def should_apply_media_type(*, current_value: Any, incoming_value: Any) -> tuple[bool, str]:
     """Decide a proposed ``media_type`` against the stored one, asymmetrically.
 
@@ -3036,6 +3125,17 @@ def merge_metadata_results(
                 allowed, reason = should_apply_media_type(
                     current_value=current_value,
                     incoming_value=value,
+                )
+            elif target == "movie" and field == "format":
+                # Dispatched out of the generic path for the reason in
+                # `should_apply_format`: the generic rules would judge this
+                # field against its own current value.
+                allowed, reason = should_apply_format(
+                    current_value=current_value,
+                    incoming_value=value,
+                    overwrite_enabled=overwrite_enabled,
+                    release_priority=release_priority,
+                    entrypoint=str(result.get("entrypoint") or ""),
                 )
             else:
                 allowed, reason = should_apply_field(

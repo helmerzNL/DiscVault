@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "俳優",
   "movieDetail.aggregateArtwork": "メンバーのアートワーク",
   "movieDetail.applied": "メタデータを更新しました。",
+  "movieDetail.formatBlockedFields": "ソースがこのディスクとは異なるフォーマットを示しているため、{count} 件のフィールドは適用されませんでした。フォーマットを修正するか正しいプレスを選んで、もう一度更新してください。",
+  "movieDetail.formatCorrectedRefreshAgain": "このディスクのフォーマットを {format} に修正しました。古いフォーマットで保留されていた {count} 件のフィールドを取り込むには、もう一度更新してください。",
   "movieDetail.applyFailed": "メタデータの更新に失敗しました。",
   "movieDetail.releaseCandidatesHelp": "MovieVault は映画を特定しましたが、このディスクの正確なプレスは特定できませんでした。手元のプレスを選ぶと詳細が入力されます。",
   "movieDetail.releaseCandidatesApplying": "このエディションをディスクに適用しています...",

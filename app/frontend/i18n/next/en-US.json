@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Actors",
   "movieDetail.aggregateArtwork": "Member artwork",
   "movieDetail.applied": "Metadata refreshed.",
+  "movieDetail.formatBlockedFields": "{count} field(s) were not applied because the source describes a different format than this disc. Correct the format, or pick the right pressing, and refresh again.",
+  "movieDetail.formatCorrectedRefreshAgain": "The disc's format was corrected to {format}. Refresh once more to bring in the {count} field(s) that were held back by the old one.",
   "movieDetail.applyFailed": "Metadata refresh failed.",
   "movieDetail.releaseCandidatesHelp": "MovieVault identified the film but not this disc's exact pressing. Pick the one you are holding to fill in its details.",
   "movieDetail.releaseCandidatesApplying": "Applying this edition to the disc...",

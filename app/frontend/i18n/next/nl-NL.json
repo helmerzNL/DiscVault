@@ -1745,6 +1745,8 @@
   "movieDetail.actors": "Acteurs",
   "movieDetail.aggregateArtwork": "Artwork van leden",
   "movieDetail.applied": "Metadata vernieuwd.",
+  "movieDetail.formatBlockedFields": "{count} veld(en) zijn niet toegepast omdat de bron een ander formaat beschrijft dan deze schijf. Corrigeer het formaat of kies de juiste persing en ververs opnieuw.",
+  "movieDetail.formatCorrectedRefreshAgain": "Het formaat van deze schijf is gecorrigeerd naar {format}. Ververs nog een keer om de {count} veld(en) op te halen die door het oude formaat werden tegengehouden.",
   "movieDetail.applyFailed": "Vernieuwen van metadata mislukt.",
   "movieDetail.releaseCandidatesHelp": "MovieVault herkende de film, maar niet de precieze persing van deze disc. Kies de persing die je vasthoudt om de details in te vullen.",
   "movieDetail.releaseCandidatesApplying": "Editie wordt op deze disc toegepast...",

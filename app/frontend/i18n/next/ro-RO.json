@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Actori",
   "movieDetail.aggregateArtwork": "Grafică pentru membri",
   "movieDetail.applied": "Metadatele au fost reîmprospătate.",
+  "movieDetail.formatBlockedFields": "{count} câmp(uri) nu au fost aplicate deoarece sursa descrie un alt format decât acest disc. Corectează formatul sau alege presarea corectă și reîmprospătează din nou.",
+  "movieDetail.formatCorrectedRefreshAgain": "Formatul acestui disc a fost corectat în {format}. Reîmprospătează încă o dată pentru a aduce cele {count} câmp(uri) blocate de formatul vechi.",
   "movieDetail.applyFailed": "Reîmprospătarea metadatelor a eșuat.",
   "movieDetail.releaseCandidatesHelp": "MovieVault a identificat filmul, dar nu presarea exactă a acestui disc. Alege-o pe cea pe care o ții în mână pentru a-i completa detaliile.",
   "movieDetail.releaseCandidatesApplying": "Se aplică această ediție discului...",

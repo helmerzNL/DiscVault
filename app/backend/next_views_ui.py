@@ -44021,15 +44021,36 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({dryRun, refreshPeople: false, personRefreshScope: "all"})
         });
-        const successMessage = dryRun
+        // A format the source and the disc disagree about does not skip one
+        // field, it skips every release field from that source - audio,
+        // subtitles, packaging, the lot - and the count was computed and thrown
+        // away, so the refresh reported plain success while applying nothing.
+        const proposalStats = ((payload.metadata || {}).preview || {}).proposalStats || {};
+        const formatBlocked = Number(proposalStats.formatBlockedFields || 0);
+        const appliedFormat = (((payload.metadata || {}).applied || {}).applied || {}).movieUpdates?.format;
+        let successMessage = dryRun
           ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.")
           : tNext("movieDetail.applied", "Metadata refreshed.");
+        let successTone = "good";
+        if (formatBlocked > 0) {
+          successTone = "warn";
+          successMessage = appliedFormat
+            // The format is read once at the start of a refresh, so the fields
+            // it was blocking were already judged against the old value. They
+            // arrive on the next run, which is worth saying rather than leaving
+            // the first one looking half-finished.
+            ? tNext("movieDetail.formatCorrectedRefreshAgain", "The disc's format was corrected to {format}. Refresh once more to bring in the {count} field(s) that were held back by the old one.")
+                .replace("{format}", physicalFormatLabel(appliedFormat))
+                .replace("{count}", String(formatBlocked))
+            : tNext("movieDetail.formatBlockedFields", "{count} field(s) were not applied because the source describes a different format than this disc. Correct the format, or pick the right pressing, and refresh again.")
+                .replace("{count}", String(formatBlocked));
+        }
         if (!dryRun) {
           const refreshed = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`);
           renderMovieDetail(refreshed.detail || {});
           await loadAppSnapshot();
         }
-        setMovieDetailMessage(successMessage, "good");
+        setMovieDetailMessage(successMessage, successTone);
         // The resolver identified the film but could not confirm which
         // pressing this disc is. That is a choice, not a miss - render the
         // picker instead of leaving "no usable match" as the last word.

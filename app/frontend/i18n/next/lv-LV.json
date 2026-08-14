@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Aktieri",
   "movieDetail.aggregateArtwork": "Dalībnieku attēli",
   "movieDetail.applied": "Metadati atsvaidzināti.",
+  "movieDetail.formatBlockedFields": "{count} lauks(i) netika lietoti, jo avots apraksta citu formātu nekā šis disks. Izlabo formātu vai izvēlies pareizo izdevumu un atsvaidzini vēlreiz.",
+  "movieDetail.formatCorrectedRefreshAgain": "Šī diska formāts tika izlabots uz {format}. Atsvaidzini vēlreiz, lai iegūtu {count} lauku(s), ko bloķēja vecais formāts.",
   "movieDetail.applyFailed": "Neizdevās atsvaidzināt metadatus.",
   "movieDetail.releaseCandidatesHelp": "MovieVault atpazina filmu, bet ne precīzu šī diska izdevumu. Izvēlieties to, kuru turat rokā, lai aizpildītu tā datus.",
   "movieDetail.releaseCandidatesApplying": "Šis izdevums tiek piemērots diskam...",

@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Darsteller",
   "movieDetail.aggregateArtwork": "Member-Artwork",
   "movieDetail.applied": "Aenderungen angewendet.",
+  "movieDetail.formatBlockedFields": "{count} Feld(er) wurden nicht übernommen, weil die Quelle ein anderes Format beschreibt als diese Disc. Korrigiere das Format oder wähle die richtige Pressung und aktualisiere erneut.",
+  "movieDetail.formatCorrectedRefreshAgain": "Das Format dieser Disc wurde zu {format} korrigiert. Aktualisiere noch einmal, um die {count} Feld(er) zu holen, die das alte Format blockiert hat.",
   "movieDetail.applyFailed": "Metadaten-Aktualisierung fehlgeschlagen.",
   "movieDetail.releaseCandidatesHelp": "MovieVault hat den Film erkannt, aber nicht die genaue Pressung dieser Disc. Wähle die Pressung, die du in der Hand hältst, um die Details auszufüllen.",
   "movieDetail.releaseCandidatesApplying": "Edition wird auf diese Disc angewendet...",

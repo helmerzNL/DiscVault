@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Herci",
   "movieDetail.aggregateArtwork": "Členská umělecká díla",
   "movieDetail.applied": "Metadata obnovena.",
+  "movieDetail.formatBlockedFields": "{count} pole nebylo použito, protože zdroj popisuje jiný formát než tento disk. Opravte formát nebo vyberte správný lis a obnovte znovu.",
+  "movieDetail.formatCorrectedRefreshAgain": "Formát tohoto disku byl opraven na {format}. Obnovte ještě jednou, aby se načetlo {count} polí, která starý formát blokoval.",
   "movieDetail.applyFailed": "Obnovení metadat selhalo.",
   "movieDetail.releaseCandidatesHelp": "MovieVault rozpoznal film, ale ne přesný lis tohoto disku. Vyberte ten, který držíte v ruce, a doplňte tak jeho údaje.",
   "movieDetail.releaseCandidatesApplying": "Použití této edice na disk...",

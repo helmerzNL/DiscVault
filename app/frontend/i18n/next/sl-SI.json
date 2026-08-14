@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Igralci",
   "movieDetail.aggregateArtwork": "Umetniško delo člana",
   "movieDetail.applied": "Metapodatki so osveženi.",
+  "movieDetail.formatBlockedFields": "{count} polj ni bilo uporabljenih, ker vir opisuje drugačen format kot ta disk. Popravite format ali izberite pravo izdajo in znova osvežite.",
+  "movieDetail.formatCorrectedRefreshAgain": "Format tega diska je bil popravljen v {format}. Osvežite še enkrat, da pridobite {count} polj, ki jih je stari format blokiral.",
   "movieDetail.applyFailed": "Osveževanje metapodatkov ni uspelo.",
   "movieDetail.releaseCandidatesHelp": "MovieVault je prepoznal film, ne pa tudi natančne izdaje tega diska. Izberite tisto, ki jo držite v roki, da izpolnite njene podatke.",
   "movieDetail.releaseCandidatesApplying": "Uporaba te izdaje na disku...",

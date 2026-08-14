@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Aktoriai",
   "movieDetail.aggregateArtwork": "Narių iliustracijos",
   "movieDetail.applied": "Metaduomenys atnaujinti.",
+  "movieDetail.formatBlockedFields": "{count} laukas (-ai) nebuvo pritaikyti, nes šaltinis aprašo kitokį formatą nei šis diskas. Pataisykite formatą arba pasirinkite tinkamą leidimą ir atnaujinkite dar kartą.",
+  "movieDetail.formatCorrectedRefreshAgain": "Šio disko formatas pataisytas į {format}. Atnaujinkite dar kartą, kad būtų gauti {count} laukas (-ai), kuriuos blokavo senasis formatas.",
   "movieDetail.applyFailed": "Nepavyko atnaujinti metaduomenų.",
   "movieDetail.releaseCandidatesHelp": "MovieVault atpažino filmą, bet ne tikslų šio disko leidimą. Pasirinkite tą, kurį laikote rankoje, kad užpildytumėte jo duomenis.",
   "movieDetail.releaseCandidatesApplying": "Šis leidimas taikomas diskui...",
