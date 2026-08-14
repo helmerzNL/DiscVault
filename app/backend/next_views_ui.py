@@ -3906,11 +3906,22 @@ def ui_preview_html(
       gap: 12px;
       margin-bottom: 14px;
     }
+    /* Every other top-level view is a grid whose gap does the spacing between
+       hero, toolbar and content. The statistics view was left as plain flow,
+       so the period control sat flush on the hero's bottom border with no gap
+       at all - which is why it read as sitting on top of the banner. The
+       spacing lives here rather than as a margin on each child, so a block
+       added later is spaced without having to know about it. */
+    .statistics-view {
+      display: grid;
+      gap: 16px;
+      min-width: 0;
+      align-content: start;
+    }
     .stats-cards {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
       gap: 14px;
-      margin-bottom: 20px;
     }
     .stat-card {
       border: 1px solid var(--line);
@@ -4166,7 +4177,7 @@ def ui_preview_html(
       align-items: center;
       justify-content: space-between;
       gap: 12px;
-      margin: 0 0 18px;
+      margin: 0;
     }
     .stats-period-note {
       margin: 0;
