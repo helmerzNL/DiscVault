@@ -147,13 +147,6 @@ try:
     from .next_auth import _rp_origins
     from .next_auth import _verify_signature
     from .next_runtime_secrets import validate_runtime_secrets
-    from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
-    from .next_movievault_connection import MovieVaultConnectionError
-    from .next_movievault_connection import MovieVaultInstanceRevoked
-    from .next_movievault_connection import is_movievault_plugin
-    from .next_movievault_connection import movievault_connection_status
-    from .next_movievault_connection import movievault_plugin_context
-    from .next_movievault_connection import refresh_movievault_connection
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
     from .next_movievault_v2 import MovieVaultV2Error
@@ -439,13 +432,6 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import _rp_origins
     from next_auth import _verify_signature
     from next_runtime_secrets import validate_runtime_secrets
-    from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
-    from next_movievault_connection import MovieVaultConnectionError
-    from next_movievault_connection import MovieVaultInstanceRevoked
-    from next_movievault_connection import is_movievault_plugin
-    from next_movievault_connection import movievault_connection_status
-    from next_movievault_connection import movievault_plugin_context
-    from next_movievault_connection import refresh_movievault_connection
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
     from next_movievault_v2 import MovieVaultV2Error
@@ -2324,8 +2310,6 @@ def box_set_proposal_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, 
     candidate_only = box_set_proposal_is_candidate_only(proposal)
     if "upcitemdb" in provider:
         provider_rank = 9
-    elif ("movievault_26" in provider or "movievault 26" in provider) and exact_barcode and explicit_members:
-        provider_rank = 0
     elif "movievault" in provider:
         provider_rank = 1
     elif ("bluray" in provider or "blu-ray" in provider) and explicit_members:
@@ -10500,8 +10484,6 @@ def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[s
         # The v2 endpoint is enforced (not user-supplied), so v2 never requires
         # user configuration.
         return False
-    if is_movievault_plugin(plugin_id):
-        return False
     manifest = plugin.get("manifest") or {}
     return bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
 
@@ -10668,8 +10650,6 @@ def plugin_execution_context(
     plugin: dict[str, Any],
     config: dict[str, Any],
     actor: dict[str, Any] | None = None,
-    *,
-    ensure_movievault_token: bool = False,
 ) -> dict[str, Any]:
     manifest = plugin.get("manifest") or {}
     context = {
@@ -10691,13 +10671,6 @@ def plugin_execution_context(
         },
     }
     plugin_id = str(plugin.get("id") or "")
-    context = movievault_plugin_context(
-        conn,
-        plugin_id,
-        context,
-        ensure_token=ensure_movievault_token,
-        actor_id=actor.get("id") if actor else None,
-    )
     return movievault_v2_plugin_context(
         conn,
         plugin_id,
@@ -19379,7 +19352,7 @@ def fetch_box_set_artwork_from_sources(
         config = plugin_config_from_db(conn, plugin_id)
         if plugin_requires_config_for_entrypoint(plugin, config, "box_set_candidates"):
             continue
-        context = plugin_execution_context(conn, plugin, config, actor, ensure_movievault_token=True)
+        context = plugin_execution_context(conn, plugin, config, actor)
         # Released here rather than earlier: the configuration read just
         # above is what reopens the transaction, so anything sooner does
         # not count. See release_read_transaction.
@@ -29380,112 +29353,6 @@ def register_routes(flask_app: Flask) -> None:
             config = plugin_config_from_db(conn, plugin_id)
         return response({"status": "ok", "plugin": plugin, "config": config})
 
-    @flask_app.get("/api/next/plugins/movievault/connection", defaults={"plugin_id": MOVIEVAULT_PLUGIN_ID})
-    @flask_app.get("/api/next/plugins/<plugin_id>/connection")
-    def movievault_connection(plugin_id: str):
-        plugin_id = str(plugin_id or "").strip()
-        if not is_movievault_plugin(plugin_id):
-            raise NextApiError("MovieVault plugin not found", 404)
-        with connect() as conn:
-            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
-            if not table_exists(conn, "plugins"):
-                raise NextApiError("Plugin registry table is not available", 503)
-            if table_exists(conn, "metadata_plugins"):
-                sync_metadata_plugin_registry(conn)
-            else:
-                sync_plugin_registry(conn, table_exists, Jsonb)
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
-            if not plugin:
-                raise NextApiError("MovieVault plugin not found", 404)
-            config = plugin_config_from_db(conn, plugin_id)
-            connection = movievault_connection_status(conn, plugin_id)
-        return response(
-            {
-                "status": "ok",
-                "plugin": plugin,
-                "config": {
-                    "settingsConfigured": config["settingsConfigured"],
-                    "secretNames": config["secretNames"],
-                    "secretsConfigured": config["secretsConfigured"],
-                },
-                "connection": connection,
-            }
-        )
-
-    @flask_app.post("/api/next/plugins/movievault/connection/refresh", defaults={"plugin_id": MOVIEVAULT_PLUGIN_ID})
-    @flask_app.post("/api/next/plugins/<plugin_id>/connection/refresh")
-    def refresh_movievault_plugin_connection(plugin_id: str):
-        plugin_id = str(plugin_id or "").strip()
-        if not is_movievault_plugin(plugin_id):
-            raise NextApiError("MovieVault plugin not found", 404)
-        body = request.get_json(silent=True) or {}
-        reset = bool(body.get("reset"))
-        with connect() as conn:
-            require_any_next_permission(conn, PLUGIN_REGISTRY_VIEW_PERMISSIONS)
-            if not table_exists(conn, "plugins"):
-                raise NextApiError("Plugin registry table is not available", 503)
-            if table_exists(conn, "metadata_plugins"):
-                sync_metadata_plugin_registry(conn)
-            else:
-                sync_plugin_registry(conn, table_exists, Jsonb)
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), None)
-            if not plugin:
-                raise NextApiError("MovieVault plugin not found", 404)
-            actor = require_any_next_permission(conn, plugin_manage_permissions(plugin))
-            status = "ok"
-            status_code = 200
-            error = None
-            try:
-                refresh_movievault_connection(conn, plugin_id=plugin_id, actor_id=actor.get("id"), reset=reset)
-                summary = f"MovieVault connection refreshed for {plugin_id}"
-            except MovieVaultInstanceRevoked as exc:
-                status = "error"
-                status_code = 409
-                error = str(exc)
-                summary = f"MovieVault connection revoked for {plugin_id}"
-            except MovieVaultConnectionError as exc:
-                status = "error"
-                status_code = 409
-                error = str(exc)
-                summary = f"MovieVault connection refresh failed for {plugin_id}"
-            connection = movievault_connection_status(conn, plugin_id)
-            audit_event(
-                conn,
-                event_type="plugin.movievault_connection_refreshed" if status == "ok" else "plugin.movievault_connection_failed",
-                category="plugins",
-                actor=actor,
-                target_type="plugin",
-                target_id=plugin_id,
-                summary=summary,
-                metadata={
-                    "pluginId": plugin_id,
-                    "reset": reset,
-                    "status": status,
-                    "error": error,
-                    "authMethod": connection.get("authMethod"),
-                    "linkStatus": connection.get("linkStatus"),
-                    "tokenPrefix": connection.get("tokenPrefix"),
-                },
-            )
-            registry = plugin_registry_snapshot(conn, table_exists, Jsonb)
-            plugin = next((item for item in registry["plugins"] if item["id"] == plugin_id), plugin)
-            config = plugin_config_from_db(conn, plugin_id)
-        payload = {
-            "status": status,
-            "plugin": plugin,
-            "config": {
-                "settingsConfigured": config["settingsConfigured"],
-                "secretNames": config["secretNames"],
-                "secretsConfigured": config["secretsConfigured"],
-            },
-            "connection": connection,
-        }
-        if error:
-            payload["error"] = error
-        return response(payload, status_code)
-
     @flask_app.get("/api/next/plugins/<plugin_id>/health")
     def plugin_health(plugin_id: str):
         plugin_id = str(plugin_id or "").strip()
@@ -29507,13 +29374,7 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Plugin not found", 404)
             actor = require_plugin_action_permission(conn, plugin, "health_check")
             config = plugin_config_from_db(conn, plugin_id)
-            context = plugin_execution_context(
-                conn,
-                plugin,
-                config,
-                actor,
-                ensure_movievault_token=is_movievault_plugin(plugin_id),
-            )
+            context = plugin_execution_context(conn, plugin, config, actor)
 
         manifest = plugin.get("manifest") or {}
         requires_secrets = bool(plugin.get("requiresSecrets") or manifest.get("requiresSecrets"))
@@ -29569,13 +29430,7 @@ def register_routes(flask_app: Flask) -> None:
             config = plugin_config_from_db(conn, plugin_id)
             if plugin_requires_config_for_entrypoint(plugin, config, entrypoint):
                 raise NextApiError("Plugin configuration is incomplete", 409)
-            context = plugin_execution_context(
-                conn,
-                plugin,
-                config,
-                actor,
-                ensure_movievault_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
-            )
+            context = plugin_execution_context(conn, plugin, config, actor)
 
         # No release needed, and none possible: the `with connect()` block above
         # has already ended, so the connection is closed and handed back before

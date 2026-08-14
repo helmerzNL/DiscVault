@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import base64
-import hashlib
 import os
 import subprocess
 import sys
@@ -17,7 +15,6 @@ if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
 from app.backend import next_auth
-from app.backend import next_movievault_connection
 from app.backend import next_runtime_secrets
 from app.backend import next_worker
 
@@ -66,10 +63,15 @@ class RuntimeSecretTests(unittest.TestCase):
             self.assertEqual(next_runtime_secrets.jwt_secret(), "shared-secret")
             next_runtime_secrets.validate_runtime_secrets()
 
+    # These three used to reach the key through
+    # `next_movievault_connection._key_encryption_key()`, which derived a Fernet
+    # key from it. That module went with the `movievault_26` plugin, so they
+    # assert on `next_runtime_secrets` itself - which is where the fail-closed
+    # rule they are about has always lived. The rule is unchanged: no secret
+    # configured means an exception, never a value derived from DATABASE_URL.
     def test_key_encryption_uses_required_jwt_secret_by_default(self):
         with patch.dict(os.environ, {"JWT_SECRET": "shared-secret"}, clear=True):
-            expected = base64.urlsafe_b64encode(hashlib.sha256(b"shared-secret").digest())
-            self.assertEqual(next_movievault_connection._key_encryption_key(), expected)
+            self.assertEqual(next_runtime_secrets.key_encryption_secret(), "shared-secret")
 
     def test_dedicated_key_encryption_secret_takes_precedence(self):
         with patch.dict(
@@ -80,8 +82,7 @@ class RuntimeSecretTests(unittest.TestCase):
             },
             clear=True,
         ):
-            expected = base64.urlsafe_b64encode(hashlib.sha256(b"dedicated-secret").digest())
-            self.assertEqual(next_movievault_connection._key_encryption_key(), expected)
+            self.assertEqual(next_runtime_secrets.key_encryption_secret(), "dedicated-secret")
 
     def test_key_encryption_rejects_database_derived_fallback(self):
         with patch.dict(
@@ -90,7 +91,7 @@ class RuntimeSecretTests(unittest.TestCase):
             clear=True,
         ):
             with self.assertRaises(next_runtime_secrets.RuntimeSecretConfigurationError):
-                next_movievault_connection._key_encryption_key()
+                next_runtime_secrets.key_encryption_secret()
 
     def test_api_startup_rejects_missing_secret_without_disclosing_database_url(self):
         env = os.environ.copy()

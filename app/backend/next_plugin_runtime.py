@@ -887,10 +887,11 @@ def load_runtime_module(plugin: PluginDiscovery):
 
     Two plugins were written expecting a module to survive between calls, and
     quietly got nothing: `tvdb` caches its auth token in `_TOKENS`, so it
-    re-authenticated on every single call, and `movievault_26` keeps a template
-    cache that never once produced a hit. Both are keyed by the configuration
-    they belong to (`api_key`, a context key), so persisting them shares nothing
-    across configurations -- their authors had already thought about that.
+    re-authenticated on every single call, and the since-removed `movievault_26`
+    kept a template cache that never once produced a hit. Both were keyed by the
+    configuration they belong to (`api_key`, a context key), so persisting them
+    shares nothing across configurations -- their authors had already thought
+    about that.
 
     It also makes connection reuse possible at all: `requests.get` builds a new
     connection per call, and a module-level `requests.Session` cannot help while
@@ -1271,8 +1272,7 @@ def reconcile_plugin_replacements(
                 # licence to outrank where DiscVault ships it. Without this floor
                 # a legacy row sitting at a low order_index (a v25 import writes
                 # index * 10) would promote the replacement above sources that are
-                # deliberately ranked higher - e.g. movievault_26 above
-                # movievault_v2.
+                # deliberately ranked higher.
                 order_index = max(inherited_order, manifest_orders.get(replacement_id, 100))
                 cur.execute(
                     """

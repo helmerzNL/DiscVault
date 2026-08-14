@@ -594,7 +594,7 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
                 self.assertNotIn("tmdb", plugins)
                 # Other defaults remain available.
-                self.assertIn("movievault_26", plugins)
+                self.assertIn("movievault_v2", plugins)
 
     def test_plugin_paths_falls_back_to_bundled_when_data_dir_unavailable(self):
         with tempfile.TemporaryDirectory() as data_dir:
@@ -654,29 +654,49 @@ class NextPluginRuntimeTests(unittest.TestCase):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
 
-        plugin = plugins["movievault_26"]
+        plugin = plugins["movievault_v2"]
         self.assertIn("metadata_source", plugin.manifest["categories"])
         self.assertNotIn("person_details", plugin.manifest["capabilities"])
         self.assertNotIn("person_details", plugin.runtime["entrypoints"])
 
-    def test_movievault_v2_ships_as_the_default_movievault_source(self):
-        """v2 is the MovieVault source a fresh install uses, ranked above 26.
+    def test_movievault_26_is_no_longer_bundled(self):
+        """The plugin is removed, not merely disabled.
 
-        The order matters as much as the flag: metadata_source_plugins() sorts by
-        (order_index, lower(name)), and "movievault 26" sorts before
-        "movievault v2", so an equal order_index would silently hand the win to
-        26. v2 must also stay below the legacy "movievault" seed order of 50 so an
-        order inherited through reconcile_plugin_replacements() cannot outrank it.
+        A disabled bundled plugin is one admin click away from running again,
+        which is not what "removed and uninstalled" means. Nothing may ship it
+        back under either id - `movievault_26` or the v25 `movievault` it
+        replaced - and migration 080 deletes the matching rows so an existing
+        install does not keep a registry entry for something that cannot load.
+        """
+        plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
+
+        self.assertNotIn("movievault_26", plugins)
+        self.assertNotIn("movievault", plugins)
+
+    def test_movievault_v2_ships_as_the_highest_priority_metadata_source(self):
+        """v2 is the source a fresh install reaches first.
+
+        metadata_source_plugins() sorts by (order_index, lower(name)), lowest
+        first, so "highest priority" is the smallest orderIndex of every bundled
+        metadata_source - strictly smaller, because a tie is broken by name and
+        would silently hand the win to whichever plugin sorts earlier.
         """
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
 
         v2 = plugins["movievault_v2"].manifest
-        legacy = plugins["movievault_26"].manifest
         self.assertIs(v2["defaultEnabled"], True)
-        self.assertIs(legacy["defaultEnabled"], False)
-        self.assertLess(v2["orderIndex"], legacy["orderIndex"])
-        self.assertLess(v2["orderIndex"], 50)
+
+        others = [
+            plugin.manifest
+            for plugin in discovery["plugins"]
+            if plugin.plugin_id != "movievault_v2"
+            and "metadata_source" in (plugin.manifest.get("categories") or [])
+        ]
+        self.assertTrue(others, "no other bundled metadata sources to rank against")
+        for manifest in others:
+            with self.subTest(plugin_id=manifest["id"]):
+                self.assertLess(v2["orderIndex"], manifest["orderIndex"])
 
     def _registry_row(self, plugin_id):
         return {
