@@ -4367,15 +4367,115 @@ def ui_preview_html(
       font-weight: 600;
       font-size: .82rem;
     }
+    /* ---- Chart header + form toggle ---- */
+    .stats-block-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .stats-block-head h2 { margin: 0; }
+    .stats-chart-toggle {
+      display: inline-flex;
+      flex: 0 0 auto;
+      padding: 2px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      background: color-mix(in srgb, var(--bg-elevated) 60%, transparent);
+      backdrop-filter: blur(14px) saturate(160%);
+      -webkit-backdrop-filter: blur(14px) saturate(160%);
+    }
+    .stats-chart-toggle button {
+      display: inline-grid;
+      place-items: center;
+      width: 28px;
+      height: 24px;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      transition: background .18s ease, color .18s ease;
+    }
+    .stats-chart-toggle button svg { width: 15px; height: 15px; fill: currentColor; display: block; }
+    .stats-chart-toggle button:hover { color: var(--text); }
+    .stats-chart-toggle button[aria-pressed="true"] {
+      color: var(--text);
+      background: var(--bg-solid);
+      box-shadow: 0 1px 3px rgba(0,0,0,.14);
+    }
+    .stats-chart-toggle button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    /* ---- Horizontal bars ---- */
+    .dv-bars { display: grid; gap: 11px; }
+    .dv-bar-row { display: grid; gap: 5px; min-width: 0; }
+    .dv-bar-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: .82rem;
+    }
+    .dv-bar-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .dv-bar-value {
+      flex: 0 0 auto;
+      font-variant-numeric: tabular-nums;
+      font-weight: 600;
+      font-size: .8rem;
+    }
+    .dv-bar-track {
+      position: relative;
+      height: 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--line) 55%, transparent);
+      box-shadow: inset 0 1px 2px color-mix(in srgb, #000 8%, transparent);
+      overflow: hidden;
+    }
+    .dv-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        color-mix(in srgb, var(--dv-bar-color) 78%, transparent) 0%,
+        var(--dv-bar-color) 100%);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 38%, transparent);
+      transform-origin: left center;
+      animation: dvBarGrow .55s cubic-bezier(.32,.72,0,1) both;
+    }
+    .dv-bars-more {
+      justify-self: start;
+      margin-top: 2px;
+      padding: 4px 10px;
+      border: 1px solid color-mix(in srgb, var(--line) 70%, transparent);
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--bg-elevated) 55%, transparent);
+      color: var(--muted);
+      font: inherit;
+      font-size: .76rem;
+      font-weight: 550;
+      cursor: pointer;
+      transition: color .18s ease, border-color .18s ease;
+    }
+    .dv-bars-more:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+    .dv-bars-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    @keyframes dvBarGrow {
+      from { transform: scaleX(0); }
+      to   { transform: scaleX(1); }
+    }
     @keyframes dvChartFade {
       from { opacity: 0; transform: translateY(4px); }
       to   { opacity: 1; transform: none; }
     }
-    .dv-donut {
+    .dv-donut, .dv-bars {
       animation: dvChartFade .4s cubic-bezier(.32,.72,0,1) both;
     }
     @media (prefers-reduced-motion: reduce) {
-      .dv-donut { animation: none; }
+      .dv-donut, .dv-bars, .dv-bar-fill { animation: none; }
       .dv-donut-seg, .stats-segmented-thumb { transition: none; }
     }
     @media (max-width: 560px) {
@@ -15543,24 +15643,39 @@ def ui_preview_html(
         </div>
         <div class="stats-cards" id="statsCards"></div>
         <div class="stats-sections">
-          <div class="stats-block stats-pie-chart-block">
-            <h2 data-next-i18n="stats.byFormat">By format</h2>
+          <div class="stats-block stats-pie-chart-block" data-stats-chart-block="format">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.byFormat">By format</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="format"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByFormat"></div>
           </div>
-          <div class="stats-block">
-            <h2 data-next-i18n="stats.byDecade">By decade</h2>
+          <div class="stats-block" data-stats-chart-block="decade">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.byDecade">By decade</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="decade"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByDecade"></div>
           </div>
-          <div class="stats-block">
-            <h2 data-next-i18n="stats.byGenre">By genre</h2>
+          <div class="stats-block" data-stats-chart-block="genre">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.byGenre">By genre</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="genre"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByGenre"></div>
           </div>
-          <div class="stats-block stats-pie-chart-block">
-            <h2 data-next-i18n="stats.topDirectors">Top 10 Directors</h2>
+          <div class="stats-block stats-pie-chart-block" data-stats-chart-block="directors">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.topDirectors">Top 10 Directors</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="directors"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByTopDirectors"></div>
           </div>
-          <div class="stats-block stats-pie-chart-block">
-            <h2 data-next-i18n="stats.topActors">Top 10 Actors</h2>
+          <div class="stats-block stats-pie-chart-block" data-stats-chart-block="actors">
+            <div class="stats-block-head">
+              <h2 data-next-i18n="stats.topActors">Top 10 Actors</h2>
+              <div class="stats-chart-toggle" data-stats-chart-toggle="actors"></div>
+            </div>
             <div class="stats-pie-chart-container" id="statsByTopActors"></div>
           </div>
           <div class="stats-block stats-price-trend" id="statsCollectionValueChartSection">
@@ -41847,8 +41962,154 @@ def ui_preview_html(
           .join("");
       }
     }
-    function statsGenresHtml(rows) {
-      return statsDonutChartHtml(rows);
+    // Bars name every category, which is the one thing a ring cannot do once
+    // there are more than eight. Long lists stay collapsed so a genre chart
+    // does not push the blocks beside it out of line before anyone asked it
+    // to; the fold is a disclosure, never a cap - the count on the button
+    // says exactly how much is behind it.
+    const DV_BARS_COLLAPSED = 6;
+    function statsBarsHtml(rows, options) {
+      const settings = options || {};
+      const ordinal = !!settings.ordinal;
+      let all = dvChartRows(rows);
+      if (!all.length) return dvChartEmptyHtml();
+      if (!ordinal) all = all.slice().sort((a, b) => (Number(b.count) || 0) - (Number(a.count) || 0));
+      const expanded = !!settings.expanded;
+      const collapsible = all.length > DV_BARS_COLLAPSED;
+      const items = collapsible && !expanded ? all.slice(0, DV_BARS_COLLAPSED) : all;
+      // Scale against the whole set, not the visible slice, so expanding the
+      // list never rescales the bars that were already on screen.
+      const max = all.reduce((acc, row) => Math.max(acc, Number(row.count) || 0), 0) || 1;
+      const body = items
+        .map((row, index) => {
+          const count = Number(row.count) || 0;
+          const width = Math.max((count / max) * 100, 1.5);
+          const color = ordinal ? dvOrdinalColor(index, Math.min(all.length, DV_SERIES_SLOTS)) : dvChartColor(index);
+          return `
+            <div class="dv-bar-row">
+              <div class="dv-bar-head">
+                <span class="dv-bar-name">${escapeHtml(dvChartLabel(row))}</span>
+                <span class="dv-bar-value">${escapeHtml(dvFormatCount(count))}</span>
+              </div>
+              <div class="dv-bar-track">
+                <div class="dv-bar-fill" style="width:${width.toFixed(2)}%;--dv-bar-color:${escapeHtml(color)};animation-delay:${Math.min(index * 35, 280)}ms"></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+      const toggle = collapsible
+        ? `<button type="button" class="dv-bars-more" data-dv-bars-toggle>${
+            expanded
+              ? escapeHtml(tNext("stats.chartShowLess", "Show less"))
+              : escapeHtml(tNext("stats.chartShowAll", "Show all")) + " (" + escapeHtml(dvFormatCount(all.length)) + ")"
+          }</button>`
+        : "";
+      return `<div class="dv-bars">${body}${toggle}</div>`;
+    }
+    // Which form each chart is currently drawn in. Remembered per chart, so a
+    // reader who prefers bars for genres does not have to say so again on
+    // every visit - but "expanded" deliberately is not remembered, because a
+    // page that reopens fully unfolded is the layout problem the collapse
+    // exists to avoid.
+    const statsChartViews = {};
+    function statsChartView(key) {
+      if (!statsChartViews[key]) {
+        let stored = "";
+        try {
+          stored = localStorage.getItem("dv_next_chart_view_" + key) || "";
+        } catch (error) {
+          stored = "";
+        }
+        statsChartViews[key] = { mode: stored === "bars" ? "bars" : "donut", expanded: false };
+      }
+      return statsChartViews[key];
+    }
+    function setStatsChartMode(key, mode) {
+      const view = statsChartView(key);
+      view.mode = mode === "bars" ? "bars" : "donut";
+      view.expanded = false;
+      try {
+        localStorage.setItem("dv_next_chart_view_" + key, view.mode);
+      } catch (error) {
+        /* a browser refusing storage must not break the toggle */
+      }
+    }
+    function statsChartHtml(key, rows, options) {
+      const view = statsChartView(key);
+      const settings = Object.assign({}, options || {}, { expanded: view.expanded });
+      return view.mode === "bars" ? statsBarsHtml(rows, settings) : statsDonutChartHtml(rows, settings);
+    }
+    // One place that knows which container, which slice of the payload, and
+    // whether the chart is ordered - so a re-render after a toggle goes
+    // through exactly the same path as the first draw.
+    const STATS_CHARTS = {
+      format: { target: "statsByFormat", field: "byFormat" },
+      // Decades are ordered, so they take the single-hue ramp rather than
+      // eight unrelated hues, which would throw that order away.
+      decade: { target: "statsByDecade", field: "byDecade", ordinal: true },
+      genre: { target: "statsByGenre", field: "byGenre" },
+      directors: { target: "statsByTopDirectors", field: "topDirectors" },
+      actors: { target: "statsByTopActors", field: "topActors" }
+    };
+    function renderStatsChart(key) {
+      const spec = STATS_CHARTS[key];
+      if (!spec) return;
+      const host = document.getElementById(spec.target);
+      if (!host) return;
+      const data = statsState.data || {};
+      host.innerHTML = statsChartHtml(key, data[spec.field], spec.ordinal ? { ordinal: true } : {});
+      const toggle = document.querySelector('[data-stats-chart-toggle="' + key + '"]');
+      if (toggle) {
+        if (!toggle.childElementCount) toggle.innerHTML = statsChartToggleButtonsHtml();
+        const mode = statsChartView(key).mode;
+        toggle.querySelectorAll("[data-stats-chart-mode]").forEach((button) => {
+          button.setAttribute("aria-pressed", button.dataset.statsChartMode === mode ? "true" : "false");
+        });
+      }
+    }
+    function setupStatsChartToggles() {
+      const root = document.getElementById("statisticsView");
+      if (!root || root.dataset.dvChartTogglesBound === "1") return;
+      root.dataset.dvChartTogglesBound = "1";
+      root.addEventListener("click", (event) => {
+        const modeButton = event.target.closest("[data-stats-chart-mode]");
+        if (modeButton) {
+          const group = modeButton.closest("[data-stats-chart-toggle]");
+          if (!group) return;
+          const key = group.dataset.statsChartToggle;
+          if (statsChartView(key).mode === modeButton.dataset.statsChartMode) return;
+          setStatsChartMode(key, modeButton.dataset.statsChartMode);
+          renderStatsChart(key);
+          return;
+        }
+        const moreButton = event.target.closest("[data-dv-bars-toggle]");
+        if (moreButton) {
+          const block = moreButton.closest("[data-stats-chart-block]");
+          if (!block) return;
+          const key = block.dataset.statsChartBlock;
+          const view = statsChartView(key);
+          view.expanded = !view.expanded;
+          renderStatsChart(key);
+        }
+      });
+    }
+    // The buttons carry the i18n attributes rather than resolved text, so the
+    // existing translation pass keeps their labels current when the locale
+    // changes without this chart having to re-render.
+    function statsChartToggleButtonsHtml() {
+      const button = (mode, labelKey, fallback, path) => (
+        `<button type="button" data-stats-chart-mode="${escapeHtml(mode)}" aria-pressed="false"`
+        + ` aria-label="${escapeHtml(tNext(labelKey, fallback))}" title="${escapeHtml(tNext(labelKey, fallback))}"`
+        + ` data-next-i18n-aria="${escapeHtml(labelKey)}" data-next-i18n-title="${escapeHtml(labelKey)}">`
+        + `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg></button>`
+      );
+      return (
+        button("donut", "stats.chartViewDonut", "Pie chart",
+               "M11,2V22C5.9,21.5 2,17.2 2,12C2,6.8 5.9,2.5 11,2M13,2V11H22C21.5,6.2 17.8,2.5 13,2M13,13V22C17.7,21.5 21.5,17.8 22,13H13Z")
+        + button("bars", "stats.chartViewBars", "Bar chart",
+                 "M3,5H21V7H3V5M3,11H15V13H3V11M3,17H9V19H3V17Z")
+      );
     }
     // Donut, not pie: the hole carries the total, which is the number a
     // reader wants first, and the ring makes the small slices easier to
@@ -41998,19 +42259,13 @@ def ui_preview_html(
           `)
           .join("");
       }
-      const byFormat = document.getElementById("statsByFormat");
-      if (byFormat) byFormat.innerHTML = statsDonutChartHtml(data.byFormat);
-      const byGenre = document.getElementById("statsByGenre");
-      if (byGenre) byGenre.innerHTML = statsGenresHtml(data.byGenre);
-      const byDecade = document.getElementById("statsByDecade");
-      // Decades are ordered, so they take the single-hue ramp rather than
-      // eight unrelated hues, which would throw that order away.
-      if (byDecade) byDecade.innerHTML = statsDonutChartHtml(data.byDecade, {ordinal: true});
-      const byTopDirectors = document.getElementById("statsByTopDirectors");
-      if (byTopDirectors) byTopDirectors.innerHTML = statsDonutChartHtml(data.topDirectors);
-      const byTopActors = document.getElementById("statsByTopActors");
-      if (byTopActors) byTopActors.innerHTML = statsDonutChartHtml(data.topActors);
+      renderStatsChart("format");
+      renderStatsChart("decade");
+      renderStatsChart("genre");
+      renderStatsChart("directors");
+      renderStatsChart("actors");
       bindStatsChartHighlight(document.getElementById("statisticsView"));
+      setupStatsChartToggles();
       renderStatsPriceTrend(data);
       renderCollectionValueChart();
       if (empty) empty.classList.add("hidden");
