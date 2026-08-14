@@ -331,6 +331,18 @@ jobs:
       - name: Test the provider-call transaction boundary
         run: python -m unittest tests.test_next_provider_call_transaction_boundary
 
+      # The statistics page had no coverage here at all, which is how its two
+      # credit charts shipped reading empty on a full collection: the query
+      # asked `job` for both, but a metadata refresh writes the crew role into
+      # `credit_type` and leaves 'Director' capitalised in `job`, while a cast
+      # row has no job at all. Only a real database answers which rows a
+      # predicate selects, and the negative cases matter as much as the
+      # positive ones - 'Director of Photography' contains the word and did
+      # not direct the film, so a substring match would refill these charts
+      # with the wrong people and still look fixed.
+      - name: Test the statistics top-credit predicates
+        run: python -m unittest tests.test_next_stats_top_credits_postgres
+
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
 
