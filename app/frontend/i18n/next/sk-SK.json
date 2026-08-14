@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Aktérov",
   "movieDetail.aggregateArtwork": "Umelecké dielo člena",
   "movieDetail.applied": "Metaúdaje boli obnovené.",
+  "movieDetail.formatBlockedFields": "{count} polí sa nepoužilo, pretože zdroj popisuje iný formát než tento disk. Opravte formát alebo vyberte správny lis a obnovte znova.",
+  "movieDetail.formatCorrectedRefreshAgain": "Formát tohto disku bol opravený na {format}. Obnovte ešte raz, aby sa načítalo {count} polí, ktoré starý formát blokoval.",
   "movieDetail.applyFailed": "Obnovenie metaúdajov zlyhalo.",
   "movieDetail.releaseCandidatesHelp": "MovieVault rozpoznal film, ale nie presný lis tohto disku. Vyberte ten, ktorý držíte v ruke, a doplňte tak jeho údaje.",
   "movieDetail.releaseCandidatesApplying": "Použitie tejto edície na disk...",

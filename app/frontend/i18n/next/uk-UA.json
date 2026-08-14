@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Суб'єкти",
   "movieDetail.aggregateArtwork": "Графічний твір учасника",
   "movieDetail.applied": "Метадані оновлено.",
+  "movieDetail.formatBlockedFields": "{count} поле(ів) не застосовано, оскільки джерело описує інший формат, ніж цей диск. Виправте формат або виберіть потрібне видання та оновіть ще раз.",
+  "movieDetail.formatCorrectedRefreshAgain": "Формат цього диска виправлено на {format}. Оновіть ще раз, щоб отримати {count} поле(ів), які блокував старий формат.",
   "movieDetail.applyFailed": "Не вдалося оновити метадані.",
   "movieDetail.releaseCandidatesHelp": "MovieVault розпізнав фільм, але не точне видання цього диска. Виберіть те, яке тримаєте в руках, щоб заповнити його дані.",
   "movieDetail.releaseCandidatesApplying": "Застосування цього видання до диска...",

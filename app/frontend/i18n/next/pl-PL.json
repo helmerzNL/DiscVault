@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "Podmioty",
   "movieDetail.aggregateArtwork": "Grafika dla członków",
   "movieDetail.applied": "Odświeżono metadane.",
+  "movieDetail.formatBlockedFields": "{count} pól nie zostało zastosowanych, ponieważ źródło opisuje inny format niż ta płyta. Popraw format lub wybierz właściwe tłoczenie i odśwież ponownie.",
+  "movieDetail.formatCorrectedRefreshAgain": "Format tej płyty poprawiono na {format}. Odśwież jeszcze raz, aby pobrać {count} pól blokowanych przez stary format.",
   "movieDetail.applyFailed": "Nie udało się odświeżyć metadanych.",
   "movieDetail.releaseCandidatesHelp": "MovieVault rozpoznał film, ale nie dokładne tłoczenie tej płyty. Wybierz to, które trzymasz w ręku, aby uzupełnić szczegóły.",
   "movieDetail.releaseCandidatesApplying": "Stosowanie tej edycji do płyty...",

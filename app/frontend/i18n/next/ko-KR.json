@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "배우",
   "movieDetail.aggregateArtwork": "멤버 아트워크",
   "movieDetail.applied": "메타데이터가 새로 고쳐졌습니다.",
+  "movieDetail.formatBlockedFields": "소스가 이 디스크와 다른 포맷을 설명하므로 {count}개 필드가 적용되지 않았습니다. 포맷을 수정하거나 올바른 프레싱을 선택한 뒤 다시 새로 고치세요.",
+  "movieDetail.formatCorrectedRefreshAgain": "이 디스크의 포맷을 {format}(으)로 수정했습니다. 이전 포맷 때문에 보류된 {count}개 필드를 가져오려면 한 번 더 새로 고치세요.",
   "movieDetail.applyFailed": "메타데이터 새로 고침에 실패했습니다.",
   "movieDetail.releaseCandidatesHelp": "MovieVault가 영화를 식별했지만 이 디스크의 정확한 프레싱은 확인하지 못했습니다. 들고 있는 프레싱을 선택하면 세부 정보가 채워집니다.",
   "movieDetail.releaseCandidatesApplying": "이 에디션을 디스크에 적용하는 중...",

@@ -1747,6 +1747,8 @@
   "movieDetail.actors": "színész",
   "movieDetail.aggregateArtwork": "Tagi műalkotások",
   "movieDetail.applied": "Metaadatok frissítve.",
+  "movieDetail.formatBlockedFields": "{count} mező nem került alkalmazásra, mert a forrás más formátumot ír le, mint ez a lemez. Javítsd a formátumot, vagy válaszd ki a megfelelő kiadást, és frissíts újra.",
+  "movieDetail.formatCorrectedRefreshAgain": "A lemez formátuma {format} értékre javult. Frissíts még egyszer, hogy megérkezzen az a {count} mező, amelyet a régi formátum visszatartott.",
   "movieDetail.applyFailed": "A metaadatok frissítése sikertelen.",
   "movieDetail.releaseCandidatesHelp": "A MovieVault felismerte a filmet, de nem ennek a lemeznek a pontos kiadását. Válaszd ki, amelyiket a kezedben tartod, hogy kitöltse az adatait.",
   "movieDetail.releaseCandidatesApplying": "A kiadás alkalmazása a lemezre...",
