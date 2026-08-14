@@ -7018,6 +7018,13 @@ def ui_preview_html(
       font-size: .8rem;
       white-space: nowrap;
     }
+    .release-fallback-poster img {
+      display: block;
+      width: 120px;
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+    }
     #movieDetailReleaseCandidates:not(:empty) {
       margin: 0 0 16px;
     }
@@ -38568,6 +38575,73 @@ def ui_preview_html(
       const candidates = releaseFallbackCandidates();
       return Number.isInteger(index) && index >= 0 && index < candidates.length ? candidates[index] : null;
     }
+    // One picture for the film, not one per row. Two 4K pressings of the same
+    // film share a front cover, so a poster per candidate would draw a
+    // difference that is not there and push the pressings themselves off the
+    // screen.
+    //
+    // MovieVault is not asked for it. Its contract forbids artwork on a
+    // `candidates` answer - a poster may only come from an approved catalogue
+    // publication, which by definition does not exist for a disc it could not
+    // pin down. DiscVault fetches it from the metadata sources it already has,
+    // by the identifier MovieVault did resolve.
+    //
+    // `resolvedIdentity` is what keeps that lookup honest. MovieVault already
+    // tied the barcode to a film, so the namespace is settled; without the flag
+    // the television namespace is queried too and an unrelated series turns up
+    // beside the right film, with nobody having asked about television.
+    async function loadReleaseFallbackPoster() {
+      const token = importCenter.releaseFallback;
+      const film = token?.film || {};
+      const imdbId = String(film.imdbId || "").trim();
+      // The identity enrichment does not run past the ambiguous terminal, so
+      // `imdbId` is the identifier to count on here and `tmdbMovieId` is a
+      // bonus that is usually absent.
+      const tmdbId = String(film.tmdbMovieId || "").trim();
+      if (!token || (!imdbId && !tmdbId)) return;
+      if (!Array.isArray(token.releases) || !token.releases.length) return;
+      const request = {resolvedIdentity: true, detectBoxSets: false, previewMode: true};
+      if (imdbId) request.imdbId = imdbId;
+      if (tmdbId) request.tmdbId = tmdbId;
+      try {
+        const payload = await authApiJson("/api/next/metadata/lookup", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          timeoutMs: 15000,
+          body: JSON.stringify(request)
+        });
+        const poster = importSourceMetadataSuggestionsFromLookup(payload.metadata || {})
+          .map((suggestion) => suggestion.posterUrl)
+          .find(Boolean);
+        // A second scan may have replaced the picker while this was in flight;
+        // painting this poster onto it would label the new film with the old
+        // one's cover.
+        if (!poster || importCenter.releaseFallback !== token) return;
+        importCenter.releaseFallback.posterUrl = poster;
+        renderReleaseFallback();
+      } catch (error) {
+        // Decoration. A picker without a poster is complete, so a failed
+        // lookup is noted and nothing else changes.
+        console.warn("release-details poster lookup failed", error);
+      }
+    }
+    // True only when the source stands behind the scanned code on the pressings
+    // it is showing. `false` and absent both fall back to the cautious line:
+    // without a statement, the sentence that cannot be wrong is the one that
+    // claims the least, which is also what keeps an older MovieVault reading
+    // exactly as it did before.
+    function releaseFallbackPickEditionHelp() {
+      if (importCenter.releaseFallback?.barcodeConfirmed === true) {
+        return tNext(
+          "releaseFallback.pickEditionHelpConfirmed",
+          "This barcode is printed on more than one pressing, so the film is certain and the pressing is not. Pick the one you are holding."
+        );
+      }
+      return tNext(
+        "releaseFallback.pickEditionHelp",
+        "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."
+      );
+    }
     function setImportFormatValue(value) {
       const select = document.getElementById("importFormatInput");
       const normalized = normalizedMovieFormatValue(value || "");
@@ -38811,11 +38885,15 @@ def ui_preview_html(
         return;
       }
       const filmLine = [film.title, film.year ? `(${film.year})` : ""].filter(Boolean).join(" ");
+      const posterUrl = String(fallback.posterUrl || "").trim();
       host.innerHTML = `
         <div class="release-fallback-card">
           <div class="release-fallback-stage" style="animation:none">${escapeHtml(tNext("releaseFallback.pickEdition", "Which pressing is this?"))}</div>
           <div><strong>${escapeHtml(filmLine)}</strong> ${releaseCandidateFilmLinksHtml(film)}</div>
-          <div class="release-fallback-meta">${escapeHtml(tNext("releaseFallback.pickEditionHelp", "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding."))}</div>
+          ${posterUrl
+            ? `<div class="release-fallback-poster"><img src="${escapeHtml(posterUrl)}" alt="${escapeHtml(film.title || "")}" loading="lazy"></div>`
+            : ""}
+          <div class="release-fallback-meta">${escapeHtml(releaseFallbackPickEditionHelp())}</div>
           ${fallback.verificationStatus === "unreviewed_external"
             ? `<div class="login-message warn">${escapeHtml(tNext("releaseFallback.unreviewed", "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving."))}</div>`
             : ""}
@@ -38849,6 +38927,8 @@ def ui_preview_html(
         stageIndex: 0,
         film: {},
         releases: [],
+        barcodeConfirmed: null,
+        posterUrl: "",
         chosenIndex: -1,
         manual: false
       };
@@ -38871,9 +38951,18 @@ def ui_preview_html(
           failureKind: String(result.failureKind || ""),
           errorCode: String(result.errorCode || ""),
           verificationStatus: String(result.verificationStatus || ""),
+          // Tri-state, and it has to stay one. `true` says the source indexes
+          // the scanned barcode on the pressings shown, `false` says they were
+          // found by title anyway, and `null` says nobody made a claim - which
+          // is what an older MovieVault and every title route answer. Coercing
+          // absent to `false` would let the client assert the barcode is
+          // unconfirmed on the strength of silence.
+          barcodeConfirmed: typeof result.barcodeConfirmed === "boolean" ? result.barcodeConfirmed : null,
           film: result.film || {},
-          releases: Array.isArray(result.releases) ? result.releases : []
+          releases: Array.isArray(result.releases) ? result.releases : [],
+          posterUrl: ""
         };
+        loadReleaseFallbackPoster();
         return importCenter.releaseFallback;
       } catch (error) {
         // The route answers resolver failures in its body, so only a
@@ -38889,6 +38978,8 @@ def ui_preview_html(
           failureKind: "transport",
           errorCode: "request_failed",
           message: error.message || String(error),
+          barcodeConfirmed: null,
+          posterUrl: "",
           film: {},
           releases: []
         };

@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Nerozpoznáno podle čárového kódu",
   "releaseFallback.pickEdition": "O který lis jde?",
   "releaseFallback.pickEditionHelp": "Film byl rozpoznán, ale žádný z těchto lisů čárový kód nepotvrdil. Vyber ten, který držíš v ruce.",
+  "releaseFallback.pickEditionHelpConfirmed": "Tento čárový kód je vytištěn na více než jednom lisu, takže film je jistý a lis ne. Vyber ten, který držíš v ruce.",
   "releaseFallback.unreviewed": "Tyto údaje pocházejí z externího zdroje a MovieVault je zatím neověřil. Zkontroluj je před uložením.",
   "releaseFallback.useEdition": "Použít toto vydání",
   "releaseFallback.editionChosen": "Vybráno",

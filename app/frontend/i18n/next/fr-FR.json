@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Non reconnu par le code-barres",
   "releaseFallback.pickEdition": "De quel pressage s'agit-il ?",
   "releaseFallback.pickEditionHelp": "Le film a été identifié, mais aucun de ces pressages n'a confirmé le code-barres. Choisissez celui que vous avez en main.",
+  "releaseFallback.pickEditionHelpConfirmed": "Ce code-barres est imprimé sur plus d'un pressage, le film est donc certain et le pressage ne l'est pas. Choisissez celui que vous avez en main.",
   "releaseFallback.unreviewed": "Ces informations proviennent d'une source externe et n'ont pas encore été vérifiées par MovieVault. Vérifiez-les avant d'enregistrer.",
   "releaseFallback.useEdition": "Utiliser cette édition",
   "releaseFallback.editionChosen": "Choisie",

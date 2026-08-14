@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Nije prepoznato po barkodu",
   "releaseFallback.pickEdition": "Koje je ovo izdanje?",
   "releaseFallback.pickEditionHelp": "Film je prepoznat, ali nijedno od ovih izdanja nije potvrdilo barkod. Odaberi ono koje držiš u ruci.",
+  "releaseFallback.pickEditionHelpConfirmed": "Ovaj barkod otisnut je na više od jednog izdanja, pa je film siguran, a izdanje nije. Odaberi ono koje držiš u ruci.",
   "releaseFallback.unreviewed": "Ovi podaci dolaze iz vanjskog izvora i MovieVault ih još nije provjerio. Provjeri ih prije spremanja.",
   "releaseFallback.useEdition": "Upotrijebi ovo izdanje",
   "releaseFallback.editionChosen": "Odabrano",

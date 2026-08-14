@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Triipkoodi järgi ei tuvastatud",
   "releaseFallback.pickEdition": "Milline trükk see on?",
   "releaseFallback.pickEditionHelp": "Film tuvastati, kuid ükski neist trükkidest ei kinnitanud triipkoodi. Vali see, mis sul käes on.",
+  "releaseFallback.pickEditionHelpConfirmed": "See triipkood on trükitud rohkem kui ühele trükile, seega film on kindel ja trükk mitte. Vali see, mis sul käes on.",
   "releaseFallback.unreviewed": "Need andmed pärinevad välisest allikast ja MovieVault pole neid veel üle vaadanud. Kontrolli neid enne salvestamist.",
   "releaseFallback.useEdition": "Kasuta seda väljaannet",
   "releaseFallback.editionChosen": "Valitud",

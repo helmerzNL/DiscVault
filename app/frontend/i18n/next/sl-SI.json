@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Ni prepoznano po črtni kodi",
   "releaseFallback.pickEdition": "Katera izdaja je to?",
   "releaseFallback.pickEditionHelp": "Film je bil prepoznan, a nobena od teh izdaj ni potrdila črtne kode. Izberi tisto, ki jo držiš.",
+  "releaseFallback.pickEditionHelpConfirmed": "Ta črtna koda je natisnjena na več kot eni izdaji, zato je film gotov, izdaja pa ne. Izberi tisto, ki jo držiš.",
   "releaseFallback.unreviewed": "Ti podatki prihajajo iz zunanjega vira in jih MovieVault še ni pregledal. Preveri jih pred shranjevanjem.",
   "releaseFallback.useEdition": "Uporabi to izdajo",
   "releaseFallback.editionChosen": "Izbrano",

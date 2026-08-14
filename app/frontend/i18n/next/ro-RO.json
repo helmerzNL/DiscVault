@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Nerecunoscut după codul de bare",
   "releaseFallback.pickEdition": "Care presare este aceasta?",
   "releaseFallback.pickEditionHelp": "Filmul a fost identificat, dar niciuna dintre aceste presări nu a confirmat codul de bare. Alege-o pe cea pe care o ai în mână.",
+  "releaseFallback.pickEditionHelpConfirmed": "Acest cod de bare este tipărit pe mai multe presări, așa că filmul este cert, iar presarea nu. Alege-o pe cea pe care o ai în mână.",
   "releaseFallback.unreviewed": "Aceste date provin dintr-o sursă externă și nu au fost încă verificate de MovieVault. Verifică-le înainte de salvare.",
   "releaseFallback.useEdition": "Folosește această ediție",
   "releaseFallback.editionChosen": "Aleasă",

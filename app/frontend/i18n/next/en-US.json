@@ -2803,6 +2803,7 @@
   "releaseFallback.title": "Not recognized by barcode",
   "releaseFallback.pickEdition": "Which pressing is this?",
   "releaseFallback.pickEditionHelp": "The film was identified but the barcode was not confirmed by any of these pressings. Pick the one you are holding.",
+  "releaseFallback.pickEditionHelpConfirmed": "This barcode is printed on more than one pressing, so the film is certain and the pressing is not. Pick the one you are holding.",
   "releaseFallback.unreviewed": "These details come from an outside source and have not been reviewed by MovieVault yet. Check them before saving.",
   "releaseFallback.useEdition": "Use this edition",
   "releaseFallback.editionChosen": "Chosen",

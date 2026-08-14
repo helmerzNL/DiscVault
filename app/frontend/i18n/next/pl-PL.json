@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Nie rozpoznano po kodzie kreskowym",
   "releaseFallback.pickEdition": "Które to tłoczenie?",
   "releaseFallback.pickEditionHelp": "Film został rozpoznany, ale żadne z tych tłoczeń nie potwierdziło kodu kreskowego. Wybierz to, które trzymasz w ręku.",
+  "releaseFallback.pickEditionHelpConfirmed": "Ten kod kreskowy widnieje na więcej niż jednym tłoczeniu, więc film jest pewny, a tłoczenie nie. Wybierz to, które trzymasz w ręku.",
   "releaseFallback.unreviewed": "Te dane pochodzą z zewnętrznego źródła i nie zostały jeszcze sprawdzone przez MovieVault. Sprawdź je przed zapisaniem.",
   "releaseFallback.useEdition": "Użyj tego wydania",
   "releaseFallback.editionChosen": "Wybrane",

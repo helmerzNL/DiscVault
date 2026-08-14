@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "バーコードでは識別できません",
   "releaseFallback.pickEdition": "どのプレスですか？",
   "releaseFallback.pickEditionHelp": "作品は特定できましたが、いずれのプレスもバーコードを確認できませんでした。手元にあるものを選んでください。",
+  "releaseFallback.pickEditionHelpConfirmed": "このバーコードは複数のプレスに印刷されているため、作品は確実でプレスだけが未確定です。手元にあるものを選んでください。",
   "releaseFallback.unreviewed": "この情報は外部ソースのもので、MovieVault はまだ確認していません。保存する前に内容を確かめてください。",
   "releaseFallback.useEdition": "このエディションを使う",
   "releaseFallback.editionChosen": "選択済み",

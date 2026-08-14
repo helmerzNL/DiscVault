@@ -206,6 +206,7 @@ jobs:
           tests.test_next_release_details_search
           tests.test_next_release_details_subtitles
           tests.test_next_release_details_finishes
+          tests.test_next_release_fallback_ui
 
       # Translations are part of "done" in this repository, and this suite is
       # what makes that checkable: it holds all 29 locales to the exact key set

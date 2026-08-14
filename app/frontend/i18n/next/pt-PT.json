@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "Não reconhecido pelo código de barras",
   "releaseFallback.pickEdition": "Qual é esta prensagem?",
   "releaseFallback.pickEditionHelp": "O filme foi identificado, mas nenhuma destas prensagens confirmou o código de barras. Escolha a que tem na mão.",
+  "releaseFallback.pickEditionHelpConfirmed": "Este código de barras está impresso em mais do que uma prensagem, por isso o filme é certo e a prensagem não. Escolha a que tem na mão.",
   "releaseFallback.unreviewed": "Estes dados vêm de uma fonte externa e ainda não foram revistos pelo MovieVault. Verifique-os antes de guardar.",
   "releaseFallback.useEdition": "Usar esta edição",
   "releaseFallback.editionChosen": "Escolhida",

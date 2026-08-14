@@ -2801,6 +2801,7 @@
   "releaseFallback.title": "바코드로 인식되지 않음",
   "releaseFallback.pickEdition": "어떤 프레싱인가요?",
   "releaseFallback.pickEditionHelp": "영화는 식별했지만 이 프레싱 중 어느 것도 바코드를 확인해 주지 못했습니다. 손에 든 것을 고르세요.",
+  "releaseFallback.pickEditionHelpConfirmed": "이 바코드는 여러 프레싱에 인쇄되어 있어 영화는 확실하지만 프레싱은 그렇지 않습니다. 손에 든 것을 고르세요.",
   "releaseFallback.unreviewed": "이 정보는 외부 출처에서 온 것으로 MovieVault가 아직 검토하지 않았습니다. 저장하기 전에 확인하세요.",
   "releaseFallback.useEdition": "이 에디션 사용",
   "releaseFallback.editionChosen": "선택됨",
