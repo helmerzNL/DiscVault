@@ -343,6 +343,32 @@ State it as an operator instruction, not a diff summary:
 "No deployment-file changes in this PR" is a fine answer when true. Silence is not: the
 reader cannot tell the difference between "nothing to do" and "not mentioned".
 
+### The harder case: a limit with no tracked file at all
+
+A Compose file and an `.env.example` at least *appear* in the diff. The limits enforced
+**in front of** DiscVault do not appear in any repository — and since DiscVault is
+self-hosted, there is no knowing what is there: nothing, a reverse proxy, a CDN as well.
+
+DiscVault's own limit is the **last** one a request meets, so raising it does not by
+itself allow the operation. If something in front refuses first it returns its own
+error, and DiscVault never sees the request: nothing is logged, and nothing can explain
+it. Every place a person looks for the cause — the app's settings, its documented
+maximum, its logs — says the operation is allowed. **The absence of a log line is the
+diagnostic.**
+
+So: **a PR that raises a size, rate or timeout limit must state the new value as a
+number the operator can act on**, and never as one proxy's setting. "Whatever runs in
+front must allow 60 MB" travels; `client_max_body_size` does not — it is nginx-only, and
+a reader on any other proxy can neither follow it nor tell that it does not apply to
+them. This rule exists because that exact mistake was made on this repository's own
+upload work.
+
+The current numbers, what each path allows, and the troubleshooting table live in
+[`edge-and-upload-limits.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/docs/apps/discvault/edge-and-upload-limits.md)
+in App-Guidance; the general rule is
+[`project-baseline.md` §6](https://github.com/Flux76HQ/App-Guidance/blob/main/docs/guidelines/project-baseline.md),
+which makes documenting those ceilings a required operational doc.
+
 ---
 
 Full reference:
