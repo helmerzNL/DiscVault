@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Rygg",
   "ownImages.labels.insert": "Innlegg",
   "ownImages.labels.disc": "Plate",
-  "ownImages.labels.other": "Annet"
+  "ownImages.labels.other": "Annet",
+  "ownImages.useAsPoster": "Bruk som plakat",
+  "ownImages.useAsBackdrop": "Bruk som bakgrunn",
+  "ownImages.promoted": "Omslag oppdatert."
 }

@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Selkämys",
   "ownImages.labels.insert": "Sisäliite",
   "ownImages.labels.disc": "Levy",
-  "ownImages.labels.other": "Muu"
+  "ownImages.labels.other": "Muu",
+  "ownImages.useAsPoster": "Käytä julisteena",
+  "ownImages.useAsBackdrop": "Käytä taustakuvana",
+  "ownImages.promoted": "Kansikuva päivitetty."
 }

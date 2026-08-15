@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Lombada",
   "ownImages.labels.insert": "Livrete",
   "ownImages.labels.disc": "Disco",
-  "ownImages.labels.other": "Outro"
+  "ownImages.labels.other": "Outro",
+  "ownImages.useAsPoster": "Usar como poster",
+  "ownImages.useAsBackdrop": "Usar como fundo",
+  "ownImages.promoted": "Capa atualizada."
 }

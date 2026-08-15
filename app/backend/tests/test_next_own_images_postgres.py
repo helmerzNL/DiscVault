@@ -94,6 +94,10 @@ class OwnImagesPostgresTests(unittest.TestCase):
                         (entity_type, f"{PREFIX}-%"),
                     )
                 cur.execute("DELETE FROM media_assets WHERE storage_key LIKE %s", ("media/scans/%",))
+                # Promotion mints a second row under the poster kind. Matched on
+                # the provenance key rather than on a path prefix, so this run
+                # cannot delete a poster some other test uploaded.
+                cur.execute("DELETE FROM media_assets WHERE metadata ? 'promotedFromScan'")
                 cur.execute("DELETE FROM movies WHERE public_id LIKE %s", (f"{PREFIX}-%",))
                 cur.execute("DELETE FROM containers WHERE public_id LIKE %s", (f"{PREFIX}-%",))
                 cur.execute("DELETE FROM series WHERE public_id LIKE %s", (f"{PREFIX}-%",))
@@ -480,13 +484,15 @@ class OwnImagesPostgresTests(unittest.TestCase):
                     [row["entity_type"] for row in cur.fetchall()], ["container", "series"]
                 )
 
-    def test_an_own_image_never_becomes_the_shelf_cover(self):
+    def test_marking_an_own_image_primary_does_not_move_the_shelf_cover(self):
         """`isPrimary` here means "the one that stands for the user's own
         photographs", not "the poster".
 
         The pin behind the shelf cover is already one stored truth spelled four
-        ways across the server, the wire and the clients. A fifth writer is
-        exactly the mistake that rule exists to prevent.
+        ways across the server, the wire and the clients. Having a second,
+        implicit way to move it is exactly the mistake that rule exists to
+        prevent -- so the cover moves only when somebody asks for it, which is
+        the promotion below.
         """
         movie_id = self._movie()
         media_id = self._upload("movies", movie_id, (10, 20, 30))["mediaId"]
@@ -498,6 +504,128 @@ class OwnImagesPostgresTests(unittest.TestCase):
                 metadata = cur.fetchone()["metadata"] or {}
         self.assertNotIn("poster_url", metadata)
         self.assertNotIn("poster_locked", metadata)
+
+    # --- promoting an own image to the shelf cover -------------------------
+
+    def _promote(self, segment, entity_id, media_id, kind="poster", expect=200):
+        response = self.client.post(
+            f"/api/next/{segment}/{entity_id}/images/{media_id}/use-as-artwork",
+            json={"kind": kind},
+        )
+        self.assertEqual(response.status_code, expect, response.data[:300])
+        return response.get_json()
+
+    def _movie_metadata(self, movie_id):
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT metadata FROM movies WHERE id=%s", (movie_id,))
+                return cur.fetchone()["metadata"] or {}
+
+    def test_promoting_copies_the_bytes_instead_of_re_encoding_them(self):
+        """The hash is the whole assertion.
+
+        A scan has already been through the encoder once. Running it through
+        again to make a poster would spend a second generation of JPEG loss on
+        the one image nobody can retake, and nothing about the result would look
+        wrong. Equal hashes prove the file was copied.
+        """
+        movie_id = self._movie()
+        media_id = self._upload("movies", movie_id, (10, 20, 30))["mediaId"]
+        promoted = self._promote("movies", movie_id, media_id)
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT kind, sha256, storage_key FROM media_assets WHERE id IN (%s, %s) ORDER BY kind",
+                    (media_id, promoted["artworkMediaId"]),
+                )
+                rows = cur.fetchall()
+        self.assertEqual([row["kind"] for row in rows], ["poster", "scan"])
+        self.assertEqual(rows[0]["sha256"], rows[1]["sha256"])
+        # Two kinds, two locations -- which is what makes both rows legal under
+        # UNIQUE(kind, variant, sha256) and UNIQUE(storage_backend, storage_key).
+        self.assertNotEqual(rows[0]["storage_key"], rows[1]["storage_key"])
+        self.assertTrue(rows[0]["storage_key"].startswith("media/posters/"))
+
+    def test_promoting_writes_the_pin_through_the_existing_writer(self):
+        movie_id = self._movie()
+        media_id = self._upload("movies", movie_id, (10, 20, 30))["mediaId"]
+        promoted = self._promote("movies", movie_id, media_id)
+
+        metadata = self._movie_metadata(movie_id)
+        self.assertTrue(metadata.get("poster_locked"))
+        self.assertEqual(
+            metadata.get("poster_url"),
+            f"/api/next/media/assets/{promoted['artworkMediaId']}",
+        )
+
+    def test_the_scan_stays_in_the_gallery_and_costs_one_slot(self):
+        """Promoting is not moving. The photograph still belongs with the other
+        images, and the poster copy has `role='poster'` so it cannot show up as
+        an eleventh scan against a ceiling of ten."""
+        movie_id = self._movie()
+        media_id = self._upload("movies", movie_id, (10, 20, 30))["mediaId"]
+        self._promote("movies", movie_id, media_id)
+
+        live = self._live("movies", movie_id)
+        self.assertEqual([image["mediaId"] for image in live], [media_id])
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*) AS n FROM entity_media WHERE entity_id=%s AND role=%s AND deleted_at IS NULL",
+                    (movie_id, "scan"),
+                )
+                self.assertEqual(int(cur.fetchone()["n"]), 1)
+
+    def test_promoting_twice_yields_one_poster(self):
+        """Same bytes, same digest, same derived id. A retry after a dropped
+        connection must not litter the artwork picker with copies."""
+        movie_id = self._movie()
+        media_id = self._upload("movies", movie_id, (10, 20, 30))["mediaId"]
+        first = self._promote("movies", movie_id, media_id)
+        second = self._promote("movies", movie_id, media_id)
+        self.assertEqual(first["artworkMediaId"], second["artworkMediaId"])
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COUNT(*) AS n FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_id=%s AND ma.kind='poster' AND em.deleted_at IS NULL
+                    """,
+                    (movie_id,),
+                )
+                self.assertEqual(int(cur.fetchone()["n"]), 1)
+
+    def test_the_cover_may_never_point_at_a_scan_row(self):
+        """The variant that stays unbuilt.
+
+        Every reader of artwork filters on `kind`, so a cover pointing at a
+        `kind='scan'` row would need each of them to learn a second kind. The
+        route refuses rather than quietly accepting a value it cannot honour.
+        """
+        movie_id = self._movie()
+        media_id = self._upload("movies", movie_id, (10, 20, 30))["mediaId"]
+        self._promote("movies", movie_id, media_id, kind="scan", expect=400)
+        self._promote("movies", movie_id, media_id, kind="nonsense", expect=400)
+        self.assertNotIn("poster_url", self._movie_metadata(movie_id))
+
+    def test_a_container_and_a_series_can_be_given_a_cover_too(self):
+        container_id = self._container()
+        series_id = self._series()
+        container_media = self._upload("containers", container_id, (10, 20, 30))["mediaId"]
+        series_media = self._upload("series", series_id, (40, 50, 60))["mediaId"]
+
+        self._promote("containers", container_id, container_media)
+        self._promote("series", series_id, series_media, kind="backdrop")
+
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT metadata FROM containers WHERE id=%s", (container_id,))
+                self.assertTrue((cur.fetchone()["metadata"] or {}).get("poster_locked"))
+                cur.execute("SELECT metadata FROM series WHERE id=%s", (series_id,))
+                self.assertTrue((cur.fetchone()["metadata"] or {}).get("backdrop_locked"))
 
 
 if __name__ == "__main__":

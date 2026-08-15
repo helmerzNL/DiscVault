@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Sırt",
   "ownImages.labels.insert": "Ek kitapçık",
   "ownImages.labels.disc": "Disk",
-  "ownImages.labels.other": "Diğer"
+  "ownImages.labels.other": "Diğer",
+  "ownImages.useAsPoster": "Afiş olarak kullan",
+  "ownImages.useAsBackdrop": "Arka plan olarak kullan",
+  "ownImages.promoted": "Kapak güncellendi."
 }

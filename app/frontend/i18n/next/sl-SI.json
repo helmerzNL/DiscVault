@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Hrbet",
   "ownImages.labels.insert": "Vložek",
   "ownImages.labels.disc": "Disk",
-  "ownImages.labels.other": "Drugo"
+  "ownImages.labels.other": "Drugo",
+  "ownImages.useAsPoster": "Uporabi kot plakat",
+  "ownImages.useAsBackdrop": "Uporabi kot ozadje",
+  "ownImages.promoted": "Ovitek posodobljen."
 }

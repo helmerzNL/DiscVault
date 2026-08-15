@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Dorso",
   "ownImages.labels.insert": "Libretto",
   "ownImages.labels.disc": "Disco",
-  "ownImages.labels.other": "Altro"
+  "ownImages.labels.other": "Altro",
+  "ownImages.useAsPoster": "Usa come locandina",
+  "ownImages.useAsBackdrop": "Usa come sfondo",
+  "ownImages.promoted": "Copertina aggiornata."
 }

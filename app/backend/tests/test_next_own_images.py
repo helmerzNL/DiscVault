@@ -9,6 +9,7 @@ wire shape carries the fields a client needs to avoid re-downloading a
 photograph it already holds.
 """
 
+import io
 import os
 import sys
 import unittest
@@ -95,7 +96,7 @@ class ScanKindTests(unittest.TestCase):
 
 
 class ScanRouteRegistrationTests(unittest.TestCase):
-    def test_all_three_entities_expose_the_same_seven_routes(self):
+    def test_all_three_entities_expose_the_same_route_surface(self):
         """Registered in a loop, so a missing one is a typo in a name rather
         than an absent block of code -- which is exactly the kind of gap that
         shows up as "images work on films and not on box sets"."""
@@ -109,7 +110,7 @@ class ScanRouteRegistrationTests(unittest.TestCase):
             self.assertIn(base, rules, segment)
             self.assertLessEqual({"GET", "POST"}, rules[base])
             self.assertLessEqual({"PATCH", "DELETE"}, rules[f"{base}/<media_id>"])
-            for action in ("primary", "hide", "unhide"):
+            for action in ("primary", "hide", "unhide", "use-as-artwork"):
                 self.assertIn(f"{base}/<media_id>/{action}", rules, f"{segment}:{action}")
 
     def test_the_poster_routes_are_untouched(self):
@@ -119,6 +120,122 @@ class ScanRouteRegistrationTests(unittest.TestCase):
         rules = {rule.rule for rule in next_app.app.url_map.iter_rules()}
         self.assertIn("/api/next/movies/<movie_id>/media/upload", rules)
         self.assertIn("/api/next/movies/<movie_id>/media/primary", rules)
+
+
+class ArtworkSizeBudgetTests(unittest.TestCase):
+    """What is kept, and at what cost.
+
+    These images are also *scanned*, and a scan is large. The budget exists
+    because ten of them per release have to fit in the free backup -- which
+    `film-detail-media.md` names as the real constraint, to be solved "with
+    compression and a resolution ceiling when storing, **not** by carrying
+    less".
+    """
+
+    @staticmethod
+    def _sleeve(width, height):
+        """Flat areas, a gradient, edges and rows of small text -- what a sleeve
+        actually is. Uniform noise would be pathological for JPEG and would test
+        the opposite of the normal case."""
+        from PIL import Image, ImageDraw, ImageFilter
+
+        image = Image.new("RGB", (width, height), (18, 22, 40))
+        draw = ImageDraw.Draw(image)
+        for y in range(height):
+            t = y / height
+            draw.line(
+                [(0, y), (width, y)],
+                fill=(int(18 + 90 * t), int(22 + 40 * t), int(40 + 120 * (1 - t))),
+            )
+        draw.rectangle(
+            [width * 0.08, height * 0.10, width * 0.92, height * 0.62], fill=(230, 226, 214)
+        )
+        draw.ellipse(
+            [width * 0.25, height * 0.20, width * 0.75, height * 0.52], fill=(190, 40, 45)
+        )
+        for row in range(60):
+            y = height * 0.66 + row * (height * 0.004)
+            draw.line(
+                [(width * 0.10, y), (width * (0.10 + 0.75 * ((row % 7) + 2) / 9), y)],
+                fill=(240, 240, 240),
+                width=max(1, height // 900),
+            )
+        return image.filter(ImageFilter.GaussianBlur(0.4))
+
+    @staticmethod
+    def _incompressible(width, height):
+        """Per-pixel noise: nothing a JPEG can exploit, so the ladder is forced
+        all the way down. This is the case that proves resolution gives way
+        *after* quality, not instead of it."""
+        import random
+
+        from PIL import Image
+
+        random.seed(11)
+        image = Image.new("RGB", (width, height))
+        pixels = image.load()
+        for y in range(height):
+            for x in range(width):
+                value = random.randint(0, 255)
+                pixels[x, y] = (value, (value * 3) % 256, (value * 7) % 256)
+        return image
+
+    def test_a_300_dpi_sleeve_keeps_its_full_resolution(self):
+        """The promise behind the 2200 px ceiling.
+
+        A DVD keepcase front at 300 dpi is 1535 x 2173. If a realistic scan of
+        one came back downscaled, the number would be decoration.
+        """
+        image = self._sleeve(1535, 2173)
+        data, width, height = next_app.encode_artwork_within_budget(image)
+        self.assertEqual((width, height), (1535, 2173))
+        self.assertLessEqual(len(data), next_app.TARGET_ARTWORK_BYTES)
+
+    def test_quality_gives_way_before_resolution_does(self):
+        """On a sleeve the point is reading the small print, and a slightly
+        softer 2200 px does that where a crisp 1400 px does not."""
+        image = self._incompressible(700, 700)
+        data, width, height = next_app.encode_artwork_within_budget(image)
+        # Small enough that the quality ladder alone gets it under budget.
+        self.assertEqual((width, height), (700, 700))
+        self.assertLessEqual(len(data), next_app.TARGET_ARTWORK_BYTES)
+
+    def test_resolution_gives_way_once_the_quality_floor_is_reached(self):
+        image = self._incompressible(2200, 2200)
+        data, width, height = next_app.encode_artwork_within_budget(image)
+        self.assertLess(max(width, height), 2200)
+        self.assertLessEqual(len(data), next_app.TARGET_ARTWORK_BYTES)
+
+    def test_the_returned_dimensions_belong_to_the_stored_bytes(self):
+        """They travel on the sync wire (§4d.5). A client laying out from a size
+        the file does not have draws a box the picture never fills."""
+        from PIL import Image
+
+        image = self._incompressible(2200, 2200)
+        data, width, height = next_app.encode_artwork_within_budget(image)
+        self.assertEqual(Image.open(io.BytesIO(data)).size, (width, height))
+
+    def test_a_small_image_is_neither_enlarged_nor_degraded(self):
+        """The common case -- a phone photo, a small cover -- must come out
+        exactly as good as it did before there was a budget."""
+        image = self._sleeve(600, 900)
+        data, width, height = next_app.encode_artwork_within_budget(image)
+        self.assertEqual((width, height), (600, 900))
+        self.assertLess(len(data), next_app.TARGET_ARTWORK_BYTES)
+
+    def test_the_ingest_ceiling_admits_raw_scanner_output(self):
+        """A 300 dpi colour scan of a sleeve is 15-40 MB of TIFF or PNG. A limit
+        that refuses what the flatbed just produced pushes the conversion onto
+        the user, on the one kind of image the app cannot obtain another way."""
+        self.assertGreaterEqual(next_app.MAX_ARTWORK_UPLOAD_BYTES, 40 * 1024 * 1024)
+        self.assertIn("MB", next_app.artwork_upload_limit_label())
+        self.assertEqual(next_app.artwork_upload_limit_label(), "60 MB")
+
+    def test_the_refusal_message_cannot_go_stale(self):
+        """Seven call sites carried the limit as text. Deriving it is what stops
+        a refusal naming a number the server no longer enforces."""
+        with patch.object(next_app, "MAX_ARTWORK_UPLOAD_BYTES", 25 * 1024 * 1024):
+            self.assertEqual(next_app.artwork_upload_limit_label(), "25 MB")
 
 
 class ScanSyncRowTests(unittest.TestCase):

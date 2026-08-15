@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Grzbiet",
   "ownImages.labels.insert": "Wkładka",
   "ownImages.labels.disc": "Płyta",
-  "ownImages.labels.other": "Inne"
+  "ownImages.labels.other": "Inne",
+  "ownImages.useAsPoster": "Użyj jako plakat",
+  "ownImages.useAsBackdrop": "Użyj jako tło",
+  "ownImages.promoted": "Okładka zaktualizowana."
 }

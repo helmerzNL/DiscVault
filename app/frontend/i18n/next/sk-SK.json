@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Chrbát",
   "ownImages.labels.insert": "Vložka",
   "ownImages.labels.disc": "Disk",
-  "ownImages.labels.other": "Iné"
+  "ownImages.labels.other": "Iné",
+  "ownImages.useAsPoster": "Použiť ako plagát",
+  "ownImages.useAsBackdrop": "Použiť ako pozadie",
+  "ownImages.promoted": "Obal aktualizovaný."
 }

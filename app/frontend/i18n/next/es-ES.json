@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Lomo",
   "ownImages.labels.insert": "Libreto",
   "ownImages.labels.disc": "Disco",
-  "ownImages.labels.other": "Otro"
+  "ownImages.labels.other": "Otro",
+  "ownImages.useAsPoster": "Usar como póster",
+  "ownImages.useAsBackdrop": "Usar como fondo",
+  "ownImages.promoted": "Carátula actualizada."
 }

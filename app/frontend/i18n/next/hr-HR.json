@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Hrbat",
   "ownImages.labels.insert": "Umetak",
   "ownImages.labels.disc": "Disk",
-  "ownImages.labels.other": "Ostalo"
+  "ownImages.labels.other": "Ostalo",
+  "ownImages.useAsPoster": "Koristi kao plakat",
+  "ownImages.useAsBackdrop": "Koristi kao pozadinu",
+  "ownImages.promoted": "Omot ažuriran."
 }

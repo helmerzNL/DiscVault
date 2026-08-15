@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Hřbet",
   "ownImages.labels.insert": "Vložka",
   "ownImages.labels.disc": "Disk",
-  "ownImages.labels.other": "Jiné"
+  "ownImages.labels.other": "Jiné",
+  "ownImages.useAsPoster": "Použít jako plakát",
+  "ownImages.useAsBackdrop": "Použít jako pozadí",
+  "ownImages.promoted": "Obal aktualizován."
 }

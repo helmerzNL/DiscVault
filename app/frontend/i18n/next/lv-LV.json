@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Mugura",
   "ownImages.labels.insert": "Ieliktnis",
   "ownImages.labels.disc": "Disks",
-  "ownImages.labels.other": "Cits"
+  "ownImages.labels.other": "Cits",
+  "ownImages.useAsPoster": "Izmantot kā plakātu",
+  "ownImages.useAsBackdrop": "Izmantot kā fonu",
+  "ownImages.promoted": "Vāks atjaunināts."
 }

@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Rygg",
   "ownImages.labels.insert": "Inlaga",
   "ownImages.labels.disc": "Skiva",
-  "ownImages.labels.other": "Övrigt"
+  "ownImages.labels.other": "Övrigt",
+  "ownImages.useAsPoster": "Använd som affisch",
+  "ownImages.useAsBackdrop": "Använd som bakgrund",
+  "ownImages.promoted": "Omslaget uppdaterat."
 }
