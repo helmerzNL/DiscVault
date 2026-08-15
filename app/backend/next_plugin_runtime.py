@@ -423,6 +423,11 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
     install directory) is left deleted, preserving the seed-once deletion
     contract. Plugin enable/config state lives in the database, not in these
     files, so replacing the files keeps that state intact.
+
+    A default the image no longer ships is removed here too. Without that, an
+    uninstalled plugin kept running from the install directory and kept being
+    written back into the registry, so the uninstall only ever took effect on
+    a fresh install.
     """
 
     install_dir = plugin_install_dir()
@@ -431,6 +436,7 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
         "path": str(install_dir),
         "upgraded": [],
         "added": [],
+        "removed": [],
         "skipped": [],
         "errors": [],
     }
@@ -459,7 +465,8 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
     auto_update_enabled = plugin_auto_update_enabled()
     if not auto_update_enabled:
         result["disabled"] = True
-    for source in bundled_default_plugin_dirs():
+    bundled_sources = bundled_default_plugin_dirs()
+    for source in bundled_sources:
         target = install_dir / source.name
         if not target.exists():
             if source.name in marker_seeded:
@@ -504,6 +511,47 @@ def upgrade_seeded_default_plugins() -> dict[str, Any]:
             result["upgraded"].append(upgrade)
         except OSError as exc:
             result["errors"].append({"path": str(target), "error": str(exc)})
+    # Second pass: a default we seeded that the image no longer ships.
+    #
+    # The loop above only visits plugins that are *in* the bundle, so a plugin
+    # dropped from the image was never reached and its files stayed in the
+    # install directory forever. That is not cosmetic. Discovery reads the
+    # install directory as authoritative, so the plugin keeps being loaded and
+    # executed on every scan, and `sync_plugin_registry` re-creates the registry
+    # row an uninstall migration had deleted -- undoing the uninstall on every
+    # existing install, while a fresh one is genuinely clean. Migration 080 and
+    # `movievault_26` are the case that exposed it.
+    #
+    # Deliberately not gated on auto-update. That setting governs whether the
+    # operator's plugin files are rewritten underneath them; this removes a
+    # plugin the product no longer ships, which cannot be updated, supported or
+    # reinstalled, and whose presence silently reverts a migration. The backup
+    # is snapshotted first, so the existing rollback route can put it back.
+    #
+    # Only ids the marker records as seeded are eligible: a plugin the operator
+    # installed by hand is theirs, is not in that list, and is never touched.
+    #
+    # `bundled_sources` being empty is the dangerous case rather than the quiet
+    # one: an unreadable or misconfigured bundle directory would make every
+    # seeded plugin look dropped and delete the lot. An empty listing therefore
+    # means "cannot tell", and nothing is removed.
+    if bundled_sources and marker_payload is not None:
+        removable = marker_seeded - {source.name for source in bundled_sources}
+        for plugin_id in sorted(removable):
+            target = install_dir / plugin_id
+            if not target.exists():
+                continue
+            try:
+                _snapshot_plugin_backup(plugin_id)
+                shutil.rmtree(target)
+            except OSError as exc:
+                result["errors"].append({"path": str(target), "error": str(exc)})
+                continue
+            # Stop recording it as seeded: that list answers "did the user
+            # delete this, so do not resurrect it", and this deletion was ours.
+            marker_seeded.discard(plugin_id)
+            result["removed"].append(plugin_id)
+            marker_changed = True
     if marker_changed and marker_payload is not None:
         marker_payload["seeded"] = sorted(marker_seeded)
         marker_payload.setdefault("source", str(bundled_plugin_dir()))

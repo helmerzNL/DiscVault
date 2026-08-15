@@ -130,6 +130,8 @@ try:
     from .next_backup import list_backup_archives
     from .next_backup import stored_backup_path
     from .next_backup import validate_backup_zip
+    from .next_artwork_trash import delete_local_media_asset_file
+    from .next_artwork_trash import purge_expired_artwork_trash
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_current_api_token_user
     from .next_auth import next_auth_effective_enabled
@@ -415,6 +417,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import list_backup_archives
     from next_backup import stored_backup_path
     from next_backup import validate_backup_zip
+    from next_artwork_trash import delete_local_media_asset_file
+    from next_artwork_trash import purge_expired_artwork_trash
     from next_auth import next_auth_current_user
     from next_auth import next_auth_current_api_token_user
     from next_auth import next_auth_effective_enabled
@@ -18969,65 +18973,6 @@ def artwork_trash_settings(conn) -> dict[str, Any]:
     }
 
 
-def delete_local_media_asset_file(asset: dict[str, Any]) -> bool:
-    if clean_text(asset.get("storage_backend")) != "local":
-        return False
-    storage_key = clean_text(asset.get("storage_key"))
-    if not storage_key:
-        return False
-    data_dir = legacy_data_dir().resolve()
-    target = (data_dir / storage_key).resolve()
-    try:
-        target.relative_to(data_dir)
-    except ValueError:
-        return False
-    if not target.is_file():
-        return False
-    target.unlink()
-    return True
-
-
-def purge_expired_artwork_trash(conn) -> dict[str, Any]:
-    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
-        return {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            DELETE FROM entity_media
-            WHERE deleted_at IS NOT NULL
-              AND purge_after IS NOT NULL
-              AND purge_after <= now()
-            RETURNING media_id
-            """
-        )
-        deleted_media_ids = [row["media_id"] for row in cur.fetchall()]
-        purged_assets = 0
-        purged_files = 0
-        for media_id in deleted_media_ids:
-            cur.execute("SELECT COUNT(*)::int AS refs FROM entity_media WHERE media_id=%s", (media_id,))
-            if int((cur.fetchone() or {}).get("refs") or 0) > 0:
-                continue
-            cur.execute(
-                """
-                DELETE FROM media_assets
-                WHERE id=%s
-                  AND kind IN ('poster', 'backdrop')
-                RETURNING id, storage_backend, storage_key
-                """,
-                (media_id,),
-            )
-            asset = cur.fetchone()
-            if not asset:
-                continue
-            purged_assets += 1
-            try:
-                if delete_local_media_asset_file(asset):
-                    purged_files += 1
-            except OSError:
-                pass
-    return {"purgedLinks": len(deleted_media_ids), "purgedAssets": purged_assets, "purgedFiles": purged_files}
-
-
 def artwork_trash_entries(conn, *, limit: int = 200) -> dict[str, Any]:
     if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return {"items": [], "settings": artwork_trash_settings(conn), "purge": {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}}
@@ -25254,10 +25199,13 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 db = cur.fetchone()
             migrations = migration_overview(conn)
-            artwork_purge = {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}
-            if migrations.get("state") == "ready":
-                with conn.transaction():
-                    artwork_purge = purge_expired_artwork_trash(conn)
+        # Read-only on purpose. This endpoint is the container health check,
+        # fired every ten seconds; it used to run the artwork-trash purge here,
+        # deleting rows and unlinking files on each probe. Under I/O load that
+        # could outlast the probe's own timeout and get a healthy container
+        # restarted over cleanup that was never urgent. The worker owns the
+        # purge now (`artwork.trash_purge`), so this answers one question:
+        # can the API reach a migrated database?
         migration_state = migrations["state"]
         is_ready = migration_state == "ready"
         return response(
@@ -25268,7 +25216,6 @@ def register_routes(flask_app: Flask) -> None:
                 "sha": build_sha(),
                 "database": db,
                 "migrations": migrations,
-                "maintenance": {"artworkTrash": artwork_purge},
             },
             200 if is_ready else 503,
         )

@@ -48,6 +48,26 @@ jobs:
             --base-ref "${{ github.event.pull_request.base.ref }}" \
             --forbid-change
 
+      # Plugins run from a writable install directory that is seeded once, and an
+      # installed copy is replaced only when the bundled manifest version is strictly
+      # newer. So a bundled plugin edited without a version bump reaches new installs
+      # and no existing one, silently. `movievault_v2` shipped orderIndex 45, was
+      # changed to 5, and kept version 1.8.0 - every upgraded instance kept 45 on disk,
+      # and it only looked right because the accompanying migration wrote the database
+      # row directly. No test can catch this: every test run starts without an install
+      # directory, so the one environment where the bug exists is the one never tested.
+      # The diff is where the evidence is, which is why the check lives here.
+      #
+      # Promotions excluded for the same reason as the bump rule above: a promotion
+      # carries beta's already-checked commits, and re-checking the aggregate range
+      # would demand a second bump for a change that already had one.
+      - name: Check bundled plugin changes carry a version bump
+        if: github.event_name == 'pull_request' && github.event.pull_request.base.ref != 'main'
+        run: |
+          python app/scripts/check_plugin_manifest_versions.py \
+            --base "${{ github.event.pull_request.base.sha }}" \
+            --head "${{ github.event.pull_request.head.sha }}"
+
       # The promotion's own check: not "was the file left alone" but "does it move
       # production forward". --aggregate compares the whole range, so it also catches a
       # promotion that somehow carries protected-path changes without a newer version.

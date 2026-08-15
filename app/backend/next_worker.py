@@ -46,6 +46,9 @@ try:
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
+    from .next_artwork_trash import ARTWORK_TRASH_PURGE_JOB_TYPE
+    from .next_artwork_trash import purge_expired_artwork_trash
+    from .next_artwork_trash import purge_interval_hours
     from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
@@ -90,6 +93,9 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
+    from next_artwork_trash import ARTWORK_TRASH_PURGE_JOB_TYPE
+    from next_artwork_trash import purge_expired_artwork_trash
+    from next_artwork_trash import purge_interval_hours
     from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
@@ -551,6 +557,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == PRICE_ALERT_JOB_TYPE:
         return process_price_alert_sweep(payload, worker_id)
 
+    if job_type == ARTWORK_TRASH_PURGE_JOB_TYPE:
+        return process_artwork_trash_purge(payload, worker_id)
+
     if job_type == RELEASE_CONTRIBUTION_JOB_TYPE:
         return process_movievault_v2_release_contribution(job, payload, worker_id)
 
@@ -700,6 +709,24 @@ def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[s
         "workerId": worker_id,
         "handled": True,
         "jobType": PRICE_ALERT_JOB_TYPE,
+        **summary,
+    }
+
+
+def process_artwork_trash_purge(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Delete artwork whose retention window has run out.
+
+    This used to run inside `GET /api/next/health`, on every ten-second
+    container probe. Nothing about the deletion changed -- only that a probe no
+    longer waits for it.
+    """
+
+    with connect() as conn:
+        summary = purge_expired_artwork_trash(conn)
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": ARTWORK_TRASH_PURGE_JOB_TYPE,
         **summary,
     }
 
@@ -3016,6 +3043,56 @@ def _maybe_enqueue_price_sweep(worker_id: str) -> None:
         pass
 
 
+def _maybe_enqueue_artwork_trash_purge(worker_id: str) -> None:
+    """Queue the artwork-trash purge at most once per interval.
+
+    It ran on every `GET /api/next/health` before -- every ten seconds, per
+    container, from a liveness probe. Retention is measured in days, so hourly
+    is as timely as this needs to be, and it costs one job row instead of 8,640.
+    """
+
+    interval_hours = purge_interval_hours()
+    try:
+        with connect() as conn:
+            if not table_exists(conn, "background_jobs"):
+                return
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND status IN ('pending', 'running')
+                    LIMIT 1
+                    """,
+                    (ARTWORK_TRASH_PURGE_JOB_TYPE,),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    SELECT 1 FROM background_jobs
+                    WHERE job_type = %s
+                      AND created_at >= now() - (%s * interval '1 hour')
+                    LIMIT 1
+                    """,
+                    (ARTWORK_TRASH_PURGE_JOB_TYPE, interval_hours),
+                )
+                if cur.fetchone():
+                    return
+                cur.execute(
+                    """
+                    INSERT INTO background_jobs (job_type, payload)
+                    VALUES (%s, %s)
+                    """,
+                    (
+                        ARTWORK_TRASH_PURGE_JOB_TYPE,
+                        Jsonb(json_ready({"source": "scheduler", "workerId": worker_id})),
+                    ),
+                )
+    except Exception:  # noqa: BLE001 - never crash the poll loop
+        pass
+
+
 def _maybe_enqueue_movievault_v2_sync(worker_id: str) -> None:
     with connect() as conn:
         with conn.cursor() as cur:
@@ -3123,6 +3200,7 @@ def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
+        _maybe_enqueue_artwork_trash_purge(worker_id)
         try:
             _maybe_enqueue_movievault_v2_sync(worker_id)
         except Exception as exc:  # noqa: BLE001 - never crash the poll loop
