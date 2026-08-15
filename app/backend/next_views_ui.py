@@ -10009,6 +10009,52 @@ def ui_preview_html(
       color: var(--muted);
       background: color-mix(in srgb, var(--bg-elevated) 84%, transparent);
     }
+    .own-images-intro {
+      color: var(--muted);
+      font-size: .88rem;
+      margin: 0 0 10px;
+    }
+    .own-image-option {
+      cursor: default;
+    }
+    .own-image-option.is-hidden .art-option-preview {
+      opacity: .48;
+      filter: grayscale(.45);
+    }
+    .own-image-actions {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .own-image-actions select {
+      flex: 1 1 auto;
+      min-width: 0;
+      font-size: .78rem;
+      padding: 3px 4px;
+    }
+    .own-image-actions button {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--bg-solid);
+      color: var(--fg);
+      cursor: pointer;
+      line-height: 1;
+      padding: 4px 6px;
+      font-size: .82rem;
+    }
+    .own-image-actions button:disabled {
+      opacity: .45;
+      cursor: default;
+    }
+    .own-image-actions button:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    .own-images-count {
+      color: var(--muted);
+      font-size: .82rem;
+    }
     .art-upload-row {
       display: flex;
       align-items: center;
@@ -16862,6 +16908,7 @@ def ui_preview_html(
                 <button type="button" class="active" data-detail-tab="movieMedia" data-detail-panel="movieMediaPosters" data-next-i18n="movieDetail.posters">Posters</button>
                 <button type="button" data-detail-tab="movieMedia" data-detail-panel="movieMediaBackdrops" data-next-i18n="movieDetail.backdrops">Backdrops</button>
                 <button type="button" data-detail-tab="movieMedia" data-detail-panel="movieMediaVideos" data-next-i18n="movieDetail.videos">Videos</button>
+                <button type="button" data-detail-tab="movieMedia" data-detail-panel="movieMediaImages" data-next-i18n="ownImages.tab">Images</button>
               </div>
             </div>
             <div class="detail-subpanel" data-detail-panel-group="movieMedia" id="movieMediaPosters">
@@ -16888,6 +16935,18 @@ def ui_preview_html(
             <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaVideos">
               <div class="movie-media-video-grid" id="movieDetailVideos"></div>
               <button type="button" class="responsive-more-button hidden" id="movieDetailVideoMore" data-next-i18n="common.more">More</button>
+            </div>
+            <div class="detail-subpanel hidden" data-detail-panel-group="movieMedia" id="movieMediaImages" data-own-images-entity="movie">
+              <p class="own-images-intro" data-next-i18n="ownImages.intro">Your own photographs of this release — the case, the spine, the insert, the disc. They sync to your other devices.</p>
+              <div class="artwork-manager-status hidden" data-own-images-status></div>
+              <div class="art-option-grid own-image-grid" id="movieOwnImagesGrid" data-own-images-grid></div>
+              <button type="button" class="responsive-more-button hidden" id="movieOwnImagesMore" data-next-i18n="common.more">More</button>
+              <div class="art-upload-row own-image-upload-row" data-art-upload-row>
+                <input type="file" accept="image/*" multiple data-own-images-input>
+                <select data-own-images-label aria-label="Image label" data-next-i18n-aria="ownImages.label"></select>
+                <button type="button" class="secondary-button" data-own-images-upload data-next-i18n="ownImages.upload">Add images</button>
+                <span class="own-images-count" data-own-images-count></span>
+              </div>
             </div>
           </div>
         </section>
@@ -16947,6 +17006,7 @@ def ui_preview_html(
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
+            <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailImagesPanel" data-next-i18n="ownImages.tab">Images</button>
             <button type="button" data-detail-tab="containerDetail" data-detail-panel="containerDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
           </nav>
           <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailOverviewPanel">
@@ -17129,6 +17189,21 @@ def ui_preview_html(
               <div class="detail-grid" id="containerDetailVideos"></div>
             </div>
           </div>
+          <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailImagesPanel" data-own-images-entity="container">
+            <div class="detail-card full">
+              <h3 data-next-i18n="ownImages.tab">Images</h3>
+              <p class="own-images-intro" data-next-i18n="ownImages.introContainer">Your own photographs of this set — the box, the spine, the booklet. They sync to your other devices.</p>
+              <div class="artwork-manager-status hidden" data-own-images-status></div>
+              <div class="art-option-grid own-image-grid" id="containerOwnImagesGrid" data-own-images-grid></div>
+              <button type="button" class="responsive-more-button hidden" id="containerOwnImagesMore" data-next-i18n="common.more">More</button>
+              <div class="art-upload-row own-image-upload-row" data-art-upload-row>
+                <input type="file" accept="image/*" multiple data-own-images-input>
+                <select data-own-images-label aria-label="Image label" data-next-i18n-aria="ownImages.label"></select>
+                <button type="button" class="secondary-button" data-own-images-upload data-next-i18n="ownImages.upload">Add images</button>
+                <span class="own-images-count" data-own-images-count></span>
+              </div>
+            </div>
+          </div>
           <div class="detail-subpanel hidden container-detail-panel" data-detail-panel-group="containerDetail" id="containerDetailMetadataPanel">
             <div class="detail-card">
               <h3 data-next-i18n="containerDetail.identifiers">Identifiers</h3>
@@ -17192,6 +17267,7 @@ def ui_preview_html(
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailPostersPanel" data-next-i18n="movieDetail.posters">Posters</button>
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailBackdropsPanel" data-next-i18n="movieDetail.backdrops">Backdrops</button>
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailVideosPanel" data-next-i18n="movieDetail.videos">Videos</button>
+            <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailImagesPanel" data-next-i18n="ownImages.tab">Images</button>
             <button type="button" data-detail-tab="seriesDetail" data-detail-panel="seriesDetailMetadataPanel" data-next-i18n="containerDetail.metadata">Metadata</button>
           </nav>
           <div class="detail-subpanel series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailDiscsPanel">
@@ -17301,6 +17377,21 @@ def ui_preview_html(
               <h3 data-next-i18n="movieDetail.videos">Videos</h3>
               <p class="import-source-meta" data-next-i18n="seriesDetail.videosHelp">A series carries no videos of its own; these come from the discs filed under it.</p>
               <div class="detail-grid" id="seriesDetailVideos"></div>
+            </div>
+          </div>
+          <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailImagesPanel" data-own-images-entity="series">
+            <div class="detail-card full">
+              <h3 data-next-i18n="ownImages.tab">Images</h3>
+              <p class="own-images-intro" data-next-i18n="ownImages.introSeries">Your own photographs of this series — the season boxes, the spines, the discs. They sync to your other devices.</p>
+              <div class="artwork-manager-status hidden" data-own-images-status></div>
+              <div class="art-option-grid own-image-grid" id="seriesOwnImagesGrid" data-own-images-grid></div>
+              <button type="button" class="responsive-more-button hidden" id="seriesOwnImagesMore" data-next-i18n="common.more">More</button>
+              <div class="art-upload-row own-image-upload-row" data-art-upload-row>
+                <input type="file" accept="image/*" multiple data-own-images-input>
+                <select data-own-images-label aria-label="Image label" data-next-i18n-aria="ownImages.label"></select>
+                <button type="button" class="secondary-button" data-own-images-upload data-next-i18n="ownImages.upload">Add images</button>
+                <span class="own-images-count" data-own-images-count></span>
+              </div>
             </div>
           </div>
           <div class="detail-subpanel hidden series-detail-panel" data-detail-panel-group="seriesDetail" id="seriesDetailMetadataPanel">
@@ -32484,6 +32575,7 @@ def ui_preview_html(
       });
       renderMovieArtworkGallery(detail, "poster");
       renderMovieArtworkGallery(detail, "backdrop");
+      renderOwnImages("movie", detail);
       renderMovieArtworkManagerStatus(detail);
       reflectArtworkLockButtons(detail, "movie");
       document.getElementById("movieDetailVideos").innerHTML = videoCardsHtml(movieVideoItems(movie, metadata));
@@ -33002,6 +33094,7 @@ def ui_preview_html(
       if (containerDebugSources) containerDebugSources.innerHTML = appDebugMode ? movieMetadataSourcesDebugHtml(detail.metadataDebug) : "";
       document.getElementById("containerDetailPosterArtwork").innerHTML = containerArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("containerDetailBackdropArtwork").innerHTML = containerArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      renderOwnImages("container", detail);
       reflectArtworkLockButtons(detail, "container");
       document.getElementById("containerDetailVideos").innerHTML = containerVideoGroupsHtml(detail);
       activateDetailTab("containerDetail", document.getElementById(activePanelId) ? activePanelId : "containerDetailFilmsPanel");
@@ -33603,6 +33696,7 @@ def ui_preview_html(
       renderSeriesSeasons(detail);
       document.getElementById("seriesDetailPosterArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "poster", "movieDetail.noPosters");
       document.getElementById("seriesDetailBackdropArtwork").innerHTML = seriesArtworkOptionsHtml(detail, "backdrop", "movieDetail.noBackdrops");
+      renderOwnImages("series", detail);
       document.getElementById("seriesDetailVideos").innerHTML = movieVideoGroupsHtml(detail.aggregateVideos || []);
       const identifiers = (detail.identifiers || []).map((item) => miniCard(
         `${item.provider_id || ""} ${item.identifier_type || ""}`.trim(),
@@ -44179,6 +44273,215 @@ def ui_preview_html(
     // three. A descriptor per entity keeps the difference in one table instead of
     // scattered across each handler, where a missed branch would silently send a
     // series to the movies route.
+    // ----------------------------------------------------------------
+    // The user's own images.
+    //
+    // Their own panel rather than a fourth kind in the artwork gallery: the
+    // artwork tabs answer "which picture should represent this on the shelf",
+    // and these answer "what does the object in my hands look like". A tile
+    // here therefore offers no lock and no provider label, and it never touches
+    // the poster.
+    // ----------------------------------------------------------------
+    const OWN_IMAGE_LABELS = ["front", "back", "spine", "insert", "disc", "other"];
+    const OWN_IMAGE_ROLE = "scan";
+    const ownImagesState = {movie: null, container: null, series: null};
+
+    function ownImageLabelText(label) {
+      const key = String(label || "other").toLowerCase();
+      return tNext(`ownImages.labels.${key}`, key);
+    }
+    function ownImagePanel(entity) {
+      return document.querySelector(`[data-own-images-entity="${entity}"]`);
+    }
+    function setOwnImagesMessage(entity, text, tone = "") {
+      const box = ownImagePanel(entity)?.querySelector("[data-own-images-status]");
+      if (!box) return;
+      box.textContent = text || "";
+      box.classList.toggle("hidden", !text);
+      box.classList.remove("good", "bad");
+      if (tone) box.classList.add(tone);
+    }
+    // A token minted before the request leaves, so a retry after a dropped
+    // connection resolves to the record the first attempt created instead of
+    // uploading the same photograph twice.
+    function newOwnImageClientId() {
+      if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+      return `own-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+    function ownImagesFromDetail(detail) {
+      // `detail.ownImages`, not a filter over `detail.mediaAssets`: that array
+      // carries hidden rows on a movie and drops them on a container and a
+      // series, so reading it here would leave an image hidden on one page and
+      // permanently unreachable -- and so impossible to un-hide -- on the other
+      // two.
+      return (detail?.ownImages || []).map((asset) => ({
+        mediaId: asset.id,
+        url: mediaAssetUrl(asset),
+        label: asset.label || "",
+        isPrimary: Boolean(asset.is_primary),
+        hidden: Boolean(asset.hidden),
+        sortOrder: Number(asset.sort_order || 0),
+      }));
+    }
+    function ownImageCardHtml(image, entity) {
+      const label = ownImageLabelText(image.label);
+      const options = OWN_IMAGE_LABELS.map((value) => `
+        <option value="${escapeHtml(value)}"${String(image.label || "other") === value ? " selected" : ""}>${escapeHtml(ownImageLabelText(value))}</option>
+      `).join("");
+      const preview = image.url
+        ? `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(label)}" loading="lazy" draggable="false">`
+        : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      return `
+        <div class="art-option own-image-option responsive-grid-item${image.hidden ? " is-hidden" : ""}" data-own-image="${escapeHtml(image.mediaId || "")}" data-own-image-entity="${escapeHtml(entity)}">
+          <div class="art-option-preview">
+            ${preview}
+            ${image.isPrimary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
+            ${image.hidden ? `<span class="art-option-badge hidden-artwork">${escapeHtml(tNext("movieDetail.hiddenArtwork", "Hidden"))}</span>` : ""}
+          </div>
+          <div class="own-image-actions">
+            <select data-own-image-label aria-label="${escapeHtml(tNext("ownImages.label", "Label"))}">${options}</select>
+            <button type="button" data-own-image-primary title="${escapeHtml(tNext("ownImages.makePrimary", "Make primary"))}" aria-label="${escapeHtml(tNext("ownImages.makePrimary", "Make primary"))}"${image.isPrimary ? " disabled" : ""}>★</button>
+            <button type="button" data-own-image-hide="${image.hidden ? "false" : "true"}" title="${escapeHtml(image.hidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"))}" aria-label="${escapeHtml(image.hidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"))}">${image.hidden ? "◍" : "◌"}</button>
+            <button type="button" data-own-image-delete title="${escapeHtml(tNext("common.delete", "Delete"))}" aria-label="${escapeHtml(tNext("common.delete", "Delete"))}">🗑</button>
+          </div>
+        </div>
+      `;
+    }
+    function renderOwnImages(entity, detail) {
+      const panel = ownImagePanel(entity);
+      if (!panel) return;
+      const images = ownImagesFromDetail(detail);
+      ownImagesState[entity] = images;
+      const grid = panel.querySelector("[data-own-images-grid]");
+      if (grid) {
+        grid.innerHTML = images.length
+          ? images.map((image) => ownImageCardHtml(image, entity)).join("")
+          : `<div class="preview-empty">${escapeHtml(tNext("ownImages.empty", "No images of your own yet."))}</div>`;
+      }
+      const select = panel.querySelector("[data-own-images-label]");
+      if (select && !select.options.length) {
+        select.innerHTML = OWN_IMAGE_LABELS.map((value) => `
+          <option value="${escapeHtml(value)}">${escapeHtml(ownImageLabelText(value))}</option>
+        `).join("");
+      }
+      const limit = Number(detail?.ownImageLimit) > 0 ? Number(detail.ownImageLimit) : 10;
+      const counter = panel.querySelector("[data-own-images-count]");
+      if (counter) {
+        counter.textContent = tNext("ownImages.count", "{used} of {limit}")
+          .replace("{used}", formatNumber(images.length))
+          .replace("{limit}", formatNumber(limit));
+      }
+      // The ceiling blocks adding and nothing else: every stored image stays
+      // visible, openable and synced even when the limit is lowered under it.
+      const uploadButton = panel.querySelector("[data-own-images-upload]");
+      if (uploadButton) uploadButton.disabled = images.length >= limit;
+      // Same grid rules as the poster gallery: four rows on mobile, two on
+      // wider screens, then a 'more' button.
+      configureResponsiveGridLimit(`${entity}OwnImagesGrid`, `${entity}OwnImagesMore`, {mobileRows: 4, desktopRows: 2});
+    }
+    async function reloadOwnImages(entity) {
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
+      if (!targetId) return;
+      const payload = await authApiJson(target.detailUrl(targetId));
+      target.render(payload.detail || {});
+    }
+    async function uploadOwnImages(entity) {
+      const panel = ownImagePanel(entity);
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
+      const input = panel?.querySelector("[data-own-images-input]");
+      const label = panel?.querySelector("[data-own-images-label]")?.value || "other";
+      if (!targetId || !input || !input.files || !input.files.length) return;
+      const files = [...input.files];
+      setOwnImagesMessage(entity, tNext("ownImages.uploading", "Adding images..."));
+      let added = 0;
+      try {
+        // One request per file rather than one batch: an upload that fails
+        // halfway through a batch would leave the caller unable to say which
+        // photographs arrived, and these are the ones that cannot be taken
+        // again.
+        for (const file of files) {
+          const data = new FormData();
+          data.append("file", file);
+          data.append("label", label);
+          data.append("clientId", newOwnImageClientId());
+          await authApiJson(`/api/next/${target.path}/${encodeURIComponent(targetId)}/images`, {
+            method: "POST",
+            body: data
+          });
+          added += 1;
+        }
+        input.value = "";
+        await reloadOwnImages(entity);
+        setOwnImagesMessage(entity, tNext("ownImages.saved", "Images saved."), "good");
+      } catch (error) {
+        input.value = "";
+        if (added) await reloadOwnImages(entity);
+        setOwnImagesMessage(entity, error.message || String(error), "bad");
+      }
+    }
+    async function ownImageRequest(entity, mediaId, path, options) {
+      const target = detailArtworkEntity(entity);
+      const targetId = target.activeId();
+      if (!targetId || !mediaId) return;
+      setOwnImagesMessage(entity, tNext("ownImages.saving", "Saving..."));
+      try {
+        await authApiJson(
+          `/api/next/${target.path}/${encodeURIComponent(targetId)}/images/${encodeURIComponent(mediaId)}${path}`,
+          options
+        );
+        await reloadOwnImages(entity);
+        setOwnImagesMessage(entity, tNext("ownImages.saved", "Images saved."), "good");
+      } catch (error) {
+        setOwnImagesMessage(entity, error.message || String(error), "bad");
+      }
+    }
+    function bindOwnImagePanels() {
+      ["movie", "container", "series"].forEach((entity) => {
+        const panel = ownImagePanel(entity);
+        if (!panel || panel.dataset.ownImagesBound === "true") return;
+        panel.dataset.ownImagesBound = "true";
+        panel.addEventListener("click", (event) => {
+          if (event.target.closest("[data-own-images-upload]")) {
+            event.preventDefault();
+            uploadOwnImages(entity);
+            return;
+          }
+          const card = event.target.closest("[data-own-image]");
+          if (!card) return;
+          const mediaId = card.dataset.ownImage;
+          if (event.target.closest("[data-own-image-primary]")) {
+            event.preventDefault();
+            ownImageRequest(entity, mediaId, "/primary", {method: "POST"});
+            return;
+          }
+          const hideButton = event.target.closest("[data-own-image-hide]");
+          if (hideButton) {
+            event.preventDefault();
+            const hide = hideButton.dataset.ownImageHide === "true";
+            ownImageRequest(entity, mediaId, hide ? "/hide" : "/unhide", {method: "POST"});
+            return;
+          }
+          if (event.target.closest("[data-own-image-delete]")) {
+            event.preventDefault();
+            if (!window.confirm(tNext("ownImages.deleteConfirm", "Delete this image? It is your own photograph and no source can supply it again."))) return;
+            ownImageRequest(entity, mediaId, "", {method: "DELETE"});
+          }
+        });
+        panel.addEventListener("change", (event) => {
+          const select = event.target.closest("[data-own-image-label]");
+          if (!select) return;
+          const card = select.closest("[data-own-image]");
+          if (!card) return;
+          ownImageRequest(entity, card.dataset.ownImage, "", {
+            method: "PATCH",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({label: select.value})
+          });
+        });
+      });
+    }
     function detailArtworkEntity(entity) {
       const entities = {
         movie: {
@@ -49643,6 +49946,10 @@ def ui_preview_html(
         const deleteButton = event.target.closest("[data-loan-delete]");
         if (deleteButton) deleteActiveMovieLoan(deleteButton.dataset.loanDelete);
       });
+      // Bound once against the static panels rather than after each render:
+      // the handlers are delegated, so a re-render replaces the tiles without
+      // orphaning a listener or stacking a second one on the panel.
+      bindOwnImagePanels();
       document.getElementById("containerEditToggleButton")?.addEventListener("click", () => handleContainerEditAction());
       document.getElementById("containerEditCancelTopButton")?.addEventListener("click", () => cancelContainerEdit());
       document.getElementById("containerEditForm")?.addEventListener("submit", (event) => saveContainerDetails(event));

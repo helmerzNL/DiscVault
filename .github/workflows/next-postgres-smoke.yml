@@ -569,6 +569,20 @@ jobs:
       - name: Test the container tile's poster resolution
         run: python -m unittest tests.test_next_container_tile_poster
 
+      # The user's own photographs of a release, a box set or a series. These
+      # are the only images in the app that no source can supply a second time,
+      # and the rules that keep them are all about two devices touching one set:
+      # the union that must survive an upload from either side, the last writer
+      # who settles which one is representative, and the re-upload of a deleted
+      # image that must revive it rather than silently do nothing. None of that
+      # is checkable against a fake cursor, so the postgres half is the half
+      # that matters here.
+      - name: Test the user's own images
+        run: >-
+          python -m unittest
+          tests.test_next_own_images
+          tests.test_next_own_images_postgres
+
       - name: Create minimal legacy SQLite fixture
         run: |
           python - <<'PY'
