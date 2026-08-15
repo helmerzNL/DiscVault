@@ -1694,6 +1694,28 @@ def reset_next_test_database(conn) -> dict[str, Any]:
                     updated_at = now()
                 """
             )
+            # Rewinding the counter without renaming the stream is precisely the
+            # state a client cannot detect: every cursor it holds now points
+            # into a history that no longer exists. Minting a new `stream_id`
+            # here is what turns that into a question the client can ask.
+            #
+            # The column is looked up first rather than guarded inside the
+            # UPDATE: PostgreSQL resolves column names at parse time, so an
+            # `EXISTS` guard in the WHERE clause would still fail on a database
+            # that predates migration 083.
+            cur.execute(
+                """
+                SELECT 1 AS present
+                FROM information_schema.columns
+                WHERE table_schema='public'
+                  AND table_name='sync_state'
+                  AND column_name='stream_id'
+                """
+            )
+            if cur.fetchone():
+                cur.execute(
+                    "UPDATE sync_state SET stream_id = gen_random_uuid() WHERE id='global'"
+                )
 
     if table_exists(conn, "digital_media_sources"):
         with conn.cursor() as cur:
@@ -7478,6 +7500,76 @@ def current_revision(conn) -> int:
     if not table_exists(conn, "sync_state"):
         return 0
     return ensure_sync_state(conn)
+
+
+def sync_stream_id(conn) -> str | None:
+    """Which revision counter is this? -- ``sync_state.stream_id``.
+
+    A cursor is a bare integer and so is the counter it is compared against, so
+    the pair alone cannot tell a quiet database from a *different* one. This is
+    the identity that can: minted per database (migration 083), handed to a
+    client in the state, bootstrap and delta responses, and echoed back as
+    ``?streamId=``.
+
+    Read through ``to_jsonb`` rather than naming the column, because a
+    connection reaching a database that has not run migration 083 yet must get
+    ``None`` here, not an aborted transaction.
+    """
+
+    if not table_exists(conn, "sync_state"):
+        return None
+    ensure_sync_state(conn)
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_jsonb(s) AS row FROM sync_state s WHERE id='global'")
+        row = cur.fetchone()
+    stream = (row or {}).get("row") or {}
+    value = stream.get("stream_id") if isinstance(stream, dict) else None
+    return str(value) if value else None
+
+
+def user_sync_stream_id(conn, user_id) -> str | None:
+    """``sync_stream_id`` for one user's private stream (``user_sync_state``)."""
+
+    if not table_exists(conn, "user_sync_state"):
+        return None
+    ensure_user_sync_state(conn, user_id)
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_jsonb(s) AS row FROM user_sync_state s WHERE user_id=%s", (user_id,))
+        row = cur.fetchone()
+    stream = (row or {}).get("row") or {}
+    value = stream.get("stream_id") if isinstance(stream, dict) else None
+    return str(value) if value else None
+
+
+def resolve_sync_cursor(
+    *,
+    since: int,
+    revision: int,
+    stream_id: str | None,
+    client_stream_id: str | None,
+) -> tuple[int, bool]:
+    """Where does this client's pull actually start, and is that a reset?
+
+    Two conditions say the cursor cannot belong to this stream:
+
+    * the client names a different ``streamId`` -- definite, and the reason the
+      column exists;
+    * the cursor sits above the counter it is meant to index into. A counter
+      only ever climbs, so ``since > revision`` cannot be reached by syncing;
+      it means the counter was rewound underneath the client (a rebuilt or
+      reset database) while the client kept its number.
+
+    Either way the answer is the same and it is not "nothing to send": replay
+    from the start. A client that never learned about ``streamId`` recovers on
+    the second condition alone, which is what makes this fix reach the builds
+    already in people's hands.
+    """
+
+    if client_stream_id and stream_id and client_stream_id != stream_id:
+        return 0, True
+    if since > revision:
+        return 0, True
+    return since, False
 
 
 def next_revision(conn) -> int:
@@ -37963,10 +38055,12 @@ def register_routes(flask_app: Flask) -> None:
     def sync_state():
         with connect() as conn:
             revision = current_revision(conn)
+            stream_id = sync_stream_id(conn)
         return response(
             {
                 "status": "ok",
                 "currentRevision": revision,
+                "streamId": stream_id,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                 "supportedEntityTypes": [
                     "movie",
@@ -38018,6 +38112,7 @@ def register_routes(flask_app: Flask) -> None:
 
         with connect() as conn:
             revision = current_revision(conn)
+            stream_id = sync_stream_id(conn)
             # Credits are scoped to the same movie window as `movies` -- the
             # query orders both by sort title -- so a truncated movie list means
             # a truncated credit list, and they are reported separately because
@@ -38100,6 +38195,10 @@ def register_routes(flask_app: Flask) -> None:
             {
                 "status": "ok",
                 "currentRevision": revision,
+                # The identity of the counter `currentRevision` belongs to. A
+                # client that stores it alongside the cursor can tell a rebuilt
+                # database from a quiet one on the next pull.
+                "streamId": stream_id,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                 "complete": not any(entry["truncated"] for entry in collections.values()),
                 "collections": collections,
@@ -38109,19 +38208,29 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/sync/delta")
     def sync_delta():
-        since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
+        requested_since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
         limit = parse_int_arg("limit", 500, minimum=1, maximum=1000)
+        client_stream_id = clean_text(request.args.get("streamId")) or None
         with connect() as conn:
             revision = current_revision(conn)
+            stream_id = sync_stream_id(conn)
+            since, reset = resolve_sync_cursor(
+                since=requested_since,
+                revision=revision,
+                stream_id=stream_id,
+                client_stream_id=client_stream_id,
+            )
             if not table_exists(conn, "sync_changes"):
                 return response(
                     {
                         "status": "ok",
-                        "since": since,
+                        "since": requested_since,
                         "currentRevision": revision,
+                        "streamId": stream_id,
+                        "reset": reset,
                         "changes": [],
                         "hasMore": False,
-                        "nextSince": revision,
+                        "nextSince": since,
                     }
                 )
             with conn.cursor() as cur:
@@ -38143,15 +38252,21 @@ def register_routes(flask_app: Flask) -> None:
                     (since, limit),
                 )
                 changes = cur.fetchall()
+        # An empty page leaves the cursor exactly where it was. Advancing it to
+        # `currentRevision` instead -- the old behaviour -- hands a client a
+        # cursor covering changes it was never sent, and there is no second
+        # chance: `WHERE revision > since` can only look forward.
         next_since = int(changes[-1]["revision"]) if changes else since
         return response(
             {
                 "status": "ok",
-                "since": since,
+                "since": requested_since,
                 "currentRevision": revision,
+                "streamId": stream_id,
+                "reset": reset,
                 "changes": changes,
                 "hasMore": bool(changes and next_since < revision),
-                "nextSince": revision if not changes else next_since,
+                "nextSince": next_since,
             }
         )
 
@@ -38453,21 +38568,31 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/sync/user/delta")
     def sync_user_delta():
-        since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
+        requested_since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
         limit = parse_int_arg("limit", 500, minimum=1, maximum=1000)
+        client_stream_id = clean_text(request.args.get("streamId")) or None
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
             revision = current_user_revision(conn, user_id)
+            stream_id = user_sync_stream_id(conn, user_id)
+            since, reset = resolve_sync_cursor(
+                since=requested_since,
+                revision=revision,
+                stream_id=stream_id,
+                client_stream_id=client_stream_id,
+            )
             if not table_exists(conn, "user_sync_changes"):
                 return response(
                     {
                         "status": "ok",
-                        "since": since,
+                        "since": requested_since,
                         "currentRevision": revision,
+                        "streamId": stream_id,
+                        "reset": reset,
                         "changes": [],
                         "hasMore": False,
-                        "nextSince": revision,
+                        "nextSince": since,
                     }
                 )
             with conn.cursor() as cur:
@@ -38489,15 +38614,18 @@ def register_routes(flask_app: Flask) -> None:
                     (user_id, since, limit),
                 )
                 changes = cur.fetchall()
+        # Same rule as the catalog stream: an empty page never moves the cursor.
         next_since = int(changes[-1]["revision"]) if changes else since
         return response(
             {
                 "status": "ok",
-                "since": since,
+                "since": requested_since,
                 "currentRevision": revision,
+                "streamId": stream_id,
+                "reset": reset,
                 "changes": changes,
                 "hasMore": bool(changes and next_since < revision),
-                "nextSince": revision if not changes else next_since,
+                "nextSince": next_since,
             }
         )
 
