@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Dine egne fotos af denne serie — sæsonæskerne, ryggene, diskene. De synkroniseres til dine andre enheder.",
   "ownImages.label": "Etiket",
   "ownImages.upload": "Tilføj billeder",
+  "ownImages.capture": "Tag billede",
   "ownImages.empty": "Ingen egne billeder endnu.",
   "ownImages.count": "{used} af {limit}",
   "ownImages.uploading": "Tilføjer billeder...",

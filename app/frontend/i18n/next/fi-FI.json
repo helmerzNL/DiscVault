@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Omat valokuvasi tästä sarjasta — kausilaatikot, selkämykset, levyt. Ne synkronoituvat muihin laitteisiisi.",
   "ownImages.label": "Nimike",
   "ownImages.upload": "Lisää kuvia",
+  "ownImages.capture": "Ota kuva",
   "ownImages.empty": "Ei vielä omia kuvia.",
   "ownImages.count": "{used} / {limit}",
   "ownImages.uploading": "Lisätään kuvia...",

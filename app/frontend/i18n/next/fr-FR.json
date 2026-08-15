@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Vos propres photos de cette série — les coffrets de saison, les tranches, les disques. Elles se synchronisent avec vos autres appareils.",
   "ownImages.label": "Étiquette",
   "ownImages.upload": "Ajouter des images",
+  "ownImages.capture": "Prendre une photo",
   "ownImages.empty": "Aucune image personnelle pour l'instant.",
   "ownImages.count": "{used} sur {limit}",
   "ownImages.uploading": "Ajout des images...",

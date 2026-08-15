@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Dine egne bilder av denne serien — sesongeskene, ryggene, platene. De synkroniseres til de andre enhetene dine.",
   "ownImages.label": "Etikett",
   "ownImages.upload": "Legg til bilder",
+  "ownImages.capture": "Ta bilde",
   "ownImages.empty": "Ingen egne bilder ennå.",
   "ownImages.count": "{used} av {limit}",
   "ownImages.uploading": "Legger til bilder...",

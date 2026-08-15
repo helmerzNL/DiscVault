@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Twoje własne zdjęcia tego serialu — pudełka sezonów, grzbiety, płyty. Synchronizują się z twoimi pozostałymi urządzeniami.",
   "ownImages.label": "Etykieta",
   "ownImages.upload": "Dodaj zdjęcia",
+  "ownImages.capture": "Zrób zdjęcie",
   "ownImages.empty": "Nie ma jeszcze własnych zdjęć.",
   "ownImages.count": "{used} z {limit}",
   "ownImages.uploading": "Dodawanie zdjęć...",

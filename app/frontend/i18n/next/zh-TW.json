@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "你自己拍攝的這部影集的照片——分季套盒、書背、光碟。它們會同步到你的其他裝置。",
   "ownImages.label": "標籤",
   "ownImages.upload": "新增圖片",
+  "ownImages.capture": "拍照",
   "ownImages.empty": "還沒有你自己的圖片。",
   "ownImages.count": "{limit} 張中的 {used} 張",
   "ownImages.uploading": "正在新增圖片...",

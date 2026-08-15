@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Deine eigenen Fotos dieser Serie — die Staffelboxen, die Rücken, die Discs. Sie werden mit deinen anderen Geräten synchronisiert.",
   "ownImages.label": "Bezeichnung",
   "ownImages.upload": "Bilder hinzufügen",
+  "ownImages.capture": "Foto aufnehmen",
   "ownImages.empty": "Noch keine eigenen Bilder.",
   "ownImages.count": "{used} von {limit}",
   "ownImages.uploading": "Bilder werden hinzugefügt...",
