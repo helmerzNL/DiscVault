@@ -232,11 +232,11 @@ verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
 `DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
 volume).
 
-Restart DiscVault or refresh its plugin registry. As of `26.7.25` the plugin is
-**enabled by default** and is the highest-priority MovieVault metadata source
-(order 45), ranked above `movievault_26` (order 55, now disabled by default).
-DiscVault queues the first synchronization automatically, and normal barcode,
-title, release, and box-set queries then use the derived PostgreSQL index.
+Restart DiscVault or refresh its plugin registry. The plugin is **enabled by
+default** and is DiscVault's highest-priority metadata source (order 5, above
+every other bundled source including `tmdb` at 10). DiscVault queues the first
+synchronization automatically, and normal barcode, title, release, and box-set
+queries then use the derived PostgreSQL index.
 
 Two settings are **enforced by DiscVault and not editable in the plugin-settings
 UI**:
@@ -253,12 +253,15 @@ UI**:
   applies to barcode and box-set lookups; title queries cannot use it, because
   buckets are keyed by the hash of the EAN.
 
-Because `movievault_26` now defaults to disabled and is DiscVault's only
-`metadata_receiver`, **contribution back to MovieVault is off unless you
-re-enable it**. Enable `movievault_26` in App Admin → Plugins if you want to
-keep contributing; it stays independently available for MovieVault Next, and
-its attributed contribution connection is not used for MovieVault v2 anonymous
-reads.
+`movievault_26` has been **removed from DiscVault and uninstalled** from
+existing installations. It was DiscVault's only `metadata_receiver`, so the v1
+receiver route that contributed back to MovieVault is gone with it, along with
+its stored connection (instance keypair, API tokens, handshake state) and the
+`MOVIEVAULT_SEARCH_URL` / `MOVIEVAULT_INGEST_URL` /
+`MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET` / `MOVIEVAULT_SHARING_MODE` settings
+that configured it. What continues to work is the separate `movievault_v2`
+release-contribution and field-correction path, gated by
+`movievault_v2_contribution_enabled` in App Admin — that one is untouched.
 
 DiscVault `26.4.57` adds negotiated `distribution-3` support. The matching
 deterministic `movievault_v2` feature package (currently 1.5.0) ships as a
@@ -271,8 +274,7 @@ provider. Blu-ray.com release-detail fallback is owned by MovieVault v2 and is
 reached only through the standalone `movievault_v2` plugin and DiscVault's
 anonymous core bridge. Existing installations must disable and uninstall the
 old `bluray_com` metadata provider before enabling this route. The separate
-`import_bluray_com` collection-import plugin and the legacy `movievault_26`
-connector remain available and unchanged.
+`import_bluray_com` collection-import plugin remains available and unchanged.
 
 DiscVault `26.4.61` adds core consumer support for `distribution-4` (a
 strict `distribution-3` superset that adds a required-nullable primary

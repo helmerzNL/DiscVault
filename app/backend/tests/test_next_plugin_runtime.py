@@ -35,6 +35,8 @@ sys.modules.setdefault("psycopg.types", psycopg_types_module)
 sys.modules.setdefault("psycopg.types.json", psycopg_types_json_module)
 
 from app.backend.next_plugin_runtime import DEFAULT_PLUGIN_DIR
+from app.backend.next_plugin_runtime import WITHDRAWN_PLUGIN_IDS
+from app.backend.next_plugin_runtime import remove_withdrawn_plugin_dirs
 from app.backend.next_plugin_runtime import PLUGIN_INITIALIZED_MARKER
 from app.backend.next_plugin_runtime import discover_plugins
 from app.backend.next_plugin_runtime import plugin_install_dir
@@ -594,7 +596,7 @@ class NextPluginRuntimeTests(unittest.TestCase):
                 plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
                 self.assertNotIn("tmdb", plugins)
                 # Other defaults remain available.
-                self.assertIn("movievault_26", plugins)
+                self.assertIn("movievault_v2", plugins)
 
     def test_plugin_paths_falls_back_to_bundled_when_data_dir_unavailable(self):
         with tempfile.TemporaryDirectory() as data_dir:
@@ -654,29 +656,49 @@ class NextPluginRuntimeTests(unittest.TestCase):
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
 
-        plugin = plugins["movievault_26"]
+        plugin = plugins["movievault_v2"]
         self.assertIn("metadata_source", plugin.manifest["categories"])
         self.assertNotIn("person_details", plugin.manifest["capabilities"])
         self.assertNotIn("person_details", plugin.runtime["entrypoints"])
 
-    def test_movievault_v2_ships_as_the_default_movievault_source(self):
-        """v2 is the MovieVault source a fresh install uses, ranked above 26.
+    def test_movievault_26_is_no_longer_bundled(self):
+        """The plugin is removed, not merely disabled.
 
-        The order matters as much as the flag: metadata_source_plugins() sorts by
-        (order_index, lower(name)), and "movievault 26" sorts before
-        "movievault v2", so an equal order_index would silently hand the win to
-        26. v2 must also stay below the legacy "movievault" seed order of 50 so an
-        order inherited through reconcile_plugin_replacements() cannot outrank it.
+        A disabled bundled plugin is one admin click away from running again,
+        which is not what "removed and uninstalled" means. Nothing may ship it
+        back under either id - `movievault_26` or the v25 `movievault` it
+        replaced - and migration 080 deletes the matching rows so an existing
+        install does not keep a registry entry for something that cannot load.
+        """
+        plugins = {plugin.plugin_id for plugin in discover_plugins()["plugins"]}
+
+        self.assertNotIn("movievault_26", plugins)
+        self.assertNotIn("movievault", plugins)
+
+    def test_movievault_v2_ships_as_the_highest_priority_metadata_source(self):
+        """v2 is the source a fresh install reaches first.
+
+        metadata_source_plugins() sorts by (order_index, lower(name)), lowest
+        first, so "highest priority" is the smallest orderIndex of every bundled
+        metadata_source - strictly smaller, because a tie is broken by name and
+        would silently hand the win to whichever plugin sorts earlier.
         """
         discovery = discover_plugins()
         plugins = {plugin.plugin_id: plugin for plugin in discovery["plugins"]}
 
         v2 = plugins["movievault_v2"].manifest
-        legacy = plugins["movievault_26"].manifest
         self.assertIs(v2["defaultEnabled"], True)
-        self.assertIs(legacy["defaultEnabled"], False)
-        self.assertLess(v2["orderIndex"], legacy["orderIndex"])
-        self.assertLess(v2["orderIndex"], 50)
+
+        others = [
+            plugin.manifest
+            for plugin in discovery["plugins"]
+            if plugin.plugin_id != "movievault_v2"
+            and "metadata_source" in (plugin.manifest.get("categories") or [])
+        ]
+        self.assertTrue(others, "no other bundled metadata sources to rank against")
+        for manifest in others:
+            with self.subTest(plugin_id=manifest["id"]):
+                self.assertLess(v2["orderIndex"], manifest["orderIndex"])
 
     def _registry_row(self, plugin_id):
         return {
@@ -1264,6 +1286,105 @@ class PluginAutoUpdateTests(unittest.TestCase):
         )
         (plugin_dir / "plugin.py").write_text(body, encoding="utf-8")
         return plugin_dir
+
+    def _write_full_plugin(self, base: Path, plugin_id: str, version: str = "1.0.0"):
+        """A plugin whose manifest passes validation, unlike `_write_plugin`'s minimal one."""
+        plugin_dir = base / plugin_id
+        plugin_dir.mkdir(parents=True, exist_ok=True)
+        (plugin_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "id": plugin_id,
+                    "name": plugin_id,
+                    "version": version,
+                    "categories": ["metadata_source"],
+                    "capabilities": ["search_title"],
+                }
+            ),
+            encoding="utf-8",
+        )
+        (plugin_dir / "plugin.py").write_text("def search_title(payload, context):\n    return {}\n", encoding="utf-8")
+        return plugin_dir
+
+    def test_withdrawn_plugin_is_skipped_wherever_its_files_are(self):
+        """The discovery skip, tested where the directory sweep cannot reach.
+
+        A configured `DISCVAULT_PLUGIN_PATHS` root belongs to the operator, so
+        `remove_withdrawn_plugin_dirs()` deliberately leaves it alone. The plugin
+        must still be undiscoverable there - otherwise "removed" would mean only
+        "removed from the directory DiscVault happens to manage".
+        """
+        external = Path(self._tmp.name) / "external-plugins"
+        external.mkdir(parents=True, exist_ok=True)
+        self._write_full_plugin(external, "movievault_26", "1.8.3")
+        self._write_full_plugin(external, "omdb")
+        self._mark_initialized()
+
+        with patch.dict(os.environ, {"DISCVAULT_PLUGIN_PATHS": str(external)}):
+            discovery = discover_plugins()
+
+        plugins = {plugin.plugin_id for plugin in discovery["plugins"]}
+        self.assertNotIn("movievault_26", plugins)
+        # A targeted skip, not a broken plugin root.
+        self.assertIn("omdb", plugins)
+        # Files left by a withdrawn plugin are an expected state on any install
+        # that predates its removal. Reporting them would put a permanent
+        # complaint in App Admin about something nobody can act on.
+        self.assertEqual([item for item in discovery["errors"] if "movievault_26" in str(item)], [])
+        # And the operator's own directory is left on disk, untouched.
+        self.assertTrue((external / "movievault_26").exists())
+
+    def test_withdrawn_plugin_directory_is_deleted_from_the_install_dir(self):
+        """The seeded copy that outlived the image - the actual beta-channel failure.
+
+        Deleting `next_plugins/movievault_26/` only changes what a *fresh*
+        install gets. Every install that ever ran an older version copied the
+        plugin into its writable install directory and marked it authoritative,
+        so the plugin kept being discovered from the data volume and
+        `sync_plugin_registry()` re-created the registry row a migration had just
+        deleted.
+        """
+        self._write_plugin(self.install_dir, "movievault_26", "1.8.3")
+        self._write_plugin(self.install_dir, "movievault", "1.0.0")
+        keep = self._write_plugin(self.install_dir, "tmdb", "1.0.0")
+
+        removed = remove_withdrawn_plugin_dirs(self.install_dir)
+
+        self.assertEqual(sorted(removed), ["movievault", "movievault_26"])
+        self.assertFalse((self.install_dir / "movievault_26").exists())
+        self.assertFalse((self.install_dir / "movievault").exists())
+        self.assertTrue(keep.exists())
+
+        # Idempotent: nothing left to remove, and no error for the absent dirs.
+        self.assertEqual(remove_withdrawn_plugin_dirs(self.install_dir), [])
+
+    def test_plugin_paths_sweeps_the_withdrawn_copy(self):
+        """The sweep has to sit on the path every discovery already takes.
+
+        `plugin_paths()` is that place - `plugin_source_fingerprint()` and
+        `discover_plugins()` both go through it - so a boot cannot reach
+        discovery with the stale directory still present.
+        """
+        self._write_plugin(self.install_dir, "movievault_26", "1.8.3")
+        self._mark_initialized()
+
+        plugin_paths()
+
+        self.assertFalse((self.install_dir / "movievault_26").exists())
+
+    def test_no_bundled_plugin_uses_a_withdrawn_id(self):
+        """A withdrawn id must never be shipped again under the same name.
+
+        Re-using one would make the plugin undiscoverable with no error saying
+        why - the skip is unconditional and does not consult the manifest.
+        """
+        bundled = {
+            path.name
+            for path in DEFAULT_PLUGIN_DIR.iterdir()
+            if path.is_dir()
+        }
+
+        self.assertEqual(bundled & WITHDRAWN_PLUGIN_IDS, set())
 
     def _mark_initialized(self):
         (self.install_dir / PLUGIN_INITIALIZED_MARKER).write_text("1", encoding="utf-8")

@@ -1509,7 +1509,9 @@ class NextMetadataPolicyTests(unittest.TestCase):
         self.assertEqual(by_entrypoint["search_barcode"]["barcode"], "5051892249348")
 
     def test_movievault_result_keeps_identity_and_filters_enrichment(self):
-        for plugin_id in ("movievault_26", "movievault_v2"):
+        # This used to run over both MovieVault ids. `movievault_26` was removed,
+        # so v2 is the only identity source left and the loop kept one entry.
+        for plugin_id in ("movievault_v2",):
             with self.subTest(plugin_id=plugin_id):
                 constrained = metadata_source_policy_result(
                     {
@@ -1663,12 +1665,12 @@ class NextMetadataPolicyTests(unittest.TestCase):
                 "order_index": 10,
             },
             {
-                "id": "movievault_26",
-                "name": "MovieVault",
+                "id": "movievault_v2",
+                "name": "MovieVault v2",
                 "categories": ["metadata_source"],
                 "capabilities": ["search_barcode"],
                 "manifest": {"capabilities": ["search_barcode"]},
-                "order_index": 51,
+                "order_index": 5,
             },
         ]
         requires_config.side_effect = lambda plugin, _config, _entrypoint: plugin["id"] == "tmdb"
@@ -1678,7 +1680,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
             "elapsedMs": 2,
             "result": {
                 "status": "hit",
-                "provider": "movievault_26",
+                "provider": "movievault_v2",
                 "movie": {
                     "title": "Alien",
                     "year": "1979",
@@ -1728,17 +1730,17 @@ class NextMetadataPolicyTests(unittest.TestCase):
                 "order_index": 10,
             },
             {
-                "id": "movievault_26",
-                "name": "MovieVault",
+                "id": "movievault_v2",
+                "name": "MovieVault v2",
                 "categories": ["metadata_source"],
                 "capabilities": ["search_barcode"],
                 "manifest": {"capabilities": ["search_barcode"]},
-                "order_index": 51,
+                "order_index": 5,
             },
         ]
 
         def execute(plugin_id, entrypoint, payload, _context):
-            if plugin_id == "movievault_26":
+            if plugin_id == "movievault_v2":
                 self.assertEqual(entrypoint, "search_barcode")
                 return {
                     "status": "ok",
@@ -1746,7 +1748,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
                     "elapsedMs": 2,
                     "result": {
                         "status": "hit",
-                        "provider": "movievault_26",
+                        "provider": "movievault_v2",
                         "movie": {"title": "Alien", "year": "1979", "overview": "MovieVault plot"},
                         "tmdbId": "348",
                     },
@@ -1782,7 +1784,7 @@ class NextMetadataPolicyTests(unittest.TestCase):
 
         self.assertEqual(
             [(call.args[0], call.args[1]) for call in run_entrypoint.call_args_list],
-            [("movievault_26", "search_barcode"), ("tmdb", "movie_details")],
+            [("movievault_v2", "search_barcode"), ("tmdb", "movie_details")],
         )
         self.assertEqual(result["proposal"]["movieUpdates"]["title"], "Alien")
         self.assertEqual(result["proposal"]["movieUpdates"]["overview"], "TMDb plot")

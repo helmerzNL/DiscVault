@@ -35,6 +35,33 @@ PLUGIN_AUTO_UPDATE_DISABLED_MARKER = ".auto_update_disabled"
 # Tracks install directories whose bundled-default upgrade check already ran in
 # this process, so the (rare) file copy work happens at most once per boot.
 _DEFAULT_PLUGIN_UPGRADE_DONE: set[str] = set()
+# Plugins DiscVault has withdrawn: removed from the image, and no longer able to
+# run even if their files are present.
+#
+# Dropping a plugin from `next_plugins/` is not enough on its own, and that is
+# not a detail - it is the whole reason this list exists. The first boot of any
+# install copies every bundled plugin into the writable install directory and
+# writes `.initialized`, after which `plugin_paths()` treats that copy as
+# authoritative and stops reading the image at all. So an install that ever ran
+# an older version keeps its own copy of a withdrawn plugin in the data volume,
+# where a new image cannot reach it: it stays discoverable, `sync_plugin_registry`
+# re-inserts the registry row a migration had just deleted, and App Admin shows a
+# plugin that the release notes say was removed.
+#
+# Both halves below are needed. Skipping the id in discovery is what makes the
+# removal true immediately and everywhere, including plugin roots DiscVault does
+# not own; deleting the directory is what stops a stale copy from sitting in the
+# data volume forever. Neither is a substitute for the other.
+#
+# `movievault_26` and the v25 `movievault` it replaced are here because their
+# transport (`next_movievault_connection.py`) is gone: nothing supplies their
+# context with a token or a signed-request callable any more, so every entrypoint
+# they expose would fail at runtime. A plugin that can only fail is worse than an
+# absent one - it reports a health error an operator is invited to investigate.
+WITHDRAWN_PLUGIN_IDS: frozenset[str] = frozenset({"movievault_26", "movievault"})
+# Install directories already swept for withdrawn plugins in this process. The
+# sweep is a directory listing plus, at most once ever, an rmtree.
+_WITHDRAWN_PLUGIN_SWEEP_DONE: set[str] = set()
 # Discovery and registry-sync memos, both keyed on a fingerprint of the plugin
 # files on disk. See `plugin_source_fingerprint` for why they are keyed that way
 # and what the memo deliberately does not protect against.
@@ -545,7 +572,49 @@ def _upgrade_default_plugins_once() -> None:
         _DEFAULT_PLUGIN_UPGRADE_DONE.discard(install_key)
 
 
+def remove_withdrawn_plugin_dirs(install_dir: Path) -> list[str]:
+    """Delete withdrawn plugins' directories from the writable install directory.
+
+    Scoped to the install directory on purpose. That is the copy DiscVault made
+    itself, at seed time, from an image that still shipped the plugin - removing
+    it is finishing DiscVault's own work rather than reaching into a location an
+    operator manages. Anything a withdrawn plugin left in a configured
+    `DISCVAULT_PLUGIN_PATHS` root is left on disk and simply never discovered.
+    """
+    removed: list[str] = []
+    if not install_dir.exists() or not install_dir.is_dir():
+        return removed
+    for plugin_id in sorted(WITHDRAWN_PLUGIN_IDS):
+        target = install_dir / plugin_id
+        if not target.is_dir():
+            continue
+        try:
+            shutil.rmtree(target)
+            removed.append(plugin_id)
+        except OSError:
+            # A read-only or busy data volume must not break plugin discovery.
+            # The discovery skip already makes the plugin unreachable; the
+            # directory is retried on the next boot.
+            continue
+    return removed
+
+
+def _remove_withdrawn_plugins_once() -> None:
+    install_dir = plugin_install_dir()
+    install_key = str(install_dir.resolve()).lower()
+    if install_key in _WITHDRAWN_PLUGIN_SWEEP_DONE:
+        return
+    _WITHDRAWN_PLUGIN_SWEEP_DONE.add(install_key)
+    try:
+        remove_withdrawn_plugin_dirs(install_dir)
+    except Exception:
+        # Same rule as the upgrade sweep: never let this break discovery, and
+        # allow a retry rather than marking it done.
+        _WITHDRAWN_PLUGIN_SWEEP_DONE.discard(install_key)
+
+
 def plugin_paths() -> list[Path]:
+    _remove_withdrawn_plugins_once()
     seed = seed_default_plugins_if_needed()
     # Once the install directory is authoritative, bring any default plugin
     # whose bundled version is newer up to date so shipped bug-fixes apply.
@@ -887,10 +956,11 @@ def load_runtime_module(plugin: PluginDiscovery):
 
     Two plugins were written expecting a module to survive between calls, and
     quietly got nothing: `tvdb` caches its auth token in `_TOKENS`, so it
-    re-authenticated on every single call, and `movievault_26` keeps a template
-    cache that never once produced a hit. Both are keyed by the configuration
-    they belong to (`api_key`, a context key), so persisting them shares nothing
-    across configurations -- their authors had already thought about that.
+    re-authenticated on every single call, and the since-removed `movievault_26`
+    kept a template cache that never once produced a hit. Both were keyed by the
+    configuration they belong to (`api_key`, a context key), so persisting them
+    shares nothing across configurations -- their authors had already thought
+    about that.
 
     It also makes connection reuse possible at all: `requests.get` builds a new
     connection per call, and a module-level `requests.Session` cannot help while
@@ -1003,6 +1073,13 @@ def _discover_plugins_uncached() -> dict[str, Any]:
             try:
                 manifest = load_manifest(plugin_dir)
                 plugin_id = str(manifest.get("id") or "")
+                if plugin_id in WITHDRAWN_PLUGIN_IDS:
+                    # Not an error, so deliberately not recorded in `errors`:
+                    # files left behind by a withdrawn plugin are an expected
+                    # state on any install that predates its removal, and
+                    # reporting them would put a permanent complaint in App
+                    # Admin about something the operator cannot act on.
+                    continue
                 if plugin_id in seen_plugin_ids:
                     continue
                 module_path, runtime = load_runtime(manifest, plugin_dir)
@@ -1271,8 +1348,7 @@ def reconcile_plugin_replacements(
                 # licence to outrank where DiscVault ships it. Without this floor
                 # a legacy row sitting at a low order_index (a v25 import writes
                 # index * 10) would promote the replacement above sources that are
-                # deliberately ranked higher - e.g. movievault_26 above
-                # movievault_v2.
+                # deliberately ranked higher.
                 order_index = max(inherited_order, manifest_orders.get(replacement_id, 100))
                 cur.execute(
                     """

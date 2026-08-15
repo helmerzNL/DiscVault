@@ -8,10 +8,13 @@ so the next person who scans the same disc gets a canonical hit.
 
 Three things are deliberately kept apart from the rest of the v2 client:
 
-*The identity.* ``next_movievault_connection`` holds an Ed25519 key registered
-with the *previous* MovieVault under a ``dvpk_`` key id. MovieVault v2 requires a
-key id that parses as a UUID, so that identity cannot be reused and this module
-registers its own.
+*The identity.* This module registers its own Ed25519 key. DiscVault used to
+hold a second one in ``next_movievault_connection``, registered with the
+*previous* MovieVault under a ``dvpk_`` key id; MovieVault v2 requires a key id
+that parses as a UUID, so that identity could never have been reused anyway. It
+has since gone with the ``movievault_26`` plugin, leaving this the only
+MovieVault identity DiscVault holds - the settings and at-rest encryption
+helpers it shared now live in ``next_settings_store``.
 
 *The transport.* ``next_movievault_v2._release_details_http`` is anonymous by
 design - the resolver is cookie-free and carries no ``Authorization`` header, and
@@ -38,7 +41,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 try:
-    from .next_movievault_connection import (
+    from .next_settings_store import (
         _b64url,
         _decrypt_secret_value,
         _delete_setting,
@@ -56,7 +59,7 @@ try:
     )
     from .versioning import backend_version
 except ImportError:  # pragma: no cover - supports running modules directly
-    from next_movievault_connection import (
+    from next_settings_store import (
         _b64url,
         _decrypt_secret_value,
         _delete_setting,

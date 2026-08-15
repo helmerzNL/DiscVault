@@ -117,7 +117,17 @@ class BootstrapCompletenessTests(unittest.TestCase):
         collections = self._bootstrap()["collections"]
         self.assertEqual(
             set(collections),
-            {"movies", "containers", "containerMembership", "movieIdentifiers", "moviePeople"},
+            {
+                "movies",
+                "containers",
+                "containerMembership",
+                "movieIdentifiers",
+                "moviePeople",
+                # The user's own images. Capped by *owning entity* rather than
+                # by picture -- the list is short per entity and the cap counts
+                # entities -- but capped all the same, so it is named here.
+                "ownImages",
+            },
         )
         for name, entry in collections.items():
             self.assertIsInstance(entry["limit"], int, name)

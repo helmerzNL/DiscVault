@@ -30,9 +30,6 @@ try:
     from .next_import import NextImporter
     from .next_import import clean_text
     from .next_ownership import actor_or_instance_owner_id
-    from .next_movievault_connection import MOVIEVAULT_PLUGIN_ID
-    from .next_movievault_connection import is_movievault_plugin
-    from .next_movievault_connection import movievault_plugin_context
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
@@ -77,9 +74,6 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import NextImporter
     from next_import import clean_text
     from next_ownership import actor_or_instance_owner_id
-    from next_movievault_connection import MOVIEVAULT_PLUGIN_ID
-    from next_movievault_connection import is_movievault_plugin
-    from next_movievault_connection import movievault_plugin_context
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
@@ -364,8 +358,6 @@ def plugin_requires_config(plugin: dict[str, Any], config: dict[str, Any], entry
         # Origin is enforced (hardcoded default + optional MOVIEVAULT_V2_ORIGIN env),
         # never user-supplied, so v2 requires no user config for any entrypoint.
         return False
-    if is_movievault_plugin(plugin_id):
-        return False
     manifest = plugin.get("manifest") or {}
     return bool(manifest.get("requiresSecrets")) and not bool(config.get("secretsConfigured"))
 
@@ -397,13 +389,6 @@ def plugin_execution_context_from_db(
         "secretsConfigured": bool(config.get("secretsConfigured")),
         "actor": queued_actor or {"id": None, "username": None, "role": None},
     }
-    context = movievault_plugin_context(
-        conn,
-        plugin_id,
-        context,
-        ensure_token=is_movievault_plugin(plugin_id) and entrypoint != "health_check",
-        actor_id=(queued_actor or {}).get("id") if queued_actor else None,
-    )
     return movievault_v2_plugin_context(
         conn,
         plugin_id,
@@ -1619,9 +1604,7 @@ def import_box_set_sort_key(proposal: dict[str, Any]) -> tuple[int, int, int, in
     exact = import_box_set_evidence_bool(evidence, "barcodeMatch", "barcode_match")
     explicit = import_box_set_evidence_bool(evidence, "membersAreExplicit", "members_are_explicit")
     members = len(import_box_set_member_list(proposal))
-    if "movievault_26" in provider or "movievault 26" in provider:
-        provider_rank = 0
-    elif "movievault" in provider:
+    if "movievault" in provider:
         provider_rank = 1
     elif "bluray" in provider or "blu-ray" in provider:
         provider_rank = 2
