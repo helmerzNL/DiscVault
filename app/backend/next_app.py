@@ -44,6 +44,7 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from werkzeug.exceptions import HTTPException
 from PIL import Image, ImageOps, UnidentifiedImageError
+from PIL.Image import DecompressionBombError
 import jwt
 
 try:
@@ -706,12 +707,35 @@ TEST_DATABASE_RESET_TABLES = (
 )
 MEDIA_GROUP_MEMBER_ROLES = {"owner", "manager", "member", "viewer"}
 PLUGIN_SECRET_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
-MAX_ARTWORK_UPLOAD_BYTES = 20 * 1024 * 1024
+# What may arrive. Deliberately far above what is kept: these images are also
+# *scanned*, and scanner software writes TIFF or PNG by default -- a 300 dpi
+# colour scan of a DVD sleeve lands between 15 and 40 MB. A limit that refuses
+# the file a flatbed just produced pushes the conversion onto the user, on the
+# one kind of image the app cannot obtain any other way.
+MAX_ARTWORK_UPLOAD_BYTES = 60 * 1024 * 1024
+
 # Cap the longest edge before re-encoding artwork. Full-resolution phone photos
 # (multiple thousands of pixels) are needlessly expensive to JPEG-encode and can
-# stall a gunicorn worker long enough for the proxy to return a 502. Posters and
-# backdrops never need more than this on screen.
-MAX_ARTWORK_DIMENSION = 2000
+# stall a gunicorn worker long enough for the proxy to return a 502.
+#
+# 2200 rather than a round 2000, because the number has a physical meaning here.
+# At 300 dpi -- the resolution people scan sleeves at -- a DVD keepcase front
+# (130 x 184 mm) is 1535 x 2173 px and a Blu-ray front (135 x 171 mm) is
+# 1594 x 2020. A 2000 cap clipped the taller of the two just below what the
+# scanner produced, which is the least useful place to draw a line.
+MAX_ARTWORK_DIMENSION = 2200
+
+# What is kept. Ten scans per release is the product limit, the free backup has
+# to carry them, and it is the *archive* size that decides how many a person can
+# realistically keep -- so the ceiling belongs on the stored bytes rather than on
+# the count.
+TARGET_ARTWORK_BYTES = 1_500_000
+# Quality falls before resolution does. On a scan of a sleeve the point is
+# reading the small print, and a slightly softer 2200 px does that where a crisp
+# 1400 px does not. Only when the floor is reached does the image get smaller.
+ARTWORK_QUALITY_LADDER = (90, 85, 80, 75, 70)
+ARTWORK_DOWNSCALE_STEP = 0.85
+MAX_ARTWORK_DOWNSCALE_ROUNDS = 6
 MAX_IMPORT_UPLOAD_BYTES = 50 * 1024 * 1024
 MAX_IMPORT_ARCHIVE_BYTES = 100 * 1024 * 1024
 IMPORT_UPLOAD_EXTENSIONS = {".csv", ".tsv", ".json", ".xml", ".zip"}
@@ -17167,6 +17191,64 @@ def uploaded_artwork_file() -> tuple[Any, str | None]:
     return upload, inferred_kind
 
 
+def artwork_upload_limit_label() -> str:
+    """The ingest ceiling, spelled for a person.
+
+    Derived rather than written out, because seven call sites carried the number
+    as text and every one of them would have kept saying "20 MB" after the
+    constant moved -- a refusal that names a limit the server does not enforce.
+    """
+    return f"{MAX_ARTWORK_UPLOAD_BYTES // (1024 * 1024)} MB"
+
+
+def encode_artwork_within_budget(image: Any) -> tuple[bytes, int, int]:
+    """Encode one already-scaled image to JPEG inside `TARGET_ARTWORK_BYTES`.
+
+    Returns the bytes together with the dimensions they were produced at. The
+    dimensions are returned rather than read from the caller's image because
+    this function may shrink it: they travel on the sync wire (§4d.5) and a
+    client that lays out from a size the stored file does not have will place a
+    box the picture never fills.
+
+    **Quality gives way before resolution does.** These are scans of sleeves and
+    the point of keeping them is reading what is printed on the object; a
+    slightly softer 2200 px does that, a crisp 1400 px does not. Only once the
+    quality floor is reached is the image made smaller, and then in gentle steps
+    rather than one jump, so an image that needs a little less does not lose a
+    lot.
+
+    A picture that already fits comes out at the top of the ladder untouched,
+    which is what keeps the common case -- a phone photo, a small cover --
+    exactly as good as it was before there was a budget.
+    """
+
+    def encode(target: Any, quality: int) -> bytes:
+        buffer = io.BytesIO()
+        # `optimize` costs a little CPU and buys a few percent for free; at the
+        # margin it is the difference between staying a rung up the ladder and
+        # dropping one.
+        target.save(buffer, format="JPEG", quality=quality, optimize=True)
+        return buffer.getvalue()
+
+    current = image
+    data = b""
+    for _round in range(MAX_ARTWORK_DOWNSCALE_ROUNDS):
+        for quality in ARTWORK_QUALITY_LADDER:
+            data = encode(current, quality)
+            if len(data) <= TARGET_ARTWORK_BYTES:
+                return data, current.width, current.height
+        width = int(current.width * ARTWORK_DOWNSCALE_STEP)
+        height = int(current.height * ARTWORK_DOWNSCALE_STEP)
+        if width < 1 or height < 1:
+            break
+        current = current.resize((width, height), Image.Resampling.LANCZOS)
+
+    # Every rung and every step exhausted. Keep the smallest thing produced
+    # rather than refusing: this is the one image no source can supply again, so
+    # storing it slightly over budget beats losing it over a number.
+    return data, current.width, current.height
+
+
 def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
     if kind not in UPLOADABLE_ARTWORK_KINDS:
         raise NextApiError("kind must be poster, backdrop or scan", 400)
@@ -17184,16 +17266,18 @@ def save_uploaded_artwork_file(upload: Any, *, kind: str) -> dict[str, Any]:
         elif image.mode == "L":
             image = image.convert("RGB")
         image.thumbnail((MAX_ARTWORK_DIMENSION, MAX_ARTWORK_DIMENSION), Image.Resampling.LANCZOS)
-        width, height = image.size
-        buffer = io.BytesIO()
-        image.save(buffer, format="JPEG", quality=90)
-        data = buffer.getvalue()
+        data, width, height = encode_artwork_within_budget(image)
+    except DecompressionBombError as exc:
+        # Pillow refuses images above ~89 megapixels. A 600 dpi scan of a sleeve
+        # is around 53 MP and passes; beyond that the caller deserves to be told
+        # what happened rather than reading it as a generic upload failure.
+        raise NextApiError(
+            "Uploaded image has too many pixels; scan at a lower resolution", 400
+        ) from exc
     except UnidentifiedImageError as exc:
         raise NextApiError("Uploaded file is not a valid image", 400) from exc
     except Exception as exc:
         raise NextApiError(f"Artwork upload failed: {exc}", 400) from exc
-    if len(data) > MAX_ARTWORK_UPLOAD_BYTES:
-        raise NextApiError("Artwork upload may not exceed 20 MB after processing", 413)
 
     digest = hashlib.sha256(data).hexdigest()
     folder = {"poster": "posters", "backdrop": "backdrops"}.get(kind, "scans")
@@ -17240,7 +17324,7 @@ def save_uploaded_profile_avatar_file(upload: Any) -> dict[str, Any]:
     except Exception as exc:
         raise NextApiError(f"Avatar upload failed: {exc}", 400) from exc
     if len(data) > MAX_ARTWORK_UPLOAD_BYTES:
-        raise NextApiError("Avatar upload may not exceed 20 MB after processing", 413)
+        raise NextApiError(f"Avatar upload may not exceed {artwork_upload_limit_label()} after processing", 413)
 
     digest = hashlib.sha256(data).hexdigest()
     data_dir = legacy_data_dir().resolve()
@@ -18529,6 +18613,160 @@ def set_primary_entity_scan(
     _clear_other_primary_scans(conn, entity_type, entity_id, media_id)
     revision = emit_entity_scan_change(conn, entity_type, entity_id)
     return _scan_result(conn, entity_type, entity_id, revision, mediaId=str(media_id))
+
+
+def promote_entity_scan_to_artwork(
+    conn,
+    *,
+    entity_type: str,
+    entity_id: UUID,
+    media_id: UUID,
+    kind: str,
+    actor: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Make one of the user's own photographs the shelf cover.
+
+    The one thing this must not do is put a `kind='scan'` row into the poster
+    chain. Every reader that asks for artwork filters on `kind`, and the moment
+    the cover points at a scan each of them has to learn a second kind -- the
+    tangle §4.8b of the sync contract exists to prevent. So the image is stored
+    a second time *as a poster*, and from there the ordinary primary path runs
+    unchanged. `media_assets` is unique on `(kind, variant, sha256)` rather than
+    on the hash alone, so the same bytes may legitimately be both.
+
+    **The bytes are copied, never re-encoded.** A scan has already been through
+    `save_uploaded_artwork_file` -- EXIF applied, RGB, longest edge capped, JPEG
+    q90. Running it through again would spend a second generation of loss on
+    precisely the image nobody can retake. Copying also makes this idempotent:
+    the same scan promoted twice yields the same storage key, the same derived
+    id, and therefore the same row.
+
+    The scan itself stays where it is. Promoting is not moving -- the photograph
+    still belongs in the images gallery -- and it does not consume a second slot
+    against the ceiling, which counts `role='scan'`.
+    """
+    entity_table = entity_artwork_table(entity_type)
+    if kind not in MOVIE_ARTWORK_KINDS:
+        raise NextApiError("kind must be poster or backdrop", 400)
+    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
+        raise NextApiError("Media asset tables are not available", 503)
+
+    scan = _scan_link_row(conn, entity_type, entity_id, media_id)
+    if scan is None or scan.get("deleted_at"):
+        raise NextApiError("Image is not linked to this item", 404)
+
+    digest = clean_text(scan.get("sha256")) or ""
+    source_key = clean_text(scan.get("storage_key")) or ""
+    if not digest or not source_key:
+        raise NextApiError("This image cannot be used as artwork", 409)
+
+    data_dir = legacy_data_dir().resolve()
+    source_path = (data_dir / source_key).resolve()
+    # Same containment check `delete_local_media_asset_file` makes. A storage key
+    # is a value from the database, and a read or a write derived from one must
+    # not be able to leave the data directory.
+    try:
+        source_path.relative_to(data_dir)
+    except ValueError:
+        raise NextApiError("This image cannot be used as artwork", 409) from None
+    if not source_path.is_file():
+        # The row survives without its file when a purge has run. Refusing is
+        # honest; writing a media row pointing at nothing would produce artwork
+        # that renders as a broken frame everywhere at once.
+        raise NextApiError("The stored image file is missing", 409)
+
+    folder = "posters" if kind == "poster" else "backdrops"
+    target_dir = data_dir / "media" / folder / "original" / digest[:2] / digest[2:4]
+    target_path = target_dir / f"{digest}.jpg"
+    target_key = target_path.relative_to(data_dir).as_posix()
+    if not target_path.exists():
+        target_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(source_path, target_path)
+
+    artwork_id = media_asset_uuid(target_key)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO media_assets (
+                id, kind, variant, storage_backend, storage_key, source_url,
+                provider_id, content_type, width, height, size_bytes, sha256, metadata
+            )
+            VALUES (%s, %s, 'original', 'local', %s, NULL, 'upload', %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (kind, variant, sha256) DO UPDATE SET
+                storage_backend=EXCLUDED.storage_backend,
+                storage_key=EXCLUDED.storage_key,
+                content_type=EXCLUDED.content_type,
+                width=EXCLUDED.width,
+                height=EXCLUDED.height,
+                size_bytes=EXCLUDED.size_bytes
+            RETURNING id
+            """,
+            (
+                artwork_id,
+                kind,
+                target_key,
+                scan.get("content_type"),
+                scan.get("width"),
+                scan.get("height"),
+                scan.get("size_bytes"),
+                digest,
+                Jsonb(
+                    json_ready(
+                        {
+                            "source": "upload",
+                            # Why two rows carry one hash. Without it, a later
+                            # reader finds a duplicate and no reason for it.
+                            "promotedFromScan": str(media_id),
+                            "promotedBy": actor_job_payload(actor or {}) if actor else None,
+                        }
+                    )
+                ),
+            ),
+        )
+        stored = cur.fetchone()
+        artwork_id = stored["id"] if stored else artwork_id
+
+    # The existing writer of `{kind}_url` + `{kind}_locked`. Nothing about the
+    # pin is reimplemented here -- that is the whole reason this function goes
+    # the long way round through a second media row.
+    set_primary_entity_media_asset(
+        conn,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        media_id=artwork_id,
+        kind=kind,
+        actor=actor,
+    )
+
+    revision = current_revision(conn)
+    if entity_type == "movie":
+        # Same delta the upload path already emits, so the new cover leaves with
+        # this change instead of waiting for the next edit of the film.
+        revision = record_sync_change(
+            conn,
+            entity_id,
+            {
+                "movieId": str(entity_id),
+                "operation": "movie.media_uploaded",
+                "kind": kind,
+                "mediaId": str(artwork_id),
+                "primary": True,
+                "promotedFromScan": str(media_id),
+                "actor": actor_job_payload(actor or {}) if actor else None,
+            },
+        )
+    with conn.cursor() as cur:
+        cur.execute(f"UPDATE {entity_table} SET updated_at=now() WHERE id=%s", (entity_id,))
+
+    return _scan_result(
+        conn,
+        entity_type,
+        entity_id,
+        revision,
+        mediaId=str(media_id),
+        kind=kind,
+        artworkMediaId=str(artwork_id),
+    )
 
 
 def set_entity_scan_hidden(
@@ -27254,7 +27492,7 @@ def register_routes(flask_app: Flask) -> None:
     def series_media_upload(series_id):
         series_uuid = parse_uuid(series_id, "series id")
         if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
-            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+            raise NextApiError(f"Artwork upload may not exceed {artwork_upload_limit_label()}", 413)
         upload, inferred_kind = uploaded_artwork_file()
         kind = clean_text(request.form.get("kind") or request.args.get("kind") or inferred_kind) or ""
         primary_value = request.form.get("primary")
@@ -28159,7 +28397,7 @@ def register_routes(flask_app: Flask) -> None:
         if not location_uuid:
             raise NextApiError("locationId is required", 400)
         if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
-            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+            raise NextApiError(f"Artwork upload may not exceed {artwork_upload_limit_label()}", 413)
         upload, _inferred = uploaded_artwork_file()
         with connect() as conn:
             actor = require_next_permission(conn, "containers.edit")
@@ -32194,7 +32432,7 @@ def register_routes(flask_app: Flask) -> None:
     def upload_wishlist_poster(item_id: str):
         item_uuid = parse_uuid(item_id, "itemId")
         if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
-            raise NextApiError("Poster upload may not exceed 20 MB", 413)
+            raise NextApiError(f"Poster upload may not exceed {artwork_upload_limit_label()}", 413)
         upload, _inferred = uploaded_artwork_file()
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
@@ -34038,7 +34276,7 @@ def register_routes(flask_app: Flask) -> None:
     def movie_media_upload(movie_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
         if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
-            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+            raise NextApiError(f"Artwork upload may not exceed {artwork_upload_limit_label()}", 413)
         upload, inferred_kind = uploaded_artwork_file()
         kind = clean_text(request.form.get("kind") or request.args.get("kind") or inferred_kind) or ""
         primary_value = request.form.get("primary")
@@ -34230,7 +34468,7 @@ def register_routes(flask_app: Flask) -> None:
         def upload_route(entity_id: str):
             entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
             if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
-                raise NextApiError("Image upload may not exceed 20 MB", 413)
+                raise NextApiError(f"Image upload may not exceed {artwork_upload_limit_label()}", 413)
             upload, _inferred = uploaded_artwork_file()
             label = request.form.get("label") or request.args.get("label") or ""
             client_id = request.form.get("clientId") or request.form.get("client_id") or ""
@@ -34332,6 +34570,40 @@ def register_routes(flask_app: Flask) -> None:
                     )
             return response({"status": "ok", **result})
 
+        def use_as_artwork_route(entity_id: str, media_id: str):
+            entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
+            media_uuid = parse_uuid(media_id, "mediaId")
+            body = request.get_json(silent=True) or {}
+            if not isinstance(body, dict):
+                raise NextApiError("Artwork promotion body must be an object", 400)
+            kind = clean_text(body.get("kind")) or "poster"
+            with connect() as conn:
+                actor = authorize_scan_entity(conn, entity_type, entity_uuid, write=True)
+                with conn.transaction():
+                    result = promote_entity_scan_to_artwork(
+                        conn,
+                        entity_type=entity_type,
+                        entity_id=entity_uuid,
+                        media_id=media_uuid,
+                        kind=kind,
+                        actor=actor,
+                    )
+                    audit_event(
+                        conn,
+                        event_type=f"{entity_type}.image_promoted",
+                        category="admin",
+                        actor=actor,
+                        target_type=entity_type,
+                        target_id=entity_uuid,
+                        summary="Used an own image as artwork",
+                        metadata={
+                            "mediaId": str(media_uuid),
+                            "kind": kind,
+                            "artworkMediaId": result.get("artworkMediaId"),
+                        },
+                    )
+            return response({"status": "ok", **result})
+
         def delete_route(entity_id: str, media_id: str):
             entity_uuid = scan_route_entity(entity_type, entity_id, id_field)
             media_uuid = parse_uuid(media_id, "mediaId")
@@ -34376,6 +34648,12 @@ def register_routes(flask_app: Flask) -> None:
         )
         flask_app.add_url_rule(
             f"{base}/<media_id>/unhide", f"{entity_type}_images_unhide", unhide_route, methods=["POST"]
+        )
+        flask_app.add_url_rule(
+            f"{base}/<media_id>/use-as-artwork",
+            f"{entity_type}_images_use_as_artwork",
+            use_as_artwork_route,
+            methods=["POST"],
         )
 
     for _scan_entity_type, _scan_path_segment, _scan_id_field in (
@@ -34423,7 +34701,7 @@ def register_routes(flask_app: Flask) -> None:
     def container_media_upload(container_id: str):
         container_uuid = parse_uuid(container_id, "containerId")
         if request.content_length and request.content_length > MAX_ARTWORK_UPLOAD_BYTES:
-            raise NextApiError("Artwork upload may not exceed 20 MB", 413)
+            raise NextApiError(f"Artwork upload may not exceed {artwork_upload_limit_label()}", 413)
         upload, inferred_kind = uploaded_artwork_file()
         kind = clean_text(request.form.get("kind") or request.args.get("kind") or inferred_kind) or ""
         primary_value = request.form.get("primary")
