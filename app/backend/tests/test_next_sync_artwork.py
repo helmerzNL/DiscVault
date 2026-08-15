@@ -83,7 +83,7 @@ def with_asset(**overrides):
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class FoldContainerSyncArtworkTests(unittest.TestCase):
     def fold(self, value):
-        return next_app.fold_container_sync_artwork(value)
+        return next_app.fold_sync_artwork(value)
 
     def test_own_asset_becomes_the_poster_url(self):
         folded = self.fold(with_asset())
@@ -155,12 +155,14 @@ class ContainerSyncArtworkSqlTests(unittest.TestCase):
         def cursor(self):  # pragma: no cover - never reached in these tests
             raise AssertionError("no query expected")
 
-    def sql(self, tables):
+    def sql(self, tables, entity_type="container"):
         conn = self.FakeConn(tables)
         original = next_app.table_exists
         next_app.table_exists = lambda _c, name: name in tables
         try:
-            return next_app.container_sync_artwork_sql(conn)
+            if entity_type == "container":
+                return next_app.container_sync_artwork_sql(conn)
+            return next_app.entity_sync_artwork_sql(conn, entity_type, alias="m")
         finally:
             next_app.table_exists = original
 
@@ -188,6 +190,23 @@ class ContainerSyncArtworkSqlTests(unittest.TestCase):
         # them must still answer a bootstrap rather than fail one.
         self.assertEqual(self.sql(set()), ("", ""))
         self.assertEqual(self.sql({"entity_media"}), ("", ""))
+
+    def test_movies_resolve_through_the_same_helper(self):
+        # The two platforms disagreed on film tiles for the same reason they
+        # disagreed on box sets, so the movie paths must not grow their own
+        # copy of the rule.
+        columns, joins = self.sql({"entity_media", "media_assets"}, entity_type="movie")
+        self.assertIn("em.entity_type='movie'", joins)
+        self.assertIn("em.entity_id=m.id", joins)
+        self.assertIn("poster_asset_id", columns)
+
+    def test_columns_lead_with_a_comma_and_never_trail_one(self):
+        # Callers append this last. A trailing comma would need a filler column
+        # after it, and a filler column is one missed `pop` from shipping
+        # storage keys to every client.
+        columns, _joins = self.sql({"entity_media", "media_assets"})
+        self.assertTrue(columns.lstrip().startswith(","), columns[:40])
+        self.assertFalse(columns.rstrip().endswith(","), columns[-40:])
 
     def test_the_fragments_carry_no_parameters(self):
         # Both callers interpolate these around their own placeholders, so a

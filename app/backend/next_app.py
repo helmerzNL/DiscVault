@@ -7884,6 +7884,62 @@ def emit_movie_identifiers_change(conn, movie_id, *, operation: str = "upsert") 
     return revision
 
 
+def entity_sync_artwork_sql(conn, entity_type: str, *, alias: str = "c") -> tuple[str, str]:
+    """Columns and joins that resolve one entity's **own** cover for the wire.
+
+    Every read surface the app has resolves artwork the same way -- the primary
+    `entity_media` row first, the stored `metadata.poster_url` second
+    (`with_preview_media_urls`). The sync payload resolved neither: movies and
+    containers went out as raw table columns, so a client only ever saw
+    `metadata.poster_url`.
+
+    That is why the two platforms disagreed on almost every tile. The PWA showed
+    the release packshot held in `entity_media`; the app showed the film poster
+    stored in metadata, because that was the only thing on the wire.
+
+    Only the entity's *own* artwork is resolved. A cover borrowed from a member
+    film deliberately stays behind -- see `fold_sync_artwork`.
+
+    Returns ``(columns, joins)``, both empty when the media tables are absent so
+    an older schema keeps working.
+    """
+
+    if not (table_exists(conn, "entity_media") and table_exists(conn, "media_assets")):
+        return "", ""
+    # Leading comma, no trailing one, so a caller appends this *last* and an
+    # older schema's empty fragment leaves valid SQL either way. A trailing
+    # comma would need a filler column to sit after it, and a filler column is
+    # one missed `pop` away from shipping plumbing to every client.
+    columns = """,
+                sync_poster.id AS poster_asset_id,
+                sync_poster.storage_backend AS poster_storage_backend,
+                sync_poster.storage_key AS poster_storage_key,
+                sync_poster.source_url AS poster_source_url,
+                sync_poster.provider_id AS poster_provider_id,
+                sync_backdrop.id AS backdrop_asset_id,
+                sync_backdrop.storage_backend AS backdrop_storage_backend,
+                sync_backdrop.storage_key AS backdrop_storage_key,
+                sync_backdrop.source_url AS backdrop_source_url,
+                sync_backdrop.provider_id AS backdrop_provider_id"""
+    joins = ""
+    for kind, join_alias in (("poster", "sync_poster"), ("backdrop", "sync_backdrop")):
+        joins += f"""
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='{entity_type}'
+                  AND em.entity_id={alias}.id
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND ma.kind='{kind}'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) {join_alias} ON true
+"""
+    return columns, joins
+
+
 def container_sync_artwork_sql(conn, *, container_alias: str = "c") -> tuple[str, str]:
     """Columns and joins that resolve a container's **own** cover for the wire.
 
@@ -7907,40 +7963,10 @@ def container_sync_artwork_sql(conn, *, container_alias: str = "c") -> tuple[str
     an older schema keeps working.
     """
 
-    if not (table_exists(conn, "entity_media") and table_exists(conn, "media_assets")):
-        return "", ""
-    columns = """
-                sync_poster.id AS poster_asset_id,
-                sync_poster.storage_backend AS poster_storage_backend,
-                sync_poster.storage_key AS poster_storage_key,
-                sync_poster.source_url AS poster_source_url,
-                sync_poster.provider_id AS poster_provider_id,
-                sync_backdrop.id AS backdrop_asset_id,
-                sync_backdrop.storage_backend AS backdrop_storage_backend,
-                sync_backdrop.storage_key AS backdrop_storage_key,
-                sync_backdrop.source_url AS backdrop_source_url,
-                sync_backdrop.provider_id AS backdrop_provider_id,
-"""
-    joins = ""
-    for kind, alias in (("poster", "sync_poster"), ("backdrop", "sync_backdrop")):
-        joins += f"""
-            LEFT JOIN LATERAL (
-                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
-                FROM entity_media em
-                JOIN media_assets ma ON ma.id = em.media_id
-                WHERE em.entity_type='container'
-                  AND em.entity_id={container_alias}.id
-                  AND em.deleted_at IS NULL
-                  AND em.hidden_at IS NULL
-                  AND ma.kind='{kind}'
-                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
-                LIMIT 1
-            ) {alias} ON true
-"""
-    return columns, joins
+    return entity_sync_artwork_sql(conn, "container", alias=container_alias)
 
 
-def fold_container_sync_artwork(row: dict[str, Any]) -> dict[str, Any]:
+def fold_sync_artwork(row: dict[str, Any]) -> dict[str, Any]:
     """Fold the joined artwork columns into `poster_url` / `backdrop_url`.
 
     The primary `entity_media` asset wins over `metadata.poster_url`, the same
@@ -8005,9 +8031,8 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
                 c.estimated_value,
                 c.estimated_value_currency,
                 c.metadata,
-{artwork_columns}
                 c.created_at,
-                c.updated_at
+                c.updated_at{artwork_columns}
             FROM containers c
 {artwork_joins}
             WHERE c.id=%s
@@ -8015,7 +8040,7 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
             (container_id,),
         )
         row = cur.fetchone()
-    return fold_container_sync_artwork(row) if row else None
+    return fold_sync_artwork(row) if row else None
 
 
 def emit_container_change(conn, container_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
@@ -12933,17 +12958,27 @@ def _movie_select_columns(columns: tuple[str, ...], *, prefix: str = "") -> str:
 
 
 def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
+    # The cover is resolved here rather than left to `metadata.poster_url`,
+    # because this entity is stored verbatim as a delta payload: whatever the
+    # app shows for this film is decided by this row. Without it the wire
+    # carried the film poster while every screen in the PWA showed the release
+    # packshot held in `entity_media`, and the two platforms disagreed on
+    # almost every tile.
+    artwork_columns, artwork_joins = entity_sync_artwork_sql(conn, "movie", alias="movies")
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                {_movie_select_columns(_MOVIE_SYNC_COLUMNS + _MOVIE_ENTITY_ONLY_COLUMNS)}
+                {_movie_select_columns(_MOVIE_SYNC_COLUMNS + _MOVIE_ENTITY_ONLY_COLUMNS, prefix="movies")}{artwork_columns}
             FROM movies
-            WHERE id=%s
+{artwork_joins}
+            WHERE movies.id=%s
             """,
             (movie_id,),
         )
         row = cur.fetchone()
+    if row is not None:
+        row = fold_sync_artwork(row)
     if row is not None:
         row["genres"] = movie_genre_keys(conn, movie_id)
         # Also reaches the delta: a sync change stores this entity verbatim as
@@ -21001,23 +21036,29 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
         return []
     visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     select_columns = _movie_select_columns(_MOVIE_SYNC_COLUMNS, prefix="m")
+    # Same resolution as the delta: a bootstrap that shipped only
+    # `metadata.poster_url` would give a fresh install the film poster where
+    # every other surface shows the release packshot.
+    artwork_columns, artwork_joins = entity_sync_artwork_sql(conn, "movie", alias="m")
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                {select_columns}
+                {select_columns}{artwork_columns}
             FROM movies m
+{artwork_joins}
             WHERE {visibility_where} AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
             (*visibility_params, limit),
         )
+        rows = [fold_sync_artwork(row) for row in cur.fetchall()]
         return attach_movie_pin_markers(
             attach_movie_discs(
                 conn,
                 attach_movie_seasons(
-                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, rows))
                 ),
             )
         )
@@ -21163,9 +21204,8 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.estimated_value,
                 c.estimated_value_currency,
                 c.metadata,
-{artwork_columns}
                 c.created_at,
-                c.updated_at
+                c.updated_at{artwork_columns}
             FROM containers c
 {artwork_joins}
             WHERE {visibility_where} AND c.deleted_at IS NULL
@@ -21174,7 +21214,7 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
             """,
             (*visibility_params, limit),
         )
-        return [fold_container_sync_artwork(row) for row in cur.fetchall()]
+        return [fold_sync_artwork(row) for row in cur.fetchall()]
 
 
 def non_secret_settings(conn) -> list[dict[str, Any]]:
