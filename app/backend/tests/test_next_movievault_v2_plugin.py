@@ -147,13 +147,126 @@ class ReleaseMappingTests(unittest.TestCase):
         emitted = {row["identifier"] for row in item["identifiers"]}
         self.assertNotIn("20000000-0000-0000-0000-000000000001", emitted)
 
-    def test_a_resolver_hit_without_a_release_id_emits_no_identifier(self):
+    def test_a_record_with_no_release_id_and_no_provider_ids_emits_nothing(self):
         """The resolver has no local identity for a release never synced, so
         there is nothing to claim -- an empty row would be a false link."""
         record = _synced_release()
         record.pop("releaseId")
         item = movievault_v2._release(record)
         self.assertNotIn("identifiers", item)
+
+
+class FilmIdentifierTests(unittest.TestCase):
+    """The film ids MovieVault already holds, and DiscVault used to drop.
+
+    `providerIds` has been on every release record since distribution-2 and
+    nothing read it, so a disc imported from MovieVault carried no TMDB id at
+    all. Every source keyed on one was then cut off from it: a refresh had a
+    title and nothing else, found nothing, and reported success doing it. Typing
+    the TMDB id in by hand was the only way through, which is the workaround
+    these tests exist to make unnecessary.
+    """
+
+    def _rows(self, record):
+        return {row["provider_id"]: row["identifier"] for row in movievault_v2._release(record).get("identifiers") or []}
+
+    def test_the_tmdb_film_id_travels_beside_the_release_id(self):
+        rows = self._rows(_synced_release(providerIds={"tmdb": "105"}))
+        self.assertEqual(rows["tmdb"], "105")
+        self.assertEqual(rows["movievault_v2"], "10000000-0000-0000-0000-000000000001")
+
+    def test_the_imdb_id_travels_too(self):
+        rows = self._rows(_synced_release(providerIds={"imdb": "tt0088763"}))
+        self.assertEqual(rows["imdb"], "tt0088763")
+
+    def test_a_television_release_withholds_the_film_id(self):
+        """`tmdb` and `tmdb_tv` are separate id spaces and a work may carry both.
+        A SHOW's identity is the series one, emitted by `_series`; attaching the
+        film id here would claim a television disc is a film TMDB knows under a
+        different number."""
+        rows = self._rows(_synced_release(workType="tv", providerIds={"tmdb": "603", "tmdb_tv": "1399"}))
+        self.assertNotIn("tmdb", rows)
+
+    def test_a_record_that_never_stated_a_work_type_keeps_its_film_id(self):
+        """`workType` arrived in distribution-4 and a published artefact is
+        immutable, so most of the catalog has no such key. Refusing those would
+        withhold the id from the majority of records to guard a minority."""
+        record = _synced_release(providerIds={"tmdb": "105"})
+        record.pop("workType", None)
+        self.assertEqual(self._rows(record)["tmdb"], "105")
+
+    def test_ids_that_do_not_look_like_ids_are_refused(self):
+        """`providerIds` is an open map of strings upstream. A key this plugin
+        claims to understand still has to look like the id it claims to be."""
+        rows = self._rows(_synced_release(providerIds={"tmdb": "not-a-number", "imdb": "0088763"}))
+        self.assertNotIn("tmdb", rows)
+        self.assertNotIn("imdb", rows)
+
+    def test_a_provider_this_plugin_does_not_map_is_ignored(self):
+        rows = self._rows(_synced_release(providerIds={"tvdb": "121361"}))
+        self.assertNotIn("tvdb", rows)
+        self.assertNotIn("121361", set(rows.values()))
+
+    def test_a_resolver_hit_carries_the_film_ids_it_has_no_release_id_for(self):
+        """A barcode the instance never synced resolves live, and that hit has no
+        `releaseId` to offer. Its film ids are then the only identity the disc
+        can be given, which makes them worth more here than anywhere else."""
+        record = movievault_v2._resolved_release_record({
+            "film": {
+                "title": "Back to the Future",
+                "year": 1985,
+                "identifiers": {"tmdbMovieId": "105", "imdbId": "tt0088763"},
+            },
+            "release": {"title": "Back to the Future", "format": "4K UHD"},
+        })
+        rows = self._rows(record)
+        self.assertEqual(rows["tmdb"], "105")
+        self.assertEqual(rows["imdb"], "tt0088763")
+        self.assertNotIn("movievault_v2", rows)
+
+
+class BoxSetProposalTests(unittest.TestCase):
+    """A box-set proposal has to name each member's release.
+
+    It is the member's only identity. The box-set feed states no year for a
+    member and the import mints a synthetic barcode for it, so a member that
+    reaches DiscVault without its `releaseId` cannot be looked up again by
+    anything -- which is how an imported box set ended up with members that
+    refreshed to nothing.
+    """
+
+    RECORD = {
+        "boxSetId": "30000000-0000-0000-0000-000000000001",
+        "title": "Back to the Future Trilogy",
+        "members": [
+            {
+                "position": 1,
+                "releaseId": "10000000-0000-0000-0000-000000000001",
+                "filmId": "20000000-0000-0000-0000-000000000001",
+                "canonicalTitle": "Back to the Future",
+                "format": "4K UHD",
+            },
+            {
+                "position": 2,
+                "releaseId": "10000000-0000-0000-0000-000000000002",
+                "filmId": "20000000-0000-0000-0000-000000000002",
+                "canonicalTitle": "Back to the Future Part II",
+                "format": "4K UHD",
+            },
+        ],
+    }
+
+    def test_every_member_names_its_release(self):
+        members = movievault_v2._proposal(self.RECORD)["members"]
+        self.assertEqual(
+            [member["releaseId"] for member in members],
+            ["10000000-0000-0000-0000-000000000001", "10000000-0000-0000-0000-000000000002"],
+        )
+
+    def test_members_keep_their_titles_and_positions(self):
+        members = movievault_v2._proposal(self.RECORD)["members"]
+        self.assertEqual([member["title"] for member in members], ["Back to the Future", "Back to the Future Part II"])
+        self.assertEqual([member["position"] for member in members], [1, 2])
 
 
 class SeriesIdentityTests(unittest.TestCase):

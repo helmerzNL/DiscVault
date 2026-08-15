@@ -280,6 +280,19 @@ def _resolved_release_record(details):
         "releaseTitle": release.get("title"),
         "format": release.get("format"),
         "edition": release.get("edition"),
+        # Restated in the sync feed's vocabulary so `_identifiers()` reads one
+        # shape. The resolver names them `tmdbMovieId`/`imdbId` under `film`; the
+        # feed puts the same facts in `providerIds`. A resolver hit has no
+        # `releaseId`, so without this it carried no identity at all -- which is
+        # exactly the disc that most needs one, having never been synced.
+        "providerIds": {
+            key: value
+            for key, value in {
+                "tmdb": (film.get("identifiers") or {}).get("tmdbMovieId"),
+                "imdb": (film.get("identifiers") or {}).get("imdbId"),
+            }.items()
+            if value not in (None, "")
+        },
     }
     record.update(_resolved_technical(details))
     record.update(_resolved_poster(details))
@@ -309,23 +322,50 @@ def _resolved_box_set_record(details):
 
 
 def _identifiers(record):
-    """Emit the catalog release id as a durable identifier row.
+    """Emit the ids this release is known by, as durable identifier rows.
 
-    Only the release id travels. `movie_details` looks a movie up by release
-    (`_release_uuid()` above), so that is the id a refresh can actually use; a
-    `filmId` would occupy the one `movie_id` slot this provider gets without
-    resolving anything. Records that carry no `releaseId` -- resolver hits,
-    which have no local identity for a release DiscVault never synced -- emit
-    nothing rather than an empty row.
+    The catalog release id is the one that makes a *refresh* work. `movie_details`
+    looks a movie up by release (`_release_uuid()` above), so that is the id a
+    refresh can actually use; a `filmId` would occupy the one `movie_id` slot this
+    provider gets without resolving anything. Records that carry no `releaseId` --
+    resolver hits, which have no local identity for a release DiscVault never
+    synced -- emit nothing *for this provider* rather than an empty row.
+
+    The film's TMDB and IMDb ids travel beside it, under their own providers.
+    MovieVault has always published them in `providerIds` and DiscVault dropped
+    them here, so a disc that came from MovieVault carried no TMDB id and every
+    source keyed on one was cut off: a later refresh had a title to work with and
+    quietly found nothing. It is worst for a box-set member, which additionally
+    has a synthetic barcode and no year the box-set feed ever states.
+
+    `tmdb` is the *film* id space and `tmdb_tv` the series one -- separate
+    upstream precisely so a work can carry both (see `_series`). A television
+    release's identity is emitted by `_series`, so the film id is withheld there
+    rather than attached to a SHOW. A record whose `workType` the feed has not
+    stated keeps its film id: that is every record projected before MovieVault
+    added the field, and refusing those would drop the id for most of the catalog.
     """
+    rows = []
     release_id = str((record or {}).get("releaseId") or "").strip()
-    if not release_id:
-        return []
-    return [{
-        "provider_id": PROVIDER_ID,
-        "identifier": release_id,
-        "identifier_type": "movie_id",
-    }]
+    if release_id:
+        rows.append({
+            "provider_id": PROVIDER_ID,
+            "identifier": release_id,
+            "identifier_type": "movie_id",
+        })
+    provider_ids = (record or {}).get("providerIds")
+    if not isinstance(provider_ids, dict):
+        return rows
+    # Shape-checked rather than trusted. `providerIds` is an open map of strings
+    # upstream, so a key this plugin claims to understand still has to look like
+    # the id it claims to be before it is written as one.
+    tmdb_id = str(provider_ids.get("tmdb") or "").strip()
+    if tmdb_id.isdigit() and (record or {}).get("workType") != "tv":
+        rows.append({"provider_id": "tmdb", "identifier": tmdb_id, "identifier_type": "movie_id"})
+    imdb_id = str(provider_ids.get("imdb") or "").strip()
+    if imdb_id.startswith("tt") and imdb_id[2:].isdigit():
+        rows.append({"provider_id": "imdb", "identifier": imdb_id, "identifier_type": "movie_id"})
+    return rows
 
 
 def _series(record):
