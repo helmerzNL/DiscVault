@@ -7884,13 +7884,114 @@ def emit_movie_identifiers_change(conn, movie_id, *, operation: str = "upsert") 
     return revision
 
 
+def container_sync_artwork_sql(conn, *, container_alias: str = "c") -> tuple[str, str]:
+    """Columns and joins that resolve a container's **own** cover for the wire.
+
+    The library and the container page have always resolved artwork server-side:
+    the container's primary `entity_media` row first, its stored
+    `metadata.poster_url` second, and only then a cover borrowed from a member
+    film. The sync payload resolved none of it -- `containers` on the wire
+    carried `metadata` and nothing else -- so a box set whose cover lives in
+    `entity_media` reached a client with no artwork at all, and the client had
+    to invent one. That is why a synced box set showed the poster of the *first
+    film inside it*: not a wrong lookup, an absent one.
+
+    Only the container's own artwork is resolved here. The borrowed member cover
+    deliberately stays behind, for the reason `container_member_poster_lateral`
+    gives -- it is a different film's poster, and §4b.9 makes a pushed
+    `metadata.poster_url` the container's own primary artwork, so shipping a
+    borrowed one would let a member's cover be laundered into the set's own on
+    the next push.
+
+    Returns ``(columns, joins)``, both empty when the media tables are absent so
+    an older schema keeps working.
+    """
+
+    if not (table_exists(conn, "entity_media") and table_exists(conn, "media_assets")):
+        return "", ""
+    columns = """
+                sync_poster.id AS poster_asset_id,
+                sync_poster.storage_backend AS poster_storage_backend,
+                sync_poster.storage_key AS poster_storage_key,
+                sync_poster.source_url AS poster_source_url,
+                sync_poster.provider_id AS poster_provider_id,
+                sync_backdrop.id AS backdrop_asset_id,
+                sync_backdrop.storage_backend AS backdrop_storage_backend,
+                sync_backdrop.storage_key AS backdrop_storage_key,
+                sync_backdrop.source_url AS backdrop_source_url,
+                sync_backdrop.provider_id AS backdrop_provider_id,
+"""
+    joins = ""
+    for kind, alias in (("poster", "sync_poster"), ("backdrop", "sync_backdrop")):
+        joins += f"""
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='container'
+                  AND em.entity_id={container_alias}.id
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND ma.kind='{kind}'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) {alias} ON true
+"""
+    return columns, joins
+
+
+def fold_container_sync_artwork(row: dict[str, Any]) -> dict[str, Any]:
+    """Fold the joined artwork columns into `poster_url` / `backdrop_url`.
+
+    The primary `entity_media` asset wins over `metadata.poster_url`, the same
+    order the library and the container page already resolve in. That order is
+    the fix, not a detail: a set whose stored metadata points at a member film's
+    poster -- an import that recorded the film's cover for the box -- renders
+    correctly everywhere the asset is preferred, and wrongly everywhere it is
+    not. The wire was the only place it was not.
+
+    The resolved cover is also written into the payload's `metadata`, because
+    §4b.9 tells clients to read it there and a build already in someone's hands
+    reads that key and nothing else. Resolving only into a new top-level field
+    would leave every installed app exactly as broken as before. Only the
+    outgoing payload is shaped; the stored row is untouched.
+
+    Safe precisely because this is the container's *own* artwork: a client that
+    pushes the value back re-attaches the asset it came from. The borrowed
+    member cover is never folded in here, which is what keeps that round trip
+    from turning a member film's poster into the set's own.
+    """
+
+    item = dict(row)
+    for kind in ("poster", "backdrop"):
+        asset = {
+            "id": item.pop(f"{kind}_asset_id", None),
+            "storage_backend": item.pop(f"{kind}_storage_backend", None),
+            "storage_key": item.pop(f"{kind}_storage_key", None),
+            "source_url": item.pop(f"{kind}_source_url", None),
+            "kind": kind,
+            "provider_id": item.pop(f"{kind}_provider_id", None),
+        }
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        url = media_asset_public_url(asset) if asset["id"] else ""
+        if not url:
+            url = first_usable_image(metadata.get(f"{kind}_url"))
+        if not url:
+            continue
+        item[f"{kind}_url"] = url
+        if clean_text(metadata.get(f"{kind}_url")) != url:
+            item["metadata"] = {**metadata, f"{kind}_url": url}
+    return item
+
+
 def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
     """One container row in the same shape as the bootstrap ``containers`` array."""
     if not table_exists(conn, "containers"):
         return None
+    artwork_columns, artwork_joins = container_sync_artwork_sql(conn)
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 c.id,
                 c.public_id,
@@ -7904,14 +8005,17 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
                 c.estimated_value,
                 c.estimated_value_currency,
                 c.metadata,
+{artwork_columns}
                 c.created_at,
                 c.updated_at
             FROM containers c
+{artwork_joins}
             WHERE c.id=%s
             """,
             (container_id,),
         )
-        return cur.fetchone()
+        row = cur.fetchone()
+    return fold_container_sync_artwork(row) if row else None
 
 
 def emit_container_change(conn, container_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
@@ -21038,6 +21142,10 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
     if not table_exists(conn, "containers"):
         return []
     visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
+    # Same artwork resolution as the delta: a bootstrap that omitted the cover
+    # would leave a fresh install in the state the delta used to leave every
+    # device -- box sets with no artwork, and a client guessing from a member.
+    artwork_columns, artwork_joins = container_sync_artwork_sql(conn)
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -21055,16 +21163,18 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.estimated_value,
                 c.estimated_value_currency,
                 c.metadata,
+{artwork_columns}
                 c.created_at,
                 c.updated_at
             FROM containers c
+{artwork_joins}
             WHERE {visibility_where} AND c.deleted_at IS NULL
             ORDER BY c.container_type, lower(c.title)
             LIMIT %s
             """,
             (*visibility_params, limit),
         )
-        return cur.fetchall()
+        return [fold_container_sync_artwork(row) for row in cur.fetchall()]
 
 
 def non_secret_settings(conn) -> list[dict[str, Any]]:
