@@ -60,7 +60,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_artwork_trash.py next_worker.py
 
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
@@ -338,6 +338,16 @@ jobs:
       # releases, because a new one is how this comes back.
       - name: Test the provider-call transaction boundary
         run: python -m unittest tests.test_next_provider_call_transaction_boundary
+
+      # A liveness probe that deletes rows and unlinks files can outlast its own
+      # timeout and get a healthy container restarted, so `/api/next/health` has
+      # to stay read-only. Only a real database answers that: the assertion is
+      # that a row whose retention window has expired is still there after the
+      # probe ran, and gone after the purge the worker now owns. Both halves
+      # matter -- a probe that stopped purging because the purge broke would
+      # pass the first assertion on its own.
+      - name: Test that the health probe does no write work
+        run: python -m unittest tests.test_next_health_is_read_only
 
       # The statistics page had no coverage here at all, which is how its two
       # credit charts shipped reading empty on a full collection: the query
