@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Ryg",
   "ownImages.labels.insert": "Indlæg",
   "ownImages.labels.disc": "Disk",
-  "ownImages.labels.other": "Andet"
+  "ownImages.labels.other": "Andet",
+  "ownImages.useAsPoster": "Brug som plakat",
+  "ownImages.useAsBackdrop": "Brug som baggrund",
+  "ownImages.promoted": "Omslag opdateret."
 }

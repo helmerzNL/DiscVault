@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Корінець",
   "ownImages.labels.insert": "Вкладка",
   "ownImages.labels.disc": "Диск",
-  "ownImages.labels.other": "Інше"
+  "ownImages.labels.other": "Інше",
+  "ownImages.useAsPoster": "Використати як постер",
+  "ownImages.useAsBackdrop": "Використати як тло",
+  "ownImages.promoted": "Обкладинку оновлено."
 }

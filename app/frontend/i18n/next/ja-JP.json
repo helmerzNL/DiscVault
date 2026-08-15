@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "背",
   "ownImages.labels.insert": "インサート",
   "ownImages.labels.disc": "ディスク",
-  "ownImages.labels.other": "その他"
+  "ownImages.labels.other": "その他",
+  "ownImages.useAsPoster": "ポスターとして使う",
+  "ownImages.useAsBackdrop": "背景として使う",
+  "ownImages.promoted": "ジャケットを更新しました。"
 }

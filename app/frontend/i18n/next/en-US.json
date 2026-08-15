@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Spine",
   "ownImages.labels.insert": "Insert",
   "ownImages.labels.disc": "Disc",
-  "ownImages.labels.other": "Other"
+  "ownImages.labels.other": "Other",
+  "ownImages.useAsPoster": "Use as poster",
+  "ownImages.useAsBackdrop": "Use as backdrop",
+  "ownImages.promoted": "Cover updated."
 }

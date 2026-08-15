@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "등면",
   "ownImages.labels.insert": "삽지",
   "ownImages.labels.disc": "디스크",
-  "ownImages.labels.other": "기타"
+  "ownImages.labels.other": "기타",
+  "ownImages.useAsPoster": "포스터로 사용",
+  "ownImages.useAsBackdrop": "배경으로 사용",
+  "ownImages.promoted": "표지를 업데이트했습니다."
 }

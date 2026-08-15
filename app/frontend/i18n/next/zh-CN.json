@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "书脊",
   "ownImages.labels.insert": "内页",
   "ownImages.labels.disc": "碟片",
-  "ownImages.labels.other": "其他"
+  "ownImages.labels.other": "其他",
+  "ownImages.useAsPoster": "用作海报",
+  "ownImages.useAsBackdrop": "用作背景图",
+  "ownImages.promoted": "封面已更新。"
 }

@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Tranche",
   "ownImages.labels.insert": "Livret",
   "ownImages.labels.disc": "Disque",
-  "ownImages.labels.other": "Autre"
+  "ownImages.labels.other": "Autre",
+  "ownImages.useAsPoster": "Utiliser comme affiche",
+  "ownImages.useAsBackdrop": "Utiliser comme arrière-plan",
+  "ownImages.promoted": "Jaquette mise à jour."
 }

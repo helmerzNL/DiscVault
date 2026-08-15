@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Rug",
   "ownImages.labels.insert": "Inlegvel",
   "ownImages.labels.disc": "Schijf",
-  "ownImages.labels.other": "Overig"
+  "ownImages.labels.other": "Overig",
+  "ownImages.useAsPoster": "Gebruik als poster",
+  "ownImages.useAsBackdrop": "Gebruik als achtergrond",
+  "ownImages.promoted": "Hoes bijgewerkt."
 }

@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Šonas",
   "ownImages.labels.insert": "Įdėklas",
   "ownImages.labels.disc": "Diskas",
-  "ownImages.labels.other": "Kita"
+  "ownImages.labels.other": "Kita",
+  "ownImages.useAsPoster": "Naudoti kaip plakatą",
+  "ownImages.useAsBackdrop": "Naudoti kaip foną",
+  "ownImages.promoted": "Viršelis atnaujintas."
 }

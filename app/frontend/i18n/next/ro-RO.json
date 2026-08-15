@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Cotor",
   "ownImages.labels.insert": "Insert",
   "ownImages.labels.disc": "Disc",
-  "ownImages.labels.other": "Altele"
+  "ownImages.labels.other": "Altele",
+  "ownImages.useAsPoster": "Folosește ca afiș",
+  "ownImages.useAsBackdrop": "Folosește ca fundal",
+  "ownImages.promoted": "Coperta a fost actualizată."
 }

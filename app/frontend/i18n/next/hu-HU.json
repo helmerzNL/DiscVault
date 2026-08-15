@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Gerinc",
   "ownImages.labels.insert": "Betétlap",
   "ownImages.labels.disc": "Lemez",
-  "ownImages.labels.other": "Egyéb"
+  "ownImages.labels.other": "Egyéb",
+  "ownImages.useAsPoster": "Használat plakátként",
+  "ownImages.useAsBackdrop": "Használat háttérként",
+  "ownImages.promoted": "Borító frissítve."
 }

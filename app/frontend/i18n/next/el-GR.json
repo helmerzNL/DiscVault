@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Ράχη",
   "ownImages.labels.insert": "Ένθετο",
   "ownImages.labels.disc": "Δίσκος",
-  "ownImages.labels.other": "Άλλο"
+  "ownImages.labels.other": "Άλλο",
+  "ownImages.useAsPoster": "Χρήση ως αφίσα",
+  "ownImages.useAsBackdrop": "Χρήση ως φόντο",
+  "ownImages.promoted": "Το εξώφυλλο ενημερώθηκε."
 }

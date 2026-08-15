@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Rücken",
   "ownImages.labels.insert": "Beiheft",
   "ownImages.labels.disc": "Disc",
-  "ownImages.labels.other": "Sonstiges"
+  "ownImages.labels.other": "Sonstiges",
+  "ownImages.useAsPoster": "Als Poster verwenden",
+  "ownImages.useAsBackdrop": "Als Hintergrund verwenden",
+  "ownImages.promoted": "Cover aktualisiert."
 }

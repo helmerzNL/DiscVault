@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Selg",
   "ownImages.labels.insert": "Sisuvoldik",
   "ownImages.labels.disc": "Plaat",
-  "ownImages.labels.other": "Muu"
+  "ownImages.labels.other": "Muu",
+  "ownImages.useAsPoster": "Kasuta plakatina",
+  "ownImages.useAsBackdrop": "Kasuta taustapildina",
+  "ownImages.promoted": "Kaanepilt uuendatud."
 }

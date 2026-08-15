@@ -44342,6 +44342,8 @@ def ui_preview_html(
             <select data-own-image-label aria-label="${escapeHtml(tNext("ownImages.label", "Label"))}">${options}</select>
             <button type="button" data-own-image-primary title="${escapeHtml(tNext("ownImages.makePrimary", "Make primary"))}" aria-label="${escapeHtml(tNext("ownImages.makePrimary", "Make primary"))}"${image.isPrimary ? " disabled" : ""}>★</button>
             <button type="button" data-own-image-hide="${image.hidden ? "false" : "true"}" title="${escapeHtml(image.hidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"))}" aria-label="${escapeHtml(image.hidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"))}">${image.hidden ? "◍" : "◌"}</button>
+            <button type="button" data-own-image-artwork="poster" title="${escapeHtml(tNext("ownImages.useAsPoster", "Use as poster"))}" aria-label="${escapeHtml(tNext("ownImages.useAsPoster", "Use as poster"))}">▣</button>
+            <button type="button" data-own-image-artwork="backdrop" title="${escapeHtml(tNext("ownImages.useAsBackdrop", "Use as backdrop"))}" aria-label="${escapeHtml(tNext("ownImages.useAsBackdrop", "Use as backdrop"))}">▤</button>
             <button type="button" data-own-image-delete title="${escapeHtml(tNext("common.delete", "Delete"))}" aria-label="${escapeHtml(tNext("common.delete", "Delete"))}">🗑</button>
           </div>
         </div>
@@ -44379,12 +44381,16 @@ def ui_preview_html(
       // wider screens, then a 'more' button.
       configureResponsiveGridLimit(`${entity}OwnImagesGrid`, `${entity}OwnImagesMore`, {mobileRows: 4, desktopRows: 2});
     }
-    async function reloadOwnImages(entity) {
+    async function reloadOwnImages(entity, {refreshLibrary = false} = {}) {
       const target = detailArtworkEntity(entity);
       const targetId = target.activeId();
       if (!targetId) return;
       const payload = await authApiJson(target.detailUrl(targetId));
       target.render(payload.detail || {});
+      // Only when the cover moved. Adding or labelling an own image changes
+      // nothing outside this panel, and re-fetching the whole snapshot for it
+      // would make every small edit pay for a library reload.
+      if (refreshLibrary) await loadAppSnapshot();
     }
     async function uploadOwnImages(entity) {
       const panel = ownImagePanel(entity);
@@ -44421,7 +44427,7 @@ def ui_preview_html(
         setOwnImagesMessage(entity, error.message || String(error), "bad");
       }
     }
-    async function ownImageRequest(entity, mediaId, path, options) {
+    async function ownImageRequest(entity, mediaId, path, options, doneMessage, reloadOptions) {
       const target = detailArtworkEntity(entity);
       const targetId = target.activeId();
       if (!targetId || !mediaId) return;
@@ -44431,8 +44437,8 @@ def ui_preview_html(
           `/api/next/${target.path}/${encodeURIComponent(targetId)}/images/${encodeURIComponent(mediaId)}${path}`,
           options
         );
-        await reloadOwnImages(entity);
-        setOwnImagesMessage(entity, tNext("ownImages.saved", "Images saved."), "good");
+        await reloadOwnImages(entity, reloadOptions);
+        setOwnImagesMessage(entity, doneMessage || tNext("ownImages.saved", "Images saved."), "good");
       } catch (error) {
         setOwnImagesMessage(entity, error.message || String(error), "bad");
       }
@@ -44461,6 +44467,20 @@ def ui_preview_html(
             event.preventDefault();
             const hide = hideButton.dataset.ownImageHide === "true";
             ownImageRequest(entity, mediaId, hide ? "/hide" : "/unhide", {method: "POST"});
+            return;
+          }
+          const artworkButton = event.target.closest("[data-own-image-artwork]");
+          if (artworkButton) {
+            event.preventDefault();
+            // The image is stored a second time under the poster kind and the
+            // ordinary primary path takes it from there, so this is the same
+            // act as picking a poster in the artwork tab -- not a second way of
+            // deciding the cover.
+            ownImageRequest(entity, mediaId, "/use-as-artwork", {
+              method: "POST",
+              headers: {"Content-Type": "application/json"},
+              body: JSON.stringify({kind: artworkButton.dataset.ownImageArtwork})
+            }, tNext("ownImages.promoted", "Cover updated."), {refreshLibrary: true});
             return;
           }
           if (event.target.closest("[data-own-image-delete]")) {

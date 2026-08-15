@@ -3040,5 +3040,8 @@
   "ownImages.labels.spine": "Ребро",
   "ownImages.labels.insert": "Вложка",
   "ownImages.labels.disc": "Диск",
-  "ownImages.labels.other": "Друго"
+  "ownImages.labels.other": "Друго",
+  "ownImages.useAsPoster": "Използвай като постер",
+  "ownImages.useAsBackdrop": "Използвай като фон",
+  "ownImages.promoted": "Обложката е обновена."
 }
