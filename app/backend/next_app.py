@@ -2192,6 +2192,50 @@ def import_source_item_identifiers(item: dict[str, Any]) -> dict[str, str]:
     return identifiers
 
 
+def box_set_member_movievault_id(member: dict[str, Any]) -> str:
+    """The MovieVault release a box-set member names, under any of its spellings.
+
+    A proposal member arrives with `releaseId` (the plugin's own `_proposal()`
+    mapping); the same fact reaches this code as `movieVaultId` once it has been
+    round-tripped through a metadata query, and in snake_case from a hand-built
+    import body. All three name one release."""
+    if not isinstance(member, dict):
+        return ""
+    return clean_text(
+        member.get("releaseId")
+        or member.get("release_id")
+        or member.get("movieVaultId")
+        or member.get("movievaultId")
+        or member.get("movievault_id")
+    )
+
+
+def box_set_member_identifiers(member: dict[str, Any]) -> dict[str, str]:
+    """The external ids an imported box-set member should be linked by.
+
+    The MovieVault release id decides whether the member can ever be refreshed
+    again. `movievault_identification_plan` plans `movie_details` -- the only call
+    that resolves a member release directly -- from the movie's stored
+    `movieVaultId`, and a member has nothing else to be found by: the box-set feed
+    states no year for its members, and the import mints a synthetic barcode
+    (`IMPORT-...-BOX-01`) that no catalog can match. Dropping the release id here
+    left the member with no identifier at all, so the full refresh queued right
+    after the import reported success and applied nothing -- until somebody typed
+    a TMDB id in by hand, which is the workaround this fix removes the need for.
+    """
+    identifiers: dict[str, str] = {}
+    tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
+    imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
+    movievault_id = box_set_member_movievault_id(member)
+    if tmdb_id:
+        identifiers["tmdb"] = tmdb_id
+    if imdb_id:
+        identifiers["imdb"] = imdb_id
+    if movievault_id:
+        identifiers[MOVIEVAULT_V2_PLUGIN_ID] = movievault_id
+    return identifiers
+
+
 def box_set_member_dedupe_keys(member: dict[str, Any]) -> set[tuple[str, str]]:
     if not isinstance(member, dict):
         return set()
@@ -34979,16 +35023,6 @@ def register_routes(flask_app: Flask) -> None:
         expected_key = physical_format_key(expected)
         return not candidate_key or not expected_key or candidate_key == expected_key
 
-    def box_set_member_identifiers(member: dict[str, Any]) -> dict[str, str]:
-        identifiers: dict[str, str] = {}
-        tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
-        imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
-        if tmdb_id:
-            identifiers["tmdb"] = tmdb_id
-        if imdb_id:
-            identifiers["imdb"] = imdb_id
-        return identifiers
-
     def existing_movie_row_matches_box_set_member(row: dict[str, Any], member: dict[str, Any]) -> bool:
         member_title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
         member_year = clean_text(member.get("year"))
@@ -35113,6 +35147,12 @@ def register_routes(flask_app: Flask) -> None:
         ):
             enriched["format"] = fallback_format
 
+        # The box-set feed states no year for its members -- only the member's own
+        # release record carries one -- so without this an imported member has no
+        # year at all. That is not just a blank column: `existing_movie_for_box_
+        # set_member` matches on title *and* year, and every title-based lookup
+        # downstream is weaker for the lack of it.
+        fill("year", movie_updates.get("year"), metadata_updates.get("year"))
         fill("overview", movie_updates.get("overview"), metadata_updates.get("overview"), metadata_updates.get("plot"))
         fill("plot", metadata_updates.get("plot"), movie_updates.get("overview"))
         fill("releaseDate", movie_updates.get("release_date"), metadata_updates.get("release_date"))
@@ -35143,6 +35183,11 @@ def register_routes(flask_app: Flask) -> None:
         if identifiers.get("imdb") and not (enriched.get("imdbId") or enriched.get("imdb_id")):
             enriched["imdbId"] = str(identifiers["imdb"])
             enriched["imdb_id"] = str(identifiers["imdb"])
+        # A member that named its release already has this; one identified from a
+        # title (a resolver-supplied box set names no release ids at all) gains it
+        # here, and it is the id that makes the member refreshable afterwards.
+        if identifiers.get(MOVIEVAULT_V2_PLUGIN_ID) and not box_set_member_movievault_id(enriched):
+            enriched["releaseId"] = str(identifiers[MOVIEVAULT_V2_PLUGIN_ID])
 
         if technical_updates:
             enriched["technicalSpecs"] = {**(enriched.get("technicalSpecs") or {}), **technical_updates}
@@ -35172,13 +35217,21 @@ def register_routes(flask_app: Flask) -> None:
         fallback_format: str,
     ) -> dict[str, Any]:
         title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
-        if not title and not (member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")):
+        movievault_id = box_set_member_movievault_id(member)
+        if not title and not movievault_id and not (
+            member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")
+        ):
             return member
         lookup_payload = {
             "title": title,
             "year": clean_text(member.get("year")),
             "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
             "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
+            # The member's own MovieVault release, which the box-set proposal
+            # named. This is what turns the enrichment call into a direct
+            # `movie_details` resolve instead of a title guess: the member has no
+            # year to disambiguate one, and its barcode is the box set's.
+            "movieVaultId": movievault_id,
             "barcode": clean_text(member.get("barcode")),
             "format": clean_text(member.get("format") or fallback_format),
             "parentBoxSets": [
