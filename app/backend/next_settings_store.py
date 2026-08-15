@@ -38,8 +38,36 @@ except ImportError:  # pragma: no cover - supports running modules directly
 SECRET_ENC_PREFIX = "enc.v1:"
 
 
-class SecretDecryptionError(RuntimeError):
+class SecretStorageError(RuntimeError):
+    """Base for failures to encrypt a secret for storage, or to read one back."""
+
+
+class SecretEncryptionError(SecretStorageError):
+    """Raised when a secret cannot be encrypted, so it must not be stored."""
+
+
+class SecretDecryptionError(SecretStorageError):
     """Raised when a stored secret cannot be decrypted with the current key."""
+
+
+def _fernet_class():
+    """The Fernet implementation, or a hard failure.
+
+    ``cryptography`` is a hard dependency (`requirements.txt`), so it being
+    absent is a mispackaged image, never an optional feature left switched off.
+    Distinguished from every other failure and reported as such, because the
+    remedy is completely different: rebuild the image, rather than check the
+    key-encryption configuration.
+    """
+    try:
+        from cryptography.fernet import Fernet
+    except ImportError as exc:  # pragma: no cover - a hard dependency in prod
+        raise SecretStorageError(
+            "The 'cryptography' package is required to store integration "
+            "credentials encrypted at rest and is not installed. This is a "
+            "packaging fault in the running image, not a configuration problem."
+        ) from exc
+    return Fernet
 
 
 def _text(value: Any, default: str = "") -> str:
@@ -105,15 +133,34 @@ def _key_encryption_key() -> bytes:
 
 
 def _encrypt_secret_value(plaintext: str) -> str:
-    """Fernet-encrypt a secret for storage. Returns plaintext unchanged if empty."""
+    """Fernet-encrypt a secret for storage. Returns plaintext unchanged if empty.
+
+    Fails closed. This used to return the plaintext unchanged when importing
+    ``cryptography`` raised, which is the worst available outcome: the caller
+    stores the value believing it is encrypted, the row looks ordinary, and
+    nothing anywhere reports that a credential is sitting in the database in the
+    clear. A raise stops the write instead, and stops it at the one moment the
+    problem is still cheap - before the secret is on disk.
+
+    The only exception caught is the import itself. Catching everything also
+    swallowed a failure to derive the key (a missing JWT_SECRET, a
+    RuntimeSecretConfigurationError) and turned that fail-closed rule into a
+    silent fail-open too.
+    """
     text = plaintext or ""
     if not text:
         return text
+    fernet = _fernet_class()
     try:
-        from cryptography.fernet import Fernet
-    except Exception:  # pragma: no cover - cryptography is a hard dependency in prod
-        return text
-    token = Fernet(_key_encryption_key()).encrypt(text.encode("utf-8"))
+        token = fernet(_key_encryption_key()).encrypt(text.encode("utf-8"))
+    except SecretStorageError:
+        raise
+    except Exception as exc:
+        raise SecretEncryptionError(
+            "Unable to encrypt an integration credential for storage; verify "
+            "DISCVAULT_NEXT_KEY_ENCRYPTION_KEY (or the JWT_SECRET it falls back "
+            "to) is set to a stable value."
+        ) from exc
     return SECRET_ENC_PREFIX + token.decode("ascii")
 
 
@@ -126,15 +173,24 @@ def _decrypt_secret_value(stored: Any) -> str:
     text = _text(stored)
     if not text.startswith(SECRET_ENC_PREFIX):
         return text
+    fernet = _fernet_class()
     try:
-        from cryptography.fernet import Fernet
-
         token = text[len(SECRET_ENC_PREFIX):].encode("ascii")
-        return Fernet(_key_encryption_key()).decrypt(token).decode("utf-8")
+        return fernet(_key_encryption_key()).decrypt(token).decode("utf-8")
+    except SecretStorageError:
+        raise
     except Exception as exc:  # pragma: no cover - defensive
+        # Names the settings an operator can actually check. "Stored signing
+        # key" described only the MovieVault instance key this module was
+        # extracted from; it now holds every integration credential, and a
+        # message naming the wrong one sends the reader looking in the wrong
+        # place. A changed key-encryption secret is the usual cause: the
+        # ciphertext is intact and the key no longer opens it.
         raise SecretDecryptionError(
-            "Unable to decrypt a stored signing key; verify the DISCVAULT "
-            "key-encryption configuration or reset the stored identity."
+            "Unable to decrypt a stored integration credential; verify "
+            "DISCVAULT_NEXT_KEY_ENCRYPTION_KEY (or the JWT_SECRET it falls back "
+            "to) still holds the value the credential was stored under, or "
+            "reset the stored identity to register a new one."
         ) from exc
 
 

@@ -68,8 +68,16 @@ jobs:
       - name: Test identity fixture and identifier extraction
         run: python -m unittest tests.test_identity_ladder_fixture tests.test_identity_ladder_validator tests.test_identity_identifier_extraction
 
+      # Both halves of the same fail-closed rule. `next_runtime_secrets` refuses
+      # to invent a secret; `next_settings_store` refuses to store a credential
+      # it could not encrypt. The second used to return the plaintext instead,
+      # which is invisible from every direction - the row looks ordinary and an
+      # unmarked value is read back as legacy plaintext without complaint.
       - name: Test runtime secret configuration
-        run: python -m unittest tests.test_next_runtime_secrets
+        run: >-
+          python -m unittest
+          tests.test_next_runtime_secrets
+          tests.test_next_settings_store
 
       # Listed by hand like every module above it. The throttles these cover sit
       # on endpoints that had none, so a silent drop here restores the gap
