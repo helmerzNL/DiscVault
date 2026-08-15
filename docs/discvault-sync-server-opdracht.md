@@ -522,3 +522,33 @@ staat.
 netjes binnen bereik ligt (`since == currentRevision`); de server kan niet meer zien dat het
 overgeslagen historie mist. Zo'n installatie heeft eenmalig een volledige resync nodig
 (`GET /api/next/sync/bootstrap`).
+
+#### Herstel van een toestel dat de sprong al gemaakt heeft
+
+De twee regels hierboven voorkomen dit voortaan, maar repareren geen toestel waar het al
+gebeurd is: zo'n cursor ligt binnen bereik en is niet te onderscheiden van een toestel dat bij
+is. En "haal opnieuw een bootstrap op" is precies bij grote collecties geen uitweg — de
+bootstrap klemt op `limit` 5000, kapt alfabetisch af en heeft lagere grenzen op de
+satellietarrays (sync-contract §5c). Een bibliotheek van 1295 films krijgt op de standaardwaarde
+een prefix van 1000.
+
+De delta kan het wel, want die blaadt door met `hasMore`/`nextSince`. Vandaar
+`app/scripts/republish_sync_stream.py`: elke levende entiteit opnieuw als gewone upsert-change,
+op een revisie bóven elke cursor. Elk toestel haalt dat bij de volgende pull op, ongeacht welke
+cursor het vasthoudt — geen clientwijziging, geen herinstallatie.
+
+```sh
+# In de applicatiecontainer: eerst kijken wat er zou bewegen (dry-run is default)
+docker compose exec app python app/scripts/republish_sync_stream.py
+
+# Daarna, als tweede bewuste handeling
+docker compose exec app python app/scripts/republish_sync_stream.py --execute
+```
+
+Volgorde van uitgifte: locaties, series, containers, films, film-identifiers, containerleden —
+verwezen entiteiten vóór wat ernaar wijst. Tombstones worden nooit opnieuw uitgegeven; die
+reizen als hun eigen `delete`-change.
+
+Het script is **niet idempotent**, en dat is het mechanisme: een change die eenmaal onder een
+cursor ligt is alleen zichtbaar te maken door er een nieuwe boven te schrijven. Elke run zet er
+dus een generatie bij. Draaien wanneer een toestel aantoonbaar vastzit, niet volgens een schema.
