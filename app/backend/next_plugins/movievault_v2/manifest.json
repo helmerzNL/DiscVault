@@ -23,7 +23,7 @@
     "secrets": []
   },
   "defaultEnabled": true,
-  "orderIndex": 45,
+  "orderIndex": 5,
   "premiumFeatureKey": "metadata.source.movievault.use",
   "entitlements": {"source_use": "metadata.source.movievault.use", "source_bulk": "metadata.source.movievault.bulk"}
 }

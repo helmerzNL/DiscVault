@@ -276,9 +276,10 @@ target user must be active and already have an admin-like role. During transfer,
 the current owner must approve with their passkey again; the target becomes
 owner and the previous owner is kept as admin.
 
-MovieVault metadata receiving/contribution is separate from using MovieVault as
-a lookup plugin. The owner can toggle `movievault_contribution_enabled` from
-the admin panel; normal admins cannot change this receiver mode.
+MovieVault contribution is separate from using MovieVault as a lookup source.
+The owner can toggle `movievault_v2_contribution_enabled` from the admin panel;
+normal admins cannot change it. The older `movievault_contribution_enabled`
+receiver switch is gone with the `movievault_26` plugin that read it.
 
 RBAC is available as an API foundation for the later full admin UI. The default
 mode is `basic`, with the protected owner plus Beheerder, Media Editor, Media

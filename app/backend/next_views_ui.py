@@ -2228,6 +2228,9 @@ def ui_preview_html(
     .bulk-create-message.bad {
       color: var(--red, #e5484d);
     }
+    .bulk-create-message.warn {
+      color: var(--amber, #ff9f0a);
+    }
     .bulk-count {
       justify-self: start;
       display: inline-flex;
@@ -10076,6 +10079,13 @@ def ui_preview_html(
     }
     .detail-message.good {
       color: var(--green);
+    }
+    /* Every detail page passes this tone - the pressing picker's "Which pressing
+       is this?", a refresh that had fields blocked by a format mismatch - and
+       without the rule it rendered as `var(--muted)`, which is what no tone at
+       all looks like. Same declaration as `.login-message.warn` above. */
+    .detail-message.warn {
+      color: var(--amber, #ff9f0a);
     }
     .video-card {
       border: 1px solid var(--line);
@@ -19495,7 +19505,6 @@ def ui_preview_html(
       pluginExecutions: {},
       pluginHealth: {},
       pluginJobs: [],
-      movieVaultConnections: {},
       metadataArtworkTrash: {items: [], settings: {}, purge: {}},
       metadataJobs: [],
       metadataJobCounts: {total: 0, byStatus: {}},
@@ -19945,6 +19954,11 @@ def ui_preview_html(
         const name = String(match?.displayName || match?.pluginName || match?.name || match?.manifest?.name || "").trim();
         if (name) return name;
       }
+      // Names for plugin ids the registry cannot supply one for. `movievault`
+      // and `movievault_26` are removed plugins and stay here on purpose:
+      // identifiers and audit entries they wrote are still on existing movies,
+      // and without an entry those rows would render a mangled id instead of the
+      // source's name.
       const known = {
         movievault: "MovieVault",
         movievault_26: "MovieVault 26",
@@ -21703,43 +21717,6 @@ def ui_preview_html(
         </div>
       `;
     }
-    function renderAppAdminMovieVaultConnection(plugin) {
-      if (!plugin || !["movievault", "movievault_26"].includes(plugin.id)) return "";
-      const connection = (appAdmin.movieVaultConnections || {})[plugin.id] || {};
-      const linkStatus = connection.linkStatus || (connection.tokenSet ? "active" : "unlinked");
-      const connected = linkStatus === "active" && connection.tokenSet;
-      const resetRequired = !!connection.requiresReset;
-      const canReset = resetRequired || linkStatus === "revoked" || linkStatus === "error";
-      const canRefresh = appAdminCanConfigurePlugin(plugin);
-      const messageClass = resetRequired ? "bad" : connected ? "good" : "info";
-      const statusLabel = resetRequired
-        ? tNext("appAdmin.movievaultResetRequired", "Local connection reset required")
-        : connected
-          ? tNext("appAdmin.movievaultConnected", "Connected")
-          : tNext("appAdmin.movievaultNotConnected", "Not connected");
-      return `
-        <div class="login-message ${messageClass}">
-          <div class="profile-passkey-head">
-            <strong>${escapeHtml(tNext("appAdmin.movievaultConnection", "MovieVault connection"))}</strong>
-            <span class="tag ${connected ? "good" : resetRequired ? "bad" : "blue"}">${escapeHtml(statusLabel)}</span>
-          </div>
-          <div class="profile-passkey-meta">
-            ${escapeHtml(tNext("appAdmin.movievaultInstance", "Instance"))}: ${escapeHtml(connection.instanceId || "-")}
-            &middot;
-            ${escapeHtml(tNext("appAdmin.movievaultAuthMethod", "Auth"))}: ${escapeHtml(connection.authMethod || "-")}
-            &middot;
-            ${escapeHtml(tNext("appAdmin.movievaultToken", "Token"))}: ${escapeHtml(connection.tokenPrefix ? `${connection.tokenPrefix}...` : "-")}
-          </div>
-          <div class="profile-passkey-meta">
-            ${escapeHtml(tNext("appAdmin.movievaultLastHandshake", "Last handshake"))}: ${escapeHtml(shortDateTime(connection.lastHandshakeAt))}
-          </div>
-          ${canRefresh ? `<div class="app-admin-plugin-actions">
-            <button type="button" class="secondary-button" data-app-admin-movievault-refresh="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.movievaultRefreshConnection", "Refresh connection"))}</button>
-            ${canReset ? `<button type="button" class="secondary-button danger" data-app-admin-movievault-reset="${escapeHtml(plugin.id)}">${escapeHtml(tNext("appAdmin.movievaultResetConnection", "Reset connection"))}</button>` : ""}
-          </div>` : ""}
-        </div>
-      `;
-    }
     function appAdminPluginSort(a, b) {
       return Number(a.orderIndex || 0) - Number(b.orderIndex || 0) || String(a.name || a.id).localeCompare(String(b.name || b.id));
     }
@@ -21926,7 +21903,6 @@ def ui_preview_html(
             ${capabilities.includes("sync_index") && appAdminCanExecutePlugin(plugin, "sync_index") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_index">${escapeHtml(tNext("appAdmin.queueSync", "Queue sync"))}</button>` : ""}
             ${capabilities.includes("sync_personal_lists") && appAdminCanExecutePlugin(plugin, "sync_personal_lists") ? `<button type="button" class="secondary-button" data-app-admin-plugin-job="${escapeHtml(plugin.id)}" data-entrypoint="sync_personal_lists">${escapeHtml(tNext("appAdmin.queuePersonalListSync", "Queue list sync"))}</button>` : ""}
           </div>
-          ${renderAppAdminMovieVaultConnection(plugin)}
           ${renderAppAdminPluginConfig(plugin, config)}
           ${appAdminPluginHealthDetails(plugin.id)}
         </div>
@@ -24183,21 +24159,11 @@ def ui_preview_html(
           authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/config`)
             .catch(() => ({plugin, config: {}}))
         )) : [];
-        const movieVaultConnectionPayloads = canLoadPlugins ? await Promise.all(appAdmin.plugins
-          .filter((plugin) => ["movievault", "movievault_26"].includes(plugin.id))
-          .map((plugin) => authApiJson(`/api/next/plugins/${encodeURIComponent(plugin.id)}/connection`)
-            .catch(() => ({plugin, connection: null})))
-        ) : [];
         appAdmin.pluginConfigs = {};
         configPayloads.forEach((payload) => {
           if (payload.plugin && payload.plugin.id) {
             appAdmin.pluginConfigs[payload.plugin.id] = payload.config || {};
           }
-        });
-        appAdmin.movieVaultConnections = {};
-        movieVaultConnectionPayloads.forEach((payload) => {
-          const pluginId = payload?.plugin?.id;
-          if (pluginId) appAdmin.movieVaultConnections[pluginId] = payload.connection || null;
         });
         appAdmin.usersCount = appAdmin.users.length || currentAuthStatus.user_count;
         renderAppAdmin();
@@ -24917,34 +24883,6 @@ def ui_preview_html(
         renderAppAdminPlugins();
         setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.pluginExecuted", "Plugin execution completed."), "good");
       } catch (error) {
-        setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
-      }
-    }
-    async function refreshAppAdminMovieVaultConnection(pluginId = "movievault", reset = false) {
-      if (reset && !confirm(tNext("appAdmin.movievaultResetConfirm", "Reset the local MovieVault instance and reconnect as a new DiscVault instance?"))) return;
-      setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movievaultRefreshing", "Refreshing MovieVault connection..."));
-      try {
-        const payload = await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/connection/refresh`, {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({reset: !!reset})
-        });
-        appAdmin.movieVaultConnections = appAdmin.movieVaultConnections || {};
-        appAdmin.movieVaultConnections[pluginId] = payload.connection || null;
-        if (payload.config) appAdmin.pluginConfigs[pluginId] = payload.config;
-        if (payload.plugin) {
-          appAdmin.plugins = appAdmin.plugins.map((plugin) => plugin.id === pluginId ? payload.plugin : plugin);
-        }
-        renderAppAdminPlugins();
-        setAppAdminMessage("appAdminPluginsMessage", tNext("appAdmin.movievaultRefreshed", "MovieVault connection refreshed."), "good");
-      } catch (error) {
-        await authApiJson(`/api/next/plugins/${encodeURIComponent(pluginId)}/connection`)
-          .then((payload) => {
-            appAdmin.movieVaultConnections = appAdmin.movieVaultConnections || {};
-            appAdmin.movieVaultConnections[pluginId] = payload.connection || null;
-            renderAppAdminPlugins();
-          })
-          .catch(() => {});
         setAppAdminMessage("appAdminPluginsMessage", error.message || String(error), "bad");
       }
     }
@@ -49325,8 +49263,6 @@ def ui_preview_html(
         const deleteButton = event.target.closest("[data-app-admin-plugin-delete]");
         const updateButton = event.target.closest("[data-app-admin-plugin-update]");
         const rollbackButton = event.target.closest("[data-app-admin-plugin-rollback]");
-        const movieVaultRefreshButton = event.target.closest("[data-app-admin-movievault-refresh]");
-        const movieVaultResetButton = event.target.closest("[data-app-admin-movievault-reset]");
         if (enableButton) setAppAdminPluginEnabled(enableButton.dataset.appAdminPluginEnable, enableButton.dataset.enabled === "true");
         if (healthButton) checkAppAdminPluginHealth(healthButton.dataset.appAdminPluginHealth);
         if (executeButton) executeAppAdminPlugin(executeButton.dataset.appAdminPluginExecute, executeButton.dataset.entrypoint);
@@ -49336,8 +49272,6 @@ def ui_preview_html(
         if (deleteButton) deleteAppAdminPlugin(deleteButton.dataset.appAdminPluginDelete);
         if (updateButton) updateAppAdminPlugin(updateButton.dataset.appAdminPluginUpdate);
         if (rollbackButton) rollbackAppAdminPlugin(rollbackButton.dataset.appAdminPluginRollback);
-        if (movieVaultRefreshButton) refreshAppAdminMovieVaultConnection(movieVaultRefreshButton.dataset.appAdminMovievaultRefresh || "movievault", false);
-        if (movieVaultResetButton) refreshAppAdminMovieVaultConnection(movieVaultResetButton.dataset.appAdminMovievaultReset || "movievault", true);
       });
       document.getElementById("appAdminPluginsList")?.addEventListener("submit", (event) => {
         const form = event.target.closest("[data-app-admin-plugin-config-form]");

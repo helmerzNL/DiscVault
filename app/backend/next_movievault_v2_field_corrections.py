@@ -31,7 +31,7 @@ try:
     from .next_metadata import movie_locked_fields
     from .next_metadata import movie_technical_specs
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
-    from .next_movievault_connection import _table_exists, _text
+    from .next_settings_store import _table_exists, _text
     from .next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 except ImportError:  # pragma: no cover - supports direct module execution
     from next_common import physical_format_label
@@ -39,7 +39,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_metadata import movie_locked_fields
     from next_metadata import movie_technical_specs
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
-    from next_movievault_connection import _table_exists, _text
+    from next_settings_store import _table_exists, _text
     from next_product_identifiers import catalogue_eans, contributable_eans, movie_identifiers_by_type
 
 #: The provider whose identifier names a MovieVault release. Written by the v2

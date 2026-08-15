@@ -5922,23 +5922,11 @@ def register_next_auth_routes(
             owner = require_owner(conn)
             if request.method == "POST":
                 body = request.get_json(silent=True) or {}
-                if "movievault_contribution_enabled" in body:
-                    enabled = bool(body.get("movievault_contribution_enabled"))
-                    with conn.transaction():
-                        set_setting(conn, "movievault_contribution_enabled", enabled)
-                        audit_event(
-                            conn,
-                            event_type="metadata.receiver_setting_changed",
-                            category="plugins",
-                            actor=owner,
-                            target_type="setting",
-                            target_id="movievault_contribution_enabled",
-                            summary="MovieVault receiver setting changed",
-                            metadata={"enabled": enabled},
-                        )
-                # The v2 gate is a separate setting from the v1 receiver above:
-                # they send different things to different systems, and an owner
-                # who allowed one has not thereby allowed the other.
+                # `movievault_contribution_enabled` used to sit here as well: the
+                # gate for the v1 MovieVault receiver, which only the removed
+                # `movievault_26` plugin ever read. It is gone with the plugin,
+                # and the migration drops the stored value so nothing renders a
+                # switch that controls nothing.
                 if "movievault_v2_contribution_enabled" in body:
                     v2_enabled = bool(body.get("movievault_v2_contribution_enabled"))
                     with conn.transaction():
@@ -5970,9 +5958,6 @@ def register_next_auth_routes(
                             metadata={},
                         )
             settings = {
-                "movievault_contribution_enabled": bool(
-                    setting_value(conn, "movievault_contribution_enabled", False)
-                ),
                 "movievault_v2_contribution_enabled": bool(
                     setting_value(conn, "movievault_v2_contribution_enabled", False)
                 ),

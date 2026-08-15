@@ -60,7 +60,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_movievault_connection.py next_runtime_secrets.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
 
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
@@ -158,9 +158,6 @@ jobs:
       # would not fail anything until something was replayed for real.
       - name: Test the metadata lookup cache
         run: python -m unittest tests.test_next_metadata_lookup_cache
-
-      - name: Test MovieVault v3 secret recovery
-        run: python -m unittest tests.test_next_movievault_v3
 
       - name: Test MovieVault v2 contract and privacy policy
         run: python -m unittest tests.test_next_movievault_v2
@@ -278,6 +275,17 @@ jobs:
       # a user agent -- so it runs up here.
       - name: Test crawler and AI-scraper exclusion
         run: python -m unittest tests.test_next_crawlers
+
+      # What the backup screen costs, and what it is allowed to report. The
+      # summary cache is the reason listing the archives is cheap; the older
+      # module beside it is the regression net for the validation the cache now
+      # stores, and had never been wired into any workflow. Both build their
+      # archives in a temporary directory, so neither needs the database.
+      - name: Test backup validation and the archive summary cache
+        run: >-
+          python -m unittest
+          tests.test_next_backup
+          tests.test_next_backup_summary_cache
 
       # ======================================================================
       # EVERY STEP ABOVE THIS LINE RUNS AGAINST AN EMPTY DATABASE.
@@ -497,6 +505,15 @@ jobs:
       # displayed anywhere, for months, with nothing red.
       - name: Test the inline script's scope
         run: python -m unittest tests.test_next_views_ui_scope
+
+      # The same shape one layer down: the PWA has no global tone classes, so a
+      # message container that grows a tone without the matching CSS renders it
+      # as the base muted style -- identical to passing no tone at all. Nothing
+      # can fail there on its own, because a missing rule is a default rather
+      # than an error, which is how every `warn` on every detail page read as
+      # ordinary grey text.
+      - name: Test that every message tone is styled
+        run: python -m unittest tests.test_next_views_message_tones
 
       # These three had never run in CI: the workflow lists its test modules by
       # hand and they were simply never added. That is the same class of gap as
@@ -760,7 +777,10 @@ jobs:
           assert response.status_code == 200, response.data[:500]
           payload = response.get_json()
           assert payload["status"] == "ok", payload
-          assert any(plugin["id"] == "movievault_26" for plugin in payload["plugins"]), payload
+          assert any(plugin["id"] == "movievault_v2" for plugin in payload["plugins"]), payload
+          assert not any(
+              plugin["id"] in {"movievault_26", "movievault"} for plugin in payload["plugins"]
+          ), payload
           print("/api/next/plugins/registry", "session-cookie-ok")
 
           update = client.patch("/api/next/plugins/plex", json={"enabled": True, "orderIndex": 105})

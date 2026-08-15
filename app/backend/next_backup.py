@@ -24,6 +24,16 @@ BACKUP_FORMAT_VERSION = 2
 SUPPORTED_BACKUP_FORMAT_VERSIONS = frozenset({1, 2})
 BACKUP_RESTORE_JOB_TYPE = "backup.restore_functional"
 
+DEFAULT_BACKUP_DESCRIPTION = "DiscVault movie collection backup"
+
+# Where the per-archive summaries live, and how they are invalidated. Listing the
+# stored backups used to reopen and re-read every archive on every call; the
+# summary is now computed once and kept beside the archive it describes. Bump the
+# version whenever the stored shape changes -- an entry written by an older build
+# is then a miss rather than a wrong answer.
+BACKUP_SUMMARY_DIR_NAME = ".summaries"
+BACKUP_SUMMARY_CACHE_VERSION = 1
+
 EXCLUDED_SCOPES = (
     "passkeys",
     "totp_secrets",
@@ -578,34 +588,143 @@ def stored_backup_path(backup_dir: Path, file_name: str) -> Path:
     return path
 
 
-def list_backup_archives(backup_dir: Path, *, limit: int = 10) -> list[dict[str, Any]]:
+def backup_summary_cache_path(archive: Path) -> Path:
+    return archive.parent / BACKUP_SUMMARY_DIR_NAME / f"{archive.name}.json"
+
+
+def read_backup_summary_cache(archive: Path, stat: os.stat_result) -> dict[str, Any] | None:
+    """Return the stored summary for this archive, or None when it cannot be trusted.
+
+    The key is the archive's size and modification time. Anything that rewrites
+    the file moves at least one of them, so an archive replaced or edited outside
+    DiscVault reads as a miss and is recomputed rather than reported from a stale
+    entry.
+    """
+
+    try:
+        with backup_summary_cache_path(archive).open("r", encoding="utf-8") as handle:
+            cached = json.load(handle)
+    except (OSError, json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(cached, dict):
+        return None
+    if cached.get("cacheVersion") != BACKUP_SUMMARY_CACHE_VERSION:
+        return None
+    if cached.get("sizeBytes") != stat.st_size or cached.get("mtimeNs") != stat.st_mtime_ns:
+        return None
+    return cached
+
+
+def write_backup_summary_cache(archive: Path, summary: dict[str, Any]) -> bool:
+    path = backup_summary_cache_path(archive)
+    temp = path.parent / f"{path.name}.{os.getpid()}.tmp"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with temp.open("w", encoding="utf-8") as handle:
+            json.dump(summary, handle)
+        # Replace rather than write in place: two workers may be listing at the
+        # same moment, and a half-written file must never be readable.
+        temp.replace(path)
+    except OSError:
+        try:
+            temp.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+    return True
+
+
+def compute_backup_summary(archive: Path, stat: os.stat_result) -> dict[str, Any]:
+    report = validate_backup_zip(archive)
+    generator = report.get("generator") or {}
+    return {
+        "cacheVersion": BACKUP_SUMMARY_CACHE_VERSION,
+        "sizeBytes": stat.st_size,
+        "mtimeNs": stat.st_mtime_ns,
+        "sha256": sha256_file(archive),
+        "createdAt": report.get("createdAt"),
+        "valid": bool(report.get("valid")),
+        "scope": report.get("scope"),
+        "description": generator.get("description") or DEFAULT_BACKUP_DESCRIPTION,
+        "tables": report.get("tables") or {},
+        "warnings": report.get("warnings") or [],
+        "errors": report.get("errors") or [],
+    }
+
+
+def backup_archive_summary(archive: Path, *, refresh: bool = False) -> dict[str, Any]:
+    """Describe one stored archive for the backup screen.
+
+    Everything expensive -- opening the ZIP, parsing every table out of it,
+    validating the relationships between them, and hashing the file -- happens
+    once and is then read from a sidecar. `refresh=True` recomputes regardless.
+    """
+
+    stat = archive.stat()
+    cached = None if refresh else read_backup_summary_cache(archive, stat)
+    if cached is None:
+        cached = compute_backup_summary(archive, stat)
+        # A backup being written right now would be summarised from a partial
+        # file. Storing the pre-read stat would make that summary permanent, so
+        # only cache when the archive did not move underneath the read.
+        try:
+            after = archive.stat()
+        except OSError:
+            after = None
+        if after is not None and (after.st_size, after.st_mtime_ns) == (stat.st_size, stat.st_mtime_ns):
+            write_backup_summary_cache(archive, cached)
+    return {
+        "fileName": archive.name,
+        "sizeBytes": stat.st_size,
+        "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z"),
+        "createdAt": cached.get("createdAt"),
+        "valid": bool(cached.get("valid")),
+        "scope": cached.get("scope"),
+        "description": cached.get("description") or DEFAULT_BACKUP_DESCRIPTION,
+        "sha256": cached.get("sha256"),
+        "tables": cached.get("tables") or {},
+        "warnings": cached.get("warnings") or [],
+        "errors": cached.get("errors") or [],
+    }
+
+
+def prune_backup_summary_cache(backup_dir: Path) -> int:
+    """Drop sidecars whose archive is gone, so deleting a backup frees its entry."""
+
+    cache_dir = backup_dir / BACKUP_SUMMARY_DIR_NAME
+    removed = 0
+    try:
+        entries = sorted(cache_dir.glob("*.zip.json"))
+    except OSError:
+        return 0
+    for entry in entries:
+        if (backup_dir / entry.name[: -len(".json")]).exists():
+            continue
+        try:
+            entry.unlink()
+        except OSError:
+            continue
+        removed += 1
+    return removed
+
+
+def list_backup_archives(
+    backup_dir: Path,
+    *,
+    limit: int = 10,
+    refresh: bool = False,
+) -> list[dict[str, Any]]:
     if not backup_dir.exists():
         return []
+    prune_backup_summary_cache(backup_dir)
     items: list[dict[str, Any]] = []
     for path in sorted(backup_dir.glob("*.zip"), key=lambda item: item.stat().st_mtime, reverse=True):
         try:
-            stat = path.stat()
-            report = validate_backup_zip(path)
+            items.append(backup_archive_summary(path, refresh=refresh))
         except OSError:
             continue
-        manifest = report.get("generator") or {}
-        items.append(
-            {
-                "fileName": path.name,
-                "sizeBytes": stat.st_size,
-                "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc)
-                .isoformat(timespec="seconds")
-                .replace("+00:00", "Z"),
-                "createdAt": report.get("createdAt"),
-                "valid": bool(report.get("valid")),
-                "scope": report.get("scope"),
-                "description": manifest.get("description") or "DiscVault movie collection backup",
-                "sha256": sha256_file(path),
-                "tables": report.get("tables") or {},
-                "warnings": report.get("warnings") or [],
-                "errors": report.get("errors") or [],
-            }
-        )
         if len(items) >= limit:
             break
     return items
@@ -824,12 +943,16 @@ def export_functional_backup(
         )
         write_json(zf, "manifest.json", manifest)
 
-    size = output_path.stat().st_size
+    # Summarise the archive we just wrote: it stores the checksum the caller
+    # reports, it warms the sidecar so the next backup screen costs nothing, and
+    # it reads the ZIP back once -- so a truncated or unwritable archive is
+    # caught here instead of sitting on disk looking like a good backup.
+    summary = backup_archive_summary(output_path, refresh=True)
     return {
         "fileName": output_path.name,
         "path": str(output_path),
-        "sizeBytes": size,
-        "sha256": sha256_file(output_path),
+        "sizeBytes": summary["sizeBytes"],
+        "sha256": summary.get("sha256"),
         "manifest": manifest,
     }
 
