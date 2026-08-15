@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "你自己拍摄的这部剧集的照片——分季套盒、书脊、碟片。它们会同步到你的其他设备。",
   "ownImages.label": "标签",
   "ownImages.upload": "添加图片",
+  "ownImages.capture": "拍照",
   "ownImages.empty": "还没有你自己的图片。",
   "ownImages.count": "{limit} 张中的 {used} 张",
   "ownImages.uploading": "正在添加图片...",

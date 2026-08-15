@@ -27,6 +27,8 @@ What goes wrong without each rule:
 Source-text assertions, in the idiom the other UI tests here use.
 """
 
+import glob
+import json
 import os
 import re
 import unittest
@@ -34,6 +36,9 @@ import unittest
 
 NEXT_VIEWS_UI_PATH = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "next_views_ui.py")
+)
+LOCALE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "i18n", "next")
 )
 
 #: Every action the iOS Images tab offers behind a long press, by i18n key.
@@ -206,6 +211,73 @@ class OwnImagesGalleryUiTests(unittest.TestCase):
             "const canEdit = hasAnyPermission(APP_PERMISSION_GROUPS.artworkManage);",
             menu,
         )
+
+    def test_the_camera_hands_off_to_the_operating_system(self):
+        """`capture` on a file input, not `getUserMedia`.
+
+        The whole point of a scan is that the print on the object stays legible:
+        sync-contract 4d.7a puts the longest side at 2200 px and lets quality
+        drop before resolution does. The OS camera returns a full-sensor JPEG;
+        an in-page `getUserMedia` preview hands back a video frame, typically
+        1280x720, and no encoder ladder recovers what the sensor never sent.
+        Nothing errors -- the photograph simply cannot be read afterwards.
+
+        The barcode scanner does use `getUserMedia`, correctly: it wants a live
+        frame to decode, not a picture to keep. That is the distinction, so the
+        assertion is scoped to this path rather than to the whole script.
+        """
+        self.assertIn(
+            '<input type="file" accept="image/*" capture="environment"'
+            ' class="hidden" data-own-images-camera',
+            self.source,
+        )
+        # Three panels: film, box set, series. Each names the input in its
+        # markup and in the two selectors that reach it.
+        self.assertEqual(self.source.count("data-own-images-camera"), 6)
+        own_images = self.source[
+            self.source.index("function bindOwnImagePanels(") :
+            self.source.index("function revealOwnImagesCaptureButton(")
+        ]
+        self.assertNotIn("mediaDevices.getUserMedia", own_images)
+
+    def test_the_camera_button_appears_on_a_touch_device_without_asking(self):
+        """`navigator.mediaDevices` needs a secure context; `capture` does not.
+
+        DiscVault is self-hosted, so a phone reaching it over plain http on the
+        LAN is ordinary -- and there `navigator.mediaDevices` is undefined while
+        the camera still works. Gating the button on it would hide the camera on
+        exactly the devices that have one.
+        """
+        start = self.source.index("function ownImagesHasCamera(")
+        end = self.source.index("function revealOwnImagesCaptureButton(", start)
+        detector = self.source[start:end]
+        self.assertIn('window.matchMedia?.("(any-pointer: coarse)")?.matches', detector)
+        coarse = detector.index("(any-pointer: coarse)")
+        devices = detector.index("enumerateDevices")
+        self.assertLess(coarse, devices, "the touch check must come first")
+
+    def test_a_photograph_just_taken_is_uploaded_without_a_second_press(self):
+        """The user framed it and pressed the shutter. Choosing files keeps its
+        button, because a multi-select is edited before it is sent.
+        """
+        self.assertIn('uploadOwnImages(entity, "camera");', self.source)
+        self.assertIn('async function uploadOwnImages(entity, source = "input") {', self.source)
+
+    def test_the_ceiling_stops_both_ways_in(self):
+        """The limit blocks adding, and taking a photograph is adding."""
+        self.assertIn("const full = images.length >= limit;", self.source)
+        self.assertIn("if (uploadButton) uploadButton.disabled = full;", self.source)
+        self.assertIn("if (captureButton) captureButton.disabled = full;", self.source)
+
+    def test_the_camera_label_is_translated_everywhere(self):
+        locales = sorted(glob.glob(os.path.join(LOCALE_DIR, "*.json")))
+        self.assertTrue(locales)
+        for path in locales:
+            with self.subTest(locale=os.path.basename(path)):
+                with open(path, encoding="utf-8") as handle:
+                    data = json.load(handle)
+                self.assertIn("ownImages.capture", data)
+                self.assertTrue(data["ownImages.capture"].strip())
 
     def test_one_action_sheet_serves_posters_backdrops_and_own_images(self):
         """A second copy of the sheet is how the three would come to offer the

@@ -16980,7 +16980,9 @@ def ui_preview_html(
               <button type="button" class="responsive-more-button hidden" id="movieOwnImagesMore" data-next-i18n="common.more">More</button>
               <div class="art-upload-row own-image-upload-row" data-art-upload-row>
                 <input type="file" accept="image/*" multiple data-own-images-input>
+                <input type="file" accept="image/*" capture="environment" class="hidden" data-own-images-camera tabindex="-1" aria-hidden="true">
                 <select data-own-images-label aria-label="Image label" data-next-i18n-aria="ownImages.label"></select>
+                <button type="button" class="secondary-button hidden" data-own-images-capture data-next-i18n="ownImages.capture">Take photo</button>
                 <button type="button" class="secondary-button" data-own-images-upload data-next-i18n="ownImages.upload">Add images</button>
                 <span class="own-images-count" data-own-images-count></span>
               </div>
@@ -17235,7 +17237,9 @@ def ui_preview_html(
               <button type="button" class="responsive-more-button hidden" id="containerOwnImagesMore" data-next-i18n="common.more">More</button>
               <div class="art-upload-row own-image-upload-row" data-art-upload-row>
                 <input type="file" accept="image/*" multiple data-own-images-input>
+                <input type="file" accept="image/*" capture="environment" class="hidden" data-own-images-camera tabindex="-1" aria-hidden="true">
                 <select data-own-images-label aria-label="Image label" data-next-i18n-aria="ownImages.label"></select>
+                <button type="button" class="secondary-button hidden" data-own-images-capture data-next-i18n="ownImages.capture">Take photo</button>
                 <button type="button" class="secondary-button" data-own-images-upload data-next-i18n="ownImages.upload">Add images</button>
                 <span class="own-images-count" data-own-images-count></span>
               </div>
@@ -17425,7 +17429,9 @@ def ui_preview_html(
               <button type="button" class="responsive-more-button hidden" id="seriesOwnImagesMore" data-next-i18n="common.more">More</button>
               <div class="art-upload-row own-image-upload-row" data-art-upload-row>
                 <input type="file" accept="image/*" multiple data-own-images-input>
+                <input type="file" accept="image/*" capture="environment" class="hidden" data-own-images-camera tabindex="-1" aria-hidden="true">
                 <select data-own-images-label aria-label="Image label" data-next-i18n-aria="ownImages.label"></select>
+                <button type="button" class="secondary-button hidden" data-own-images-capture data-next-i18n="ownImages.capture">Take photo</button>
                 <button type="button" class="secondary-button" data-own-images-upload data-next-i18n="ownImages.upload">Add images</button>
                 <span class="own-images-count" data-own-images-count></span>
               </div>
@@ -44442,8 +44448,13 @@ def ui_preview_html(
       }
       // The ceiling blocks adding and nothing else: every stored image stays
       // visible, openable and synced even when the limit is lowered under it.
+      // Both ways in are adding, so both stop at the same number.
+      const full = images.length >= limit;
       const uploadButton = panel.querySelector("[data-own-images-upload]");
-      if (uploadButton) uploadButton.disabled = images.length >= limit;
+      if (uploadButton) uploadButton.disabled = full;
+      const captureButton = panel.querySelector("[data-own-images-capture]");
+      if (captureButton) captureButton.disabled = full;
+      revealOwnImagesCaptureButton(panel);
       // Same grid rules as the poster gallery: four rows on mobile, two on
       // wider screens, then a 'more' button.
       configureResponsiveGridLimit(`${entity}OwnImagesGrid`, `${entity}OwnImagesMore`, {mobileRows: 4, desktopRows: 2});
@@ -44459,11 +44470,16 @@ def ui_preview_html(
       // would make every small edit pay for a library reload.
       if (refreshLibrary) await loadAppSnapshot();
     }
-    async function uploadOwnImages(entity) {
+    // `source` names which of the two inputs this call is emptying. Choosing a
+    // file and taking a photograph are the same upload from here on -- the
+    // difference is only which control the bytes came through.
+    async function uploadOwnImages(entity, source = "input") {
       const panel = ownImagePanel(entity);
       const target = detailArtworkEntity(entity);
       const targetId = target.activeId();
-      const input = panel?.querySelector("[data-own-images-input]");
+      const input = panel?.querySelector(
+        source === "camera" ? "[data-own-images-camera]" : "[data-own-images-input]"
+      );
       const label = panel?.querySelector("[data-own-images-label]")?.value || "other";
       if (!targetId || !input || !input.files || !input.files.length) return;
       const files = [...input.files];
@@ -44523,11 +44539,57 @@ def ui_preview_html(
         if (!panel || panel.dataset.ownImagesBound === "true") return;
         panel.dataset.ownImagesBound = "true";
         panel.addEventListener("click", (event) => {
-          if (!event.target.closest("[data-own-images-upload]")) return;
+          if (event.target.closest("[data-own-images-upload]")) {
+            event.preventDefault();
+            uploadOwnImages(entity);
+            return;
+          }
+          if (!event.target.closest("[data-own-images-capture]")) return;
           event.preventDefault();
-          uploadOwnImages(entity);
+          // Opening the camera is the visible button's only job; the input it
+          // drives stays hidden so the row does not show two file pickers.
+          panel.querySelector("[data-own-images-camera]")?.click();
+        });
+        // A photograph just taken needs no second confirmation: the user framed
+        // it and pressed the shutter, so pressing "Add images" afterwards is a
+        // step that asks nothing. Choosing files keeps its button, because a
+        // multi-select is edited before it is sent.
+        panel.addEventListener("change", (event) => {
+          if (!event.target.closest("[data-own-images-camera]")) return;
+          uploadOwnImages(entity, "camera");
         });
       });
+    }
+    // A file input carrying `capture` hands off to the operating system's own
+    // camera, which is what iOS does and what keeps the full sensor resolution
+    // -- and 2200 px along the longest side is the whole point of a scan
+    // (sync-contract 4d.7a). An in-page getUserMedia preview would hand back a
+    // video frame instead, and the print on a spine is exactly what stops being
+    // legible at that size.
+    let ownImagesCameraLikely = null;
+    function ownImagesHasCamera() {
+      if (ownImagesCameraLikely !== null) return ownImagesCameraLikely;
+      // `capture` is not gated on a secure context, but `navigator.mediaDevices`
+      // is -- and DiscVault is self-hosted, so a phone reaching it over plain
+      // http on the LAN is ordinary. Asking mediaDevices first would hide the
+      // camera on exactly the devices that have one, so a touch device counts
+      // without being asked.
+      if (window.matchMedia?.("(any-pointer: coarse)")?.matches) {
+        ownImagesCameraLikely = true;
+        return true;
+      }
+      ownImagesCameraLikely = false;
+      navigator.mediaDevices?.enumerateDevices?.().then((devices) => {
+        if (!devices.some((device) => device.kind === "videoinput")) return;
+        ownImagesCameraLikely = true;
+        document.querySelectorAll("[data-own-images-entity]").forEach(revealOwnImagesCaptureButton);
+      }).catch(() => {});
+      return false;
+    }
+    function revealOwnImagesCaptureButton(panel) {
+      const button = panel?.querySelector("[data-own-images-capture]");
+      if (!button) return;
+      button.classList.toggle("hidden", !ownImagesHasCamera());
     }
     // The same set of actions iOS puts behind a long press on this tab, in the
     // same order. Share is the one that is not a mutation, so it is the one a

@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Οι δικές σου φωτογραφίες αυτής της σειράς — τα κουτιά των κύκλων, οι ράχες, οι δίσκοι. Συγχρονίζονται στις άλλες συσκευές σου.",
   "ownImages.label": "Ετικέτα",
   "ownImages.upload": "Προσθήκη εικόνων",
+  "ownImages.capture": "Λήψη φωτογραφίας",
   "ownImages.empty": "Δεν υπάρχουν ακόμη δικές σου εικόνες.",
   "ownImages.count": "{used} από {limit}",
   "ownImages.uploading": "Προσθήκη εικόνων...",

@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Твої власні світлини цього серіалу — коробки сезонів, корінці, диски. Вони синхронізуються на інші твої пристрої.",
   "ownImages.label": "Позначка",
   "ownImages.upload": "Додати зображення",
+  "ownImages.capture": "Зробити фото",
   "ownImages.empty": "Власних зображень поки немає.",
   "ownImages.count": "{used} з {limit}",
   "ownImages.uploading": "Додавання зображень...",

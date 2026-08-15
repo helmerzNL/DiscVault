@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Tvoje vlastné fotky tohto seriálu — škatule sezón, chrbty, disky. Synchronizujú sa do tvojich ostatných zariadení.",
   "ownImages.label": "Označenie",
   "ownImages.upload": "Pridať obrázky",
+  "ownImages.capture": "Odfotiť",
   "ownImages.empty": "Zatiaľ žiadne vlastné obrázky.",
   "ownImages.count": "{used} z {limit}",
   "ownImages.uploading": "Pridávajú sa obrázky...",

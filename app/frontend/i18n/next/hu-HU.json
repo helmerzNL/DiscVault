@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "A saját fotóid erről a sorozatról — az évaddobozok, a gerincek, a lemezek. Szinkronizálódnak a többi eszközödre.",
   "ownImages.label": "Címke",
   "ownImages.upload": "Képek hozzáadása",
+  "ownImages.capture": "Fénykép készítése",
   "ownImages.empty": "Még nincsenek saját képek.",
   "ownImages.count": "{used} / {limit}",
   "ownImages.uploading": "Képek hozzáadása...",

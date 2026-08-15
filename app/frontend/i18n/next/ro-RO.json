@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Fotografiile tale ale acestui serial — cutiile de sezon, cotoarele, discurile. Se sincronizează pe celelalte dispozitive ale tale.",
   "ownImages.label": "Etichetă",
   "ownImages.upload": "Adaugă imagini",
+  "ownImages.capture": "Fă o poză",
   "ownImages.empty": "Încă nu ai imagini proprii.",
   "ownImages.count": "{used} din {limit}",
   "ownImages.uploading": "Se adaugă imaginile...",

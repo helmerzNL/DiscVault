@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Tvoje vlastní fotky tohoto seriálu — krabice sezón, hřbety, disky. Synchronizují se do tvých ostatních zařízení.",
   "ownImages.label": "Popisek",
   "ownImages.upload": "Přidat obrázky",
+  "ownImages.capture": "Vyfotit",
   "ownImages.empty": "Zatím žádné vlastní obrázky.",
   "ownImages.count": "{used} z {limit}",
   "ownImages.uploading": "Přidávání obrázků...",
