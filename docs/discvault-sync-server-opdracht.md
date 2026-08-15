@@ -532,10 +532,42 @@ bootstrap klemt op `limit` 5000, kapt alfabetisch af en heeft lagere grenzen op 
 satellietarrays (sync-contract §5c). Een bibliotheek van 1295 films krijgt op de standaardwaarde
 een prefix van 1000.
 
-De delta kan het wel, want die blaadt door met `hasMore`/`nextSince`. Vandaar
-`app/scripts/republish_sync_stream.py`: elke levende entiteit opnieuw als gewone upsert-change,
-op een revisie bóven elke cursor. Elk toestel haalt dat bij de volgende pull op, ongeacht welke
-cursor het vasthoudt — geen clientwijziging, geen herinstallatie.
+De delta kan het wel, want die blaadt door met `hasMore`/`nextSince`. De catalogus wordt dus
+opnieuw ín die stroom geschreven: elke levende entiteit als gewone upsert-change, op een revisie
+bóven elke cursor. Elk toestel haalt dat bij de volgende pull op, ongeacht welke cursor het
+vasthoudt — geen clientwijziging, geen herinstallatie.
+
+**Dit gaat vanzelf.** Migratie `084_sync_catalog_republish_job.sql` zet één
+`sync.catalog_republish`-job klaar en de worker voert hem uit. Migraties draaien al onbeheerd bij
+elke containerstart (`next_database.py migrate` in supervisord) en draaien **één keer per
+versie** — precies de cadans die dit nodig heeft. Wie update krijgt de reparatie dus zonder een
+runbook te openen.
+
+Drie keuzes die daaronder liggen:
+
+- **Een job, geen SQL in de migratie.** Een delta-payload is de hele entiteit, gebouwd door
+  `movie_entity` en verwanten in `next_app`. Diezelfde vorm in SQL nabouwen zou een tweede
+  implementatie van het wire-formaat zijn, die uit elkaar loopt zodra er een veld bij komt. De
+  migratie plant dus alleen in; `next_sync_republish.py` voert uit, via dezelfde bouwers als de
+  live endpoints.
+- **Eén keer, nooit op een timer.** De republish is bewust niet idempotent: een change die
+  eenmaal onder een cursor ligt is alleen zichtbaar te maken door er een nieuwe boven te
+  schrijven. Elke run zet er een generatie bij en kost elk verbonden toestel een volledige
+  catalogusdownload. Eén keer per upgrade is de reparatie; één keer per boot zou een
+  permanente heffing zijn.
+- **Overslaan bij een lege bibliotheek.** Er valt niets te repareren en er is geen client met
+  een cursor in een historie die nooit bestond.
+
+Volgorde van uitgifte: locaties, series, containers, films, film-identifiers, containerleden —
+verwezen entiteiten vóór wat ernaar wijst, zodat een client die de stroom op revisievolgorde
+toepast nooit langer dan één change een dangling reference houdt. Tombstones worden nooit
+opnieuw uitgegeven; die reizen als hun eigen `delete`-change.
+
+#### De handmatige uitweg ernaast
+
+`app/scripts/republish_sync_stream.py` doet hetzelfde werk via dezelfde module, voor de gevallen
+die een eenmalige migratie niet dekt: een toestel dat later alsnog vastloopt, een run die faalde,
+of het republiceren van één entiteitssoort tijdens het zoeken.
 
 ```sh
 # In de applicatiecontainer: eerst kijken wat er zou bewegen (dry-run is default)
@@ -545,10 +577,4 @@ docker compose exec app python app/scripts/republish_sync_stream.py
 docker compose exec app python app/scripts/republish_sync_stream.py --execute
 ```
 
-Volgorde van uitgifte: locaties, series, containers, films, film-identifiers, containerleden —
-verwezen entiteiten vóór wat ernaar wijst. Tombstones worden nooit opnieuw uitgegeven; die
-reizen als hun eigen `delete`-change.
-
-Het script is **niet idempotent**, en dat is het mechanisme: een change die eenmaal onder een
-cursor ligt is alleen zichtbaar te maken door er een nieuwe boven te schrijven. Elke run zet er
-dus een generatie bij. Draaien wanneer een toestel aantoonbaar vastzit, niet volgens een schema.
+Voor een normale upgrade hoeft dit niet: de job hierboven heeft het dan al gedaan.
