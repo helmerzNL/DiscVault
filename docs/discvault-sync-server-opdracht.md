@@ -578,3 +578,30 @@ docker compose exec app python app/scripts/republish_sync_stream.py --execute
 ```
 
 Voor een normale upgrade hoeft dit niet: de job hierboven heeft het dan al gedaan.
+
+#### Een payloadvormfix bereikt niemand uit zichzelf
+
+De delta draagt **wijzigingen**, geen hervormingen. Verandert een fix wat een entiteit op de draad
+*meedraagt* zonder dat er een rij verandert — zoals #690, dat de hoes ging oplossen uit
+`entity_media` in plaats van doorgeven uit `metadata.poster_url` — dan is er niets als gewijzigd
+gemarkeerd en heeft de delta niets te sturen. Elk toestel houdt wat het al had.
+
+**Zo'n fix brengt dus zijn eigen republish-migratie mee** (`085_sync_catalog_republish_artwork.sql`
+als voorbeeld). Niet in een runbook: wie update hoort het te krijgen zonder te weten dat er een
+script bestaat.
+
+##### Twee wachtende sweeps zijn geen twee fixes
+
+De guard in 085 slaat de job over als er al één `pending` of `running` is. Dat is geen
+optimalisatie maar de definitie van de operatie: een republish stuurt elke levende entiteit
+opnieuw **zoals hij nú is**, gebouwd door de code die draait. Een sweep die nog niet gelopen heeft
+draagt dus alle fixes die inmiddels zijn geland, ook die van ná het moment dat hij werd ingepland.
+
+Dat is precies het geval van iemand die eens per week update en drie releases overslaat: zijn
+container draait 084 en 085 achter elkaar, er wordt één job ingepland, en die publiceert een
+catalogus die beide fixes al draagt. Zonder de guard betaalde elk toestel twee identieke
+downloads.
+
+`completed` en `failed` staan bewust **niet** in die guard. Een afgeronde sweep publiceerde de
+oude vorm en kan deze niet dragen; een gefaalde publiceerde niets. Beide horen door een verse
+sweep gevolgd te worden.
