@@ -49,6 +49,8 @@ try:
     from .next_artwork_trash import ARTWORK_TRASH_PURGE_JOB_TYPE
     from .next_artwork_trash import purge_expired_artwork_trash
     from .next_artwork_trash import purge_interval_hours
+    from .next_sync_republish import SYNC_CATALOG_REPUBLISH_JOB_TYPE
+    from .next_sync_republish import run_catalog_republish
     from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
@@ -96,6 +98,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_artwork_trash import ARTWORK_TRASH_PURGE_JOB_TYPE
     from next_artwork_trash import purge_expired_artwork_trash
     from next_artwork_trash import purge_interval_hours
+    from next_sync_republish import SYNC_CATALOG_REPUBLISH_JOB_TYPE
+    from next_sync_republish import run_catalog_republish
     from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
@@ -560,6 +564,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == ARTWORK_TRASH_PURGE_JOB_TYPE:
         return process_artwork_trash_purge(payload, worker_id)
 
+    if job_type == SYNC_CATALOG_REPUBLISH_JOB_TYPE:
+        return process_sync_catalog_republish(payload, worker_id)
+
     if job_type == RELEASE_CONTRIBUTION_JOB_TYPE:
         return process_movievault_v2_release_contribution(job, payload, worker_id)
 
@@ -727,6 +734,37 @@ def process_artwork_trash_purge(payload: dict[str, Any], worker_id: str) -> dict
         "workerId": worker_id,
         "handled": True,
         "jobType": ARTWORK_TRASH_PURGE_JOB_TYPE,
+        **summary,
+    }
+
+
+def process_sync_catalog_republish(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Write the catalog back into the delta stream, above every client cursor.
+
+    Enqueued by migration 084, so the repair happens on upgrade with nobody
+    rolling anything out. It exists because a device stranded by the old cursor
+    behaviour cannot be detected: its cursor sits within range and reads exactly
+    like a device that is up to date.
+
+    The work runs here rather than in the API process for the reason every job
+    does -- one claimant, atomic, retried on failure, visible in the job list --
+    and `run_catalog_republish` refuses rather than reporting a quiet success
+    when it cannot build a payload. A job that says it repaired the stream while
+    publishing nothing would be worse than the failure it hides.
+    """
+
+    entities = payload.get("entities")
+    if entities is not None and not isinstance(entities, list):
+        raise RuntimeError("entities must be a list of entity kinds when provided")
+    with connect() as conn:
+        summary = run_catalog_republish(
+            conn, entities=[str(kind) for kind in entities] if entities else None
+        )
+    return {
+        "workerId": worker_id,
+        "handled": True,
+        "jobType": SYNC_CATALOG_REPUBLISH_JOB_TYPE,
+        "reason": payload.get("reason"),
         **summary,
     }
 
