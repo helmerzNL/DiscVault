@@ -276,6 +276,40 @@ jobs:
       - name: Test crawler and AI-scraper exclusion
         run: python -m unittest tests.test_next_crawlers
 
+      # Plugins run from a writable install directory that is seeded once, not
+      # from the image, so "removed from the bundle" only became an uninstall
+      # when the upgrade pass started removing the files too. Every test starts
+      # without an install directory, which is precisely why this needs its own
+      # module: it builds the upgraded-deployment case by hand -- seed, then
+      # take the plugin out of the bundle. No database; it works on temporary
+      # directories.
+      - name: Test that a dropped bundled plugin is uninstalled
+        run: python -m unittest tests.test_next_plugin_removal_on_upgrade
+
+      # The repository's own guard scripts had no coverage running anywhere.
+      # They are the enforcement points every MUST rule in the baseline leans
+      # on, so a guard that silently stopped guarding would look exactly like a
+      # branch with nothing wrong. Run from the repository root because the
+      # scripts resolve paths relative to it.
+      #
+      # Listed rather than discovered, because `test_sync_dedup_merge` is
+      # deliberately NOT in this list: four of its cases have been failing since
+      # #395 on 2026-07-24, unnoticed because nothing ran them. They expect the
+      # title/year dedup group key to carry the media format -- `("what women
+      # want", "", "dvd")` -- and `sync_dedup_merge.py` still produces the
+      # two-part key. That is the physical-copy identity #395 set out to
+      # preserve, so it needs deciding on its own terms rather than being
+      # silently switched off or hurried into an unrelated pull request.
+      - name: Test the guard scripts
+        working-directory: .
+        run: >-
+          python -m unittest
+          app.scripts.tests.test_bump_version
+          app.scripts.tests.test_check_forbidden_paths
+          app.scripts.tests.test_check_version_bumped
+          app.scripts.tests.test_check_plugin_manifest_versions
+          app.scripts.tests.test_prune_landed_branches
+
       # What the backup screen costs, and what it is allowed to report. The
       # summary cache is the reason listing the archives is cheap; the older
       # module beside it is the regression net for the validation the cache now
