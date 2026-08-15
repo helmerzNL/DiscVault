@@ -30,6 +30,9 @@ from app.backend.scripts import republish_sync_stream as cli
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 MIGRATION = REPO_ROOT / "app" / "backend" / "migrations_next" / "084_sync_catalog_republish_job.sql"
+ARTWORK_MIGRATION = (
+    REPO_ROOT / "app" / "backend" / "migrations_next" / "085_sync_catalog_republish_artwork.sql"
+)
 WORKER = REPO_ROOT / "app" / "backend" / "next_worker.py"
 
 
@@ -173,6 +176,53 @@ class AutomaticPathTests(unittest.TestCase):
             len(re.findall(r"from \.?next_sync_republish import run_catalog_republish", self.worker)),
             2,
         )
+
+
+class PayloadShapeRepublishTests(unittest.TestCase):
+    """A reshape reaches nobody on its own, and two sweeps are not two fixes.
+
+    #690 changed what movies and containers *carry* without changing a row, so
+    nothing was marked changed and the delta had nothing to send. That is the
+    general shape of a payload-shape fix: it needs the catalog re-sent, and 085
+    schedules that the way 084 did.
+
+    The interesting half is the coalescing. Someone who updates once a week runs
+    084 and 085 back to back. A republish re-sends every entity *as it is now*,
+    built by the code that is running -- so a sweep that has not started yet
+    already carries both fixes, and enqueueing a second one buys nothing while
+    costing every device another full catalog download.
+    """
+
+    def setUp(self):
+        self.migration = ARTWORK_MIGRATION.read_text(encoding="utf-8")
+
+    def test_it_enqueues_the_same_job_type_the_worker_handles(self):
+        self.assertIn("INSERT INTO background_jobs", self.migration)
+        self.assertIn(f"'{republish_mod.SYNC_CATALOG_REPUBLISH_JOB_TYPE}'", self.migration)
+        self.assertIn("'pending'", self.migration)
+
+    def test_it_coalesces_with_a_sweep_that_has_not_run_yet(self):
+        self.assertIn("status IN ('pending', 'running')", self.migration)
+
+    def test_a_completed_or_failed_sweep_does_not_suppress_it(self):
+        # A completed sweep published the *old* shape and cannot carry this one;
+        # a failed sweep published nothing. Either must be followed by a fresh
+        # one, so neither status may appear in the coalescing guard.
+        guard_start = self.migration.index("status IN (")
+        guard = self.migration[guard_start : guard_start + 40]
+        self.assertNotIn("completed", guard)
+        self.assertNotIn("failed", guard)
+
+    def test_it_keeps_its_own_once_ever_guard(self):
+        self.assertIn("payload->>'migration' = '085'", self.migration)
+
+    def test_it_skips_an_empty_library(self):
+        self.assertIn("WHERE EXISTS (SELECT 1 FROM movies WHERE deleted_at IS NULL)", self.migration)
+
+    def test_it_records_why_it_ran(self):
+        # The job list is where an operator finds out a sweep happened and what
+        # prompted it; "a republish appeared" with no reason is a mystery.
+        self.assertIn("'artwork_resolution_changed'", self.migration)
 
 
 class ManualCliTests(unittest.TestCase):
