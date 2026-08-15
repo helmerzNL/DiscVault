@@ -10014,42 +10014,79 @@ def ui_preview_html(
       font-size: .88rem;
       margin: 0 0 10px;
     }
+    /* The width follows the backdrops, never the posters. A poster-wide cell
+       (four per row) is too small to read a title off a spine or the text on an
+       insert, and that is exactly what the user opened this tab to check. Each
+       grid mirrors the backdrop grid on the page it sits on. */
+    .own-image-grid {
+      grid-template-columns: repeat(auto-fill, minmax(min(180px, 100%), 1fr));
+    }
+    #movieOwnImagesGrid {
+      grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+    }
     .own-image-option {
-      cursor: default;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      padding: 0;
+      gap: 0;
+      cursor: pointer;
+      outline: none;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+    /* The square comes from the grid track, never from the photograph. A cell
+       sized by its own image reports a width outside its column and the grid
+       draws straight over the sections below it, and clipping does not help --
+       it clips on bounds that have already grown. */
+    .own-image-option .art-option-preview {
+      aspect-ratio: 1 / 1;
+    }
+    /* Fitted, not filled. These photographs share no aspect ratio -- a case
+       stands upright, a spine is long and thin, a disc is round, an insert is
+       usually landscape -- so `cover` scales until the short side covers the
+       frame and throws the rest away. On a spine that leaves a strip of the
+       middle and drops the printing, which is the only reason anyone
+       photographs a spine. The matte behind the letterbox is what keeps a tall
+       photograph sitting in a frame instead of floating. */
+    .own-image-option .art-option-preview img {
+      object-fit: contain;
+    }
+    .own-image-option:focus-visible .art-option-preview {
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 68%, transparent);
     }
     .own-image-option.is-hidden .art-option-preview {
       opacity: .48;
       filter: grayscale(.45);
     }
-    .own-image-actions {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      flex-wrap: wrap;
+    .own-image-option.is-pending {
+      cursor: progress;
     }
-    .own-image-actions select {
-      flex: 1 1 auto;
-      min-width: 0;
-      font-size: .78rem;
-      padding: 3px 4px;
+    .own-image-option.is-pending .art-option-preview {
+      opacity: .72;
     }
-    .own-image-actions button {
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--bg-solid);
-      color: var(--fg);
-      cursor: pointer;
-      line-height: 1;
+    .own-image-option .art-option-badge.own-image-primary {
+      left: auto;
+      right: 6px;
+    }
+    .own-image-label {
+      position: absolute;
+      left: 6px;
+      bottom: 6px;
+      max-width: calc(100% - 12px);
       padding: 4px 6px;
-      font-size: .82rem;
-    }
-    .own-image-actions button:disabled {
-      opacity: .45;
-      cursor: default;
-    }
-    .own-image-actions button:focus-visible {
-      outline: 2px solid var(--accent);
-      outline-offset: 1px;
+      border-radius: 999px;
+      background: rgba(10, 12, 16, .62);
+      color: #fff;
+      font-size: .68rem;
+      font-weight: 800;
+      line-height: 1;
+      -webkit-backdrop-filter: blur(10px);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 6px 16px rgba(0, 0, 0, .18);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .own-images-count {
       color: var(--muted);
@@ -44285,6 +44322,9 @@ def ui_preview_html(
     const OWN_IMAGE_LABELS = ["front", "back", "spine", "insert", "disc", "other"];
     const OWN_IMAGE_ROLE = "scan";
     const ownImagesState = {movie: null, container: null, series: null};
+    // Uploads still in flight, per entity, so the grid can show a square for a
+    // photograph the server has not acknowledged yet.
+    const ownImagesPending = {movie: [], container: [], series: []};
 
     function ownImageLabelText(label) {
       const key = String(label || "other").toLowerCase();
@@ -44323,43 +44363,70 @@ def ui_preview_html(
         sortOrder: Number(asset.sort_order || 0),
       }));
     }
+    // One tile, no button row. Every action lives behind the long-press menu,
+    // the way the posters and backdrops on this page already work and the way
+    // iOS fills the same tab -- and because the photograph no longer touches
+    // every edge of its square, the whole square is the target rather than the
+    // part the picture happens to cover.
     function ownImageCardHtml(image, entity) {
       const label = ownImageLabelText(image.label);
-      const options = OWN_IMAGE_LABELS.map((value) => `
-        <option value="${escapeHtml(value)}"${String(image.label || "other") === value ? " selected" : ""}>${escapeHtml(ownImageLabelText(value))}</option>
-      `).join("");
       const preview = image.url
         ? `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(label)}" loading="lazy" draggable="false">`
         : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const actionLabel = `${tNext("ownImages.tab", "Images")}: ${label}`;
       return `
-        <div class="art-option own-image-option responsive-grid-item${image.hidden ? " is-hidden" : ""}" data-own-image="${escapeHtml(image.mediaId || "")}" data-own-image-entity="${escapeHtml(entity)}">
+        <div class="art-option own-image-option responsive-grid-item${image.hidden ? " is-hidden" : ""}"
+             tabindex="0" role="button" aria-haspopup="dialog" aria-label="${escapeHtml(actionLabel)}"
+             data-own-image="${escapeHtml(image.mediaId || "")}" data-own-image-entity="${escapeHtml(entity)}"
+             data-own-image-url="${escapeHtml(image.url || "")}"
+             data-own-image-label-value="${escapeHtml(image.label || "other")}"
+             data-own-image-is-primary="${image.isPrimary ? "true" : "false"}"
+             data-own-image-hidden="${image.hidden ? "true" : "false"}">
           <div class="art-option-preview">
             ${preview}
-            ${image.isPrimary ? `<span class="art-option-badge">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
+            ${image.isPrimary ? `<span class="art-option-badge own-image-primary">${escapeHtml(tNext("movieDetail.primary", "Primary"))}</span>` : ""}
             ${image.hidden ? `<span class="art-option-badge hidden-artwork">${escapeHtml(tNext("movieDetail.hiddenArtwork", "Hidden"))}</span>` : ""}
-          </div>
-          <div class="own-image-actions">
-            <select data-own-image-label aria-label="${escapeHtml(tNext("ownImages.label", "Label"))}">${options}</select>
-            <button type="button" data-own-image-primary title="${escapeHtml(tNext("ownImages.makePrimary", "Make primary"))}" aria-label="${escapeHtml(tNext("ownImages.makePrimary", "Make primary"))}"${image.isPrimary ? " disabled" : ""}>★</button>
-            <button type="button" data-own-image-hide="${image.hidden ? "false" : "true"}" title="${escapeHtml(image.hidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"))}" aria-label="${escapeHtml(image.hidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"))}">${image.hidden ? "◍" : "◌"}</button>
-            <button type="button" data-own-image-artwork="poster" title="${escapeHtml(tNext("ownImages.useAsPoster", "Use as poster"))}" aria-label="${escapeHtml(tNext("ownImages.useAsPoster", "Use as poster"))}">▣</button>
-            <button type="button" data-own-image-artwork="backdrop" title="${escapeHtml(tNext("ownImages.useAsBackdrop", "Use as backdrop"))}" aria-label="${escapeHtml(tNext("ownImages.useAsBackdrop", "Use as backdrop"))}">▤</button>
-            <button type="button" data-own-image-delete title="${escapeHtml(tNext("common.delete", "Delete"))}" aria-label="${escapeHtml(tNext("common.delete", "Delete"))}">🗑</button>
+            <span class="own-image-label">${escapeHtml(label)}</span>
           </div>
         </div>
       `;
+    }
+    // An upload in flight gets its own square. The photographs behind this tab
+    // are the ones no source can supply again, so "is mine already there?" has
+    // to be answerable by looking at the grid rather than at a status line.
+    function ownImagePendingCardHtml(label) {
+      return `
+        <div class="art-option own-image-option responsive-grid-item is-pending">
+          <div class="art-option-preview">
+            <span>${escapeHtml(tNext("ownImages.uploading", "Adding images..."))}</span>
+            <span class="own-image-label">${escapeHtml(ownImageLabelText(label))}</span>
+          </div>
+        </div>
+      `;
+    }
+    function paintOwnImagesGrid(entity) {
+      const panel = ownImagePanel(entity);
+      const grid = panel?.querySelector("[data-own-images-grid]");
+      if (!grid) return;
+      const images = ownImagesState[entity] || [];
+      const pending = ownImagesPending[entity] || [];
+      const cards = images.map((image) => ownImageCardHtml(image, entity))
+        .concat(pending.map((entry) => ownImagePendingCardHtml(entry.label)));
+      grid.innerHTML = cards.length
+        ? cards.join("")
+        : `<div class="preview-empty">${escapeHtml(tNext("ownImages.empty", "No images of your own yet."))}</div>`;
+      bindOwnImageLongPressMenus(grid);
+      // The overflow classes live on the cards this call just replaced, so they
+      // have to be reapplied -- otherwise a repaint during an upload quietly
+      // un-collapses a grid the 'more' button had folded.
+      updateResponsiveGridLimit(grid);
     }
     function renderOwnImages(entity, detail) {
       const panel = ownImagePanel(entity);
       if (!panel) return;
       const images = ownImagesFromDetail(detail);
       ownImagesState[entity] = images;
-      const grid = panel.querySelector("[data-own-images-grid]");
-      if (grid) {
-        grid.innerHTML = images.length
-          ? images.map((image) => ownImageCardHtml(image, entity)).join("")
-          : `<div class="preview-empty">${escapeHtml(tNext("ownImages.empty", "No images of your own yet."))}</div>`;
-      }
+      paintOwnImagesGrid(entity);
       const select = panel.querySelector("[data-own-images-label]");
       if (select && !select.options.length) {
         select.innerHTML = OWN_IMAGE_LABELS.map((value) => `
@@ -44401,6 +44468,8 @@ def ui_preview_html(
       if (!targetId || !input || !input.files || !input.files.length) return;
       const files = [...input.files];
       setOwnImagesMessage(entity, tNext("ownImages.uploading", "Adding images..."));
+      ownImagesPending[entity] = files.map(() => ({label}));
+      paintOwnImagesGrid(entity);
       let added = 0;
       try {
         // One request per file rather than one batch: an upload that fails
@@ -44417,13 +44486,18 @@ def ui_preview_html(
             body: data
           });
           added += 1;
+          ownImagesPending[entity].pop();
+          paintOwnImagesGrid(entity);
         }
         input.value = "";
+        ownImagesPending[entity] = [];
         await reloadOwnImages(entity);
         setOwnImagesMessage(entity, tNext("ownImages.saved", "Images saved."), "good");
       } catch (error) {
         input.value = "";
+        ownImagesPending[entity] = [];
         if (added) await reloadOwnImages(entity);
+        else paintOwnImagesGrid(entity);
         setOwnImagesMessage(entity, error.message || String(error), "bad");
       }
     }
@@ -44449,57 +44523,109 @@ def ui_preview_html(
         if (!panel || panel.dataset.ownImagesBound === "true") return;
         panel.dataset.ownImagesBound = "true";
         panel.addEventListener("click", (event) => {
-          if (event.target.closest("[data-own-images-upload]")) {
-            event.preventDefault();
-            uploadOwnImages(entity);
-            return;
-          }
-          const card = event.target.closest("[data-own-image]");
-          if (!card) return;
-          const mediaId = card.dataset.ownImage;
-          if (event.target.closest("[data-own-image-primary]")) {
-            event.preventDefault();
-            ownImageRequest(entity, mediaId, "/primary", {method: "POST"});
-            return;
-          }
-          const hideButton = event.target.closest("[data-own-image-hide]");
-          if (hideButton) {
-            event.preventDefault();
-            const hide = hideButton.dataset.ownImageHide === "true";
-            ownImageRequest(entity, mediaId, hide ? "/hide" : "/unhide", {method: "POST"});
-            return;
-          }
-          const artworkButton = event.target.closest("[data-own-image-artwork]");
-          if (artworkButton) {
-            event.preventDefault();
-            // The image is stored a second time under the poster kind and the
-            // ordinary primary path takes it from there, so this is the same
-            // act as picking a poster in the artwork tab -- not a second way of
-            // deciding the cover.
-            ownImageRequest(entity, mediaId, "/use-as-artwork", {
+          if (!event.target.closest("[data-own-images-upload]")) return;
+          event.preventDefault();
+          uploadOwnImages(entity);
+        });
+      });
+    }
+    // The same set of actions iOS puts behind a long press on this tab, in the
+    // same order. Share is the one that is not a mutation, so it is the one a
+    // reader without the artwork permission still gets.
+    function openOwnImageActionsMenu(tile) {
+      const entity = tile?.dataset?.ownImageEntity || "";
+      const mediaId = tile?.dataset?.ownImage || "";
+      if (!entity || !mediaId) return;
+      const url = tile.dataset.ownImageUrl || "";
+      const labelValue = tile.dataset.ownImageLabelValue || "other";
+      const isPrimary = tile.dataset.ownImageIsPrimary === "true";
+      const isHidden = tile.dataset.ownImageHidden === "true";
+      const canEdit = hasAnyPermission(APP_PERMISSION_GROUPS.artworkManage);
+      const actions = [];
+      if (canEdit && !isPrimary) {
+        actions.push({
+          label: tNext("ownImages.makePrimary", "Make primary"),
+          run: () => ownImageRequest(entity, mediaId, "/primary", {method: "POST"})
+        });
+      }
+      if (canEdit) {
+        // The image is stored a second time under the poster kind and the
+        // ordinary primary path takes it from there, so this is the same act as
+        // picking a poster in the artwork tab -- not a second way of deciding
+        // the cover.
+        ["poster", "backdrop"].forEach((kind) => {
+          actions.push({
+            label: kind === "poster"
+              ? tNext("ownImages.useAsPoster", "Use as poster")
+              : tNext("ownImages.useAsBackdrop", "Use as backdrop"),
+            run: () => ownImageRequest(entity, mediaId, "/use-as-artwork", {
               method: "POST",
               headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({kind: artworkButton.dataset.ownImageArtwork})
-            }, tNext("ownImages.promoted", "Cover updated."), {refreshLibrary: true});
-            return;
-          }
-          if (event.target.closest("[data-own-image-delete]")) {
-            event.preventDefault();
+              body: JSON.stringify({kind})
+            }, tNext("ownImages.promoted", "Cover updated."), {refreshLibrary: true})
+          });
+        });
+        actions.push({
+          label: tNext("ownImages.label", "Label"),
+          run: () => openOwnImageLabelMenu(tile)
+        });
+      }
+      if (url) {
+        actions.push({
+          label: tNext("common.share", "Share"),
+          run: () => shareOwnImage(entity, url, labelValue)
+        });
+      }
+      if (canEdit) {
+        actions.push({
+          label: isHidden ? tNext("ownImages.unhide", "Show again") : tNext("ownImages.hide", "Hide"),
+          run: () => ownImageRequest(entity, mediaId, isHidden ? "/unhide" : "/hide", {method: "POST"})
+        });
+        actions.push({
+          label: tNext("common.delete", "Delete"),
+          tone: "danger",
+          // Everywhere else in the app a deletion can be fetched again from its
+          // source. Not here, and the confirmation says so in as many words.
+          run: () => {
             if (!window.confirm(tNext("ownImages.deleteConfirm", "Delete this image? It is your own photograph and no source can supply it again."))) return;
             ownImageRequest(entity, mediaId, "", {method: "DELETE"});
           }
         });
-        panel.addEventListener("change", (event) => {
-          const select = event.target.closest("[data-own-image-label]");
-          if (!select) return;
-          const card = select.closest("[data-own-image]");
-          if (!card) return;
-          ownImageRequest(entity, card.dataset.ownImage, "", {
-            method: "PATCH",
-            headers: {"Content-Type": "application/json"},
-            body: JSON.stringify({label: select.value})
-          });
-        });
+      }
+      openArtworkActionSheet(tile, tNext("ownImages.tab", "Images"), actions);
+    }
+    function openOwnImageLabelMenu(tile) {
+      const entity = tile?.dataset?.ownImageEntity || "";
+      const mediaId = tile?.dataset?.ownImage || "";
+      if (!entity || !mediaId) return;
+      const current = tile.dataset.ownImageLabelValue || "other";
+      const actions = OWN_IMAGE_LABELS.map((value) => ({
+        label: value === current ? `${ownImageLabelText(value)} ✓` : ownImageLabelText(value),
+        run: () => ownImageRequest(entity, mediaId, "", {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({label: value})
+        })
+      }));
+      openArtworkActionSheet(tile, tNext("ownImages.label", "Label"), actions);
+    }
+    async function shareOwnImage(entity, url, label) {
+      if (!url) return;
+      const title = ownImageLabelText(label);
+      try {
+        if (navigator.share) {
+          await navigator.share({title, text: title, url});
+          return;
+        }
+        await copyArtworkUrl(url, (text, tone) => setOwnImagesMessage(entity, text, tone));
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+        setOwnImagesMessage(entity, error.message || String(error), "bad");
+      }
+    }
+    function bindOwnImageLongPressMenus(root = document) {
+      root.querySelectorAll(".own-image-option[data-own-image]").forEach((tile) => {
+        bindLongPressActionMenu(tile, () => openOwnImageActionsMenu(tile));
       });
     }
     function detailArtworkEntity(entity) {
@@ -44670,9 +44796,12 @@ def ui_preview_html(
         setMovieDetailMessage(error.message || String(error), "bad");
       }
     }
-    async function copyArtworkUrl(url) {
+    // `reportTo` is passed by callers that own their own status line -- the own
+    // images panel sits on the series page too, where neither the movie nor the
+    // container message box is on screen to report into.
+    async function copyArtworkUrl(url, reportTo = null) {
       if (!url) return;
-      const setMessage = activeContainerId ? setContainerDetailMessage : setMovieDetailMessage;
+      const setMessage = reportTo || (activeContainerId ? setContainerDetailMessage : setMovieDetailMessage);
       try {
         if (navigator.clipboard?.writeText) {
           await navigator.clipboard.writeText(url);
@@ -44781,15 +44910,21 @@ def ui_preview_html(
           run: () => deleteDetailArtwork("movie", mediaId, kind)
         });
       }
-      if (!actions.length) return;
-      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
-      overlay.returnFocusElement = tile;
       const kindLabel = kind === "backdrop"
         ? tNext("movieDetail.backdrops", "Backdrops")
         : tNext("movieDetail.posters", "Posters");
+      openArtworkActionSheet(tile, kindLabel, actions);
+    }
+    // One sheet for every artwork tile -- posters, backdrops and the user's own
+    // photographs. A second copy is how the three would come to offer the same
+    // action under two different labels.
+    function openArtworkActionSheet(tile, title, actions) {
+      if (!actions.length) return;
+      const { overlay, panel } = listsCreateOverlay("lists-actionsheet");
+      overlay.returnFocusElement = tile;
       panel.innerHTML = `
         <header class="lists-modal-head">
-          <h3>${escapeHtml(kindLabel)}</h3>
+          <h3>${escapeHtml(title)}</h3>
           <span class="muted">${escapeHtml(tNext("common.actions", "Actions"))}</span>
         </header>
         <div class="lists-actionsheet-list">
