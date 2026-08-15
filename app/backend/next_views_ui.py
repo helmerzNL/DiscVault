@@ -2228,6 +2228,9 @@ def ui_preview_html(
     .bulk-create-message.bad {
       color: var(--red, #e5484d);
     }
+    .bulk-create-message.warn {
+      color: var(--amber, #ff9f0a);
+    }
     .bulk-count {
       justify-self: start;
       display: inline-flex;
@@ -10030,6 +10033,13 @@ def ui_preview_html(
     }
     .detail-message.good {
       color: var(--green);
+    }
+    /* Every detail page passes this tone - the pressing picker's "Which pressing
+       is this?", a refresh that had fields blocked by a format mismatch - and
+       without the rule it rendered as `var(--muted)`, which is what no tone at
+       all looks like. Same declaration as `.login-message.warn` above. */
+    .detail-message.warn {
+      color: var(--amber, #ff9f0a);
     }
     .video-card {
       border: 1px solid var(--line);
