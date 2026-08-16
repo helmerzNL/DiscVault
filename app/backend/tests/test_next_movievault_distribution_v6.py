@@ -9,9 +9,11 @@ test_next_movievault_v2_postgres), and the parser's open posture (563's lesson,
 inherited from ``_seasons``).
 """
 
+import json
 import os
 import sys
 import unittest
+from pathlib import Path
 
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -19,6 +21,9 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 from app.backend import next_movievault_v2 as mv
+
+
+FIXTURES = Path(__file__).parent / "fixtures"
 
 
 class ContractEnumerationTests(unittest.TestCase):
@@ -162,6 +167,103 @@ class DiscsParserTests(unittest.TestCase):
 # DATABASE_URL is set for the whole job. A schema test placed here therefore
 # does not skip -- it connects to a database without the table and fails on a
 # migration that is perfectly correct.
+
+
+class ProvisionalPosterEnumTests(unittest.TestCase):
+    """The path that actually took the feed down in production.
+
+    MovieVault 0.23.0's provisional provider-poster feature emits two new
+    contract-legal poster enum values -- `attestation="unverified"` and
+    `license="unverified-fan-submitted"` -- both permitted by the
+    distribution-v6 `PublicPosterReference` schema this consumer claims to
+    support. The allow-lists `POSTER_ATTESTATIONS` / `POSTER_LICENSES` were
+    stale, so `_poster` raised `record_invalid` on the first provisional poster,
+    and because `parse_ndjson` is all-or-nothing that single record aborted the
+    entire sync (`run_sync` recorded `last_error="record_invalid"` and
+    re-raised). This whole path had no coverage -- which is why it broke -- so
+    the three surfaces that read a poster claim each get an assertion here.
+    """
+
+    PROVISIONAL_ATTESTATION = "unverified"
+    PROVISIONAL_LICENSE = "unverified-fan-submitted"
+
+    def _provisional_poster(self):
+        """A syntactically complete distribution poster object carrying the
+        provisional attestation/licence values."""
+        return {
+            "assetId": "40000000-0000-0000-0000-000000000009",
+            "assetType": "front_cover",
+            "attestation": self.PROVISIONAL_ATTESTATION,
+            "license": self.PROVISIONAL_LICENSE,
+            "thumbnail": {
+                "checksum": "a" * 64,
+                "path": "/v2/assets/40000000-0000-0000-0000-000000000009/thumbnail",
+            },
+            "display": {
+                "checksum": "b" * 64,
+                "path": "/v2/assets/40000000-0000-0000-0000-000000000009/display",
+            },
+        }
+
+    def test_the_allow_lists_carry_the_provisional_values(self):
+        """State the invariant plainly: the widened sets are the fix, and a
+        regression that narrowed them again would fail here before any parsing."""
+        self.assertIn(self.PROVISIONAL_ATTESTATION, mv.POSTER_ATTESTATIONS)
+        self.assertIn(self.PROVISIONAL_LICENSE, mv.POSTER_LICENSES)
+
+    def test_poster_parser_accepts_the_provisional_values(self):
+        """`_poster` -- the bulk-sync path -- must accept and keep the values,
+        not reject and not strip them. Accepted and shown, per the feature."""
+        parsed = mv._poster(self._provisional_poster(), mv.MOVIEVAULT_V6_CONTRACT)
+        self.assertIsNotNone(parsed)
+        self.assertEqual(parsed["attestation"], self.PROVISIONAL_ATTESTATION)
+        self.assertEqual(parsed["license"], self.PROVISIONAL_LICENSE)
+        self.assertEqual(parsed["assetType"], "front_cover")
+
+    def test_a_full_v6_release_with_a_provisional_poster_syncs(self):
+        """The production symptom, reproduced end to end through `parse_ndjson`.
+
+        The frozen v4 full fixture already contains a valid release record with
+        a poster; v6 is a strict superset of v4, so parsing that record under v6
+        with only the poster's attestation/licence swapped to the provisional
+        values exercises exactly the path that raised `record_invalid`. The
+        assertion is that no record is lost and the values survive intact.
+        """
+        lines = (FIXTURES / "distribution-v4-full.ndjson").read_bytes().splitlines()
+        record = json.loads(lines[1])
+        self.assertEqual(record["recordType"], "release")
+        self.assertIsNotNone(record.get("poster"))
+        record["contractVersion"] = mv.MOVIEVAULT_V6_CONTRACT
+        record["poster"] = dict(record["poster"])
+        record["poster"]["attestation"] = self.PROVISIONAL_ATTESTATION
+        record["poster"]["license"] = self.PROVISIONAL_LICENSE
+
+        ndjson = (json.dumps(record) + "\n").encode("utf-8")
+        try:
+            parsed = mv.parse_ndjson(
+                ndjson,
+                full=True,
+                maximum_revision=record["revision"],
+                contract_version=mv.MOVIEVAULT_V6_CONTRACT,
+            )
+        except mv.MovieVaultV2Error as exc:  # pragma: no cover - failure detail
+            self.fail(f"provisional poster aborted the sync: {exc}")
+
+        self.assertEqual(len(parsed), 1)
+        poster = parsed[0]["poster"]
+        self.assertEqual(poster["attestation"], self.PROVISIONAL_ATTESTATION)
+        self.assertEqual(poster["license"], self.PROVISIONAL_LICENSE)
+
+    def test_resolver_path_accepts_a_provisional_poster(self):
+        """`_release_details_poster` -- the v2 resolver path a scanned disc
+        uses -- reads the same shared allow-lists, so it must accept the
+        provisional values too rather than refuse the release-details response.
+        """
+        poster = self._provisional_poster()
+        parsed = mv._release_details_poster(poster)
+        self.assertEqual(parsed["attestation"], self.PROVISIONAL_ATTESTATION)
+        self.assertEqual(parsed["license"], self.PROVISIONAL_LICENSE)
+        self.assertEqual(parsed["assetType"], "front_cover")
 
 
 if __name__ == "__main__":  # pragma: no cover

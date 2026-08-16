@@ -157,8 +157,29 @@ ASSET_PATH_PATTERNS = {
     MOVIEVAULT_V6_CONTRACT: re.compile(r"^/v2/assets/[0-9a-f-]+/(thumbnail|display)$"),
 }
 POSTER_ASSET_TYPE = "front_cover"
-POSTER_ATTESTATIONS = {"original", "licensed"}
-POSTER_LICENSES = {"cc0-1.0", "cc-by-4.0", "cc-by-sa-4.0"}
+# Poster attestation/licence vocabularies. These mirror the distribution-v6
+# `PublicPosterReference` enums (MovieVault-v2
+# docs/contracts/distribution-v6.schema.json) and DiscVault's manifest declares
+# `distribution-6` support, so every value the schema permits must be accepted
+# here -- a value the feed is allowed to send but this allow-list rejects raises
+# `record_invalid` in `_poster`, and because `parse_ndjson` is all-or-nothing
+# that single record takes the whole feed sync down with it.
+#
+# `unverified` / `unverified-fan-submitted` are MovieVault's provisional
+# provider-poster values (shipped by MovieVault 0.23.0): a poster shown ahead of
+# moderation. DiscVault accepts and shows these like any other poster -- there
+# is deliberately no suppression/hide path, because surfacing artwork early is
+# the whole point of the provisional feature. The two sets are shared by both
+# consumers of a poster claim, `_poster` (bulk distribution sync) and
+# `_release_details_poster` (the v2 resolver path a scanned disc uses), so
+# widening them here keeps both paths in step.
+POSTER_ATTESTATIONS = {"original", "licensed", "unverified"}
+POSTER_LICENSES = {
+    "cc0-1.0",
+    "cc-by-4.0",
+    "cc-by-sa-4.0",
+    "unverified-fan-submitted",
+}
 
 # distribution-4 audio track / subtitle language enums (PR #159 on
 # MovieVault-v2). Kept as plain sets rather than a DB-level CHECK enum:
