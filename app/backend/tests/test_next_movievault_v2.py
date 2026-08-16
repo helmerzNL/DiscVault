@@ -989,7 +989,9 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             "unknown_field": {"unexpected": "value"},
             "wrong_asset_type": {"assetType": "back_cover"},
             "unapproved_license": {"license": "all-rights-reserved"},
-            "unapproved_attestation": {"attestation": "unverified"},
+            # "unverified" is now an accepted attestation (distribution-v6
+            # provisional posters), so an off-contract value is what must reject.
+            "unapproved_attestation": {"attestation": "bogus"},
             "off_contract_asset_path": {
                 "display": {
                     "checksum": "b" * 64,
