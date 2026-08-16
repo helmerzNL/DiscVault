@@ -3754,20 +3754,35 @@ def _release_details_poster_fields(
 ) -> dict[str, Any]:
     """Expose a poster carried by a release-details response.
 
-    With a checksum the bulk-sync cache is reused: enqueue the same bounded,
-    anonymous caching job (idempotent on ``assetId``/variant/checksum, so an
-    already-cached poster never re-downloads) and return a DiscVault-local URL.
+    This is the *live* enrichment path: the anonymous resolver answers per
+    barcode and is where a poster arrives for a just-scanned or just-contributed
+    disc, before any v4 index sync has published it locally. Unlike the bulk
+    catalog, the resolver serves the poster from a stable, anonymous
+    ``/v2/assets/{assetId}/{variant}`` endpoint (no auth, no identity), so its
+    absolute URL is always safe to hand straight to a client.
 
-    The v2 resolver publishes no checksum, and bytes that cannot be verified
+    With a checksum the bulk-sync cache is still reused: the same bounded,
+    idempotent caching job is enqueued so a *verified* DiscVault-local copy
+    replaces the remote reference on the next lookup. But the client must never
+    be made to wait on that asynchronous job -- doing so was the defect this
+    path was created to avoid. So:
+
+      * if the verified local copy is already cached, return its DiscVault-local
+        URL (no external round-trip for the client);
+      * otherwise return the stable anonymous asset URL now, so the cover shows
+        immediately and the enrichment fallback stays a real safety net for the
+        "just contributed, not yet cached / not yet synced" case, instead of
+        collapsing to ``pending`` and reaching the client as no poster at all.
+
+    The v2 resolver may also publish no checksum. Bytes that cannot be verified
     must never be stored -- caching them would break the guarantee that
-    everything on disk was checked. Such a poster is therefore surfaced as the
-    stable anonymous asset URL instead, so the cover still reaches the client
-    without an unverifiable copy being written."""
+    everything on disk was checked -- so a checksum-less poster is surfaced as
+    the anonymous asset URL only, with nothing enqueued."""
     if poster is None:
         return dict(POSTER_FIELDS_UNAVAILABLE)
     display = poster.get("display") if isinstance(poster.get("display"), dict) else {}
+    remote_url = _remote_asset_url(origin, display.get("path"))
     if not display.get("checksum"):
-        remote_url = _remote_asset_url(origin, display.get("path"))
         if not remote_url:
             return dict(POSTER_FIELDS_UNAVAILABLE)
         return {
@@ -3779,7 +3794,21 @@ def _release_details_poster_fields(
     with conn.transaction():
         with conn.cursor() as cur:
             _enqueue_poster_cache(cur, origin, poster)
-    return _poster_status_fields(conn, poster)
+    fields = _poster_status_fields(conn, poster)
+    # The verified local copy wins the moment it exists. Until then the cover
+    # still has to reach the client: fall back to the stable anonymous asset URL
+    # rather than surfacing a URL-less ``pending``, which the metadata pipeline
+    # drops entirely (no ``poster_url`` -> no ``mediaUpdates.poster`` -> the
+    # client shows a placeholder despite MovieVault carrying the artwork). The
+    # cache job still runs, so a later lookup upgrades to the DiscVault-local URL.
+    if not fields.get("posterUrl") and remote_url:
+        return {
+            "posterUrl": remote_url,
+            "posterStatus": "remote",
+            "posterChecksum": display.get("checksum"),
+            "posterRevision": None,
+        }
+    return fields
 
 
 def localize_release_details_posters(

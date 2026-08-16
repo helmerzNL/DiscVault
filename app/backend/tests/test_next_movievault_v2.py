@@ -1196,7 +1196,14 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertIsNone(localized["release"]["posterChecksum"])
         self.assertEqual(conn.enqueued, [])
 
-    def test_localize_release_details_posters_reports_pending_before_cached(self):
+    def test_localize_release_details_posters_serves_remote_url_before_cached(self):
+        """The resolver enrichment path is the live safety net for a poster
+        MovieVault carries but this instance has not cached or synced yet. Until
+        the verified local copy exists the cover must still reach the client, so
+        an uncached checksummed poster is surfaced as the stable anonymous asset
+        URL rather than a URL-less ``pending`` the metadata pipeline would drop.
+        The cache job is still enqueued so a later lookup upgrades to local."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
         conn = FakePosterConn({})
         result = next_movievault_v2.validate_release_details_response(
             {**release_details_hit(), "poster": release_details_poster()}
@@ -1206,8 +1213,43 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             conn, "https://movievault.example", result
         )
 
-        self.assertIsNone(localized["release"]["posterUrl"])
-        self.assertEqual(localized["release"]["posterStatus"], "pending")
+        self.assertEqual(
+            localized["release"]["posterUrl"],
+            f"https://movievault.example/v2/assets/{asset_id}/display",
+        )
+        self.assertEqual(localized["release"]["posterStatus"], "remote")
+        self.assertEqual(localized["release"]["posterChecksum"], "b" * 64)
+        # The verified-local upgrade is still queued for the next lookup.
+        self.assertEqual(
+            {(a, variant) for a, variant in conn.enqueued},
+            {(asset_id, "thumbnail"), (asset_id, "display")},
+        )
+
+    def test_localize_release_details_posters_prefers_cached_local_over_remote(self):
+        """Once the verified DiscVault-local copy exists it wins: the client
+        loads the authenticated local route, not the anonymous remote asset."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        conn = FakePosterConn(
+            {
+                (asset_id, "b" * 64): {
+                    "status": "ready",
+                    "media_asset_id": "media-release",
+                }
+            }
+        )
+        result = next_movievault_v2.validate_release_details_response(
+            {**release_details_hit(), "poster": release_details_poster()}
+        )
+
+        localized = next_movievault_v2.localize_release_details_posters(
+            conn, "https://movievault.example", result
+        )
+
+        self.assertEqual(
+            localized["release"]["posterUrl"],
+            "/api/next/movievault-v2/posters/media-release",
+        )
+        self.assertEqual(localized["release"]["posterStatus"], "ready")
         self.assertEqual(localized["release"]["posterChecksum"], "b" * 64)
 
     def test_release_details_callback_survives_poster_cache_failure(self):
