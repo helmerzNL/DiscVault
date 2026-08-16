@@ -410,6 +410,63 @@ class SearchBarcodeResolverFallbackTests(unittest.TestCase):
         }
         self.assertEqual(movievault_v2._resolved_technical(details), {})
 
+    def test_local_hit_with_uncached_poster_is_rescued_by_the_resolver(self):
+        """The reported defect: a barcode is in the local index (matchSource
+        local_index) but its synced poster is still pending in the async cache,
+        so the local lookup carries no posterUrl. The live resolver enrichment
+        must supply the cover so it reaches the client, and it must survive
+        canonicalisation as a `poster` media update (mediaKinds) rather than
+        vanishing - re-syncing an already-known release is a no-op, so this live
+        path is the only thing that surfaces the poster in the meantime."""
+        remote_poster = "https://movievault.example/v2/assets/abc/display"
+        # The resolver result is already localized by core: `release.posterUrl`
+        # is the stable anonymous asset URL that localize_release_details_posters
+        # now returns for an uncached checksummed poster.
+        context, calls = self._context(
+            lookup_results=[_synced_release()],  # local hit, no posterUrl
+            resolver_result={
+                "status": "canonical_hit",
+                "release": {"posterUrl": remote_poster, "posterStatus": "remote"},
+            },
+        )
+        result = movievault_v2.search_barcode({"barcode": "9781234567897"}, context)
+
+        self.assertEqual(result["matchSource"], "local_index")
+        self.assertEqual(result["posterUrl"], remote_poster)
+        self.assertEqual(result["movie"]["posterUrl"], remote_poster)
+        # The resolver was consulted precisely because the local poster was absent.
+        self.assertEqual(calls["resolver"], 1)
+
+        # End to end: the poster reaches next_metadata as a `poster` media update,
+        # so metadata_result_summary would report mediaKinds ["poster"] instead
+        # of the empty list the user saw.
+        canonical = next_metadata.canonicalize_plugin_result(
+            "movievault_v2", "search_barcode", result
+        )
+        self.assertIn("poster", canonical["mediaUpdates"])
+        self.assertEqual(
+            canonical["mediaUpdates"]["poster"]["sourceUrl"], remote_poster
+        )
+        self.assertEqual(
+            next_metadata.metadata_result_summary(
+                {**canonical, "pluginId": "movievault_v2"}
+            )["mediaKinds"],
+            ["poster"],
+        )
+
+    def test_local_hit_with_cached_poster_does_not_call_the_resolver(self):
+        """When the synced poster is already cached (local posterUrl present),
+        the live resolver must not be consulted - a needless round-trip - and
+        the local URL is what surfaces."""
+        local_url = "/api/next/movievault-v2/posters/media-release"
+        context, calls = self._context(
+            lookup_results=[_synced_release(posterUrl=local_url, posterStatus="ready")],
+        )
+        result = movievault_v2.search_barcode({"barcode": "9781234567897"}, context)
+
+        self.assertEqual(result["posterUrl"], local_url)
+        self.assertEqual(calls["resolver"], 0)
+
 
 class MovieDetailsRefreshTests(unittest.TestCase):
     """A metadata refresh reaches this entrypoint, and `movievault_identification_plan` hands it
