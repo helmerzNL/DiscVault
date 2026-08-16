@@ -11,6 +11,54 @@ stop and warn the user before acting.**
 
 ---
 
+## Repository layout: backend vs PWA
+
+This repo holds **both** the self-hosted backend/server (Docker, Unraid-friendly) **and** the
+PWA web client that sits next to it. Two workspace agents work here — `discvault-backend` and
+`discvault-pwa` — and the workspace rule is to **not run them in parallel on overlapping paths**.
+The table below is the authoritative ownership map. It is grounded in the actual tree (Flask
+backend served by gunicorn via `app/backend/Dockerfile` / `app/Dockerfile.v26` + supervisord;
+see `app/deploy/v26/supervisord.conf`), not inferred.
+
+| Path | Role | Owner agent |
+|---|---|---|
+| `app/backend/` | Flask backend: API routes, auth, DB access, imports/exports, workers, plugin runtime. Entry point `next_app:app`; DB migrations in `app/backend/migrations_next/`; server-side plugins in `app/backend/next_plugins/`; backend tests in `app/backend/tests/` | `discvault-backend` |
+| `app/mcp-server/` | MCP server (`server.py`), runs as its own supervisor program on port 6090, talks to the backend over HTTP | `discvault-backend` |
+| `app/scripts/` | Build/version/CI/maintenance scripts (`bump_version.py`, `check_version_bumped.py`, `prune_landed_branches.py`, DB tooling) | `discvault-backend` |
+| `app/deploy/` | Deploy assets: Compose (`app/deploy/next/`), Unraid template (`app/deploy/unraid/`), supervisord (`app/deploy/v26/`) | `discvault-backend` |
+| `app/Dockerfile.v26`, `app/backend/Dockerfile`, `app/docker-compose*.yml`, `app/.env.example`, `app/VERSION`, `app/.build-version` | Image build, compose, env template, version file | `discvault-backend` |
+| `sync/` | Backend sync fixtures/tooling | `discvault-backend` |
+| `dist/plugins/` | Packaged plugin release artefacts (zips) | `discvault-backend` (release step) |
+| `app/frontend/` | **PWA client static assets**: client-side JS (`app/frontend/js/`), i18n JSON (`app/frontend/i18n/next/`), PWA manifests (`manifest.json`, `manifest-beta.json`), `service-worker.js`, icons/flags/logos | `discvault-pwa` |
+
+### The one genuinely shared / ambiguous area — read before editing UI
+
+The PWA is **not** a standalone SPA project with its own bundler. The main app markup is still
+**emitted as one large inline HTML/JS document by the backend Python modules**
+`app/backend/next_views_ui.py` and the sibling `next_views_*.py` files (collection, detail,
+migration). New frontend behaviour is deliberately being **extracted** into standalone files
+under `app/frontend/js/`, which the backend serves through a strict whitelist route in
+`app/backend/next_static.py` (`/api/next/app/js/<name>`).
+
+Consequences:
+
+- Files physically under `app/backend/` are **backend-owned** even when they produce UI markup.
+  `next_views_ui.py` and friends are enormous Python modules — treat them as `discvault-backend`
+  territory.
+- `app/frontend/` is **PWA-owned**, but the backend references it (`next_frontend_dir()` in
+  `app/backend/next_app.py`, the whitelist in `next_static.py`). **Adding a new file under
+  `app/frontend/js/` is not enough** — it only becomes reachable once its filename is added to
+  the `NEXT_SCRIPT_ASSETS` whitelist in the backend. That whitelist edit is a backend change.
+- i18n lives in two places: `app/frontend/i18n/next/` (client asset, PWA-owned) and i18n handling
+  inside backend modules (backend-owned). A translation task usually touches both.
+
+So a UI feature that starts in an inline view and moves to `app/frontend/js/` **crosses the
+ownership line** and needs the two agents coordinated (a `docs/changes/` spec), not run in
+parallel. When in doubt, the physical directory decides ownership; the whitelist wiring is the
+seam between them.
+
+---
+
 ## Branch & release workflow
 
 DiscVault uses a **two-branch model**. Keep it that way.
