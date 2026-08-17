@@ -22,11 +22,14 @@ fixed the chart:
    summed afterwards the chart still shows one format more than once, now with
    the same label twice - which looks even more like a bug.
 
-The ambiguous case is deliberate and is asserted as such. A combo pack is only
-recognised with an explicit separator (`+`, `/`, `&`), because "4K Blu-ray" is
-the ordinary name for a *single* UHD disc. Reading "4K UHD BLURAY" as a
-two-disc pack would guess, and guess wrong for every shelf that spells one disc
-that way.
+The ambiguous case is deliberate and is asserted as such. A combo pack is
+recognised only when the value marks it: an explicit `+`, `/`, `&`, or the
+*underscore* the clients' own canonical code carries (`4K_UHD_BLURAY`). A bare
+space is not such a mark, because "4K Blu-ray" / "Ultra HD Blu-ray" is the
+ordinary name for a *single* UHD disc. Reading "4K UHD BLURAY" as a two-disc
+pack would guess, and guess wrong for every shelf that spells one disc that way
+-- while reading the underscore-joined code as one is reading the record, since
+that string is only ever written for a two-disc pack.
 """
 
 import os
@@ -59,10 +62,22 @@ class PhysicalFormatLabelTests(unittest.TestCase):
 
     def test_a_combo_needs_an_explicit_separator(self):
         # "4K Blu-ray" is what a single UHD disc is called, so a pack is only
-        # a pack when the value says so. Guessing here would mislabel every
-        # shelf that spells one disc this way.
+        # a pack when the value says so. A bare *space* is not that mark, and
+        # guessing here would mislabel every shelf that spells one disc this way.
         self.assertEqual(physical_format_label("4K UHD BLURAY"), "4K UHD")
         self.assertEqual(physical_format_label("4K Blu-ray"), "4K UHD")
+        self.assertEqual(physical_format_label("Ultra HD Blu-ray"), "4K UHD")
+
+    def test_the_clients_underscore_combo_code_is_a_pack(self):
+        # `4K_UHD_BLURAY` is the single token iOS `DiscFormat.uhd4kBluray` and
+        # the PWA filter store for a two-disc pack, and the sync push writes it
+        # raw into `movies.format`. The underscore joining the Blu-ray token to
+        # the 4K name is the pack's own separator, so both halves survive -- the
+        # correction sheet and this chart were dropping the Blu-ray leg and
+        # folding the pack in with single-4K discs.
+        for raw in ("4K_UHD_BLURAY", "4k_uhd_bluray", "4K_UHD_BD"):
+            with self.subTest(raw=raw):
+                self.assertEqual(physical_format_label(raw), "4K UHD + Blu-ray")
 
     def test_hd_dvd_is_not_dvd(self):
         self.assertEqual(physical_format_label("HD DVD"), "HD DVD")
