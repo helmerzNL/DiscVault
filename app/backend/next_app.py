@@ -5920,6 +5920,13 @@ def server_usable_image(value: Any) -> str:
         return text
     if text.startswith("/api/next/media/"):
         return text
+    # MovieVault v2 posters (including provisional fan-submitted ones arriving
+    # via the metadata fallback, `metadata.poster_url`) are served by their own
+    # route and must pass through unchanged. This mirrors the client-side
+    # `usableImage` twins (next_views_ui.py, next_views_collection.py); the
+    # server-side allow-list drifted out of parity, blanking those tiles.
+    if text.startswith("/api/next/movievault-v2/posters/"):
+        return text
     return ""
 
 
