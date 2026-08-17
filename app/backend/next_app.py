@@ -28039,6 +28039,83 @@ def register_routes(flask_app: Flask) -> None:
                 {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
             )
 
+    @flask_app.post("/api/next/movievault/contributions/release-selection")
+    def movievault_release_selection():
+        """Record the release a client picked for a film it just wrote by sync.
+
+        The PWA fires the same contribution as a *side-effect* of the import and
+        edit routes: when their body carries a `releaseCandidate`, the backend
+        queues `queue_release_contribution_job` behind the same gate. iOS does
+        not use either route -- it resolves candidates itself and writes films
+        through sync mutations, which never read `releaseCandidate` -- so the
+        one fact only the person holding the disc knows (which pressing an
+        ambiguous barcode is) never reached the catalogue.
+
+        This is that side-effect given its own front door, for the coupled iOS
+        path (change spec 2026-08-16-ios-contributions.md 3.5). It is purely
+        additive: no existing client behaviour changes, `movie.upsert` and the
+        normative sync contract are untouched, and it invents no contribution
+        logic. It reuses the exact machinery the PWA path proves -- the gate
+        (`release_contribution_enabled`), the payload builder
+        (`release_technical_contribution_payload`, which enforces the substance
+        floor and the field boundary), and the queue.
+
+        iOS calls this *after* the sync mutation that created the film is
+        acknowledged, so the local UUID resolves server-side. If it does not yet
+        exist here the route answers `404 Movie not found` and iOS retries after
+        the next sync ack rather than treating it as terminal.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        candidate = body.get("releaseCandidate") or body.get("release_candidate")
+        if not isinstance(candidate, dict) or not candidate:
+            raise NextApiError("releaseCandidate is required", 400)
+        candidate_film = body.get("releaseCandidateFilm") or body.get("release_candidate_film")
+        if not isinstance(candidate_film, dict):
+            candidate_film = {}
+        scanned_barcode = clean_text(
+            body.get("scannedBarcode") or body.get("scanned_barcode")
+        )
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            # The same two-gate composition the side-effect path checks: the
+            # owner setting (`movievault_v2_contribution_enabled`) and the user
+            # preference (`share_release_selections`). A 403 here is the normal
+            # "selections off" answer, not a failure -- iOS sends the user to
+            # the sharing preferences.
+            if not release_contribution_enabled(conn, actor.get("id") if actor else None):
+                raise NextApiError("Release contributions are not enabled", 403)
+            # Binds `id` to a film that exists server-side and enforces the same
+            # per-record edit permission as every other contribution act. A
+            # missing film is a 404 iOS retries after the next sync ack.
+            record, _metadata = _correction_record(conn, actor, "movie", str(body.get("id") or ""))
+            # Built from the request triplet, exactly as the import side-effect
+            # builds it, so the payload builder is reused verbatim. The film
+            # falls back to the local record only when the client sent none.
+            # The builder maps the field boundary (`scannedBarcode` is evidence,
+            # never a `release.barcodes` member) and refuses -- returns {} --
+            # when the substance floor is not met, so a title-plus-barcode
+            # lookup never costs a moderator a review.
+            contribution_payload = release_technical_contribution_payload(
+                candidate,
+                scanned_barcode=scanned_barcode or "",
+                film=candidate_film
+                or {"title": record.get("title"), "year": record.get("year")},
+                provenance="candidate_selection",
+            )
+            if not contribution_payload:
+                raise NextApiError("There is not enough here to contribute", 422)
+            job = queue_release_contribution_job(
+                conn,
+                contribution_payload,
+                actor=actor,
+                reason="ios_release_selection",
+            )
+            return response(
+                {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
+            )
+
     @flask_app.get("/api/next/movievault/contributions/history")
     def movievault_correction_history():
         """What this person has contributed, newest first.
