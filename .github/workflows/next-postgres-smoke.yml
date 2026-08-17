@@ -89,6 +89,7 @@ jobs:
           tests.test_next_legacy_auth
           tests.test_next_mobile_auth
           tests.test_next_review_login
+          tests.test_next_effective_permission_keys
 
       # The passkey ceremony itself. On a passkey-only instance this is the
       # entire front door, and both defects it covers were invisible in normal
