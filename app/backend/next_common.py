@@ -205,6 +205,16 @@ def parse_uuid_list(values: Any, field_name: str, *, maximum: int = 250) -> list
 _FOUR_K_TOKENS = ("4k", "uhd", "ultra hd")
 _BLURAY_RE = re.compile(r"blu[\s-]?ray|(?:^|[^a-z])bd(?:[^a-z]|$)")
 _FORMAT_COMBO_RE = re.compile(r"[+/&]")
+#: DiscVault's own canonical *combo* code carries no `+/&` separator: the clients
+#: store the two-disc pack as the single token `4K_UHD_BLURAY` (iOS `DiscFormat`,
+#: the PWA filter) and the sync push writes that raw value into `movies.format`.
+#: An underscore *joining* a Blu-ray token to the 4K name is that pack and only
+#: that pack. It is not the same string as `Ultra HD Blu-ray`, which is the name
+#: of one 4K disc and must stay `4K UHD`: there the Blu-ray token is separated by
+#: a space, never an underscore. Without this the correction sheet read the
+#: stored `4K_UHD_BLURAY` as `4K UHD`, dropping the Blu-ray leg and proposing a
+#: false correction against a catalogue holding the full combo.
+_FORMAT_COMBO_UNDERSCORE_RE = re.compile(r"_(?:blu[\s-]?ray|bd)\b|\bbd_|bluray_")
 
 
 def physical_format_label(value: Any) -> str:
@@ -215,7 +225,10 @@ def physical_format_label(value: Any) -> str:
     lowered = text.lower()
     has_four_k = any(token in lowered for token in _FOUR_K_TOKENS)
     has_bluray = bool(_BLURAY_RE.search(lowered))
-    if has_four_k and has_bluray and _FORMAT_COMBO_RE.search(lowered):
+    is_combo = bool(
+        _FORMAT_COMBO_RE.search(lowered) or _FORMAT_COMBO_UNDERSCORE_RE.search(lowered)
+    )
+    if has_four_k and has_bluray and is_combo:
         return "4K UHD + Blu-ray"
     if has_four_k:
         return "4K UHD"
