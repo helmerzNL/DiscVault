@@ -181,6 +181,24 @@ POSTER_LICENSES = {
     "unverified-fan-submitted",
 }
 
+# The provisional attestation and licence are a matched pair: MovieVault's
+# `PublicAssetReference.unverified_fields_are_paired` invariant guarantees
+# `attestation:"unverified"` iff `license:"unverified-fan-submitted"`, so it
+# never emits a mixed pair (e.g. `unverified` + `cc0-1.0`). Mirroring the
+# invariant here keeps DiscVault from silently accepting a claim MovieVault's
+# own producer would refuse to make. Both individual values are already vetted
+# against the enum sets above; this only rejects the cross-field combination.
+_POSTER_PROVISIONAL_ATTESTATION = "unverified"
+_POSTER_PROVISIONAL_LICENSE = "unverified-fan-submitted"
+
+
+def _poster_provisional_claims_are_paired(
+    attestation: str | None, license_name: str | None
+) -> bool:
+    return (attestation == _POSTER_PROVISIONAL_ATTESTATION) == (
+        license_name == _POSTER_PROVISIONAL_LICENSE
+    )
+
 # distribution-4 audio track / subtitle language enums (PR #159 on
 # MovieVault-v2). Kept as plain sets rather than a DB-level CHECK enum:
 # unrecognized codec/channels/immersiveFormat values are stored as-is with a
@@ -494,6 +512,8 @@ def _poster(value: Any, contract_version: str) -> dict[str, Any] | None:
     if attestation not in POSTER_ATTESTATIONS:
         raise MovieVaultV2Error("record_invalid")
     if license_name not in POSTER_LICENSES:
+        raise MovieVaultV2Error("record_invalid")
+    if not _poster_provisional_claims_are_paired(attestation, license_name):
         raise MovieVaultV2Error("record_invalid")
     return {
         "assetId": _uuid(value["assetId"]),
@@ -2275,6 +2295,12 @@ def _release_details_poster(value: Any) -> dict[str, Any]:
         raise MovieVaultV2Error("release_details_response_invalid")
     if license_name is not None and license_name not in POSTER_LICENSES:
         raise MovieVaultV2Error("release_details_response_invalid")
+    # Mirror MovieVault's pairing invariant on this path too (see
+    # `_poster_provisional_claims_are_paired`): a lone `unverified` /
+    # `unverified-fan-submitted` claim is a defect, and because posters degrade
+    # here it costs only the poster, never the record.
+    if not _poster_provisional_claims_are_paired(attestation, license_name):
+        raise MovieVaultV2Error("release_details_response_invalid")
     return {
         "assetId": asset_id,
         "assetType": POSTER_ASSET_TYPE,
@@ -2283,6 +2309,39 @@ def _release_details_poster(value: Any) -> dict[str, Any]:
         "thumbnail": _release_details_asset_variant(value["thumbnail"]),
         "display": _release_details_asset_variant(value["display"]),
     }
+
+
+# Release-details poster labels already logged as dropped, keyed by call-site
+# label. A malformed supplementary poster is bounded by MovieVault's own
+# vocabulary, so - like the unknown-key log above - one warning per label is
+# enough to surface a producer regression without a per-scan log flood.
+_RELEASE_DETAILS_DROPPED_POSTER_SEEN: set[str] = set()
+
+
+def _release_details_optional_poster(value: Any, *, label: str) -> dict[str, Any] | None:
+    """Parse a supplementary poster, degrading a poster-only defect to absence.
+
+    A poster is artwork layered on top of a record whose load-bearing fields
+    (`status`, `film`, `release`) the caller has already validated. Following
+    the same safe-direction rule that made unknown keys and the optional
+    technical fields non-fatal, a poster whose claim is out-of-enum or whose
+    variant is malformed must cost only itself: the film and release still
+    reach the client, and only a structural defect blanks the response. This is
+    the poster-shaped instance of the degrade-don't-discard fixes already made
+    for `subtitles` (2026-08-04) and `finishes` (2026-08-09), and it is what
+    `_release_details_poster`'s own docstring promises but its callers did not
+    yet honour (FLU-42 provisional-poster contract)."""
+    try:
+        return _release_details_poster(value)
+    except MovieVaultV2Error:
+        if label not in _RELEASE_DETAILS_DROPPED_POSTER_SEEN:
+            _RELEASE_DETAILS_DROPPED_POSTER_SEEN.add(label)
+            logger.warning(
+                "movievault_v2: dropping malformed release-details %s - "
+                "record kept without it",
+                label,
+            )
+        return None
 
 
 def validate_release_details_response(value: Any) -> dict[str, Any]:
@@ -2375,11 +2434,26 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
         # for `external_hit` exactly like `canonical_hit` - `verificationStatus`
         # describes the provenance of the technical data only (issue #402).
         if item.get("poster") is not None:
-            result["poster"] = _release_details_poster(item["poster"])
+            poster = _release_details_optional_poster(item["poster"], label="poster")
+            if poster is not None:
+                result["poster"] = poster
         if item.get("boxSetPoster") is not None:
+            # A box-set poster with no box set to hang it on is a poster-only
+            # anomaly, not a structural one: drop it and keep the record rather
+            # than blanking the answer over a supplementary artwork field.
             if "boxSet" not in result:
-                raise MovieVaultV2Error("release_details_response_invalid")
-            result["boxSetPoster"] = _release_details_poster(item["boxSetPoster"])
+                if "boxSetPoster (no box set)" not in _RELEASE_DETAILS_DROPPED_POSTER_SEEN:
+                    _RELEASE_DETAILS_DROPPED_POSTER_SEEN.add("boxSetPoster (no box set)")
+                    logger.warning(
+                        "movievault_v2: dropping release-details boxSetPoster "
+                        "carried without a boxSet - record kept without it",
+                    )
+            else:
+                box_set_poster = _release_details_optional_poster(
+                    item["boxSetPoster"], label="boxSetPoster"
+                )
+                if box_set_poster is not None:
+                    result["boxSetPoster"] = box_set_poster
         if status == "external_hit":
             moderation = _release_details_object(
                 item["moderation"],
@@ -2403,10 +2477,13 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
         # pressings. That is a choice for the person holding the disc, so it
         # arrives as a list rather than as a failure - see App-Guidance
         # `docs/apps/discvault/adding-a-title.md`.
+        # `poster` here is the 0.25.0 film-level cover: a source recognised the
+        # film but not the pressing, yet can still show its artwork while the
+        # user picks an edition. It degrades exactly like the hit-path posters.
         _release_details_object(
             item,
             required={"contractVersion", "status", "film", "releases"},
-            optional={"verificationStatus"},
+            optional={"verificationStatus", "poster"},
             label="candidates response",
         )
         releases_value = item["releases"]
@@ -2420,6 +2497,10 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
                 _release_details_release_summary(entry) for entry in releases_value
             ],
         }
+        if item.get("poster") is not None:
+            poster = _release_details_optional_poster(item["poster"], label="poster")
+            if poster is not None:
+                result["poster"] = poster
         if item.get("verificationStatus") is not None:
             if item["verificationStatus"] not in {"canonical", "unreviewed_external"}:
                 raise MovieVaultV2Error("release_details_response_invalid")
