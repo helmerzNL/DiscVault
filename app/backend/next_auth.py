@@ -1655,7 +1655,7 @@ def register_next_auth_routes(
             conn, user_id=user_id, username=username, device=device
         )
         role = primary_role(conn, user_id)
-        effective_permission_keys = sorted(user_permissions(conn, user_id))
+        effective_permission_keys = effective_permission_keys_for(conn, user_id)
         token = token_payload["token"]
         user_payload = {
             "id": str(user_id),
@@ -1715,6 +1715,43 @@ def register_next_auth_routes(
         with conn.cursor() as cur:
             cur.execute("SELECT key FROM permissions")
             return {row["key"] for row in cur.fetchall()}
+
+    def effective_permission_keys_for(conn, user_id: UUID | str) -> list[str]:
+        """The effective permission set to *report* to a client, mirroring the gates.
+
+        This is the single source of truth for ``effectivePermissionKeys`` in
+        every login/exchange response. It must report exactly the set the gates
+        (``require_next_permission`` / ``require_any_next_permission`` in
+        ``next_app.py``) will enforce -- see auth-hardening-decisions.md rule 12
+        ("What a client is told it may do must equal what it may do") and its
+        "mirror case" addendum.
+
+        When authentication is not effective-enabled (``auth_enabled`` unset, or
+        no active user with a credential), those gates bypass to owner/``*`` and
+        accept every permissioned route. On such an instance the report must
+        mirror that bypass and hand back the owner-equivalent *concrete* key set
+        -- the full permission catalogue, which includes ``collection.edit_all``
+        -- rather than the empty/role-derived set ``user_permissions`` returns
+        when the RBAC tables are absent. A literal ``"*"`` is deliberately not
+        used: the client matches on concrete keys and cannot interpret it.
+
+        When authentication *is* effective-enabled (the multi-user case), both
+        the gates and this report fall back to ``user_permissions``, so a
+        narrowly-scoped user is reported exactly as narrowly as they are
+        enforced. Gating the full-set report on the *same*
+        ``next_auth_effective_enabled`` condition as the gate's bypass is what
+        keeps this from over-reporting on a real multi-user instance.
+        """
+
+        if not next_auth_effective_enabled(conn, table_exists):
+            return sorted(permission_keys_catalog(conn))
+        return sorted(user_permissions(conn, user_id))
+
+    # Expose the shared reporter so tests can exercise its behaviour directly and
+    # assert that the three login/exchange emitters share one implementation.
+    app.extensions.setdefault("next_auth", {})[
+        "effective_permission_keys_for"
+    ] = effective_permission_keys_for
 
     def audit_event(
         conn,
@@ -4346,7 +4383,7 @@ def register_next_auth_routes(
                     ),
                 )
                 reviewer_role = primary_role(conn, reviewer["id"])
-                effective_permission_keys = sorted(user_permissions(conn, reviewer["id"]))
+                effective_permission_keys = effective_permission_keys_for(conn, reviewer["id"])
                 audit_event(
                     conn,
                     event_type="auth.review_login",
@@ -4771,7 +4808,7 @@ def register_next_auth_routes(
                         device=device,
                     )
                     role = primary_role(conn, row["user_id"])
-                    effective_permission_keys = sorted(user_permissions(conn, row["user_id"]))
+                    effective_permission_keys = effective_permission_keys_for(conn, row["user_id"])
                 audit_event(
                     conn,
                     event_type="auth.mobile_token_exchanged",
