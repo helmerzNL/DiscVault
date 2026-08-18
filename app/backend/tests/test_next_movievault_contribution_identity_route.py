@@ -58,6 +58,10 @@ class ContributionIdentityRouteTests(unittest.TestCase):
         perm = patch("app.backend.next_app.require_next_permission")
         with patch("app.backend.next_app.connect", return_value=self.connect_context), \
                 patch(
+                    "app.backend.next_app.next_auth_effective_enabled",
+                    return_value=False,
+                ), \
+                patch(
                     "app.backend.next_movievault_v2_contributions.registration_state",
                     return_value=state if state is not None else {},
                 ), perm as require_perm:
