@@ -28116,6 +28116,49 @@ def register_routes(flask_app: Flask) -> None:
                 {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
             )
 
+    @flask_app.get("/api/next/movievault/contributions/identity")
+    def movievault_contribution_identity():
+        """The server's MovieVault contribution identity — the merge target.
+
+        The couple-and-merge trigger (contribution-v3 §5.7; change spec
+        2026-08-16-ios-contributions.md §2b.1) has iOS sign its consent as a
+        proof over *this server's* MovieVault instance id — the surviving
+        identity ``I_srv`` — as `merge_proof_message(surviving=I_srv,
+        retired=I_ios)`. A device that has just coupled cannot build that proof
+        without knowing ``I_srv``'s instance id, and nothing else hands it over;
+        the couple only gives it a DiscVault URL, token and role. So this returns
+        the surviving instance id, gated on the coupling user's
+        ``collection.edit_all``.
+
+        Only the instance id is exposed — never the token, private key or key id,
+        which stay server-side (`registration_state` already draws that line, and
+        this reuses it rather than reading the settings directly). The instance
+        id is a public MovieVault identifier that every contribution already
+        carries upstream, not a secret: it is what a merge proof is *bound to*,
+        and MovieVault still verifies that proof against the retired instance's
+        registered key, so learning the id grants a caller nothing on its own.
+
+        ``instanceId`` is reported only once the server is fully registered —
+        matching :func:`merge_instance`'s own precondition. A client seeing
+        ``registered: false`` must treat it as "no merge target yet" (there is
+        nothing to fold into), not as an error to retry.
+        """
+        try:
+            from .next_movievault_v2_contributions import registration_state
+        except ImportError:  # pragma: no cover - direct module execution
+            from next_movievault_v2_contributions import registration_state
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            state = registration_state(conn)
+        registered = bool(state.get("registered"))
+        return response(
+            {
+                "status": "ok",
+                "registered": registered,
+                "instanceId": state.get("instanceId") if registered else None,
+            }
+        )
+
     @flask_app.post("/api/next/movievault/contributions/merge")
     def movievault_contribution_merge():
         """Couple-and-merge trigger: fold a standalone device's contribution
