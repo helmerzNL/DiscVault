@@ -6,6 +6,7 @@ gates compose so the owner's decision wins, and that only a failure which could
 find a different answer later gets retried.
 """
 
+import base64
 import json
 import os
 import sys
@@ -363,3 +364,182 @@ class WorkTypeTests(unittest.TestCase):
         payload = mapped(candidate(workType="MOVIE"), film=film)
         self.assertEqual(payload["film"]["tmdbMovieId"], "123")
         self.assertNotIn("tmdbTvId", payload["film"])
+
+
+# Fixed identities for the merge transport. I_srv survives, I_ios is retired.
+_I_SRV = "11111111-1111-4111-8111-111111111111"
+_I_IOS = "22222222-2222-4222-8222-222222222222"
+
+
+def _merge_settings(**overrides):
+    """A ``_setting_value`` stand-in keyed by settings key.
+
+    The merge path reads the surviving instance id, the bearer token, the key id
+    and the signing key from settings. The token and private key are returned
+    verbatim here and pass through the patched ``_decrypt_secret_value``; the
+    private key must be a real PEM because ``_signed_headers`` loads it to sign
+    the server's authorisation half.
+    """
+    values = {
+        contributions.INSTANCE_ID_KEY: _I_SRV,
+        contributions.TOKEN_KEY: "srv-token",
+        contributions.KEY_ID_KEY: "srv-key-id",
+        contributions.PRIVATE_KEY_KEY: _TEST_PRIVATE_KEY,
+    }
+    values.update(overrides)
+
+    def _lookup(conn, key, default="", **_):
+        return values.get(key, default)
+
+    return _lookup
+
+
+def _sign_merge_proof(private_pem, surviving_id, retired_id):
+    """What the *device* does: sign the merge message with its own key."""
+    from cryptography.hazmat.primitives import serialization
+
+    private_key = serialization.load_pem_private_key(private_pem.encode("ascii"), password=None)
+    message = contributions.merge_proof_message(surviving_id, retired_id)
+    return contributions._b64url(private_key.sign(message))
+
+
+class MergeProofMessageTests(unittest.TestCase):
+    """The proof bytes must be exactly what MovieVault re-derives and verifies."""
+
+    def test_the_message_matches_movievaults_wire_format(self):
+        from uuid import UUID
+
+        message = contributions.merge_proof_message(_I_SRV, _I_IOS)
+        expected = (
+            b"movievault-merge-v1." + UUID(_I_SRV).bytes + b"." + UUID(_I_IOS).bytes
+        )
+        self.assertEqual(message, expected)
+
+    def test_the_surviving_id_binds_the_proof_to_this_server(self):
+        """A device that signed for one server must not verify against another,
+        so swapping the surviving id must change the signed bytes."""
+        other_srv = "33333333-3333-4333-8333-333333333333"
+        self.assertNotEqual(
+            contributions.merge_proof_message(_I_SRV, _I_IOS),
+            contributions.merge_proof_message(other_srv, _I_IOS),
+        )
+
+    def test_a_device_signature_verifies_against_its_registered_key(self):
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+        device_private, device_public = contributions._generate_key_pair()
+        proof = _sign_merge_proof(device_private, _I_SRV, _I_IOS)
+        raw_public = base64.urlsafe_b64decode(device_public + "=" * (-len(device_public) % 4))
+        raw_proof = base64.urlsafe_b64decode(proof + "=" * (-len(proof) % 4))
+        # Raises on mismatch, which is the assertion; MovieVault does exactly this.
+        Ed25519PublicKey.from_public_bytes(raw_public).verify(
+            raw_proof, contributions.merge_proof_message(_I_SRV, _I_IOS)
+        )
+        self.assertEqual(len(raw_proof), 64)
+
+
+class MergeTransportTests(unittest.TestCase):
+    """The couple-and-merge trigger, two-sided (contribution-v3 §5.7)."""
+
+    def _call(self, *, http, registered=True, proof="device-proof", retired=_I_IOS, settings=None):
+        state = {"registered": registered, "instanceId": _I_SRV}
+        with patch.object(contributions, "_http", http), patch.object(
+            contributions, "registration_state", lambda conn: state
+        ), patch.object(
+            contributions, "_setting_value", settings or _merge_settings()
+        ), patch.object(
+            contributions, "_decrypt_secret_value", lambda value, **_: value
+        ):
+            return contributions.merge_instance(
+                object(), retired_instance_id=retired, retired_instance_proof=proof
+            )
+
+    def test_both_halves_travel_and_the_result_returns(self):
+        """The server signs and bears its token (I_srv half); the device proof
+        rides in the body (I_ios half); MovieVault's result comes back."""
+        sent = {}
+
+        def fake_http(url, *, body, headers, timeout_seconds):
+            sent["url"] = url
+            sent["body"] = body
+            sent["headers"] = headers
+            return 200, b'{"status":"completed","reassociatedCount":3,"retiredInPlaceCount":1}'
+
+        device_private, _ = contributions._generate_key_pair()
+        proof = _sign_merge_proof(device_private, _I_SRV, _I_IOS)
+        result = self._call(http=fake_http, proof=proof)
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["reassociatedCount"], 3)
+        self.assertTrue(sent["url"].endswith("/v2/contributions/merge"))
+        envelope = json.loads(sent["body"].decode("utf-8"))
+        self.assertEqual(envelope["protocolVersion"], "contribution-merge-1")
+        self.assertEqual(envelope["retiredInstanceId"], _I_IOS)
+        self.assertEqual(envelope["retiredInstanceProof"], proof)
+        # The server's authorisation half: its bearer token, key id and signature.
+        self.assertEqual(sent["headers"]["Authorization"], "Bearer srv-token")
+        self.assertEqual(sent["headers"]["X-DiscVault-Key-Id"], "srv-key-id")
+        self.assertIn("X-DiscVault-Signature", sent["headers"])
+
+    def test_the_server_cannot_merge_without_the_device_proof(self):
+        """Adversarial: a server-only caller (no I_ios half) never reaches the
+        wire. This is 'neither side can merge unilaterally' at the transport."""
+        called = {"http": False}
+
+        def fake_http(*a, **k):
+            called["http"] = True
+            return 200, b"{}"
+
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=fake_http, proof="")
+        self.assertEqual(cm.exception.code, "merge_proof_missing")
+        self.assertFalse(called["http"], "no request may be sent without the device half")
+
+    def test_an_unregistered_server_cannot_merge(self):
+        """The other half failing closed: without I_srv there is nothing to
+        merge into, and no call is made."""
+        called = {"http": False}
+
+        def fake_http(*a, **k):
+            called["http"] = True
+            return 200, b"{}"
+
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=fake_http, registered=False)
+        self.assertEqual(cm.exception.code, "contribution_not_registered")
+        self.assertFalse(called["http"])
+
+    def test_a_non_uuid_retired_id_is_refused_locally(self):
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=lambda *a, **k: (200, b"{}"), retired="not-a-uuid")
+        self.assertEqual(cm.exception.code, "retired_instance_id_invalid")
+
+    def test_merging_the_server_into_itself_is_refused(self):
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=lambda *a, **k: (200, b"{}"), retired=_I_SRV)
+        self.assertEqual(cm.exception.code, "merge_into_self")
+
+    def test_a_rejected_proof_from_movievault_is_terminal(self):
+        """A 401 signature_invalid means the device half did not verify. A
+        repeat signs identically, so it must not be retried."""
+
+        def fake_http(url, *, body, headers, timeout_seconds):
+            return 401, b'{"error":{"code":"signature_invalid"}}'
+
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=fake_http)
+        self.assertEqual(cm.exception.code, "signature_invalid")
+        self.assertFalse(cm.exception.retryable)
+
+    def test_a_timed_out_merge_is_retryable_because_it_is_idempotent(self):
+        """MovieVault keys the merge on (retired, surviving), so a repeat after a
+        timeout is a no-op there rather than a second merge."""
+
+        def fake_http(url, *, body, headers, timeout_seconds):
+            raise contributions.MovieVaultContributionError(
+                "contribution_network_error", retryable=True
+            )
+
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=fake_http)
+        self.assertTrue(cm.exception.retryable)
