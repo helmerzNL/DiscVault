@@ -28116,6 +28116,146 @@ def register_routes(flask_app: Flask) -> None:
                 {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
             )
 
+    @flask_app.get("/api/next/movievault/contributions/identity")
+    def movievault_contribution_identity():
+        """The server's MovieVault contribution identity — the merge target.
+
+        The couple-and-merge trigger (contribution-v3 §5.7; change spec
+        2026-08-16-ios-contributions.md §2b.1) has iOS sign its consent as a
+        proof over *this server's* MovieVault instance id — the surviving
+        identity ``I_srv`` — as `merge_proof_message(surviving=I_srv,
+        retired=I_ios)`. A device that has just coupled cannot build that proof
+        without knowing ``I_srv``'s instance id, and nothing else hands it over;
+        the couple only gives it a DiscVault URL, token and role. So this returns
+        the surviving instance id, gated on the coupling user's
+        ``collection.edit_all``.
+
+        Only the instance id is exposed — never the token, private key or key id,
+        which stay server-side (`registration_state` already draws that line, and
+        this reuses it rather than reading the settings directly). The instance
+        id is a public MovieVault identifier that every contribution already
+        carries upstream, not a secret: it is what a merge proof is *bound to*,
+        and MovieVault still verifies that proof against the retired instance's
+        registered key, so learning the id grants a caller nothing on its own.
+
+        ``instanceId`` is reported only once the server is fully registered —
+        matching :func:`merge_instance`'s own precondition. A client seeing
+        ``registered: false`` must treat it as "no merge target yet" (there is
+        nothing to fold into), not as an error to retry.
+        """
+        try:
+            from .next_movievault_v2_contributions import registration_state
+        except ImportError:  # pragma: no cover - direct module execution
+            from next_movievault_v2_contributions import registration_state
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            state = registration_state(conn)
+        registered = bool(state.get("registered"))
+        return response(
+            {
+                "status": "ok",
+                "registered": registered,
+                "instanceId": state.get("instanceId") if registered else None,
+            }
+        )
+
+    @flask_app.post("/api/next/movievault/contributions/merge")
+    def movievault_contribution_merge():
+        """Couple-and-merge trigger: fold a standalone device's contribution
+        identity into this server's (contribution-v3 §5.7, RATIFIED 2026-08-18;
+        change spec 2026-08-16-ios-contributions.md §2b.1).
+
+        The merge fires when a standalone iOS install that already holds its own
+        MovieVault identity `I_ios` gains this DiscVault server. iOS observes the
+        couple event and initiates, but a device proving possession of `I_ios` is
+        not proof it may fold `I_ios` into the server identity `I_srv`. So the
+        merge is mediated here and needs **both** halves -- neither side can merge
+        unilaterally:
+
+        - The **server half** is held server-side and never leaves it:
+          `merge_instance` signs the call with `I_srv`'s key and bears `I_srv`'s
+          token, so MovieVault authenticates the surviving instance as the caller.
+          A client cannot supply this.
+        - The **device half** is `retiredInstanceProof` in the body: a signature
+          by `I_ios`'s key over `merge_proof_message(I_srv, I_ios)`. DiscVault
+          never holds `I_ios`'s key, so it passes the proof through verbatim and
+          cannot forge it; MovieVault refuses (401 `signature_invalid`) unless the
+          device really signed for *this* server.
+
+        The caller must also be an authenticated DiscVault user
+        (`collection.edit_all`) -- the person who just coupled -- which is the
+        DiscVault-level evidence that this device gained this server. The
+        one-line consent that precedes the merge is shown on iOS (§2b.3); this
+        route is never a silent side-effect of sign-in.
+
+        Idempotent on `(retired, surviving)` at MovieVault (D3): a re-fired
+        couple or a retry converges to the same result. A `retryable` transport
+        failure answers 503 -- the client may repeat it because a repeat after a
+        timeout is a no-op there, not a second merge. A terminal failure (a
+        rejected proof, an unregistered server, a bad id) answers 400 with the
+        precise `errorCode` and must not be retried, because a repeat signs
+        identically.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        retired_instance_id = clean_text(
+            body.get("retiredInstanceId") or body.get("retired_instance_id")
+        )
+        retired_instance_proof = clean_text(
+            body.get("retiredInstanceProof") or body.get("retired_instance_proof")
+        )
+        if not retired_instance_id:
+            raise NextApiError("retiredInstanceId is required", 400)
+        if not retired_instance_proof:
+            raise NextApiError("retiredInstanceProof is required", 400)
+        try:
+            from .next_movievault_v2_contributions import (
+                MovieVaultContributionError,
+                merge_instance,
+            )
+        except ImportError:  # pragma: no cover - direct module execution
+            from next_movievault_v2_contributions import (
+                MovieVaultContributionError,
+                merge_instance,
+            )
+        # Human wording per known reason; the machine-readable `errorCode` is the
+        # contract surface iOS branches on. Anything unmapped falls back to a
+        # generic line rather than leaking a raw code into the UI.
+        messages = {
+            "contribution_not_registered": (
+                "This server is not registered with MovieVault"
+            ),
+            "merge_proof_missing": "A device merge proof is required",
+            "retired_instance_id_invalid": "The device identity is not a valid id",
+            "merge_into_self": "A server cannot merge into itself",
+            "signature_invalid": "The device merge proof did not verify",
+            "retired_instance_not_found": (
+                "The device identity is not known to MovieVault"
+            ),
+            "payload_invalid": "The merge request was rejected as invalid",
+        }
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            try:
+                result = merge_instance(
+                    conn,
+                    retired_instance_id=retired_instance_id,
+                    retired_instance_proof=retired_instance_proof,
+                )
+            except MovieVaultContributionError as exc:
+                # Fail closed. Retryable transport errors (timeout, 5xx) are a 503
+                # the client may repeat; everything else is terminal (4xx).
+                retryable = bool(getattr(exc, "retryable", False))
+                raise NextApiError(
+                    messages.get(
+                        exc.code, "The identity merge could not be completed"
+                    ),
+                    503 if retryable else 400,
+                    code=exc.code,
+                ) from exc
+            return response({"status": "ok", "merge": result})
+
     @flask_app.get("/api/next/movievault/contributions/history")
     def movievault_correction_history():
         """What this person has contributed, newest first.
