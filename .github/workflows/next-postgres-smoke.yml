@@ -174,6 +174,14 @@ jobs:
       - name: Test MovieVault v2 release contributions
         run: python -m unittest tests.test_next_movievault_v2_contributions
 
+      # The couple-and-merge merge-target route: what the identity endpoint
+      # exposes (I_srv only), what it withholds (token/key/key id, and the id
+      # itself when unregistered), and that it fails closed on the permission
+      # gate. Listed explicitly because this workflow lists rather than
+      # discovers, and the route test lives in its own file.
+      - name: Test couple-and-merge identity route
+        run: python -m unittest tests.test_next_movievault_contribution_identity_route
+
       # The conversions a field correction makes on the way out - two packaging
       # axes flattened to one list, free-text ratios filtered to the bounded
       # form, and the audio/subtitle union refused rather than half-sent. Pure
