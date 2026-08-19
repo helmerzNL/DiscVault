@@ -39,6 +39,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from typing import Any
+from uuid import UUID
 
 try:
     from .next_settings_store import (
@@ -83,6 +84,17 @@ RELEASE_TECHNICAL_ENTITY = "release_technical"
 REGISTER_PATH = "/v2/contributions/register"
 SUBMIT_PATH = "/v2/contributions"
 ROTATE_PATH = "/v2/contributions/keys/rotate"
+MERGE_PATH = "/v2/contributions/merge"
+
+#: The protocol string MovieVault's ``MergeRequest`` pins with a ``Literal``.
+#: A mismatch is a 422 ``payload_invalid`` there, so it is fixed, not derived.
+MERGE_PROTOCOL = "contribution-merge-1"
+
+#: The prefix MovieVault signs the merge proof under (contribution-v3 §5.7).
+#: The device signs ``MERGE_PROOF_PREFIX + surviving_id.bytes + b"." +
+#: retired_id.bytes`` with its own key; DiscVault never holds that key, so it
+#: cannot forge the proof and cannot merge without the device's half.
+MERGE_PROOF_PREFIX = b"movievault-merge-v1."
 
 #: Admin gate. Off by default: a self-hosted instance does not start sending
 #: anything outward because it was upgraded.
@@ -445,6 +457,115 @@ def rotate_key(conn, *, timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS) -> dict[
     _set_setting(conn, PRIVATE_KEY_KEY, _encrypt_secret_value(new_private_pem), is_secret=True)
     _set_setting(conn, KEY_ID_KEY, new_key_id)
     return registration_state(conn)
+
+
+# --- identity merge (couple-and-merge trigger) ------------------------------
+
+
+def merge_proof_message(surviving_instance_id: str, retired_instance_id: str) -> bytes:
+    """The bytes the *device* signs to consent to a merge (contribution-v3 §5.7).
+
+    Deliberately exposed so the DiscVault side and any test can build the exact
+    message MovieVault will re-derive and verify against the retired instance's
+    registered key. Mirrors the key-rotation proof shape (``rotate_key``): a
+    fixed prefix, then the two instance ids in raw 16-byte UUID form. The
+    surviving id is *this server's* — so a device's proof is bound to the server
+    it is coupling with and cannot be replayed to merge into a different one.
+    """
+    return (
+        MERGE_PROOF_PREFIX
+        + UUID(surviving_instance_id).bytes
+        + b"."
+        + UUID(retired_instance_id).bytes
+    )
+
+
+def merge_instance(
+    conn,
+    *,
+    retired_instance_id: str,
+    retired_instance_proof: str,
+    timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    """Merge a standalone device's identity into this server's, both consenting.
+
+    The couple-and-merge trigger (contribution-v3 §5, change spec §2b.1). When a
+    device that has been contributing standalone attaches this server, its
+    contribution identity ``I_ios`` is folded into the server's ``I_srv`` so the
+    two do not fork into split history and split reputation.
+
+    **Two-sided authorisation — neither side can merge unilaterally:**
+
+    - The *server* half is this call itself: it is signed by ``I_srv``'s key and
+      carries ``I_srv``'s bearer token, so MovieVault authenticates the surviving
+      instance as the caller. A device cannot make this call — it does not hold
+      the server's token or signing key.
+    - The *device* half is ``retired_instance_proof``: a signature by ``I_ios``'s
+      key over :func:`merge_proof_message`. DiscVault never holds ``I_ios``'s
+      private key, so it cannot forge this; the merge is refused (401
+      ``signature_invalid``) unless the device really signed for *this* server.
+
+    So the merge fires only when both halves are present and valid. The proof is
+    produced on the device and passed in verbatim; this function neither derives
+    nor stores it.
+
+    The merge is idempotent on ``(retired, surviving)`` at MovieVault (D3), which
+    is why a timed-out attempt is safe to repeat — the ``retryable`` transport
+    errors carry through unchanged from the submit path.
+
+    Returns MovieVault's ``{"status", "reassociatedCount", "retiredInPlaceCount"}``.
+    """
+    state = registration_state(conn)
+    if not state.get("registered"):
+        # No I_srv: there is nothing to merge *into*. This is the server half of
+        # the authorisation failing closed, before any network call.
+        raise MovieVaultContributionError("contribution_not_registered")
+
+    surviving_instance_id = _text(_setting_value(conn, INSTANCE_ID_KEY, ""))
+
+    retired_instance_id = _text(retired_instance_id)
+    try:
+        retired_uuid = UUID(retired_instance_id)
+    except (ValueError, AttributeError, TypeError) as exc:
+        raise MovieVaultContributionError("retired_instance_id_invalid") from exc
+    # Normalise to canonical lower-case hyphenated form; MovieVault's model pins
+    # exactly that pattern and would 422 anything else.
+    retired_instance_id = str(retired_uuid)
+
+    if surviving_instance_id and retired_instance_id == surviving_instance_id:
+        # Merging the server into itself is meaningless and would have the device
+        # sign a proof over (I_srv, I_srv). Refuse loudly rather than let it round-trip.
+        raise MovieVaultContributionError("merge_into_self")
+
+    retired_instance_proof = _text(retired_instance_proof)
+    if not retired_instance_proof:
+        # The device half is missing. Failing here — not at MovieVault — is what
+        # makes "neither side can merge unilaterally" true of this function: a
+        # server-only caller cannot get a request onto the wire at all.
+        raise MovieVaultContributionError("merge_proof_missing")
+
+    token = _decrypt_secret_value(_setting_value(conn, TOKEN_KEY, "", include_secret=True))
+    key_id = _text(_setting_value(conn, KEY_ID_KEY, ""))
+    private_pem = _decrypt_secret_value(_setting_value(conn, PRIVATE_KEY_KEY, "", include_secret=True))
+
+    body = canonical_json(
+        {
+            "protocolVersion": MERGE_PROTOCOL,
+            "retiredInstanceId": retired_instance_id,
+            "retiredInstanceProof": retired_instance_proof,
+        }
+    )
+    # Signed by I_srv's key + I_srv's bearer token: the server's authorisation half.
+    headers = _signed_headers(private_pem, body)
+    headers["Authorization"] = f"Bearer {token}"
+    headers["X-DiscVault-Key-Id"] = key_id
+    status, content = _http(
+        f"{enforced_origin()}{MERGE_PATH}",
+        body=body,
+        headers=headers,
+        timeout_seconds=timeout_seconds,
+    )
+    return _raise_for_status(status, content)
 
 
 # --- submission -------------------------------------------------------------

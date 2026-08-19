@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Dina egna foton av den här serien — säsongsboxarna, ryggarna, skivorna. De synkas till dina andra enheter.",
   "ownImages.label": "Etikett",
   "ownImages.upload": "Lägg till bilder",
+  "ownImages.capture": "Ta foto",
   "ownImages.empty": "Inga egna bilder ännu.",
   "ownImages.count": "{used} av {limit}",
   "ownImages.uploading": "Lägger till bilder...",

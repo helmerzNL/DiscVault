@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "このシリーズを自分で撮影した写真です。シーズンの箱、背、ディスクなど。ほかの端末と同期されます。",
   "ownImages.label": "ラベル",
   "ownImages.upload": "画像を追加",
+  "ownImages.capture": "写真を撮る",
   "ownImages.empty": "自分の画像はまだありません。",
   "ownImages.count": "{limit} 件中 {used} 件",
   "ownImages.uploading": "画像を追加しています...",

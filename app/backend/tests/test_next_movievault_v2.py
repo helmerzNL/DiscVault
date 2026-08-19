@@ -974,22 +974,33 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             "40000000-0000-0000-0000-000000000002",
         )
 
-    def test_release_details_rejects_box_set_poster_without_box_set(self):
+    def test_release_details_drops_a_box_set_poster_without_a_box_set(self):
+        """A box-set poster with no box set to hang it on is a poster-only
+        anomaly, not a structural one: it is dropped and the record is kept,
+        rather than blanking the answer over a supplementary artwork field."""
         payload = release_details_hit()
         payload["boxSetPoster"] = release_details_poster()
 
-        with self.assertRaisesRegex(
-            next_movievault_v2.MovieVaultV2Error,
-            "^release_details_response_invalid$",
-        ):
-            next_movievault_v2.validate_release_details_response(payload)
+        result = next_movievault_v2.validate_release_details_response(payload)
 
-    def test_release_details_rejects_malformed_poster(self):
+        self.assertNotIn("boxSetPoster", result)
+        self.assertNotIn("boxSet", result)
+        self.assertEqual(result["status"], "canonical_hit")
+        self.assertIn("release", result)
+
+    def test_release_details_drops_a_malformed_poster_and_keeps_the_record(self):
+        """A poster is artwork layered on an already-valid record, so a defect
+        confined to it must cost only the poster - the film and release still
+        reach the client. This reverses the old whole-record refusal, the same
+        failure class fixed for `subtitles` (2026-08-04) and `finishes`
+        (2026-08-09); see the FLU-42 provisional-poster contract."""
         cases = {
             "unknown_field": {"unexpected": "value"},
             "wrong_asset_type": {"assetType": "back_cover"},
             "unapproved_license": {"license": "all-rights-reserved"},
-            "unapproved_attestation": {"attestation": "unverified"},
+            # "unverified" is now an accepted attestation (distribution-v6
+            # provisional posters), so an off-contract value is the defect here.
+            "unapproved_attestation": {"attestation": "bogus"},
             "off_contract_asset_path": {
                 "display": {
                     "checksum": "b" * 64,
@@ -1008,11 +1019,13 @@ class MovieVaultV2ContractTests(unittest.TestCase):
                 payload = release_details_hit()
                 payload["poster"] = {**release_details_poster(), **override}
 
-                with self.assertRaisesRegex(
-                    next_movievault_v2.MovieVaultV2Error,
-                    "^release_details_response_invalid$",
-                ):
-                    next_movievault_v2.validate_release_details_response(payload)
+                result = next_movievault_v2.validate_release_details_response(payload)
+
+                # The defect blanks the poster only - never the record.
+                self.assertNotIn("poster", result)
+                self.assertEqual(result["status"], "canonical_hit")
+                self.assertEqual(result["film"]["title"], "Example Film")
+                self.assertIn("release", result)
 
     def test_release_details_without_poster_is_unchanged(self):
         payload = release_details_hit()
@@ -1064,9 +1077,11 @@ class MovieVaultV2ContractTests(unittest.TestCase):
                     f"/v2/assets/{asset_id}/display",
                 )
 
-    def test_release_details_still_rejects_a_readable_unapproved_claim(self):
-        """Leniency covers shape and absence only -- artwork DiscVault is not
-        cleared to show must still be refused."""
+    def test_release_details_drops_a_readable_unapproved_poster_but_keeps_the_record(self):
+        """Artwork DiscVault is not cleared to show must still not be shown - a
+        readable but out-of-enum claim yields no poster. What changed under
+        FLU-42 is the blast radius: it drops the poster instead of blanking the
+        whole record, so the film and release survive an artwork-only defect."""
         asset_id = "40000000-0000-0000-0000-000000000001"
         base = {
             "assetId": asset_id,
@@ -1083,11 +1098,109 @@ class MovieVaultV2ContractTests(unittest.TestCase):
                 payload = release_details_hit()
                 payload["poster"] = {**base, **override}
 
-                with self.assertRaisesRegex(
-                    next_movievault_v2.MovieVaultV2Error,
-                    "^release_details_response_invalid$",
-                ):
-                    next_movievault_v2.validate_release_details_response(payload)
+                result = next_movievault_v2.validate_release_details_response(payload)
+
+                self.assertNotIn("poster", result)
+                self.assertEqual(result["status"], "canonical_hit")
+                self.assertIn("release", result)
+
+    def test_release_details_accepts_the_provisional_poster_pair_on_a_hit(self):
+        """The exact provisional payload MovieVault will flip on -
+        `attestation:"unverified"`, `license:"unverified-fan-submitted"` - is
+        accepted and carried on the resolve path, not just the sync/backdrop
+        path. Pins the FLU-42 contract decision directly where a scanned disc
+        reads it."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        payload = release_details_hit()
+        payload["poster"] = {
+            "assetId": asset_id,
+            "assetType": "front_cover",
+            "attestation": "unverified",
+            "license": "unverified-fan-submitted",
+            "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+            "display": {"path": f"/v2/assets/{asset_id}/display"},
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["poster"]["assetId"], asset_id)
+        self.assertEqual(result["poster"]["attestation"], "unverified")
+        self.assertEqual(result["poster"]["license"], "unverified-fan-submitted")
+
+    def test_release_details_drops_an_unpaired_provisional_poster(self):
+        """Mirror of MovieVault's `unverified_fields_are_paired` invariant: a
+        lone `unverified` attestation (or a lone `unverified-fan-submitted`
+        licence) is a claim MovieVault's own producer would never emit. It is
+        treated as a poster defect, so it degrades to no poster and keeps the
+        record."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        base = {
+            "assetId": asset_id,
+            "assetType": "front_cover",
+            "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+            "display": {"path": f"/v2/assets/{asset_id}/display"},
+        }
+        for name, override in {
+            "attestation_only": {"attestation": "unverified", "license": "cc0-1.0"},
+            "license_only": {
+                "attestation": "original",
+                "license": "unverified-fan-submitted",
+            },
+        }.items():
+            with self.subTest(case=name):
+                payload = release_details_hit()
+                payload["poster"] = {**base, **override}
+
+                result = next_movievault_v2.validate_release_details_response(payload)
+
+                self.assertNotIn("poster", result)
+                self.assertEqual(result["status"], "canonical_hit")
+                self.assertIn("release", result)
+
+    def test_release_details_candidates_carries_a_film_level_poster(self):
+        """0.25.0 adds a film-level cover to `candidates` answers: a source that
+        recognised the film but not the pressing can still show its artwork
+        while the user picks an edition. Finding 1 of FLU-45 - the branch used
+        to drop it as an undeclared key."""
+        payload = release_details_candidates()
+        payload["poster"] = release_details_poster()
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(
+            result["poster"]["assetId"], "40000000-0000-0000-0000-000000000001"
+        )
+        self.assertEqual(len(result["releases"]), 2)
+
+    def test_release_details_candidates_carries_a_provisional_film_poster(self):
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        payload = release_details_candidates()
+        payload["poster"] = {
+            "assetId": asset_id,
+            "assetType": "front_cover",
+            "attestation": "unverified",
+            "license": "unverified-fan-submitted",
+            "thumbnail": {"path": f"/v2/assets/{asset_id}/thumbnail"},
+            "display": {"path": f"/v2/assets/{asset_id}/display"},
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["poster"]["attestation"], "unverified")
+        self.assertEqual(result["poster"]["license"], "unverified-fan-submitted")
+
+    def test_release_details_candidates_drops_a_malformed_film_poster(self):
+        """A malformed film-level cover on a `candidates` answer costs only the
+        cover: the candidate list the user must pick from still arrives."""
+        payload = release_details_candidates()
+        payload["poster"] = {**release_details_poster(), "attestation": "bogus"}
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertNotIn("poster", result)
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(len(result["releases"]), 2)
 
     def test_poster_without_checksum_is_served_remotely_and_never_cached(self):
         """Unverifiable bytes must not be written to the artwork cache, so the
@@ -1194,7 +1307,14 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertIsNone(localized["release"]["posterChecksum"])
         self.assertEqual(conn.enqueued, [])
 
-    def test_localize_release_details_posters_reports_pending_before_cached(self):
+    def test_localize_release_details_posters_serves_remote_url_before_cached(self):
+        """The resolver enrichment path is the live safety net for a poster
+        MovieVault carries but this instance has not cached or synced yet. Until
+        the verified local copy exists the cover must still reach the client, so
+        an uncached checksummed poster is surfaced as the stable anonymous asset
+        URL rather than a URL-less ``pending`` the metadata pipeline would drop.
+        The cache job is still enqueued so a later lookup upgrades to local."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
         conn = FakePosterConn({})
         result = next_movievault_v2.validate_release_details_response(
             {**release_details_hit(), "poster": release_details_poster()}
@@ -1204,8 +1324,43 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             conn, "https://movievault.example", result
         )
 
-        self.assertIsNone(localized["release"]["posterUrl"])
-        self.assertEqual(localized["release"]["posterStatus"], "pending")
+        self.assertEqual(
+            localized["release"]["posterUrl"],
+            f"https://movievault.example/v2/assets/{asset_id}/display",
+        )
+        self.assertEqual(localized["release"]["posterStatus"], "remote")
+        self.assertEqual(localized["release"]["posterChecksum"], "b" * 64)
+        # The verified-local upgrade is still queued for the next lookup.
+        self.assertEqual(
+            {(a, variant) for a, variant in conn.enqueued},
+            {(asset_id, "thumbnail"), (asset_id, "display")},
+        )
+
+    def test_localize_release_details_posters_prefers_cached_local_over_remote(self):
+        """Once the verified DiscVault-local copy exists it wins: the client
+        loads the authenticated local route, not the anonymous remote asset."""
+        asset_id = "40000000-0000-0000-0000-000000000001"
+        conn = FakePosterConn(
+            {
+                (asset_id, "b" * 64): {
+                    "status": "ready",
+                    "media_asset_id": "media-release",
+                }
+            }
+        )
+        result = next_movievault_v2.validate_release_details_response(
+            {**release_details_hit(), "poster": release_details_poster()}
+        )
+
+        localized = next_movievault_v2.localize_release_details_posters(
+            conn, "https://movievault.example", result
+        )
+
+        self.assertEqual(
+            localized["release"]["posterUrl"],
+            "/api/next/movievault-v2/posters/media-release",
+        )
+        self.assertEqual(localized["release"]["posterStatus"], "ready")
         self.assertEqual(localized["release"]["posterChecksum"], "b" * 64)
 
     def test_release_details_callback_survives_poster_cache_failure(self):
@@ -1464,6 +1619,33 @@ class AudioSubtitleTrackContractTests(unittest.TestCase):
         )
         self.assertTrue(parsed["audioTracks"])
         self.assertTrue(parsed["subtitles"])
+
+    def test_v4_poster_accepts_the_paired_provisional_claim(self):
+        """The bulk sync reader accepts a fully-paired provisional poster - both
+        `unverified` and `unverified-fan-submitted` present together."""
+        record = self._v4_release()
+        record["poster"] = {
+            **record["poster"],
+            "attestation": "unverified",
+            "license": "unverified-fan-submitted",
+        }
+        parsed = next_movievault_v2.validate_record(
+            record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+        )
+        self.assertEqual(parsed["poster"]["attestation"], "unverified")
+        self.assertEqual(parsed["poster"]["license"], "unverified-fan-submitted")
+
+    def test_v4_poster_rejects_an_unpaired_provisional_claim(self):
+        """Mirror of MovieVault's `unverified_fields_are_paired` invariant on the
+        sync path: a `unverified` attestation without its matching licence is a
+        record MovieVault would never emit, so the strict bulk reader refuses
+        it (both individual values are otherwise in-enum)."""
+        record = self._v4_release()
+        record["poster"] = {**record["poster"], "attestation": "unverified"}
+        with self.assertRaisesRegex(next_movievault_v2.MovieVaultV2Error, "^record_invalid$"):
+            next_movievault_v2.validate_record(
+                record, contract_version=next_movievault_v2.MOVIEVAULT_V4_CONTRACT
+            )
 
     def test_v4_release_without_backdrop_still_parses(self):
         """The feed served release records with no `backdrop` key at all before

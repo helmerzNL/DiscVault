@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "이 시리즈를 직접 찍은 사진입니다. 시즌 박스, 등면, 디스크 등. 다른 기기와 동기화됩니다.",
   "ownImages.label": "라벨",
   "ownImages.upload": "이미지 추가",
+  "ownImages.capture": "사진 촬영",
   "ownImages.empty": "아직 내 이미지가 없습니다.",
   "ownImages.count": "{limit}개 중 {used}개",
   "ownImages.uploading": "이미지를 추가하는 중...",

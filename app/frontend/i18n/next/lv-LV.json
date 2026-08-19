@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Tavi paša foto no šī seriāla — sezonu kastes, muguras, diski. Tie sinhronizējas ar tavām citām ierīcēm.",
   "ownImages.label": "Apzīmējums",
   "ownImages.upload": "Pievienot attēlus",
+  "ownImages.capture": "Uzņemt fotoattēlu",
   "ownImages.empty": "Pagaidām nav savu attēlu.",
   "ownImages.count": "{used} no {limit}",
   "ownImages.uploading": "Pievieno attēlus...",

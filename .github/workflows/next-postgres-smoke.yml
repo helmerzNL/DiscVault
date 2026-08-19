@@ -60,7 +60,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_artwork_trash.py next_worker.py
 
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
@@ -68,8 +68,16 @@ jobs:
       - name: Test identity fixture and identifier extraction
         run: python -m unittest tests.test_identity_ladder_fixture tests.test_identity_ladder_validator tests.test_identity_identifier_extraction
 
+      # Both halves of the same fail-closed rule. `next_runtime_secrets` refuses
+      # to invent a secret; `next_settings_store` refuses to store a credential
+      # it could not encrypt. The second used to return the plaintext instead,
+      # which is invisible from every direction - the row looks ordinary and an
+      # unmarked value is read back as legacy plaintext without complaint.
       - name: Test runtime secret configuration
-        run: python -m unittest tests.test_next_runtime_secrets
+        run: >-
+          python -m unittest
+          tests.test_next_runtime_secrets
+          tests.test_next_settings_store
 
       # Listed by hand like every module above it. The throttles these cover sit
       # on endpoints that had none, so a silent drop here restores the gap
@@ -81,6 +89,7 @@ jobs:
           tests.test_next_legacy_auth
           tests.test_next_mobile_auth
           tests.test_next_review_login
+          tests.test_next_effective_permission_keys
 
       # The passkey ceremony itself. On a passkey-only instance this is the
       # entire front door, and both defects it covers were invisible in normal
@@ -164,6 +173,14 @@ jobs:
 
       - name: Test MovieVault v2 release contributions
         run: python -m unittest tests.test_next_movievault_v2_contributions
+
+      # The couple-and-merge merge-target route: what the identity endpoint
+      # exposes (I_srv only), what it withholds (token/key/key id, and the id
+      # itself when unregistered), and that it fails closed on the permission
+      # gate. Listed explicitly because this workflow lists rather than
+      # discovers, and the route test lives in its own file.
+      - name: Test couple-and-merge identity route
+        run: python -m unittest tests.test_next_movievault_contribution_identity_route
 
       # The conversions a field correction makes on the way out - two packaging
       # axes flattened to one list, free-text ratios filtered to the bounded
@@ -276,6 +293,40 @@ jobs:
       - name: Test crawler and AI-scraper exclusion
         run: python -m unittest tests.test_next_crawlers
 
+      # Plugins run from a writable install directory that is seeded once, not
+      # from the image, so "removed from the bundle" only became an uninstall
+      # when the upgrade pass started removing the files too. Every test starts
+      # without an install directory, which is precisely why this needs its own
+      # module: it builds the upgraded-deployment case by hand -- seed, then
+      # take the plugin out of the bundle. No database; it works on temporary
+      # directories.
+      - name: Test that a dropped bundled plugin is uninstalled
+        run: python -m unittest tests.test_next_plugin_removal_on_upgrade
+
+      # The repository's own guard scripts had no coverage running anywhere.
+      # They are the enforcement points every MUST rule in the baseline leans
+      # on, so a guard that silently stopped guarding would look exactly like a
+      # branch with nothing wrong. Run from the repository root because the
+      # scripts resolve paths relative to it.
+      #
+      # Listed rather than discovered, because `test_sync_dedup_merge` is
+      # deliberately NOT in this list: four of its cases have been failing since
+      # #395 on 2026-07-24, unnoticed because nothing ran them. They expect the
+      # title/year dedup group key to carry the media format -- `("what women
+      # want", "", "dvd")` -- and `sync_dedup_merge.py` still produces the
+      # two-part key. That is the physical-copy identity #395 set out to
+      # preserve, so it needs deciding on its own terms rather than being
+      # silently switched off or hurried into an unrelated pull request.
+      - name: Test the guard scripts
+        working-directory: .
+        run: >-
+          python -m unittest
+          app.scripts.tests.test_bump_version
+          app.scripts.tests.test_check_forbidden_paths
+          app.scripts.tests.test_check_version_bumped
+          app.scripts.tests.test_check_plugin_manifest_versions
+          app.scripts.tests.test_prune_landed_branches
+
       # What the backup screen costs, and what it is allowed to report. The
       # summary cache is the reason listing the archives is cheap; the older
       # module beside it is the regression net for the validation the cache now
@@ -338,6 +389,16 @@ jobs:
       # releases, because a new one is how this comes back.
       - name: Test the provider-call transaction boundary
         run: python -m unittest tests.test_next_provider_call_transaction_boundary
+
+      # A liveness probe that deletes rows and unlinks files can outlast its own
+      # timeout and get a healthy container restarted, so `/api/next/health` has
+      # to stay read-only. Only a real database answers that: the assertion is
+      # that a row whose retention window has expired is still there after the
+      # probe ran, and gone after the purge the worker now owns. Both halves
+      # matter -- a probe that stopped purging because the purge broke would
+      # pass the first assertion on its own.
+      - name: Test that the health probe does no write work
+        run: python -m unittest tests.test_next_health_is_read_only
 
       # The statistics page had no coverage here at all, which is how its two
       # credit charts shipped reading empty on a full collection: the query
@@ -562,6 +623,13 @@ jobs:
       # members when nothing distinguishes them.
       - name: Test box-set member deduplication
         run: python -m unittest tests.test_next_box_set_member_dedupe
+
+      # An imported box-set member is identified by the MovieVault release the
+      # proposal names and by nothing else -- it has no year and its barcode is
+      # synthetic. Dropping that id left every member unrefreshable while the
+      # refresh still reported success.
+      - name: Test box-set member identity survives the import
+        run: python -m unittest tests.test_next_box_set_member_identity
 
       # A vault and a collection showed a cover on their page and an empty tile
       # in the library. This guards that every container surface resolves the

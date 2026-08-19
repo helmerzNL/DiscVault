@@ -391,6 +391,47 @@ class FormatSpellingTests(unittest.TestCase):
             with self.subTest(raw=raw):
                 self.assertEqual(corrections._format_display(raw), "4K UHD + Blu-ray")
 
+    def test_the_clients_combo_code_keeps_both_halves(self):
+        """The clients' own canonical combo carries no `+/&` separator.
+
+        iOS `DiscFormat.uhd4kBluray` and the PWA filter both store a
+        2-disc pack as the single token `4K_UHD_BLURAY`, and the sync push
+        writes that raw value straight into `movies.format`. Read raw it
+        collapsed to `4K UHD` -- the Blu-ray leg dropped -- so a combo shelf
+        proposed replacing the catalogue's `4K UHD + Blu-ray` with `4K UHD`:
+        a false difference on a record that already agreed. The underscore
+        *is* the separator here, so both halves must survive."""
+        for raw in ("4K_UHD_BLURAY", "4k_uhd_bluray", "4K_UHD_BD"):
+            with self.subTest(raw=raw):
+                self.assertEqual(corrections._format_display(raw), "4K UHD + Blu-ray")
+
+    def test_a_single_uhd_disc_is_not_read_as_a_combo(self):
+        """`Ultra HD Blu-ray` names one 4K disc, not a two-disc pack.
+
+        The token boundary that marks the combo is an underscore or a
+        `+/&`, never the space in the medium's own name -- otherwise every
+        single-4K release would be misread as carrying a Blu-ray it does
+        not have, and its `disc_count`/discs would disagree with a format
+        that claims two."""
+        for raw in ("Ultra HD Blu-ray", "UHD Blu-ray", "4K_UHD", "4K UHD"):
+            with self.subTest(raw=raw):
+                self.assertEqual(corrections._format_display(raw), "4K UHD")
+
+    def test_the_clients_combo_code_reads_as_agreement_not_a_change(self):
+        """The reported symptom, pinned end to end: a combo shelf whose
+        stored code matches the catalogue proposes nothing.
+
+        Before the fix the local side spelled `4K_UHD_BLURAY` as `4K UHD`
+        while the catalogue held `4K UHD + Blu-ray`, so the diff carried a
+        `format` change the user had to uncheck by hand. Spelled the way the
+        catalogue spells it, the two are equal and `build_changes` skips it."""
+        local = {"format": corrections._format_display("4K_UHD_BLURAY")}
+        mirror = {"format": "4K UHD + Blu-ray"}
+        self.assertEqual(
+            corrections.build_changes(allowed=["format"], local=local, mirror=mirror),
+            [],
+        )
+
     def test_a_spelling_this_does_not_know_is_left_alone(self):
         """Free text on purpose. A person may have typed something this does
         not recognise, and inventing a spelling for it would propose a

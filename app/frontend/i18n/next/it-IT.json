@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Le tue foto di questa serie: i cofanetti delle stagioni, i dorsi, i dischi. Si sincronizzano con gli altri tuoi dispositivi.",
   "ownImages.label": "Etichetta",
   "ownImages.upload": "Aggiungi immagini",
+  "ownImages.capture": "Scatta foto",
   "ownImages.empty": "Ancora nessuna immagine personale.",
   "ownImages.count": "{used} di {limit}",
   "ownImages.uploading": "Aggiunta immagini...",

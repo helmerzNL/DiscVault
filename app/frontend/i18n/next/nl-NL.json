@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Je eigen foto's van deze serie — de seizoensdozen, de ruggen, de schijven. Ze synchroniseren naar je andere apparaten.",
   "ownImages.label": "Label",
   "ownImages.upload": "Afbeeldingen toevoegen",
+  "ownImages.capture": "Foto maken",
   "ownImages.empty": "Nog geen eigen afbeeldingen.",
   "ownImages.count": "{used} van {limit}",
   "ownImages.uploading": "Afbeeldingen toevoegen...",

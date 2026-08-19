@@ -130,6 +130,8 @@ try:
     from .next_backup import list_backup_archives
     from .next_backup import stored_backup_path
     from .next_backup import validate_backup_zip
+    from .next_artwork_trash import delete_local_media_asset_file
+    from .next_artwork_trash import purge_expired_artwork_trash
     from .next_auth import next_auth_current_user
     from .next_auth import next_auth_current_api_token_user
     from .next_auth import next_auth_effective_enabled
@@ -415,6 +417,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import list_backup_archives
     from next_backup import stored_backup_path
     from next_backup import validate_backup_zip
+    from next_artwork_trash import delete_local_media_asset_file
+    from next_artwork_trash import purge_expired_artwork_trash
     from next_auth import next_auth_current_user
     from next_auth import next_auth_current_api_token_user
     from next_auth import next_auth_effective_enabled
@@ -1694,6 +1698,28 @@ def reset_next_test_database(conn) -> dict[str, Any]:
                     updated_at = now()
                 """
             )
+            # Rewinding the counter without renaming the stream is precisely the
+            # state a client cannot detect: every cursor it holds now points
+            # into a history that no longer exists. Minting a new `stream_id`
+            # here is what turns that into a question the client can ask.
+            #
+            # The column is looked up first rather than guarded inside the
+            # UPDATE: PostgreSQL resolves column names at parse time, so an
+            # `EXISTS` guard in the WHERE clause would still fail on a database
+            # that predates migration 083.
+            cur.execute(
+                """
+                SELECT 1 AS present
+                FROM information_schema.columns
+                WHERE table_schema='public'
+                  AND table_name='sync_state'
+                  AND column_name='stream_id'
+                """
+            )
+            if cur.fetchone():
+                cur.execute(
+                    "UPDATE sync_state SET stream_id = gen_random_uuid() WHERE id='global'"
+                )
 
     if table_exists(conn, "digital_media_sources"):
         with conn.cursor() as cur:
@@ -2163,6 +2189,50 @@ def import_source_item_identifiers(item: dict[str, Any]) -> dict[str, str]:
             value = clean_text(identifier)
             if provider_id and value:
                 identifiers[provider_id] = value
+    return identifiers
+
+
+def box_set_member_movievault_id(member: dict[str, Any]) -> str:
+    """The MovieVault release a box-set member names, under any of its spellings.
+
+    A proposal member arrives with `releaseId` (the plugin's own `_proposal()`
+    mapping); the same fact reaches this code as `movieVaultId` once it has been
+    round-tripped through a metadata query, and in snake_case from a hand-built
+    import body. All three name one release."""
+    if not isinstance(member, dict):
+        return ""
+    return clean_text(
+        member.get("releaseId")
+        or member.get("release_id")
+        or member.get("movieVaultId")
+        or member.get("movievaultId")
+        or member.get("movievault_id")
+    )
+
+
+def box_set_member_identifiers(member: dict[str, Any]) -> dict[str, str]:
+    """The external ids an imported box-set member should be linked by.
+
+    The MovieVault release id decides whether the member can ever be refreshed
+    again. `movievault_identification_plan` plans `movie_details` -- the only call
+    that resolves a member release directly -- from the movie's stored
+    `movieVaultId`, and a member has nothing else to be found by: the box-set feed
+    states no year for its members, and the import mints a synthetic barcode
+    (`IMPORT-...-BOX-01`) that no catalog can match. Dropping the release id here
+    left the member with no identifier at all, so the full refresh queued right
+    after the import reported success and applied nothing -- until somebody typed
+    a TMDB id in by hand, which is the workaround this fix removes the need for.
+    """
+    identifiers: dict[str, str] = {}
+    tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
+    imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
+    movievault_id = box_set_member_movievault_id(member)
+    if tmdb_id:
+        identifiers["tmdb"] = tmdb_id
+    if imdb_id:
+        identifiers["imdb"] = imdb_id
+    if movievault_id:
+        identifiers[MOVIEVAULT_V2_PLUGIN_ID] = movievault_id
     return identifiers
 
 
@@ -5850,6 +5920,13 @@ def server_usable_image(value: Any) -> str:
         return text
     if text.startswith("/api/next/media/"):
         return text
+    # MovieVault v2 posters (including provisional fan-submitted ones arriving
+    # via the metadata fallback, `metadata.poster_url`) are served by their own
+    # route and must pass through unchanged. This mirrors the client-side
+    # `usableImage` twins (next_views_ui.py, next_views_collection.py); the
+    # server-side allow-list drifted out of parity, blanking those tiles.
+    if text.startswith("/api/next/movievault-v2/posters/"):
+        return text
     return ""
 
 
@@ -7480,6 +7557,76 @@ def current_revision(conn) -> int:
     return ensure_sync_state(conn)
 
 
+def sync_stream_id(conn) -> str | None:
+    """Which revision counter is this? -- ``sync_state.stream_id``.
+
+    A cursor is a bare integer and so is the counter it is compared against, so
+    the pair alone cannot tell a quiet database from a *different* one. This is
+    the identity that can: minted per database (migration 083), handed to a
+    client in the state, bootstrap and delta responses, and echoed back as
+    ``?streamId=``.
+
+    Read through ``to_jsonb`` rather than naming the column, because a
+    connection reaching a database that has not run migration 083 yet must get
+    ``None`` here, not an aborted transaction.
+    """
+
+    if not table_exists(conn, "sync_state"):
+        return None
+    ensure_sync_state(conn)
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_jsonb(s) AS row FROM sync_state s WHERE id='global'")
+        row = cur.fetchone()
+    stream = (row or {}).get("row") or {}
+    value = stream.get("stream_id") if isinstance(stream, dict) else None
+    return str(value) if value else None
+
+
+def user_sync_stream_id(conn, user_id) -> str | None:
+    """``sync_stream_id`` for one user's private stream (``user_sync_state``)."""
+
+    if not table_exists(conn, "user_sync_state"):
+        return None
+    ensure_user_sync_state(conn, user_id)
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_jsonb(s) AS row FROM user_sync_state s WHERE user_id=%s", (user_id,))
+        row = cur.fetchone()
+    stream = (row or {}).get("row") or {}
+    value = stream.get("stream_id") if isinstance(stream, dict) else None
+    return str(value) if value else None
+
+
+def resolve_sync_cursor(
+    *,
+    since: int,
+    revision: int,
+    stream_id: str | None,
+    client_stream_id: str | None,
+) -> tuple[int, bool]:
+    """Where does this client's pull actually start, and is that a reset?
+
+    Two conditions say the cursor cannot belong to this stream:
+
+    * the client names a different ``streamId`` -- definite, and the reason the
+      column exists;
+    * the cursor sits above the counter it is meant to index into. A counter
+      only ever climbs, so ``since > revision`` cannot be reached by syncing;
+      it means the counter was rewound underneath the client (a rebuilt or
+      reset database) while the client kept its number.
+
+    Either way the answer is the same and it is not "nothing to send": replay
+    from the start. A client that never learned about ``streamId`` recovers on
+    the second condition alone, which is what makes this fix reach the builds
+    already in people's hands.
+    """
+
+    if client_stream_id and stream_id and client_stream_id != stream_id:
+        return 0, True
+    if since > revision:
+        return 0, True
+    return since, False
+
+
 def next_revision(conn) -> int:
     with conn.cursor() as cur:
         cur.execute(
@@ -7744,13 +7891,140 @@ def emit_movie_identifiers_change(conn, movie_id, *, operation: str = "upsert") 
     return revision
 
 
+def entity_sync_artwork_sql(conn, entity_type: str, *, alias: str = "c") -> tuple[str, str]:
+    """Columns and joins that resolve one entity's **own** cover for the wire.
+
+    Every read surface the app has resolves artwork the same way -- the primary
+    `entity_media` row first, the stored `metadata.poster_url` second
+    (`with_preview_media_urls`). The sync payload resolved neither: movies and
+    containers went out as raw table columns, so a client only ever saw
+    `metadata.poster_url`.
+
+    That is why the two platforms disagreed on almost every tile. The PWA showed
+    the release packshot held in `entity_media`; the app showed the film poster
+    stored in metadata, because that was the only thing on the wire.
+
+    Only the entity's *own* artwork is resolved. A cover borrowed from a member
+    film deliberately stays behind -- see `fold_sync_artwork`.
+
+    Returns ``(columns, joins)``, both empty when the media tables are absent so
+    an older schema keeps working.
+    """
+
+    if not (table_exists(conn, "entity_media") and table_exists(conn, "media_assets")):
+        return "", ""
+    # Leading comma, no trailing one, so a caller appends this *last* and an
+    # older schema's empty fragment leaves valid SQL either way. A trailing
+    # comma would need a filler column to sit after it, and a filler column is
+    # one missed `pop` away from shipping plumbing to every client.
+    columns = """,
+                sync_poster.id AS poster_asset_id,
+                sync_poster.storage_backend AS poster_storage_backend,
+                sync_poster.storage_key AS poster_storage_key,
+                sync_poster.source_url AS poster_source_url,
+                sync_poster.provider_id AS poster_provider_id,
+                sync_backdrop.id AS backdrop_asset_id,
+                sync_backdrop.storage_backend AS backdrop_storage_backend,
+                sync_backdrop.storage_key AS backdrop_storage_key,
+                sync_backdrop.source_url AS backdrop_source_url,
+                sync_backdrop.provider_id AS backdrop_provider_id"""
+    joins = ""
+    for kind, join_alias in (("poster", "sync_poster"), ("backdrop", "sync_backdrop")):
+        joins += f"""
+            LEFT JOIN LATERAL (
+                SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='{entity_type}'
+                  AND em.entity_id={alias}.id
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND ma.kind='{kind}'
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                LIMIT 1
+            ) {join_alias} ON true
+"""
+    return columns, joins
+
+
+def container_sync_artwork_sql(conn, *, container_alias: str = "c") -> tuple[str, str]:
+    """Columns and joins that resolve a container's **own** cover for the wire.
+
+    The library and the container page have always resolved artwork server-side:
+    the container's primary `entity_media` row first, its stored
+    `metadata.poster_url` second, and only then a cover borrowed from a member
+    film. The sync payload resolved none of it -- `containers` on the wire
+    carried `metadata` and nothing else -- so a box set whose cover lives in
+    `entity_media` reached a client with no artwork at all, and the client had
+    to invent one. That is why a synced box set showed the poster of the *first
+    film inside it*: not a wrong lookup, an absent one.
+
+    Only the container's own artwork is resolved here. The borrowed member cover
+    deliberately stays behind, for the reason `container_member_poster_lateral`
+    gives -- it is a different film's poster, and §4b.9 makes a pushed
+    `metadata.poster_url` the container's own primary artwork, so shipping a
+    borrowed one would let a member's cover be laundered into the set's own on
+    the next push.
+
+    Returns ``(columns, joins)``, both empty when the media tables are absent so
+    an older schema keeps working.
+    """
+
+    return entity_sync_artwork_sql(conn, "container", alias=container_alias)
+
+
+def fold_sync_artwork(row: dict[str, Any]) -> dict[str, Any]:
+    """Fold the joined artwork columns into `poster_url` / `backdrop_url`.
+
+    The primary `entity_media` asset wins over `metadata.poster_url`, the same
+    order the library and the container page already resolve in. That order is
+    the fix, not a detail: a set whose stored metadata points at a member film's
+    poster -- an import that recorded the film's cover for the box -- renders
+    correctly everywhere the asset is preferred, and wrongly everywhere it is
+    not. The wire was the only place it was not.
+
+    The resolved cover is also written into the payload's `metadata`, because
+    §4b.9 tells clients to read it there and a build already in someone's hands
+    reads that key and nothing else. Resolving only into a new top-level field
+    would leave every installed app exactly as broken as before. Only the
+    outgoing payload is shaped; the stored row is untouched.
+
+    Safe precisely because this is the container's *own* artwork: a client that
+    pushes the value back re-attaches the asset it came from. The borrowed
+    member cover is never folded in here, which is what keeps that round trip
+    from turning a member film's poster into the set's own.
+    """
+
+    item = dict(row)
+    for kind in ("poster", "backdrop"):
+        asset = {
+            "id": item.pop(f"{kind}_asset_id", None),
+            "storage_backend": item.pop(f"{kind}_storage_backend", None),
+            "storage_key": item.pop(f"{kind}_storage_key", None),
+            "source_url": item.pop(f"{kind}_source_url", None),
+            "kind": kind,
+            "provider_id": item.pop(f"{kind}_provider_id", None),
+        }
+        metadata = item.get("metadata") if isinstance(item.get("metadata"), dict) else {}
+        url = media_asset_public_url(asset) if asset["id"] else ""
+        if not url:
+            url = first_usable_image(metadata.get(f"{kind}_url"))
+        if not url:
+            continue
+        item[f"{kind}_url"] = url
+        if clean_text(metadata.get(f"{kind}_url")) != url:
+            item["metadata"] = {**metadata, f"{kind}_url": url}
+    return item
+
+
 def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
     """One container row in the same shape as the bootstrap ``containers`` array."""
     if not table_exists(conn, "containers"):
         return None
+    artwork_columns, artwork_joins = container_sync_artwork_sql(conn)
     with conn.cursor() as cur:
         cur.execute(
-            """
+            f"""
             SELECT
                 c.id,
                 c.public_id,
@@ -7765,13 +8039,15 @@ def single_container_sync_entity(conn, container_id) -> dict[str, Any] | None:
                 c.estimated_value_currency,
                 c.metadata,
                 c.created_at,
-                c.updated_at
+                c.updated_at{artwork_columns}
             FROM containers c
+{artwork_joins}
             WHERE c.id=%s
             """,
             (container_id,),
         )
-        return cur.fetchone()
+        row = cur.fetchone()
+    return fold_sync_artwork(row) if row else None
 
 
 def emit_container_change(conn, container_id, *, operation: str, entity: dict[str, Any] | None = None) -> int:
@@ -12689,17 +12965,27 @@ def _movie_select_columns(columns: tuple[str, ...], *, prefix: str = "") -> str:
 
 
 def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
+    # The cover is resolved here rather than left to `metadata.poster_url`,
+    # because this entity is stored verbatim as a delta payload: whatever the
+    # app shows for this film is decided by this row. Without it the wire
+    # carried the film poster while every screen in the PWA showed the release
+    # packshot held in `entity_media`, and the two platforms disagreed on
+    # almost every tile.
+    artwork_columns, artwork_joins = entity_sync_artwork_sql(conn, "movie", alias="movies")
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                {_movie_select_columns(_MOVIE_SYNC_COLUMNS + _MOVIE_ENTITY_ONLY_COLUMNS)}
+                {_movie_select_columns(_MOVIE_SYNC_COLUMNS + _MOVIE_ENTITY_ONLY_COLUMNS, prefix="movies")}{artwork_columns}
             FROM movies
-            WHERE id=%s
+{artwork_joins}
+            WHERE movies.id=%s
             """,
             (movie_id,),
         )
         row = cur.fetchone()
+    if row is not None:
+        row = fold_sync_artwork(row)
     if row is not None:
         row["genres"] = movie_genre_keys(conn, movie_id)
         # Also reaches the delta: a sync change stores this entity verbatim as
@@ -18877,65 +19163,6 @@ def artwork_trash_settings(conn) -> dict[str, Any]:
     }
 
 
-def delete_local_media_asset_file(asset: dict[str, Any]) -> bool:
-    if clean_text(asset.get("storage_backend")) != "local":
-        return False
-    storage_key = clean_text(asset.get("storage_key"))
-    if not storage_key:
-        return False
-    data_dir = legacy_data_dir().resolve()
-    target = (data_dir / storage_key).resolve()
-    try:
-        target.relative_to(data_dir)
-    except ValueError:
-        return False
-    if not target.is_file():
-        return False
-    target.unlink()
-    return True
-
-
-def purge_expired_artwork_trash(conn) -> dict[str, Any]:
-    if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
-        return {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}
-    with conn.cursor() as cur:
-        cur.execute(
-            """
-            DELETE FROM entity_media
-            WHERE deleted_at IS NOT NULL
-              AND purge_after IS NOT NULL
-              AND purge_after <= now()
-            RETURNING media_id
-            """
-        )
-        deleted_media_ids = [row["media_id"] for row in cur.fetchall()]
-        purged_assets = 0
-        purged_files = 0
-        for media_id in deleted_media_ids:
-            cur.execute("SELECT COUNT(*)::int AS refs FROM entity_media WHERE media_id=%s", (media_id,))
-            if int((cur.fetchone() or {}).get("refs") or 0) > 0:
-                continue
-            cur.execute(
-                """
-                DELETE FROM media_assets
-                WHERE id=%s
-                  AND kind IN ('poster', 'backdrop')
-                RETURNING id, storage_backend, storage_key
-                """,
-                (media_id,),
-            )
-            asset = cur.fetchone()
-            if not asset:
-                continue
-            purged_assets += 1
-            try:
-                if delete_local_media_asset_file(asset):
-                    purged_files += 1
-            except OSError:
-                pass
-    return {"purgedLinks": len(deleted_media_ids), "purgedAssets": purged_assets, "purgedFiles": purged_files}
-
-
 def artwork_trash_entries(conn, *, limit: int = 200) -> dict[str, Any]:
     if not table_exists(conn, "entity_media") or not table_exists(conn, "media_assets"):
         return {"items": [], "settings": artwork_trash_settings(conn), "purge": {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}}
@@ -20816,23 +21043,29 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
         return []
     visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m") if actor else ("TRUE", [])
     select_columns = _movie_select_columns(_MOVIE_SYNC_COLUMNS, prefix="m")
+    # Same resolution as the delta: a bootstrap that shipped only
+    # `metadata.poster_url` would give a fresh install the film poster where
+    # every other surface shows the release packshot.
+    artwork_columns, artwork_joins = entity_sync_artwork_sql(conn, "movie", alias="m")
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                {select_columns}
+                {select_columns}{artwork_columns}
             FROM movies m
+{artwork_joins}
             WHERE {visibility_where} AND m.deleted_at IS NULL
             ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
             LIMIT %s
             """,
             (*visibility_params, limit),
         )
+        rows = [fold_sync_artwork(row) for row in cur.fetchall()]
         return attach_movie_pin_markers(
             attach_movie_discs(
                 conn,
                 attach_movie_seasons(
-                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, cur.fetchall()))
+                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, rows))
                 ),
             )
         )
@@ -20957,6 +21190,10 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
     if not table_exists(conn, "containers"):
         return []
     visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
+    # Same artwork resolution as the delta: a bootstrap that omitted the cover
+    # would leave a fresh install in the state the delta used to leave every
+    # device -- box sets with no artwork, and a client guessing from a member.
+    artwork_columns, artwork_joins = container_sync_artwork_sql(conn)
     with conn.cursor() as cur:
         cur.execute(
             f"""
@@ -20975,15 +21212,16 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
                 c.estimated_value_currency,
                 c.metadata,
                 c.created_at,
-                c.updated_at
+                c.updated_at{artwork_columns}
             FROM containers c
+{artwork_joins}
             WHERE {visibility_where} AND c.deleted_at IS NULL
             ORDER BY c.container_type, lower(c.title)
             LIMIT %s
             """,
             (*visibility_params, limit),
         )
-        return cur.fetchall()
+        return [fold_sync_artwork(row) for row in cur.fetchall()]
 
 
 def non_secret_settings(conn) -> list[dict[str, Any]]:
@@ -25162,10 +25400,13 @@ def register_routes(flask_app: Flask) -> None:
                 )
                 db = cur.fetchone()
             migrations = migration_overview(conn)
-            artwork_purge = {"purgedLinks": 0, "purgedAssets": 0, "purgedFiles": 0}
-            if migrations.get("state") == "ready":
-                with conn.transaction():
-                    artwork_purge = purge_expired_artwork_trash(conn)
+        # Read-only on purpose. This endpoint is the container health check,
+        # fired every ten seconds; it used to run the artwork-trash purge here,
+        # deleting rows and unlinking files on each probe. Under I/O load that
+        # could outlast the probe's own timeout and get a healthy container
+        # restarted over cleanup that was never urgent. The worker owns the
+        # purge now (`artwork.trash_purge`), so this answers one question:
+        # can the API reach a migrated database?
         migration_state = migrations["state"]
         is_ready = migration_state == "ready"
         return response(
@@ -25176,7 +25417,6 @@ def register_routes(flask_app: Flask) -> None:
                 "sha": build_sha(),
                 "database": db,
                 "migrations": migrations,
-                "maintenance": {"artworkTrash": artwork_purge},
             },
             200 if is_ready else 503,
         )
@@ -27798,6 +28038,223 @@ def register_routes(flask_app: Flask) -> None:
             return response(
                 {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
             )
+
+    @flask_app.post("/api/next/movievault/contributions/release-selection")
+    def movievault_release_selection():
+        """Record the release a client picked for a film it just wrote by sync.
+
+        The PWA fires the same contribution as a *side-effect* of the import and
+        edit routes: when their body carries a `releaseCandidate`, the backend
+        queues `queue_release_contribution_job` behind the same gate. iOS does
+        not use either route -- it resolves candidates itself and writes films
+        through sync mutations, which never read `releaseCandidate` -- so the
+        one fact only the person holding the disc knows (which pressing an
+        ambiguous barcode is) never reached the catalogue.
+
+        This is that side-effect given its own front door, for the coupled iOS
+        path (change spec 2026-08-16-ios-contributions.md 3.5). It is purely
+        additive: no existing client behaviour changes, `movie.upsert` and the
+        normative sync contract are untouched, and it invents no contribution
+        logic. It reuses the exact machinery the PWA path proves -- the gate
+        (`release_contribution_enabled`), the payload builder
+        (`release_technical_contribution_payload`, which enforces the substance
+        floor and the field boundary), and the queue.
+
+        iOS calls this *after* the sync mutation that created the film is
+        acknowledged, so the local UUID resolves server-side. If it does not yet
+        exist here the route answers `404 Movie not found` and iOS retries after
+        the next sync ack rather than treating it as terminal.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        candidate = body.get("releaseCandidate") or body.get("release_candidate")
+        if not isinstance(candidate, dict) or not candidate:
+            raise NextApiError("releaseCandidate is required", 400)
+        candidate_film = body.get("releaseCandidateFilm") or body.get("release_candidate_film")
+        if not isinstance(candidate_film, dict):
+            candidate_film = {}
+        scanned_barcode = clean_text(
+            body.get("scannedBarcode") or body.get("scanned_barcode")
+        )
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            # The same two-gate composition the side-effect path checks: the
+            # owner setting (`movievault_v2_contribution_enabled`) and the user
+            # preference (`share_release_selections`). A 403 here is the normal
+            # "selections off" answer, not a failure -- iOS sends the user to
+            # the sharing preferences.
+            if not release_contribution_enabled(conn, actor.get("id") if actor else None):
+                raise NextApiError("Release contributions are not enabled", 403)
+            # Binds `id` to a film that exists server-side and enforces the same
+            # per-record edit permission as every other contribution act. A
+            # missing film is a 404 iOS retries after the next sync ack.
+            record, _metadata = _correction_record(conn, actor, "movie", str(body.get("id") or ""))
+            # Built from the request triplet, exactly as the import side-effect
+            # builds it, so the payload builder is reused verbatim. The film
+            # falls back to the local record only when the client sent none.
+            # The builder maps the field boundary (`scannedBarcode` is evidence,
+            # never a `release.barcodes` member) and refuses -- returns {} --
+            # when the substance floor is not met, so a title-plus-barcode
+            # lookup never costs a moderator a review.
+            contribution_payload = release_technical_contribution_payload(
+                candidate,
+                scanned_barcode=scanned_barcode or "",
+                film=candidate_film
+                or {"title": record.get("title"), "year": record.get("year")},
+                provenance="candidate_selection",
+            )
+            if not contribution_payload:
+                raise NextApiError("There is not enough here to contribute", 422)
+            job = queue_release_contribution_job(
+                conn,
+                contribution_payload,
+                actor=actor,
+                reason="ios_release_selection",
+            )
+            return response(
+                {"status": "ok", "queued": bool(job), "jobId": (job or {}).get("id")}
+            )
+
+    @flask_app.get("/api/next/movievault/contributions/identity")
+    def movievault_contribution_identity():
+        """The server's MovieVault contribution identity — the merge target.
+
+        The couple-and-merge trigger (contribution-v3 §5.7; change spec
+        2026-08-16-ios-contributions.md §2b.1) has iOS sign its consent as a
+        proof over *this server's* MovieVault instance id — the surviving
+        identity ``I_srv`` — as `merge_proof_message(surviving=I_srv,
+        retired=I_ios)`. A device that has just coupled cannot build that proof
+        without knowing ``I_srv``'s instance id, and nothing else hands it over;
+        the couple only gives it a DiscVault URL, token and role. So this returns
+        the surviving instance id, gated on the coupling user's
+        ``collection.edit_all``.
+
+        Only the instance id is exposed — never the token, private key or key id,
+        which stay server-side (`registration_state` already draws that line, and
+        this reuses it rather than reading the settings directly). The instance
+        id is a public MovieVault identifier that every contribution already
+        carries upstream, not a secret: it is what a merge proof is *bound to*,
+        and MovieVault still verifies that proof against the retired instance's
+        registered key, so learning the id grants a caller nothing on its own.
+
+        ``instanceId`` is reported only once the server is fully registered —
+        matching :func:`merge_instance`'s own precondition. A client seeing
+        ``registered: false`` must treat it as "no merge target yet" (there is
+        nothing to fold into), not as an error to retry.
+        """
+        try:
+            from .next_movievault_v2_contributions import registration_state
+        except ImportError:  # pragma: no cover - direct module execution
+            from next_movievault_v2_contributions import registration_state
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            state = registration_state(conn)
+        registered = bool(state.get("registered"))
+        return response(
+            {
+                "status": "ok",
+                "registered": registered,
+                "instanceId": state.get("instanceId") if registered else None,
+            }
+        )
+
+    @flask_app.post("/api/next/movievault/contributions/merge")
+    def movievault_contribution_merge():
+        """Couple-and-merge trigger: fold a standalone device's contribution
+        identity into this server's (contribution-v3 §5.7, RATIFIED 2026-08-18;
+        change spec 2026-08-16-ios-contributions.md §2b.1).
+
+        The merge fires when a standalone iOS install that already holds its own
+        MovieVault identity `I_ios` gains this DiscVault server. iOS observes the
+        couple event and initiates, but a device proving possession of `I_ios` is
+        not proof it may fold `I_ios` into the server identity `I_srv`. So the
+        merge is mediated here and needs **both** halves -- neither side can merge
+        unilaterally:
+
+        - The **server half** is held server-side and never leaves it:
+          `merge_instance` signs the call with `I_srv`'s key and bears `I_srv`'s
+          token, so MovieVault authenticates the surviving instance as the caller.
+          A client cannot supply this.
+        - The **device half** is `retiredInstanceProof` in the body: a signature
+          by `I_ios`'s key over `merge_proof_message(I_srv, I_ios)`. DiscVault
+          never holds `I_ios`'s key, so it passes the proof through verbatim and
+          cannot forge it; MovieVault refuses (401 `signature_invalid`) unless the
+          device really signed for *this* server.
+
+        The caller must also be an authenticated DiscVault user
+        (`collection.edit_all`) -- the person who just coupled -- which is the
+        DiscVault-level evidence that this device gained this server. The
+        one-line consent that precedes the merge is shown on iOS (§2b.3); this
+        route is never a silent side-effect of sign-in.
+
+        Idempotent on `(retired, surviving)` at MovieVault (D3): a re-fired
+        couple or a retry converges to the same result. A `retryable` transport
+        failure answers 503 -- the client may repeat it because a repeat after a
+        timeout is a no-op there, not a second merge. A terminal failure (a
+        rejected proof, an unregistered server, a bad id) answers 400 with the
+        precise `errorCode` and must not be retried, because a repeat signs
+        identically.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        retired_instance_id = clean_text(
+            body.get("retiredInstanceId") or body.get("retired_instance_id")
+        )
+        retired_instance_proof = clean_text(
+            body.get("retiredInstanceProof") or body.get("retired_instance_proof")
+        )
+        if not retired_instance_id:
+            raise NextApiError("retiredInstanceId is required", 400)
+        if not retired_instance_proof:
+            raise NextApiError("retiredInstanceProof is required", 400)
+        try:
+            from .next_movievault_v2_contributions import (
+                MovieVaultContributionError,
+                merge_instance,
+            )
+        except ImportError:  # pragma: no cover - direct module execution
+            from next_movievault_v2_contributions import (
+                MovieVaultContributionError,
+                merge_instance,
+            )
+        # Human wording per known reason; the machine-readable `errorCode` is the
+        # contract surface iOS branches on. Anything unmapped falls back to a
+        # generic line rather than leaking a raw code into the UI.
+        messages = {
+            "contribution_not_registered": (
+                "This server is not registered with MovieVault"
+            ),
+            "merge_proof_missing": "A device merge proof is required",
+            "retired_instance_id_invalid": "The device identity is not a valid id",
+            "merge_into_self": "A server cannot merge into itself",
+            "signature_invalid": "The device merge proof did not verify",
+            "retired_instance_not_found": (
+                "The device identity is not known to MovieVault"
+            ),
+            "payload_invalid": "The merge request was rejected as invalid",
+        }
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            try:
+                result = merge_instance(
+                    conn,
+                    retired_instance_id=retired_instance_id,
+                    retired_instance_proof=retired_instance_proof,
+                )
+            except MovieVaultContributionError as exc:
+                # Fail closed. Retryable transport errors (timeout, 5xx) are a 503
+                # the client may repeat; everything else is terminal (4xx).
+                retryable = bool(getattr(exc, "retryable", False))
+                raise NextApiError(
+                    messages.get(
+                        exc.code, "The identity merge could not be completed"
+                    ),
+                    503 if retryable else 400,
+                    code=exc.code,
+                ) from exc
+            return response({"status": "ok", "merge": result})
 
     @flask_app.get("/api/next/movievault/contributions/history")
     def movievault_correction_history():
@@ -34940,16 +35397,6 @@ def register_routes(flask_app: Flask) -> None:
         expected_key = physical_format_key(expected)
         return not candidate_key or not expected_key or candidate_key == expected_key
 
-    def box_set_member_identifiers(member: dict[str, Any]) -> dict[str, str]:
-        identifiers: dict[str, str] = {}
-        tmdb_id = clean_text(member.get("tmdbId") or member.get("tmdb_id"))
-        imdb_id = clean_text(member.get("imdbId") or member.get("imdb_id"))
-        if tmdb_id:
-            identifiers["tmdb"] = tmdb_id
-        if imdb_id:
-            identifiers["imdb"] = imdb_id
-        return identifiers
-
     def existing_movie_row_matches_box_set_member(row: dict[str, Any], member: dict[str, Any]) -> bool:
         member_title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
         member_year = clean_text(member.get("year"))
@@ -35074,6 +35521,12 @@ def register_routes(flask_app: Flask) -> None:
         ):
             enriched["format"] = fallback_format
 
+        # The box-set feed states no year for its members -- only the member's own
+        # release record carries one -- so without this an imported member has no
+        # year at all. That is not just a blank column: `existing_movie_for_box_
+        # set_member` matches on title *and* year, and every title-based lookup
+        # downstream is weaker for the lack of it.
+        fill("year", movie_updates.get("year"), metadata_updates.get("year"))
         fill("overview", movie_updates.get("overview"), metadata_updates.get("overview"), metadata_updates.get("plot"))
         fill("plot", metadata_updates.get("plot"), movie_updates.get("overview"))
         fill("releaseDate", movie_updates.get("release_date"), metadata_updates.get("release_date"))
@@ -35104,6 +35557,11 @@ def register_routes(flask_app: Flask) -> None:
         if identifiers.get("imdb") and not (enriched.get("imdbId") or enriched.get("imdb_id")):
             enriched["imdbId"] = str(identifiers["imdb"])
             enriched["imdb_id"] = str(identifiers["imdb"])
+        # A member that named its release already has this; one identified from a
+        # title (a resolver-supplied box set names no release ids at all) gains it
+        # here, and it is the id that makes the member refreshable afterwards.
+        if identifiers.get(MOVIEVAULT_V2_PLUGIN_ID) and not box_set_member_movievault_id(enriched):
+            enriched["releaseId"] = str(identifiers[MOVIEVAULT_V2_PLUGIN_ID])
 
         if technical_updates:
             enriched["technicalSpecs"] = {**(enriched.get("technicalSpecs") or {}), **technical_updates}
@@ -35133,13 +35591,21 @@ def register_routes(flask_app: Flask) -> None:
         fallback_format: str,
     ) -> dict[str, Any]:
         title = clean_text(member.get("title") or member.get("originalTitle") or member.get("original_title"))
-        if not title and not (member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")):
+        movievault_id = box_set_member_movievault_id(member)
+        if not title and not movievault_id and not (
+            member.get("tmdbId") or member.get("tmdb_id") or member.get("imdbId") or member.get("imdb_id")
+        ):
             return member
         lookup_payload = {
             "title": title,
             "year": clean_text(member.get("year")),
             "tmdbId": clean_text(member.get("tmdbId") or member.get("tmdb_id")),
             "imdbId": clean_text(member.get("imdbId") or member.get("imdb_id")),
+            # The member's own MovieVault release, which the box-set proposal
+            # named. This is what turns the enrichment call into a direct
+            # `movie_details` resolve instead of a title guess: the member has no
+            # year to disambiguate one, and its barcode is the box set's.
+            "movieVaultId": movievault_id,
             "barcode": clean_text(member.get("barcode")),
             "format": clean_text(member.get("format") or fallback_format),
             "parentBoxSets": [
@@ -37963,10 +38429,12 @@ def register_routes(flask_app: Flask) -> None:
     def sync_state():
         with connect() as conn:
             revision = current_revision(conn)
+            stream_id = sync_stream_id(conn)
         return response(
             {
                 "status": "ok",
                 "currentRevision": revision,
+                "streamId": stream_id,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                 "supportedEntityTypes": [
                     "movie",
@@ -38018,6 +38486,7 @@ def register_routes(flask_app: Flask) -> None:
 
         with connect() as conn:
             revision = current_revision(conn)
+            stream_id = sync_stream_id(conn)
             # Credits are scoped to the same movie window as `movies` -- the
             # query orders both by sort title -- so a truncated movie list means
             # a truncated credit list, and they are reported separately because
@@ -38100,6 +38569,10 @@ def register_routes(flask_app: Flask) -> None:
             {
                 "status": "ok",
                 "currentRevision": revision,
+                # The identity of the counter `currentRevision` belongs to. A
+                # client that stores it alongside the cursor can tell a rebuilt
+                # database from a quiet one on the next pull.
+                "streamId": stream_id,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
                 "complete": not any(entry["truncated"] for entry in collections.values()),
                 "collections": collections,
@@ -38109,19 +38582,29 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/sync/delta")
     def sync_delta():
-        since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
+        requested_since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
         limit = parse_int_arg("limit", 500, minimum=1, maximum=1000)
+        client_stream_id = clean_text(request.args.get("streamId")) or None
         with connect() as conn:
             revision = current_revision(conn)
+            stream_id = sync_stream_id(conn)
+            since, reset = resolve_sync_cursor(
+                since=requested_since,
+                revision=revision,
+                stream_id=stream_id,
+                client_stream_id=client_stream_id,
+            )
             if not table_exists(conn, "sync_changes"):
                 return response(
                     {
                         "status": "ok",
-                        "since": since,
+                        "since": requested_since,
                         "currentRevision": revision,
+                        "streamId": stream_id,
+                        "reset": reset,
                         "changes": [],
                         "hasMore": False,
-                        "nextSince": revision,
+                        "nextSince": since,
                     }
                 )
             with conn.cursor() as cur:
@@ -38143,15 +38626,21 @@ def register_routes(flask_app: Flask) -> None:
                     (since, limit),
                 )
                 changes = cur.fetchall()
+        # An empty page leaves the cursor exactly where it was. Advancing it to
+        # `currentRevision` instead -- the old behaviour -- hands a client a
+        # cursor covering changes it was never sent, and there is no second
+        # chance: `WHERE revision > since` can only look forward.
         next_since = int(changes[-1]["revision"]) if changes else since
         return response(
             {
                 "status": "ok",
-                "since": since,
+                "since": requested_since,
                 "currentRevision": revision,
+                "streamId": stream_id,
+                "reset": reset,
                 "changes": changes,
                 "hasMore": bool(changes and next_since < revision),
-                "nextSince": revision if not changes else next_since,
+                "nextSince": next_since,
             }
         )
 
@@ -38453,21 +38942,31 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/sync/user/delta")
     def sync_user_delta():
-        since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
+        requested_since = parse_int_arg("since", 0, minimum=0, maximum=9_000_000_000)
         limit = parse_int_arg("limit", 500, minimum=1, maximum=1000)
+        client_stream_id = clean_text(request.args.get("streamId")) or None
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
             revision = current_user_revision(conn, user_id)
+            stream_id = user_sync_stream_id(conn, user_id)
+            since, reset = resolve_sync_cursor(
+                since=requested_since,
+                revision=revision,
+                stream_id=stream_id,
+                client_stream_id=client_stream_id,
+            )
             if not table_exists(conn, "user_sync_changes"):
                 return response(
                     {
                         "status": "ok",
-                        "since": since,
+                        "since": requested_since,
                         "currentRevision": revision,
+                        "streamId": stream_id,
+                        "reset": reset,
                         "changes": [],
                         "hasMore": False,
-                        "nextSince": revision,
+                        "nextSince": since,
                     }
                 )
             with conn.cursor() as cur:
@@ -38489,15 +38988,18 @@ def register_routes(flask_app: Flask) -> None:
                     (user_id, since, limit),
                 )
                 changes = cur.fetchall()
+        # Same rule as the catalog stream: an empty page never moves the cursor.
         next_since = int(changes[-1]["revision"]) if changes else since
         return response(
             {
                 "status": "ok",
-                "since": since,
+                "since": requested_since,
                 "currentRevision": revision,
+                "streamId": stream_id,
+                "reset": reset,
                 "changes": changes,
                 "hasMore": bool(changes and next_since < revision),
-                "nextSince": revision if not changes else next_since,
+                "nextSince": next_since,
             }
         )
 

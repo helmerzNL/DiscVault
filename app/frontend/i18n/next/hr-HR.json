@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Tvoje vlastite fotografije ove serije — kutije sezona, hrptovi, diskovi. Sinkroniziraju se na tvoje ostale uređaje.",
   "ownImages.label": "Oznaka",
   "ownImages.upload": "Dodaj slike",
+  "ownImages.capture": "Snimi fotografiju",
   "ownImages.empty": "Još nema vlastitih slika.",
   "ownImages.count": "{used} od {limit}",
   "ownImages.uploading": "Dodavanje slika...",

@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Sinu enda fotod sellest sarjast — hooajakarbid, seljad, plaadid. Need sünkroonitakse su teistesse seadmetesse.",
   "ownImages.label": "Silt",
   "ownImages.upload": "Lisa pilte",
+  "ownImages.capture": "Tee foto",
   "ownImages.empty": "Omi pilte pole veel.",
   "ownImages.count": "{used} / {limit}",
   "ownImages.uploading": "Piltide lisamine...",

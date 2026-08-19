@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Jūsų pačių nuotraukos iš šio serialo — sezonų dėžutės, nugarėlės, diskai. Jos sinchronizuojamos su kitais jūsų įrenginiais.",
   "ownImages.label": "Žymė",
   "ownImages.upload": "Pridėti vaizdų",
+  "ownImages.capture": "Fotografuoti",
   "ownImages.empty": "Savų vaizdų kol kas nėra.",
   "ownImages.count": "{used} iš {limit}",
   "ownImages.uploading": "Pridedami vaizdai...",

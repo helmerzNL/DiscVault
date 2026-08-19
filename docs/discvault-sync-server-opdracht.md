@@ -476,3 +476,132 @@ waar trede 4 (titel+jaar) actief is.
       `scripts/validate_identity_ladder_fixture.py`. De validator voert alle
       categorieën uit (`cases`, `identifier_cases`, `merge_winner_cases`), weigert
       schema-/dispatchdrift en controleert de gepinde fixture-SHA.
+
+---
+
+### Cursoridentiteit — een pull die niet bij deze stream hoort, herspeelt
+
+`GET /api/next/sync/delta` blaadt door `sync_changes` met `WHERE revision > since`. Beide
+helften van die vergelijking zijn kale gehele getallen en niets zei uit **welke** teller ze
+kwamen. Een herbouwde of gereset database — `sync_state.revision` terug op 0, `sync_changes`
+leeg — was daardoor niet te onderscheiden van een database waar niets gebeurd was.
+
+De waargenomen storing (iOS-log 2026-08-15): schone database, films toegevoegd in de PWA, en een
+iOS-app die nog een cursor uit de *vorige* database vasthield. Zijn eerste pull vroeg om
+`revision > <oud, groot>`, matchte niets, en het oude antwoord gaf `nextSince: currentRevision`
+terug — de cursor sprong op de top van een historie die het apparaat nooit ontvangen had. De
+PWA-films stonden op lagere revisies en `>` kijkt alleen vooruit, dus ze waren vanaf dat apparaat
+definitief onbereikbaar. De film die daarna *op* iOS werd toegevoegd verscheen wél in de PWA,
+omdat een push de cursor helemaal niet raadpleegt — precies waarom de sync aan beide kanten
+gezond oogde.
+
+Twee regels sluiten dit, en ze staan los van elkaar:
+
+1. **Een lege pagina verzet de cursor niet.** `nextSince` is de revisie van de laatste change die
+   daadwerkelijk is meegegeven, of de cursor ongewijzigd. Nooit `currentRevision`: dat is een
+   bewering over changes die het antwoord niet bevatte.
+2. **Een onmogelijke cursor herspeelt vanaf het begin.** `since > currentRevision` is niet via
+   syncen te bereiken — de teller klimt alleen — dus betekent het dat de teller onder de client is
+   teruggedraaid. `resolve_sync_cursor` zet de pull dan op 0 en zet `reset: true`.
+
+| Veld | Waar | Betekenis |
+|---|---|---|
+| `streamId` | response van `/sync/state`, `/sync/bootstrap`, `/sync/delta`, `/sync/user/delta` | Identiteit van de tellerstream (`sync_state.stream_id`, migratie `083_sync_stream_identity.sql`) |
+| `?streamId=<uuid>` | queryparameter op beide delta-endpoints | De stream waar de cursor van de client bij hoort; een mismatch is een definitieve reset |
+| `reset` | response van beide delta-endpoints | `true` wanneer de server de pull op 0 heeft gezet; de client moet zijn lokale beeld als onvolledig behandelen |
+
+Beide velden zijn additief. Een client die `streamId` nooit meestuurt blijft werken **en herstelt
+alsnog**, want regel 2 vraagt niets van de client — dat is wat deze fix bij reeds uitgebrachte
+builds laat aankomen.
+
+`reset_next_test_database` mint een nieuwe `stream_id` bij het terugdraaien van de teller.
+Een teller terugdraaien zonder de stream te hernoemen is exact de val die hierboven beschreven
+staat.
+
+**Wat dit niet repareert.** Een apparaat dat de sprong al gemaakt heeft, heeft een cursor die
+netjes binnen bereik ligt (`since == currentRevision`); de server kan niet meer zien dat het
+overgeslagen historie mist. Zo'n installatie heeft eenmalig een volledige resync nodig
+(`GET /api/next/sync/bootstrap`).
+
+#### Herstel van een toestel dat de sprong al gemaakt heeft
+
+De twee regels hierboven voorkomen dit voortaan, maar repareren geen toestel waar het al
+gebeurd is: zo'n cursor ligt binnen bereik en is niet te onderscheiden van een toestel dat bij
+is. En "haal opnieuw een bootstrap op" is precies bij grote collecties geen uitweg — de
+bootstrap klemt op `limit` 5000, kapt alfabetisch af en heeft lagere grenzen op de
+satellietarrays (sync-contract §5c). Een bibliotheek van 1295 films krijgt op de standaardwaarde
+een prefix van 1000.
+
+De delta kan het wel, want die blaadt door met `hasMore`/`nextSince`. De catalogus wordt dus
+opnieuw ín die stroom geschreven: elke levende entiteit als gewone upsert-change, op een revisie
+bóven elke cursor. Elk toestel haalt dat bij de volgende pull op, ongeacht welke cursor het
+vasthoudt — geen clientwijziging, geen herinstallatie.
+
+**Dit gaat vanzelf.** Migratie `084_sync_catalog_republish_job.sql` zet één
+`sync.catalog_republish`-job klaar en de worker voert hem uit. Migraties draaien al onbeheerd bij
+elke containerstart (`next_database.py migrate` in supervisord) en draaien **één keer per
+versie** — precies de cadans die dit nodig heeft. Wie update krijgt de reparatie dus zonder een
+runbook te openen.
+
+Drie keuzes die daaronder liggen:
+
+- **Een job, geen SQL in de migratie.** Een delta-payload is de hele entiteit, gebouwd door
+  `movie_entity` en verwanten in `next_app`. Diezelfde vorm in SQL nabouwen zou een tweede
+  implementatie van het wire-formaat zijn, die uit elkaar loopt zodra er een veld bij komt. De
+  migratie plant dus alleen in; `next_sync_republish.py` voert uit, via dezelfde bouwers als de
+  live endpoints.
+- **Eén keer, nooit op een timer.** De republish is bewust niet idempotent: een change die
+  eenmaal onder een cursor ligt is alleen zichtbaar te maken door er een nieuwe boven te
+  schrijven. Elke run zet er een generatie bij en kost elk verbonden toestel een volledige
+  catalogusdownload. Eén keer per upgrade is de reparatie; één keer per boot zou een
+  permanente heffing zijn.
+- **Overslaan bij een lege bibliotheek.** Er valt niets te repareren en er is geen client met
+  een cursor in een historie die nooit bestond.
+
+Volgorde van uitgifte: locaties, series, containers, films, film-identifiers, containerleden —
+verwezen entiteiten vóór wat ernaar wijst, zodat een client die de stroom op revisievolgorde
+toepast nooit langer dan één change een dangling reference houdt. Tombstones worden nooit
+opnieuw uitgegeven; die reizen als hun eigen `delete`-change.
+
+#### De handmatige uitweg ernaast
+
+`app/scripts/republish_sync_stream.py` doet hetzelfde werk via dezelfde module, voor de gevallen
+die een eenmalige migratie niet dekt: een toestel dat later alsnog vastloopt, een run die faalde,
+of het republiceren van één entiteitssoort tijdens het zoeken.
+
+```sh
+# In de applicatiecontainer: eerst kijken wat er zou bewegen (dry-run is default)
+docker compose exec app python app/scripts/republish_sync_stream.py
+
+# Daarna, als tweede bewuste handeling
+docker compose exec app python app/scripts/republish_sync_stream.py --execute
+```
+
+Voor een normale upgrade hoeft dit niet: de job hierboven heeft het dan al gedaan.
+
+#### Een payloadvormfix bereikt niemand uit zichzelf
+
+De delta draagt **wijzigingen**, geen hervormingen. Verandert een fix wat een entiteit op de draad
+*meedraagt* zonder dat er een rij verandert — zoals #690, dat de hoes ging oplossen uit
+`entity_media` in plaats van doorgeven uit `metadata.poster_url` — dan is er niets als gewijzigd
+gemarkeerd en heeft de delta niets te sturen. Elk toestel houdt wat het al had.
+
+**Zo'n fix brengt dus zijn eigen republish-migratie mee** (`085_sync_catalog_republish_artwork.sql`
+als voorbeeld). Niet in een runbook: wie update hoort het te krijgen zonder te weten dat er een
+script bestaat.
+
+##### Twee wachtende sweeps zijn geen twee fixes
+
+De guard in 085 slaat de job over als er al één `pending` of `running` is. Dat is geen
+optimalisatie maar de definitie van de operatie: een republish stuurt elke levende entiteit
+opnieuw **zoals hij nú is**, gebouwd door de code die draait. Een sweep die nog niet gelopen heeft
+draagt dus alle fixes die inmiddels zijn geland, ook die van ná het moment dat hij werd ingepland.
+
+Dat is precies het geval van iemand die eens per week update en drie releases overslaat: zijn
+container draait 084 en 085 achter elkaar, er wordt één job ingepland, en die publiceert een
+catalogus die beide fixes al draagt. Zonder de guard betaalde elk toestel twee identieke
+downloads.
+
+`completed` en `failed` staan bewust **niet** in die guard. Een afgeronde sweep publiceerde de
+oude vorm en kan deze niet dragen; een gefaalde publiceerde niets. Beide horen door een verse
+sweep gevolgd te worden.

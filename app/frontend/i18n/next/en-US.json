@@ -3026,6 +3026,7 @@
   "ownImages.introSeries": "Your own photographs of this series — the season boxes, the spines, the discs. They sync to your other devices.",
   "ownImages.label": "Label",
   "ownImages.upload": "Add images",
+  "ownImages.capture": "Take photo",
   "ownImages.empty": "No images of your own yet.",
   "ownImages.count": "{used} of {limit}",
   "ownImages.uploading": "Adding images...",
