@@ -2995,6 +2995,59 @@ def _insert_lookup(
     )
 
 
+# The two "own identity" source types: a hash that is the entity's *own* barcode,
+# not a disc it merely contains.
+_OWN_IDENTITY_SOURCES = ("release_ean", "box_set_ean")
+
+
+def _purge_foreign_identity_claims(
+    cur: Any,
+    generation: str,
+    own_hashes: list[str],
+    *,
+    keep_entity_type: str,
+    keep_entity_id: str,
+) -> None:
+    """Make an entity's own barcode exclusive to it within the generation.
+
+    A delta is applied *in place* on the active generation, and each upsert only
+    clears its **own** prior lookup rows (`entity_id = self`). So when a barcode
+    is reassigned from one box set/release to another, the record that *loses* it
+    is not re-emitted unless it changed for another reason -- and with the feed
+    compacted, it usually is not. The losing entity's stale
+    `hash -> that entity` row then survives, and because `local_lookup` returns
+    every claimant of a hash, the scanned barcode resolves to the wrong box set
+    (real symptom: EAN 786936826951 resolved to a 4K "Avengers Assembled:
+    Complete 4-Movie Collection" it had been moved off, not the Blu-ray "Marvel
+    Cinematic Universe: Phase One" it now belongs to).
+
+    An entity's *own* barcode (`release_ean`/`box_set_ean`) identifies exactly one
+    product, so when this entity claims it as its own, any *other* entity's
+    own-identity claim on the same hash is stale by definition and is removed here.
+    `member_ean`/`member_barcode` rows are deliberately left alone: a disc barcode
+    legitimately belongs to a standalone release *and* to every box set that
+    contains it, so those are not exclusive and must keep coexisting.
+    """
+    if not own_hashes:
+        return
+    cur.execute(
+        """
+        DELETE FROM movievault_v2_lookup_hashes
+        WHERE generation = %s
+          AND lookup_hash = ANY(%s)
+          AND source_type = ANY(%s)
+          AND NOT (entity_type = %s AND entity_id = %s)
+        """,
+        (
+            generation,
+            list(own_hashes),
+            list(_OWN_IDENTITY_SOURCES),
+            keep_entity_type,
+            keep_entity_id,
+        ),
+    )
+
+
 def _replace_audio_tracks(
     cur: Any, generation: str, release_id: str, tracks: list[dict[str, Any]]
 ) -> None:
@@ -3153,6 +3206,13 @@ def _upsert_release(cur: Any, generation: str, record: dict[str, Any], origin: s
             Jsonb(record["discs"]) if record.get("discs") is not None else None,
         ),
     )
+    _purge_foreign_identity_claims(
+        cur,
+        generation,
+        record["eanHashes"],
+        keep_entity_type="release",
+        keep_entity_id=release_id,
+    )
     for lookup_hash in record["eanHashes"]:
         _insert_lookup(cur, generation, lookup_hash, "release", release_id, "release_ean")
     _replace_audio_tracks(cur, generation, release_id, record.get("audioTracks") or [])
@@ -3205,6 +3265,13 @@ def _upsert_box_set(cur: Any, generation: str, record: dict[str, Any], origin: s
         WHERE generation = %s AND box_set_id = %s
         """,
         (generation, box_set_id),
+    )
+    _purge_foreign_identity_claims(
+        cur,
+        generation,
+        record["eanHashes"],
+        keep_entity_type="box_set",
+        keep_entity_id=box_set_id,
     )
     for lookup_hash in record["eanHashes"]:
         _insert_lookup(cur, generation, lookup_hash, "box_set", box_set_id, "box_set_ean")
@@ -4107,14 +4174,33 @@ def local_lookup(conn: Any, request: dict[str, Any]) -> dict[str, Any]:
         if not isinstance(lookup_hash, str) or not HASH_PATTERN.fullmatch(lookup_hash):
             raise MovieVaultV2Error("lookup_invalid")
         with conn.cursor() as cur:
+            # Order the freshest claimant first. A hash may legitimately match
+            # more than one entity (a disc barcode belongs to its standalone
+            # release *and* to every box set that contains it), so results are a
+            # list, not a single row. But it may also carry a *stale* claim: an
+            # in-place delta cannot always remove the row of an entity a barcode
+            # was moved off (see `_purge_foreign_identity_claims`). Ordering by
+            # the entity's own revision DESC puts the entity that most recently
+            # claimed the barcode at the top, so a residual stale row can no
+            # longer outrank the current owner in what the client shows.
             cur.execute(
                 """
-                SELECT entity_type, entity_id,
-                       array_agg(DISTINCT source_type ORDER BY source_type) AS match_sources
-                FROM movievault_v2_lookup_hashes
-                WHERE generation = %s AND lookup_hash = %s
-                GROUP BY entity_type, entity_id
-                ORDER BY entity_type, entity_id
+                SELECT lh.entity_type, lh.entity_id,
+                       array_agg(DISTINCT lh.source_type ORDER BY lh.source_type)
+                           AS match_sources,
+                       COALESCE(r.revision, b.revision) AS entity_revision
+                FROM movievault_v2_lookup_hashes AS lh
+                LEFT JOIN movievault_v2_releases AS r
+                    ON lh.entity_type = 'release'
+                   AND r.generation = lh.generation
+                   AND r.release_id = lh.entity_id
+                LEFT JOIN movievault_v2_box_sets AS b
+                    ON lh.entity_type = 'box_set'
+                   AND b.generation = lh.generation
+                   AND b.box_set_id = lh.entity_id
+                WHERE lh.generation = %s AND lh.lookup_hash = %s
+                GROUP BY lh.entity_type, lh.entity_id, COALESCE(r.revision, b.revision)
+                ORDER BY entity_revision DESC NULLS LAST, lh.entity_type, lh.entity_id
                 LIMIT %s
                 """,
                 (generation, lookup_hash, limit),
