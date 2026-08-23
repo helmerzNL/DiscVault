@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault werkt nog aan deze zoekopdracht. Zoek zo meteen opnieuw - het afgeronde resultaat blijft klaarstaan.",
   "releaseFallback.unreachable": "MovieVault was niet bereikbaar, dus over deze schijf is nog niets bekend. Dit is meestal tijdelijk.",
   "releaseFallback.failed": "MovieVault kon deze zoekopdracht niet afronden.",
+  "releaseFallback.rateLimited": "De gratis opzoeklimiet voor externe bronnen is bereikt, dus deze disc kon nu niet worden opgezocht. Dit komt meestal alleen voor bij oudere discs - de meeste 4K- en Blu-ray-titels worden automatisch gevonden. Voeg de disc hieronder handmatig toe.",
   "releaseFallback.retry": "Opnieuw proberen",
   "releaseFallback.sharingOn": "Je keuze wordt gedeeld met MovieVault, zodat anderen die deze schijf scannen hem wel vinden. Alleen de releasegegevens gaan mee - nooit iets over jou of je collectie.",
   "preferences.cardSharing": "Delen met MovieVault",

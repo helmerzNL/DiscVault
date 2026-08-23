@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault töötleb seda otsingut veel. Otsi hetke pärast uuesti - valmis tulemus jääb alles.",
   "releaseFallback.unreachable": "MovieVaultiga ei saadud ühendust, seega selle plaadi kohta pole veel midagi teada. See on tavaliselt ajutine.",
   "releaseFallback.failed": "MovieVault ei saanud seda otsingut lõpetada.",
+  "releaseFallback.rateLimited": "Väliste allikate tasuta otsingupiir on täis, seega ei õnnestunud seda ketast praegu otsida. Tavaliselt puudutab see ainult vanemaid kettaid - enamik 4K- ja Blu-ray-pealkirju leitakse automaatselt. Lisa see allpool käsitsi.",
   "releaseFallback.retry": "Proovi uuesti",
   "releaseFallback.sharingOn": "Sinu valik jagatakse MovieVaultiga, et teised leiaksid selle plaadi skannides üles. Saadetakse ainult väljaande andmed - mitte kunagi midagi sinu või su kogu kohta.",
   "preferences.cardSharing": "Jagamine MovieVaultiga",

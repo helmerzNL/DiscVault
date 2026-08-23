@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault na tomto vyhledávání stále pracuje. Vyhledej za chvíli znovu - hotový výsledek zůstane připravený.",
   "releaseFallback.unreachable": "MovieVault nebyl dostupný, o tomto disku tedy zatím nic nevíme. Bývá to dočasné.",
   "releaseFallback.failed": "MovieVault toto vyhledávání nedokončil.",
+  "releaseFallback.rateLimited": "Bezplatný limit vyhledávání v externích zdrojích byl vyčerpán, takže tento disk se teď nepodařilo vyhledat. Obvykle se to týká jen starších disků - většina titulů 4K a Blu-ray se najde automaticky. Přidejte jej ručně níže.",
   "releaseFallback.retry": "Zkusit znovu",
   "releaseFallback.sharingOn": "Tvá volba se sdílí s MovieVault, aby ostatní tento disk při skenování našli. Odesílají se pouze údaje o vydání - nikdy nic o tobě ani o tvé sbírce.",
   "preferences.cardSharing": "Sdílení s MovieVault",

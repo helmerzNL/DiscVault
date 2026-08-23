@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault dar vykdo šią paiešką. Paieškok dar kartą po akimirkos - baigtas rezultatas išlieka paruoštas.",
   "releaseFallback.unreachable": "Nepavyko susisiekti su MovieVault, todėl apie šį diską dar nieko nežinoma. Paprastai tai laikina.",
   "releaseFallback.failed": "MovieVault negalėjo užbaigti šios paieškos.",
+  "releaseFallback.rateLimited": "Pasiekta nemokama išorinių šaltinių paieškų riba, todėl šio disko dabar nepavyko rasti. Paprastai tai paliečia tik senesnius diskus - dauguma 4K ir Blu-ray leidinių randami automatiškai. Pridėkite jį rankiniu būdu žemiau.",
   "releaseFallback.retry": "Bandyti dar kartą",
   "releaseFallback.sharingOn": "Tavo pasirinkimas dalijamasi su MovieVault, kad kiti rastų šį diską jį nuskaitę. Siunčiami tik leidimo duomenys - niekada nieko apie tave ar tavo kolekciją.",
   "preferences.cardSharing": "Dalijimasis su MovieVault",

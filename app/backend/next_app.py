@@ -10576,6 +10576,14 @@ RELEASE_DETAILS_FAILURE_KINDS: dict[str, tuple[str, bool]] = {
     "not_found": ("no_data", False),
     "ambiguous_title": ("needs_year", False),
     "canonical_release_unusable": ("catalog_defect", False),
+    # MovieVault answered, but the external fallback source it needed was
+    # rate-limited - in practice its daily free-lookup quota. So `answered` stays
+    # true (this is not `unavailable`: MovieVault was reached and replied), and it
+    # is NOT retryable: a quota does not clear on a quick retry, so offering "try
+    # again" would be dishonest. It effectively only bites older/rarer discs -
+    # modern 4K/Blu-ray resolve from the catalogue or primary sources and never
+    # reach that fallback. Copy: releaseFallback.rateLimited.
+    "provider_rate_limited": ("rate_limited", False),
     # DiscVault-owned. MovieVault answered; this client refused what it sent, or
     # refused to send the request at all. Auditing these as `server` - which the
     # `.get()` default below used to do - points the next investigation at the

@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault arbeitet noch an dieser Suche. Suche gleich erneut - das fertige Ergebnis bleibt bereit.",
   "releaseFallback.unreachable": "MovieVault war nicht erreichbar, daher ist über diese Disc noch nichts bekannt. Das ist meist vorübergehend.",
   "releaseFallback.failed": "MovieVault konnte diese Suche nicht abschließen.",
+  "releaseFallback.rateLimited": "Das kostenlose Abfragelimit für externe Quellen ist erreicht, daher konnte diese Disc gerade nicht abgefragt werden. Das betrifft in der Regel nur ältere Discs - die meisten 4K- und Blu-ray-Titel werden automatisch gefunden. Füge sie unten von Hand hinzu.",
   "releaseFallback.retry": "Erneut versuchen",
   "releaseFallback.sharingOn": "Deine Wahl wird mit MovieVault geteilt, damit andere diese Disc beim Scannen finden. Nur die Release-Daten werden übertragen - niemals etwas über dich oder deine Sammlung.",
   "preferences.cardSharing": "Mit MovieVault teilen",
