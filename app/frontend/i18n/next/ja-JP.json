@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault はまだこの検索を処理中です。少し後で再検索してください - 完了した結果は保持されます。",
   "releaseFallback.unreachable": "MovieVault に接続できなかったため、このディスクについてはまだ何もわかりません。通常は一時的なものです。",
   "releaseFallback.failed": "MovieVault はこの検索を完了できませんでした。",
+  "releaseFallback.rateLimited": "外部ソースの無料検索回数の上限に達したため、このディスクは現在検索できませんでした。これは通常、古いディスクにのみ影響します。ほとんどの 4K および Blu-ray タイトルは自動的に見つかります。下から手動で追加してください。",
   "releaseFallback.retry": "再試行",
   "releaseFallback.sharingOn": "あなたの選択は MovieVault と共有され、同じディスクをスキャンした人が見つけられるようになります。送信されるのはリリース情報だけで、あなたやコレクションに関する情報は一切送られません。",
   "preferences.cardSharing": "MovieVault との共有",

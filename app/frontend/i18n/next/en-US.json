@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault is still working on this lookup. Search again in a moment - the finished result is kept ready.",
   "releaseFallback.unreachable": "MovieVault could not be reached, so nothing is known about this disc yet. This is usually temporary.",
   "releaseFallback.failed": "MovieVault could not complete this lookup.",
+  "releaseFallback.rateLimited": "The free lookup limit for external sources has been reached, so this disc could not be looked up right now. This usually only affects older discs - most 4K and Blu-ray titles are found automatically. Add it by hand below.",
   "releaseFallback.retry": "Try again",
   "releaseFallback.sharingOn": "Your choice is shared with MovieVault so others scanning this disc find it. Only the release details travel - never anything about you or your collection.",
   "preferences.cardSharing": "Sharing with MovieVault",

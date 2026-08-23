@@ -39143,6 +39143,17 @@ def ui_preview_html(
             : tNext("releaseFallback.unreachable", "MovieVault could not be reached, so nothing is known about this disc yet. This is usually temporary.")
         };
       }
+      // The external fallback source was rate-limited (usually its daily free
+      // lookup quota). Not "unreachable" (MovieVault answered) and not worth a
+      // retry (a quota does not clear on a quick one), so no retry button. It
+      // effectively only affects older discs - most 4K/Blu-ray are found before
+      // this fallback is even reached.
+      if (fallback.failureKind === "rate_limited") {
+        return {
+          tone: "warn",
+          text: tNext("releaseFallback.rateLimited", "The free lookup limit for external sources has been reached, so this disc could not be looked up right now. This usually only affects older discs - most 4K and Blu-ray titles are found automatically. Add it by hand below.")
+        };
+      }
       if (fallback.status === "failed") {
         return {
           tone: "bad",

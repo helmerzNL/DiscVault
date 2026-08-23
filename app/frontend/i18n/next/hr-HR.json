@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault još radi na ovoj pretrazi. Potraži ponovno za trenutak - gotov rezultat ostaje spreman.",
   "releaseFallback.unreachable": "MovieVault nije bio dostupan pa o ovom disku još ništa nije poznato. To je obično privremeno.",
   "releaseFallback.failed": "MovieVault nije mogao dovršiti ovu pretragu.",
+  "releaseFallback.rateLimited": "Dosegnut je besplatni limit pretraživanja vanjskih izvora, pa se ovaj disk trenutačno nije mogao pretražiti. To obično utječe samo na starije diskove - većina 4K i Blu-ray naslova pronalazi se automatski. Dodajte ga ručno u nastavku.",
   "releaseFallback.retry": "Pokušaj ponovno",
   "releaseFallback.sharingOn": "Tvoj se odabir dijeli s MovieVaultom kako bi drugi pronašli ovaj disk pri skeniranju. Šalju se samo podaci o izdanju - nikad ništa o tebi ili tvojoj zbirci.",
   "preferences.cardSharing": "Dijeljenje s MovieVaultom",

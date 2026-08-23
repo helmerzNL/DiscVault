@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault arbejder stadig på opslaget. Søg igen om lidt - det færdige resultat står klar.",
   "releaseFallback.unreachable": "MovieVault kunne ikke nås, så der vides endnu intet om denne disk. Det er som regel midlertidigt.",
   "releaseFallback.failed": "MovieVault kunne ikke fuldføre opslaget.",
+  "releaseFallback.rateLimited": "Den gratis opslagsgrænse for eksterne kilder er nået, så denne disc kunne ikke slås op lige nu. Det rammer normalt kun ældre discs - de fleste 4K- og Blu-ray-titler findes automatisk. Tilføj den manuelt nedenfor.",
   "releaseFallback.retry": "Prøv igen",
   "releaseFallback.sharingOn": "Dit valg deles med MovieVault, så andre finder denne disc, når de scanner den. Kun udgivelsesoplysningerne sendes - aldrig noget om dig eller din samling.",
   "preferences.cardSharing": "Deling med MovieVault",

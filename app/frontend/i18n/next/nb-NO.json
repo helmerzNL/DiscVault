@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault jobber fortsatt med oppslaget. Søk igjen om litt - det ferdige resultatet ligger klart.",
   "releaseFallback.unreachable": "MovieVault kunne ikke nås, så ingenting er kjent om denne platen ennå. Dette er som regel midlertidig.",
   "releaseFallback.failed": "MovieVault kunne ikke fullføre oppslaget.",
+  "releaseFallback.rateLimited": "Den gratis oppslagsgrensen for eksterne kilder er nådd, så denne platen kunne ikke slås opp akkurat nå. Dette gjelder vanligvis bare eldre plater - de fleste 4K- og Blu-ray-titler finnes automatisk. Legg den til manuelt nedenfor.",
   "releaseFallback.retry": "Prøv igjen",
   "releaseFallback.sharingOn": "Valget ditt deles med MovieVault slik at andre finner denne platen når de skanner den. Bare utgivelsesdetaljene sendes - aldri noe om deg eller samlingen din.",
   "preferences.cardSharing": "Deling med MovieVault",

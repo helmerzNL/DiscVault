@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault bu aramayı hâlâ sürdürüyor. Birazdan yeniden ara - tamamlanan sonuç hazır tutuluyor.",
   "releaseFallback.unreachable": "MovieVault'a ulaşılamadı, bu yüzden bu disk hakkında henüz bir şey bilinmiyor. Bu genellikle geçicidir.",
   "releaseFallback.failed": "MovieVault bu aramayı tamamlayamadı.",
+  "releaseFallback.rateLimited": "Dış kaynaklar için ücretsiz arama sınırına ulaşıldı, bu nedenle bu disk şu anda aranamadı. Bu genellikle yalnızca eski diskleri etkiler - çoğu 4K ve Blu-ray başlığı otomatik olarak bulunur. Aşağıdan elle ekleyin.",
   "releaseFallback.retry": "Yeniden dene",
   "releaseFallback.sharingOn": "Seçimin MovieVault ile paylaşılır, böylece bu diski tarayan başkaları da bulur. Yalnızca sürüm bilgileri gönderilir - senin ya da koleksiyonunla ilgili hiçbir şey gönderilmez.",
   "preferences.cardSharing": "MovieVault ile paylaşım",
