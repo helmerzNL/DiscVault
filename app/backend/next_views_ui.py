@@ -37402,10 +37402,48 @@ def ui_preview_html(
       stopImportBarcodeScanner();
       const input = document.getElementById("importBarcodeInput");
       if (input) input.value = barcode;
+      // A scan is a fresh, unambiguous identity. Clear the other manual-search
+      // identity fields (title/year/TMDB/IMDB) left over from the previous item,
+      // otherwise previewBarcodeImport() sends the stale title alongside the new
+      // barcode and the lookup matches on it -- so a second scan kept returning
+      // the first title until the field was cleared by hand (issue #706).
+      clearImportManualIdentityFields();
       importCenter.activeBatchBarcode = "";
       setImportScannerMessage(tNext("importCenter.scanFound", "Barcode found. Previewing metadata..."), "good");
       previewBarcodeImport();
       return true;
+    }
+    function clearImportManualIdentityFields() {
+      // Only the identity fields that steer which title the lookup matches.
+      // The Format select is a disc preference, not an identity, so it is left
+      // as the user set it.
+      ["importTitleInput", "importYearInput", "importTmdbIdInput", "importImdbIdInput"].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = "";
+      });
+    }
+    function resetImportSingleSearch() {
+      // After a successful add the flow leaves for the library, so the Scan & add
+      // form must not keep the item just added: clear every search input and the
+      // lookup/preview state so returning to ADD starts on a clean form rather
+      // than the previous barcode and its result (issue #706).
+      ["importBarcodeInput", "importTitleInput", "importYearInput", "importTmdbIdInput", "importImdbIdInput"].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = "";
+      });
+      const formatField = document.getElementById("importFormatInput");
+      if (formatField) formatField.selectedIndex = 0;
+      importCenter.barcodeLookup = null;
+      importCenter.addResult = null;
+      importCenter.selectedMovieCandidateKey = "";
+      importCenter.selectedBoxSetProposalKey = "";
+      importCenter.selectedBoxSetProposalSnapshot = null;
+      importCenter.boxSetMemberEdits = {};
+      importCenter.activeBatchBarcode = "";
+      resetReleaseFallback();
+      setImportLookupActionMessage("", "");
+      setImportLookupPreviewMessage("", "");
+      renderBarcodeLookup();
     }
     async function tryNativeImportBarcodeScanner(viewport) {
       if (typeof BarcodeDetector === "undefined") return "fallback";
@@ -39511,10 +39549,16 @@ def ui_preview_html(
           if (!openNextImportBatchRow(barcode)) {
             setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
           }
-        } else if (importedContainerId) {
-          openAppContainerDetail(importedContainerId);
-        } else if (movie.id) {
-          openAppMovieDetail(movie.id);
+        } else {
+          // Single (non-batch) add: the view now leaves for the library, so
+          // clear the search form and its result before navigating -- otherwise
+          // returning to ADD shows the item just added, still filled in (#706).
+          resetImportSingleSearch();
+          if (importedContainerId) {
+            openAppContainerDetail(importedContainerId);
+          } else if (movie.id) {
+            openAppMovieDetail(movie.id);
+          }
         }
         loadAppSnapshot().catch((error) => {
           console.warn("Snapshot refresh after import failed", error);

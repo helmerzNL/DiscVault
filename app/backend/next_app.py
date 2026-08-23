@@ -23770,11 +23770,28 @@ def queue_movievault_v2_sync_job(
     actor: dict[str, Any],
     source: str,
     skip_when_indexed: bool = False,
+    force_full: bool = False,
 ) -> tuple[dict[str, Any] | None, bool, bool]:
     if not table_exists(conn, "background_jobs"):
         raise NextApiError("Background job table is not available", 503)
     with conn.cursor() as cur:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (MOVIEVAULT_V2_JOB_LOCK_KEY,))
+        if force_full and table_exists(conn, "movievault_v2_sync_state"):
+            # Force a full rebuild by clearing the cursor: run_sync takes the full
+            # path whenever the cursor is empty, and a full sync builds a fresh
+            # generation, which is the only way to drop a stale lookup-hash row an
+            # in-place delta could not remove (a barcode moved between box sets --
+            # see _purge_foreign_identity_claims in next_movievault_v2.py). This is
+            # the repair action behind "re-index"; without it the operator's only
+            # recourse was clearing the cursor by hand in SQL.
+            cur.execute(
+                """
+                UPDATE movievault_v2_sync_state
+                SET cursor = NULL, status = 'stale', updated_at = now()
+                WHERE plugin_id = %s
+                """,
+                (MOVIEVAULT_V2_PLUGIN_ID,),
+            )
         if skip_when_indexed and table_exists(conn, "movievault_v2_sync_state"):
             cur.execute(
                 """
@@ -31125,6 +31142,10 @@ def register_routes(flask_app: Flask) -> None:
                     "role": actor.get("role"),
                 },
             }
+            # A deliberate re-index (repair) rather than an ordinary sync. Read
+            # from the request body, not the plugin payload, so it does not depend
+            # on the plugin manifest declaring the key.
+            force_full = bool(body.get("forceFull"))
             duplicate = False
             with conn.transaction():
                 job = None
@@ -31132,7 +31153,8 @@ def register_routes(flask_app: Flask) -> None:
                     job, duplicate, _skipped_current = queue_movievault_v2_sync_job(
                         conn,
                         actor=actor,
-                        source="manual",
+                        source="reindex" if force_full else "manual",
+                        force_full=force_full,
                     )
                 if job is None:
                     job = create_background_job(

@@ -403,6 +403,147 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
             )
         self.assertEqual(removed["results"], [])
 
+    def test_box_set_barcode_reassignment_drops_stale_lookup(self):
+        """A box-set barcode moved to another box set by an in-place delta must
+        resolve to the new owner only -- never to the box set it was moved off.
+
+        Regression for EAN 786936826951 resolving in the PWA to a 4K "Avengers
+        Assembled: Complete 4-Movie Collection" it had been reassigned away from,
+        instead of the Blu-ray "Marvel Cinematic Universe: Phase One" that now
+        carries it. The losing box set is not re-emitted (the feed is compacted),
+        so its stale `hash -> box set` lookup row survived the delta and, because
+        local_lookup returns every claimant, outranked the current owner.
+        """
+        fixture = self.fixture()
+        full_fixture = self.publisher_ordered_fixture()
+        fixture_digest = hashlib.sha256(full_fixture).hexdigest()
+        settings = {"origin": "https://movievault.example"}
+        original_box = next(
+            json.loads(line)
+            for line in fixture.splitlines()
+            if json.loads(line)["recordType"] == "box_set"
+        )
+        shared_hash = original_box["eanHashes"][0]
+
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=self.manifest()),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    full_fixture,
+                    {
+                        "x-content-sha256": fixture_digest,
+                        "x-next-cursor": "cursor-value-long-enough",
+                    },
+                ),
+            ),
+        ):
+            next_movievault_v2.run_sync(self.connect, settings)
+
+        # Sanity: the barcode resolves to the original box set before the move.
+        with self.connect() as conn:
+            before = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "barcode", "hash": shared_hash, "limit": 10},
+            )
+        before_box_ids = {
+            item["boxSetId"]
+            for item in before["results"]
+            if item["recordType"] == "box_set"
+        }
+        self.assertEqual(before_box_ids, {original_box["boxSetId"]})
+
+        # A NEW box set now claims the same barcode as its own EAN, at a higher
+        # revision. The old box set is intentionally NOT re-emitted.
+        new_box = copy.deepcopy(original_box)
+        new_box["boxSetId"] = "30000000-0000-0000-0000-000000000002"
+        new_box["title"] = "Reassigned Box Set"
+        new_box["revision"] = 43
+        delta_content = json.dumps(
+            new_box, ensure_ascii=True, separators=(",", ":"), sort_keys=True
+        ).encode("ascii") + b"\n"
+        delta_digest = hashlib.sha256(delta_content).hexdigest()
+        delta_manifest = self.manifest(
+            revision=43, cursor="cursor-value-next-long-enough", checksum="f" * 64
+        )
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=delta_manifest),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    delta_content,
+                    {
+                        "x-content-sha256": delta_digest,
+                        "x-next-cursor": delta_manifest["currentCursor"],
+                    },
+                ),
+            ),
+        ):
+            delta = next_movievault_v2.run_sync(self.connect, settings)
+        self.assertEqual(delta["mode"], "delta")
+
+        with self.connect() as conn:
+            after = next_movievault_v2.local_lookup(
+                conn,
+                {"kind": "barcode", "hash": shared_hash, "limit": 10},
+            )
+        after_box_ids = [
+            item["boxSetId"]
+            for item in after["results"]
+            if item["recordType"] == "box_set"
+        ]
+        # The stale claim from the original box set is gone; only the new owner
+        # resolves for this barcode.
+        self.assertEqual(after_box_ids, [new_box["boxSetId"]])
+        self.assertNotIn(original_box["boxSetId"], after_box_ids)
+
+    def test_force_full_reindex_clears_cursor_to_force_a_full_rebuild(self):
+        """The re-index repair action clears the sync cursor so the next run_sync
+        takes the full path (a fresh generation), which is what actually drops a
+        stale lookup row an in-place delta could not remove."""
+        fixture = self.publisher_ordered_fixture()
+        digest = hashlib.sha256(fixture).hexdigest()
+        settings = {"origin": "https://movievault.example"}
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=self.manifest()),
+            patch.object(
+                next_movievault_v2,
+                "_fetch_feed",
+                return_value=(
+                    200,
+                    fixture,
+                    {
+                        "x-content-sha256": digest,
+                        "x-next-cursor": "cursor-value-long-enough",
+                    },
+                ),
+            ),
+        ):
+            next_movievault_v2.run_sync(self.connect, settings)
+
+        actor = {"id": None, "username": "tester", "role": "admin"}
+        with self.connect() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT cursor FROM movievault_v2_sync_state WHERE plugin_id = %s",
+                    (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
+                )
+                self.assertIsNotNone(cur.fetchone()["cursor"])
+            with conn.transaction():
+                next_app.queue_movievault_v2_sync_job(
+                    conn, actor=actor, source="reindex", force_full=True
+                )
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT cursor FROM movievault_v2_sync_state WHERE plugin_id = %s",
+                    (next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,),
+                )
+                self.assertIsNone(cur.fetchone()["cursor"])
+
     def test_cursor_conflict_forces_shadow_generation_full_resync(self):
         fixture = self.publisher_ordered_fixture()
         digest = hashlib.sha256(fixture).hexdigest()
