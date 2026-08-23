@@ -37422,6 +37422,29 @@ def ui_preview_html(
         if (field) field.value = "";
       });
     }
+    function resetImportSingleSearch() {
+      // After a successful add the flow leaves for the library, so the Scan & add
+      // form must not keep the item just added: clear every search input and the
+      // lookup/preview state so returning to ADD starts on a clean form rather
+      // than the previous barcode and its result (issue #706).
+      ["importBarcodeInput", "importTitleInput", "importYearInput", "importTmdbIdInput", "importImdbIdInput"].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = "";
+      });
+      const formatField = document.getElementById("importFormatInput");
+      if (formatField) formatField.selectedIndex = 0;
+      importCenter.barcodeLookup = null;
+      importCenter.addResult = null;
+      importCenter.selectedMovieCandidateKey = "";
+      importCenter.selectedBoxSetProposalKey = "";
+      importCenter.selectedBoxSetProposalSnapshot = null;
+      importCenter.boxSetMemberEdits = {};
+      importCenter.activeBatchBarcode = "";
+      resetReleaseFallback();
+      setImportLookupActionMessage("", "");
+      setImportLookupPreviewMessage("", "");
+      renderBarcodeLookup();
+    }
     async function tryNativeImportBarcodeScanner(viewport) {
       if (typeof BarcodeDetector === "undefined") return "fallback";
       let detector;
@@ -39526,10 +39549,16 @@ def ui_preview_html(
           if (!openNextImportBatchRow(barcode)) {
             setImportBatchMessage(tNext("importCenter.batchWorkflowNext", "Added. Pick the next barcode to continue."), "good");
           }
-        } else if (importedContainerId) {
-          openAppContainerDetail(importedContainerId);
-        } else if (movie.id) {
-          openAppMovieDetail(movie.id);
+        } else {
+          // Single (non-batch) add: the view now leaves for the library, so
+          // clear the search form and its result before navigating -- otherwise
+          // returning to ADD shows the item just added, still filled in (#706).
+          resetImportSingleSearch();
+          if (importedContainerId) {
+            openAppContainerDetail(importedContainerId);
+          } else if (movie.id) {
+            openAppMovieDetail(movie.id);
+          }
         }
         loadAppSnapshot().catch((error) => {
           console.warn("Snapshot refresh after import failed", error);
