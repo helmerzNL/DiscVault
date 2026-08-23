@@ -37402,10 +37402,25 @@ def ui_preview_html(
       stopImportBarcodeScanner();
       const input = document.getElementById("importBarcodeInput");
       if (input) input.value = barcode;
+      // A scan is a fresh, unambiguous identity. Clear the other manual-search
+      // identity fields (title/year/TMDB/IMDB) left over from the previous item,
+      // otherwise previewBarcodeImport() sends the stale title alongside the new
+      // barcode and the lookup matches on it -- so a second scan kept returning
+      // the first title until the field was cleared by hand (issue #706).
+      clearImportManualIdentityFields();
       importCenter.activeBatchBarcode = "";
       setImportScannerMessage(tNext("importCenter.scanFound", "Barcode found. Previewing metadata..."), "good");
       previewBarcodeImport();
       return true;
+    }
+    function clearImportManualIdentityFields() {
+      // Only the identity fields that steer which title the lookup matches.
+      // The Format select is a disc preference, not an identity, so it is left
+      // as the user set it.
+      ["importTitleInput", "importYearInput", "importTmdbIdInput", "importImdbIdInput"].forEach((id) => {
+        const field = document.getElementById(id);
+        if (field) field.value = "";
+      });
     }
     async function tryNativeImportBarcodeScanner(viewport) {
       if (typeof BarcodeDetector === "undefined") return "fallback";
