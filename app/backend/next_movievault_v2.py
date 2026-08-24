@@ -2361,6 +2361,12 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             "resolutionId",
             "retryAfterSeconds",
             "errorCode",
+            # Only ever present on `candidates`; the per-status branch validates
+            # and keeps it. Named here as well because this outer reader runs
+            # first and drops whatever it does not list - which is what silently
+            # blanked the picker's barcode-confidence line (iOS carried it, the
+            # PWA did not).
+            "barcodeConfirmed",
         },
         label="response",
     )
@@ -2480,10 +2486,19 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
         # `poster` here is the 0.25.0 film-level cover: a source recognised the
         # film but not the pressing, yet can still show its artwork while the
         # user picks an edition. It degrades exactly like the hit-path posters.
+        #
+        # `barcodeConfirmed` is the resolver's statement that the scanned code is
+        # itself printed on the pressings listed, as opposed to the film having
+        # been found by title with the barcode unconfirmed. It has to be named
+        # here or the object reader below drops it as unknown - which is exactly
+        # what silently blanked the confidence signal the picker shows, so the
+        # PWA always fell back to the cautious "barcode was not confirmed" line
+        # even when MovieVault had confirmed it. iOS carried the flag; DiscVault
+        # dropped it. See release_details_search_payload, which reads it back.
         _release_details_object(
             item,
             required={"contractVersion", "status", "film", "releases"},
-            optional={"verificationStatus", "poster"},
+            optional={"verificationStatus", "poster", "barcodeConfirmed"},
             label="candidates response",
         )
         releases_value = item["releases"]
@@ -2505,6 +2520,13 @@ def validate_release_details_response(value: Any) -> dict[str, Any]:
             if item["verificationStatus"] not in {"canonical", "unreviewed_external"}:
                 raise MovieVaultV2Error("release_details_response_invalid")
             result["verificationStatus"] = item["verificationStatus"]
+        # Tri-state, carried through only as a real boolean. `true`/`false` are
+        # the resolver's own claim; absent stays absent so an older MovieVault
+        # that says nothing is never made to assert the barcode is unconfirmed.
+        if item.get("barcodeConfirmed") is not None:
+            if not isinstance(item["barcodeConfirmed"], bool):
+                raise MovieVaultV2Error("release_details_response_invalid")
+            result["barcodeConfirmed"] = item["barcodeConfirmed"]
         return result
     if status in {"ambiguous", "miss"}:
         _release_details_object(

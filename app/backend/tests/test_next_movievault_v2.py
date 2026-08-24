@@ -710,6 +710,45 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         self.assertEqual(first["finishes"], [])
         self.assertEqual(result["releases"][1]["finishes"], ["holofoil"])
 
+    def test_release_details_carries_barcode_confirmed_on_a_candidate_list(self):
+        """The confidence signal has to survive the response reader.
+
+        The resolver states `barcodeConfirmed` on a `candidates` answer when the
+        scanned code is itself printed on the pressings shown, and the Add flow
+        picker chooses one of two sentences on it - "the film is certain, pick
+        the pressing" versus the cautious "the barcode was not confirmed". The
+        outer response reader runs first and drops any key it does not list, so
+        this field was silently blanked for the whole client: iOS carried it,
+        the PWA never saw it and always showed the cautious line even on a
+        confirmed barcode. Both the `true` and `false` claims are kept.
+        """
+        for confirmed in (True, False):
+            with self.subTest(confirmed=confirmed):
+                payload = release_details_candidates()
+                payload["barcodeConfirmed"] = confirmed
+
+                result = next_movievault_v2.validate_release_details_response(payload)
+
+                self.assertEqual(result["status"], "candidates")
+                self.assertEqual(result["barcodeConfirmed"], confirmed)
+
+    def test_release_details_leaves_an_unstated_barcode_confirmation_out(self):
+        # Absent is a third state the client depends on - an older MovieVault and
+        # every title route say nothing - so it is never defaulted to a boolean.
+        result = next_movievault_v2.validate_release_details_response(
+            release_details_candidates()
+        )
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertNotIn("barcodeConfirmed", result)
+
+    def test_release_details_rejects_a_non_boolean_barcode_confirmed(self):
+        payload = release_details_candidates()
+        payload["barcodeConfirmed"] = "true"
+
+        with self.assertRaises(next_movievault_v2.MovieVaultV2Error):
+            next_movievault_v2.validate_release_details_response(payload)
+
     def test_release_details_ignores_an_unknown_future_key(self):
         """An additive producer field must not cost the whole answer.
 
