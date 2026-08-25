@@ -28187,7 +28187,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.post("/api/next/movievault/contributions/merge")
     def movievault_contribution_merge():
         """Couple-and-merge trigger: fold a standalone device's contribution
-        identity into this server's (contribution-v3 §5.7, RATIFIED 2026-08-18;
+        identity into this server's (contribution-v3 §5.7, IMPLEMENTED but NOT
+        independently ratified as of a 2026-08-25 correction — see
+        MovieVault-v2's docs/contracts/contribution-v3.md correction notice;
         change spec 2026-08-16-ios-contributions.md §2b.1).
 
         The merge fires when a standalone iOS install that already holds its own
