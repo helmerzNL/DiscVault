@@ -19410,6 +19410,10 @@ def ui_preview_html(
     const initialMovieId = JSON.parse(document.getElementById("initialMovieId").textContent || '""');
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
+    // Bumped every time the SPA replaces `movies` wholesale (loadAppSnapshot()).
+    // library-paging.js pages into that array from outside the SPA and has no
+    // other way to learn the array it was fetching against was thrown away.
+    let librarySnapshotEpoch = 0;
     let libraryMovieTotal = Number(state.moviesTotal ?? (state.movies || []).length) || 0;
     let libraryMoviePageSize = Number(state.moviesPageSize) || 200;
     let libraryMoviesHasMore = state.moviesHasMore === true;
@@ -43964,6 +43968,15 @@ def ui_preview_html(
       showLibraryPage(true, route || "library");
     }
     function refreshAppSnapshotSilently() {
+      // Every return to the Library used to reload the whole snapshot, which
+      // resets `movies` to the 200-row first-paint page and makes background
+      // hydration start over -- five extra pages per navigation for a 2,500-disc
+      // library, and five extra windows in which a page already in flight goes
+      // stale (#715). showLibraryPage(), which both callers invoke on the next
+      // line, already refreshes the Library on this cooldown; sharing the key
+      // also collapses the two snapshot loads a permitted user used to trigger
+      // per navigation into one.
+      if (!shouldLazyRefresh("library", LIBRARY_LAZY_REFRESH_COOLDOWN_MS)) return;
       loadAppSnapshot().catch(() => {});
     }
     async function saveMovieDetails(event) {
@@ -45330,11 +45343,25 @@ def ui_preview_html(
       getPageSize: () => libraryMoviePageSize,
       hasMoreMovies: () => libraryMoviesHasMore === true && movies.length < libraryMovieTotal,
       getLoadedCount: () => movies.length,
+      getSnapshotEpoch: () => librarySnapshotEpoch,
       setMovieTotal: (total) => {
         const parsed = Number(total);
         if (Number.isFinite(parsed) && parsed >= 0) libraryMovieTotal = parsed;
       },
-      appendMovies: (rows) => {
+      appendMovies: (rows, expectedOffset) => {
+        // `expectedOffset` is the movies.length the caller measured when it
+        // issued the request. A page fetched against an older array must never
+        // be appended: the SPA reloads its snapshot on its own (a save, an
+        // import, returning to the Library) and resets `movies` back to the
+        // 200-row first-paint page, so a response already in flight would land
+        // hundreds of rows past the end and punch a hole that offset paging can
+        // never step back over (#715). `null` -- deliberately distinct from 0,
+        // which means "every row was a duplicate" -- tells the caller the array
+        // moved under it. Omitting the argument keeps the old contract.
+        if (expectedOffset !== undefined && expectedOffset !== null) {
+          const expected = Number(expectedOffset);
+          if (!Number.isFinite(expected) || expected !== movies.length) return null;
+        }
         if (!Array.isArray(rows) || !rows.length) return 0;
         const seen = new Set(movies.map((movie) => String(movie?.id || "")));
         const added = [];
@@ -47546,6 +47573,7 @@ def ui_preview_html(
       state = payload.snapshot || {};
       priceDisplay = state.priceDisplay || {};
       movies = state.movies || [];
+      librarySnapshotEpoch += 1;
       libraryMovieTotal = Number(state.moviesTotal ?? movies.length) || 0;
       libraryMoviePageSize = Number(state.moviesPageSize) || libraryMoviePageSize;
       libraryMoviesHasMore = state.moviesHasMore === true;

@@ -4731,6 +4731,21 @@ def collection_movie_preview_entities(
     offset: int = 0,
     actor: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    """One page of the library, in the order the Library renders it.
+
+    The ``m.id`` at the end of the ORDER BY is load-bearing, not decoration.
+    Title and year do not identify a row: a 4K and a Blu-ray of the same film are
+    two ``movies`` rows sharing a title and a year, and a collection of a few
+    thousand discs holds many such pairs. Without a unique tiebreaker the sort is
+    not a total order, so two executions may place tied rows differently -- and
+    LIMIT/OFFSET slices whatever order it got. A row can then be served on two
+    consecutive pages while another is served on neither.
+
+    The client cannot repair that. ``library-paging.js`` walks this route by
+    offset and de-duplicates by id, so a repeated row is silently dropped and a
+    skipped one is simply never loaded; a page that comes back entirely
+    duplicated used to stop hydration for good (#715).
+    """
     if not table_exists(conn, "movies"):
         return []
     offset = max(0, int(offset or 0))
@@ -4806,7 +4821,7 @@ def collection_movie_preview_entities(
                 ) backdrop_asset ON true
                 WHERE {visibility_where}
                   AND m.deleted_at IS NULL
-                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                 LIMIT %s OFFSET %s
                 """,
                 (*visibility_params, limit, offset),
@@ -4858,7 +4873,7 @@ def collection_movie_preview_entities(
             FROM movies m
             WHERE {visibility_where}
               AND m.deleted_at IS NULL
-            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
             LIMIT %s OFFSET %s
             """,
             (*visibility_params, limit, offset),
@@ -29544,7 +29559,7 @@ def register_routes(flask_app: Flask) -> None:
                         m.updated_at
                     FROM movies m
                     {where}
-                    ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                    ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                     LIMIT %s OFFSET %s
                     """,
                     (*params, limit, offset),
@@ -31294,7 +31309,7 @@ def register_routes(flask_app: Flask) -> None:
                             LIMIT 1
                         ) backdrop_asset ON true
                         {where}
-                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                         LIMIT %s OFFSET %s
                         """,
                         (*params, limit, offset),
@@ -31321,7 +31336,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.updated_at
                         FROM movies m
                         {where}
-                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                         LIMIT %s OFFSET %s
                         """,
                         (*params, limit, offset),
