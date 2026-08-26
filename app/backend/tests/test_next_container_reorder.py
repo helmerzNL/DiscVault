@@ -145,6 +145,31 @@ class NextContainerRemoveMovieRouteTests(NextContainerMemberRouteTestCase):
         detail.assert_called_once_with(self.conn, UUID(CONTAINER_ID), actor=self.actor)
 
 
+class NextBulkContainerMovieRouteTests(NextContainerMemberRouteTestCase):
+    def test_add_movies_to_box_set_reports_success(self):
+        self.cursor.fetchone.return_value = {"max_sort": 0}
+        self.cursor.fetchall.return_value = [{"id": MOVIE_A}]
+        with (
+            patch("app.backend.next_app.connect", return_value=self.connect_context),
+            patch("app.backend.next_app.next_auth_effective_enabled", return_value=False),
+            patch("app.backend.next_app.require_next_permission", return_value=self.actor),
+            patch("app.backend.next_app.table_exists", return_value=True),
+            patch("app.backend.next_app.container_type_for_id", return_value="box_set"),
+            patch("app.backend.next_app.emit_container_membership_change"),
+            patch("app.backend.next_app.capture_collection_value_snapshot") as snapshot,
+        ):
+            response = self.client.post(
+                f"/api/next/bulk/containers/{CONTAINER_ID}/movies",
+                json={"movieIds": [str(MOVIE_A)], "targetType": "box_set"},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.get_json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["changed"], 1)
+        snapshot.assert_called_once_with(self.conn, self.actor)
+
+
 class NextCollectionReorderRouteTests(NextContainerMemberRouteTestCase):
     def reorder(self, items, *, linked, visible_movies, visible_containers):
         # Raw link rows first, then the visible movie items, then the visible

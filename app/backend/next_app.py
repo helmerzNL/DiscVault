@@ -28938,7 +28938,7 @@ def register_routes(flask_app: Flask) -> None:
         if operation not in {"add", "remove"}:
             raise NextApiError("operation must be add or remove", 400)
         with connect() as conn:
-            require_next_permission(conn, "containers.edit")
+            actor = require_next_permission(conn, "containers.edit")
             if not table_exists(conn, "container_movies"):
                 raise NextApiError("Container movie links are not available yet", 503)
             container_type = container_type_for_id(conn, container_uuid)
