@@ -27395,7 +27395,7 @@ def ui_preview_html(
           const diff = itemYearValue(a, mode) - itemYearValue(b, mode);
           if (diff) return mode === "year_desc" ? -diff : diff;
         }
-        const diff = String(a.title || "").localeCompare(String(b.title || ""), localeState.locale || undefined, {sensitivity: "base"});
+        const diff = itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base"});
         return mode === "title_desc" ? -diff : diff;
       });
     }
@@ -27571,6 +27571,24 @@ def ui_preview_html(
     }
     function itemTitleValue(item) {
       return itemEntity(item)?.title || tNext("common.untitled", "Untitled");
+    }
+    // What the library orders on, as opposed to what it displays. A user who
+    // sets a sort title expects "The Matrix" to file under M while the tile
+    // still reads "The Matrix", so the two must never be the same function.
+    //
+    // The server has always ordered this way -- every list query ends in
+    // `ORDER BY lower(COALESCE(m.sort_title, m.title))` -- but the SPA hydrates
+    // the whole library through library-paging.js and then re-sorts it, which
+    // silently threw that order away. Nothing was red: the rows were all there,
+    // in the wrong order, and a user who had filled in every sort title saw no
+    // difference at all (#716).
+    //
+    // Both spellings are load-bearing: movies reach the client as raw rows
+    // (`sort_title`), series are serialised camelCase (`sortTitle`), and
+    // containers have no such column -- they fall back to the title they show.
+    function itemSortTitleValue(item) {
+      const entity = itemEntity(item);
+      return entity?.sort_title || entity?.sortTitle || itemTitleValue(item);
     }
     function itemYearLabel(item) {
       if (item?.kind === "movie") return item.movie?.year || "";
@@ -27846,7 +27864,7 @@ def ui_preview_html(
       if (key === "studios") return itemStudioValues(item).join(" ").toLowerCase();
       if (key === "rating") return itemRatingValues(item).join(" ").toLowerCase();
       if (key === "tags") return itemTagValues(item).map((tag) => tag.name).join(" ").toLowerCase();
-      return itemTitleValue(item).toLowerCase();
+      return itemSortTitleValue(item).toLowerCase();
     }
     function compareLibraryBehavior(leftItem, rightItem) {
       const left = itemWatchActivity(leftItem);
@@ -27867,7 +27885,7 @@ def ui_preview_html(
               {sensitivity: "base", numeric: true}
             );
         if (diff) return state.direction === "desc" ? -diff : diff;
-        return itemTitleValue(a).localeCompare(itemTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
       });
     }
     function libraryListSortIconHtml(direction) {
@@ -27979,7 +27997,7 @@ def ui_preview_html(
       if (key === "format") return itemFormatLabel(item).toLowerCase();
       if (key === "director") return creditText(itemDirectorCredits(item)).toLowerCase();
       if (key === "actors") return creditText(itemActorCredits(item)).toLowerCase();
-      return itemTitleValue(item).toLowerCase();
+      return itemSortTitleValue(item).toLowerCase();
     }
     function sortDetailItems(items, sortState) {
       const state = sortState || {key: "title", direction: "asc"};

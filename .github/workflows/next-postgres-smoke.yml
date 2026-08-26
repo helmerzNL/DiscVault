@@ -479,6 +479,21 @@ jobs:
           tests.test_next_library_series_ui
           tests.test_next_library_series_postgres
 
+      # The library's own list surface, and the order it puts rows in. The same
+      # gap #715 closed for test_next_library_paging above, one module over and
+      # still open: test_next_library_list_ui was named by no workflow, so the
+      # comparators behind the Library's sort were never executed. That is how
+      # the sort order could be wrong for as long as it was -- the server orders
+      # on COALESCE(sort_title, title), the SPA hydrates the whole library and
+      # re-sorts it, and a client sorting on the display title instead threw
+      # that away with nothing red: every row present, in the wrong order
+      # (#716).
+      #
+      # Not grouped with the paging step above, which needs the schema. This one
+      # reads the inline script's source and wants no database at all.
+      - name: Test the library list and its sort order
+        run: python -m unittest tests.test_next_library_list_ui
+
       # The series detail page. The PostgreSQL half is the one that matters: it
       # pins that series artwork really is stored with entity_type='series', a
       # value migration 003 leaves unconstrained and which therefore has nothing

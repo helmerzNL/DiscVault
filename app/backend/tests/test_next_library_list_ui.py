@@ -208,5 +208,75 @@ class NextLibraryListUiTests(unittest.TestCase):
         )
 
 
+    def test_library_ordering_uses_the_sort_title(self):
+        # The server has always ordered on COALESCE(sort_title, title); the SPA
+        # re-sorted the hydrated rows on the display title and threw that away,
+        # so filling in every sort title changed nothing and nothing was red
+        # (#716). One helper, and every client-side title ordering goes through
+        # it -- the grid, the list view's Title column, its tiebreaker, and the
+        # series disc table.
+        self.assertEqual(self.source.count("function itemSortTitleValue(item) {"), 1)
+        self.assertIn(
+            "return entity?.sort_title || entity?.sortTitle || itemTitleValue(item);",
+            self.source,
+        )
+
+        # The toolbar's Name (A-Z) sort. The old comparator read the item's flat
+        # `title` property, which is still set for other callers -- so asserting
+        # the new call is not enough, the old read has to be gone.
+        self.assertIn(
+            "const diff = itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), "
+            'localeState.locale || undefined, {sensitivity: "base"});',
+            self.source,
+        )
+        self.assertNotIn(
+            'const diff = String(a.title || "").localeCompare(String(b.title || "")',
+            self.source,
+        )
+
+        # The list view's Title column, and the tiebreaker two equal values fall
+        # through to.
+        self.assertIn(
+            "return itemSortTitleValue(item).toLowerCase();\n    }\n"
+            "    function compareLibraryBehavior(leftItem, rightItem) {",
+            self.source,
+        )
+        self.assertIn(
+            "return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), "
+            'localeState.locale || undefined, {sensitivity: "base", numeric: true});',
+            self.source,
+        )
+
+        # The series disc table, so both library view modes and the detail table
+        # agree about the same shelf.
+        self.assertIn(
+            "return itemSortTitleValue(item).toLowerCase();\n    }\n"
+            "    function sortDetailItems(items, sortState) {",
+            self.source,
+        )
+
+        # Every server-side list query already agrees, and stays the fallback
+        # this mirrors.
+        self.assertIn(
+            "ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST",
+            self.app_source,
+        )
+
+    def test_the_displayed_title_did_not_follow_the_sort(self):
+        # itemTitleValue is also the display path and the CSV `title` column. A
+        # user who files "The Matrix" under M still expects the tile, the row and
+        # the exported cell to read "The Matrix".
+        self.assertIn(
+            "function itemTitleValue(item) {\n"
+            '      return itemEntity(item)?.title || tNext("common.untitled", "Untitled");',
+            self.source,
+        )
+        self.assertIn(
+            "<strong>${escapeHtml(itemTitleValue(item))}</strong>",
+            self.source,
+        )
+        self.assertIn("title: itemTitleValue(item),", self.source)
+
+
 if __name__ == "__main__":
     unittest.main()
