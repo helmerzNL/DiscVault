@@ -19410,6 +19410,10 @@ def ui_preview_html(
     const initialMovieId = JSON.parse(document.getElementById("initialMovieId").textContent || '""');
     let state = JSON.parse(document.getElementById("initialState").textContent || "{}");
     let movies = state.movies || [];
+    // Bumped every time the SPA replaces `movies` wholesale (loadAppSnapshot()).
+    // library-paging.js pages into that array from outside the SPA and has no
+    // other way to learn the array it was fetching against was thrown away.
+    let librarySnapshotEpoch = 0;
     let libraryMovieTotal = Number(state.moviesTotal ?? (state.movies || []).length) || 0;
     let libraryMoviePageSize = Number(state.moviesPageSize) || 200;
     let libraryMoviesHasMore = state.moviesHasMore === true;
@@ -27391,7 +27395,7 @@ def ui_preview_html(
           const diff = itemYearValue(a, mode) - itemYearValue(b, mode);
           if (diff) return mode === "year_desc" ? -diff : diff;
         }
-        const diff = String(a.title || "").localeCompare(String(b.title || ""), localeState.locale || undefined, {sensitivity: "base"});
+        const diff = itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base"});
         return mode === "title_desc" ? -diff : diff;
       });
     }
@@ -27567,6 +27571,24 @@ def ui_preview_html(
     }
     function itemTitleValue(item) {
       return itemEntity(item)?.title || tNext("common.untitled", "Untitled");
+    }
+    // What the library orders on, as opposed to what it displays. A user who
+    // sets a sort title expects "The Matrix" to file under M while the tile
+    // still reads "The Matrix", so the two must never be the same function.
+    //
+    // The server has always ordered this way -- every list query ends in
+    // `ORDER BY lower(COALESCE(m.sort_title, m.title))` -- but the SPA hydrates
+    // the whole library through library-paging.js and then re-sorts it, which
+    // silently threw that order away. Nothing was red: the rows were all there,
+    // in the wrong order, and a user who had filled in every sort title saw no
+    // difference at all (#716).
+    //
+    // Both spellings are load-bearing: movies reach the client as raw rows
+    // (`sort_title`), series are serialised camelCase (`sortTitle`), and
+    // containers have no such column -- they fall back to the title they show.
+    function itemSortTitleValue(item) {
+      const entity = itemEntity(item);
+      return entity?.sort_title || entity?.sortTitle || itemTitleValue(item);
     }
     function itemYearLabel(item) {
       if (item?.kind === "movie") return item.movie?.year || "";
@@ -27842,7 +27864,7 @@ def ui_preview_html(
       if (key === "studios") return itemStudioValues(item).join(" ").toLowerCase();
       if (key === "rating") return itemRatingValues(item).join(" ").toLowerCase();
       if (key === "tags") return itemTagValues(item).map((tag) => tag.name).join(" ").toLowerCase();
-      return itemTitleValue(item).toLowerCase();
+      return itemSortTitleValue(item).toLowerCase();
     }
     function compareLibraryBehavior(leftItem, rightItem) {
       const left = itemWatchActivity(leftItem);
@@ -27863,7 +27885,7 @@ def ui_preview_html(
               {sensitivity: "base", numeric: true}
             );
         if (diff) return state.direction === "desc" ? -diff : diff;
-        return itemTitleValue(a).localeCompare(itemTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
       });
     }
     function libraryListSortIconHtml(direction) {
@@ -27975,7 +27997,7 @@ def ui_preview_html(
       if (key === "format") return itemFormatLabel(item).toLowerCase();
       if (key === "director") return creditText(itemDirectorCredits(item)).toLowerCase();
       if (key === "actors") return creditText(itemActorCredits(item)).toLowerCase();
-      return itemTitleValue(item).toLowerCase();
+      return itemSortTitleValue(item).toLowerCase();
     }
     function sortDetailItems(items, sortState) {
       const state = sortState || {key: "title", direction: "asc"};
@@ -39143,6 +39165,17 @@ def ui_preview_html(
             : tNext("releaseFallback.unreachable", "MovieVault could not be reached, so nothing is known about this disc yet. This is usually temporary.")
         };
       }
+      // The external fallback source was rate-limited (usually its daily free
+      // lookup quota). Not "unreachable" (MovieVault answered) and not worth a
+      // retry (a quota does not clear on a quick one), so no retry button. It
+      // effectively only affects older discs - most 4K/Blu-ray are found before
+      // this fallback is even reached.
+      if (fallback.failureKind === "rate_limited") {
+        return {
+          tone: "warn",
+          text: tNext("releaseFallback.rateLimited", "The free lookup limit for external sources has been reached, so this disc could not be looked up right now. This usually only affects older discs - most 4K and Blu-ray titles are found automatically. Add it by hand below.")
+        };
+      }
       if (fallback.status === "failed") {
         return {
           tone: "bad",
@@ -43953,6 +43986,15 @@ def ui_preview_html(
       showLibraryPage(true, route || "library");
     }
     function refreshAppSnapshotSilently() {
+      // Every return to the Library used to reload the whole snapshot, which
+      // resets `movies` to the 200-row first-paint page and makes background
+      // hydration start over -- five extra pages per navigation for a 2,500-disc
+      // library, and five extra windows in which a page already in flight goes
+      // stale (#715). showLibraryPage(), which both callers invoke on the next
+      // line, already refreshes the Library on this cooldown; sharing the key
+      // also collapses the two snapshot loads a permitted user used to trigger
+      // per navigation into one.
+      if (!shouldLazyRefresh("library", LIBRARY_LAZY_REFRESH_COOLDOWN_MS)) return;
       loadAppSnapshot().catch(() => {});
     }
     async function saveMovieDetails(event) {
@@ -45319,11 +45361,25 @@ def ui_preview_html(
       getPageSize: () => libraryMoviePageSize,
       hasMoreMovies: () => libraryMoviesHasMore === true && movies.length < libraryMovieTotal,
       getLoadedCount: () => movies.length,
+      getSnapshotEpoch: () => librarySnapshotEpoch,
       setMovieTotal: (total) => {
         const parsed = Number(total);
         if (Number.isFinite(parsed) && parsed >= 0) libraryMovieTotal = parsed;
       },
-      appendMovies: (rows) => {
+      appendMovies: (rows, expectedOffset) => {
+        // `expectedOffset` is the movies.length the caller measured when it
+        // issued the request. A page fetched against an older array must never
+        // be appended: the SPA reloads its snapshot on its own (a save, an
+        // import, returning to the Library) and resets `movies` back to the
+        // 200-row first-paint page, so a response already in flight would land
+        // hundreds of rows past the end and punch a hole that offset paging can
+        // never step back over (#715). `null` -- deliberately distinct from 0,
+        // which means "every row was a duplicate" -- tells the caller the array
+        // moved under it. Omitting the argument keeps the old contract.
+        if (expectedOffset !== undefined && expectedOffset !== null) {
+          const expected = Number(expectedOffset);
+          if (!Number.isFinite(expected) || expected !== movies.length) return null;
+        }
         if (!Array.isArray(rows) || !rows.length) return 0;
         const seen = new Set(movies.map((movie) => String(movie?.id || "")));
         const added = [];
@@ -47535,6 +47591,7 @@ def ui_preview_html(
       state = payload.snapshot || {};
       priceDisplay = state.priceDisplay || {};
       movies = state.movies || [];
+      librarySnapshotEpoch += 1;
       libraryMovieTotal = Number(state.moviesTotal ?? movies.length) || 0;
       libraryMoviePageSize = Number(state.moviesPageSize) || libraryMoviePageSize;
       libraryMoviesHasMore = state.moviesHasMore === true;

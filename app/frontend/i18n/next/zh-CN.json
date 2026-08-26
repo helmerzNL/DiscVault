@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault 仍在处理这次查询。请稍后重新搜索 - 完成的结果会保留。",
   "releaseFallback.unreachable": "无法连接 MovieVault，因此暂时无法了解这张碟片。这通常是暂时的。",
   "releaseFallback.failed": "MovieVault 未能完成这次查询。",
+  "releaseFallback.rateLimited": "外部来源的免费查询次数已用完，因此暂时无法查询这张碟片。这通常只影响较旧的碟片——大多数 4K 和 Blu-ray 影片都会被自动找到。请在下方手动添加。",
   "releaseFallback.retry": "重试",
   "releaseFallback.sharingOn": "你的选择会共享给 MovieVault，这样其他人扫描这张碟时也能找到。只会发送版本信息，绝不会发送任何关于你或你收藏的内容。",
   "preferences.cardSharing": "与 MovieVault 共享",

@@ -16,6 +16,11 @@ on:
       # An allowlist of files silently stops covering every module added after
       # it was written, and nothing fails to tell you.
       - "app/backend/**"
+      # The two frontend modules are read directly by tests in this job
+      # (tests.test_next_library_paging asserts on library-paging.js and
+      # library-export.js as source), so a change to them can break this job
+      # without touching app/backend at all.
+      - "app/frontend/js/**"
       - ".github/workflows/next-postgres-smoke.yml"
       - "sync/fixtures/identity-ladder.json"
 
@@ -359,6 +364,27 @@ jobs:
       - name: Test the person-identifier lookup index
         run: python -m unittest tests.test_next_person_identifier_index
 
+      # Beside the person-identifier index for the same reason -- it asserts which
+      # plan the planner picks, and whether two OFFSET pages of the library overlap,
+      # neither of which is a question without the schema.
+      #
+      # tests.test_next_library_paging is unconditional and was, until #715, running
+      # nowhere: 48 assertions written specifically to keep the library's background
+      # hydration from stalling, none of them executed by any workflow. A test that
+      # no job names does not exist, and this file is the only place that can name it.
+      - name: Test the library paging contract and its sort index
+        run: >-
+          python -m unittest
+          tests.test_next_library_paging
+          tests.test_next_library_sort_index
+
+      # The one test of this module that runs it rather than reading it. Every
+      # source-text assertion in test_next_library_paging passed throughout #715,
+      # while the library stopped at 700 of 2,509 movies -- a string cannot notice
+      # a case nobody thought of. Needs node, which ubuntu-latest ships.
+      - name: Replay library hydration against the real module
+        run: python -m unittest tests.test_next_library_hydration_replay
+
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
@@ -452,6 +478,21 @@ jobs:
           python -m unittest
           tests.test_next_library_series_ui
           tests.test_next_library_series_postgres
+
+      # The library's own list surface, and the order it puts rows in. The same
+      # gap #715 closed for test_next_library_paging above, one module over and
+      # still open: test_next_library_list_ui was named by no workflow, so the
+      # comparators behind the Library's sort were never executed. That is how
+      # the sort order could be wrong for as long as it was -- the server orders
+      # on COALESCE(sort_title, title), the SPA hydrates the whole library and
+      # re-sorts it, and a client sorting on the display title instead threw
+      # that away with nothing red: every row present, in the wrong order
+      # (#716).
+      #
+      # Not grouped with the paging step above, which needs the schema. This one
+      # reads the inline script's source and wants no database at all.
+      - name: Test the library list and its sort order
+        run: python -m unittest tests.test_next_library_list_ui
 
       # The series detail page. The PostgreSQL half is the one that matters: it
       # pins that series artwork really is stored with entity_type='series', a

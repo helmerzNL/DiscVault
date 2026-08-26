@@ -4731,6 +4731,21 @@ def collection_movie_preview_entities(
     offset: int = 0,
     actor: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
+    """One page of the library, in the order the Library renders it.
+
+    The ``m.id`` at the end of the ORDER BY is load-bearing, not decoration.
+    Title and year do not identify a row: a 4K and a Blu-ray of the same film are
+    two ``movies`` rows sharing a title and a year, and a collection of a few
+    thousand discs holds many such pairs. Without a unique tiebreaker the sort is
+    not a total order, so two executions may place tied rows differently -- and
+    LIMIT/OFFSET slices whatever order it got. A row can then be served on two
+    consecutive pages while another is served on neither.
+
+    The client cannot repair that. ``library-paging.js`` walks this route by
+    offset and de-duplicates by id, so a repeated row is silently dropped and a
+    skipped one is simply never loaded; a page that comes back entirely
+    duplicated used to stop hydration for good (#715).
+    """
     if not table_exists(conn, "movies"):
         return []
     offset = max(0, int(offset or 0))
@@ -4806,7 +4821,7 @@ def collection_movie_preview_entities(
                 ) backdrop_asset ON true
                 WHERE {visibility_where}
                   AND m.deleted_at IS NULL
-                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                 LIMIT %s OFFSET %s
                 """,
                 (*visibility_params, limit, offset),
@@ -4858,7 +4873,7 @@ def collection_movie_preview_entities(
             FROM movies m
             WHERE {visibility_where}
               AND m.deleted_at IS NULL
-            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+            ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
             LIMIT %s OFFSET %s
             """,
             (*visibility_params, limit, offset),
@@ -10576,6 +10591,14 @@ RELEASE_DETAILS_FAILURE_KINDS: dict[str, tuple[str, bool]] = {
     "not_found": ("no_data", False),
     "ambiguous_title": ("needs_year", False),
     "canonical_release_unusable": ("catalog_defect", False),
+    # MovieVault answered, but the external fallback source it needed was
+    # rate-limited - in practice its daily free-lookup quota. So `answered` stays
+    # true (this is not `unavailable`: MovieVault was reached and replied), and it
+    # is NOT retryable: a quota does not clear on a quick retry, so offering "try
+    # again" would be dishonest. It effectively only bites older/rarer discs -
+    # modern 4K/Blu-ray resolve from the catalogue or primary sources and never
+    # reach that fallback. Copy: releaseFallback.rateLimited.
+    "provider_rate_limited": ("rate_limited", False),
     # DiscVault-owned. MovieVault answered; this client refused what it sent, or
     # refused to send the request at all. Auditing these as `server` - which the
     # `.get()` default below used to do - points the next investigation at the
@@ -28179,7 +28202,9 @@ def register_routes(flask_app: Flask) -> None:
     @flask_app.post("/api/next/movievault/contributions/merge")
     def movievault_contribution_merge():
         """Couple-and-merge trigger: fold a standalone device's contribution
-        identity into this server's (contribution-v3 §5.7, RATIFIED 2026-08-18;
+        identity into this server's (contribution-v3 §5.7, IMPLEMENTED but NOT
+        independently ratified as of a 2026-08-25 correction — see
+        MovieVault-v2's docs/contracts/contribution-v3.md correction notice;
         change spec 2026-08-16-ios-contributions.md §2b.1).
 
         The merge fires when a standalone iOS install that already holds its own
@@ -29536,7 +29561,7 @@ def register_routes(flask_app: Flask) -> None:
                         m.updated_at
                     FROM movies m
                     {where}
-                    ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                    ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                     LIMIT %s OFFSET %s
                     """,
                     (*params, limit, offset),
@@ -31286,7 +31311,7 @@ def register_routes(flask_app: Flask) -> None:
                             LIMIT 1
                         ) backdrop_asset ON true
                         {where}
-                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                         LIMIT %s OFFSET %s
                         """,
                         (*params, limit, offset),
@@ -31313,7 +31338,7 @@ def register_routes(flask_app: Flask) -> None:
                             m.updated_at
                         FROM movies m
                         {where}
-                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST
+                        ORDER BY lower(COALESCE(m.sort_title, m.title)), m.year NULLS LAST, m.id
                         LIMIT %s OFFSET %s
                         """,
                         (*params, limit, offset),

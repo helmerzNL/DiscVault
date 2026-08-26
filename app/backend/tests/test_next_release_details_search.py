@@ -184,6 +184,20 @@ class ReleaseDetailsSearchPayloadTests(unittest.TestCase):
                 self.assertFalse(payload["retryable"])
                 self.assertTrue(payload["answered"])
 
+    def test_a_rate_limited_provider_is_an_answer_that_is_not_retryable(self):
+        """MovieVault answered, but the external fallback was rate-limited -
+        usually its daily free-lookup quota. It is an answer (not `unavailable`),
+        and not retryable: a quota does not clear on a quick retry, so no "try
+        again" is offered. The frontend keys distinct copy off this kind."""
+        payload = next_app.release_details_search_payload(
+            {"status": "failed", "errorCode": "provider_rate_limited"},
+            entrypoint="search",
+        )
+        self.assertEqual(payload["failureKind"], "rate_limited")
+        self.assertFalse(payload["retryable"])
+        self.assertTrue(payload["answered"])
+        self.assertEqual(payload["errorCode"], "provider_rate_limited")
+
     def test_a_failure_discvault_owns_is_not_reported_as_the_servers(self):
         """A payload this client refused is a DiscVault defect.
 

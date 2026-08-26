@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "MovieVault käsittelee hakua yhä. Hae hetken kuluttua uudelleen - valmis tulos pysyy tallessa.",
   "releaseFallback.unreachable": "MovieVaultiin ei saatu yhteyttä, joten tästä levystä ei tiedetä vielä mitään. Tämä on yleensä tilapäistä.",
   "releaseFallback.failed": "MovieVault ei saanut hakua valmiiksi.",
+  "releaseFallback.rateLimited": "Ulkoisten lähteiden ilmainen hakuraja on täynnä, joten tätä levyä ei voitu hakea juuri nyt. Tämä koskee yleensä vain vanhempia levyjä - useimmat 4K- ja Blu-ray-nimikkeet löytyvät automaattisesti. Lisää se käsin alta.",
   "releaseFallback.retry": "Yritä uudelleen",
   "releaseFallback.sharingOn": "Valintasi jaetaan MovieVaultin kanssa, jotta muut löytävät tämän levyn skannatessaan. Vain julkaisun tiedot lähetetään - ei koskaan mitään sinusta tai kokoelmastasi.",
   "preferences.cardSharing": "Jakaminen MovieVaultin kanssa",

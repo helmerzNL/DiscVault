@@ -24,6 +24,15 @@
  *     small first-paint set - completely outside this module. hydrate() must not treat
  *     "finished before" as "nothing to do now"; the bridge's own hasMoreMovies() is the
  *     only thing allowed to decide that, checked fresh on every call.
+ *   - That same reset used to strand a page already in flight. Its response was appended
+ *     blind to an array that had shrunk back to 200 rows, so it landed hundreds of rows
+ *     past the end and left a hole no offset could step back over; the next page came
+ *     back entirely duplicated, and the anti-loop guard - which by design never retries -
+ *     stopped hydration for good, at 200 + 500 (#715). Two rules follow, and both are
+ *     load-bearing: a page may only be appended to the array it was fetched against
+ *     (appendMovies' expectedOffset), and the cursor may only advance by what the server
+ *     says it served (payload.offset + items.length), never by the de-duplicated loaded
+ *     count. A snapshot reset is normal, so it restarts the cycle rather than ending it.
  */
 (function () {
   "use strict";
@@ -31,6 +40,10 @@
   var MOVIES_ENDPOINT = "/api/next/collection/movies";
   var CHUNK_SIZE = 500;
   var MAX_CHUNKS = 200;
+  // A snapshot reload landing mid-flight is normal and self-correcting - the cycle
+  // simply restarts from wherever the array now ends. A burst of them (a bulk action,
+  // a rapid save/back/save) is not worth chasing inside one cycle forever.
+  var MAX_STALE_RESTARTS = 5;
   var RENDER_DEBOUNCE_MS = 350;
   var BRIDGE_POLL_MS = 100;
   var BRIDGE_POLL_ATTEMPTS = 100;
@@ -54,10 +67,27 @@
     renderTimer: null,
     growthScheduled: false,
     aborted: false,
+    // `null` rather than 0 so the first hydrate() after a late bridge attach adopts
+    // whatever the SPA is on instead of reading a spurious reset.
+    epoch: null,
   };
 
   function bridge() {
     return window.DiscVaultLibrary || null;
+  }
+
+  /**
+   * The SPA's snapshot generation, or null when the bridge predates it - an older
+   * inline SPA served from a cache must keep working, just without the reset check.
+   */
+  function snapshotEpoch(api) {
+    if (!api || typeof api.getSnapshotEpoch !== "function") return null;
+    try {
+      var value = api.getSnapshotEpoch();
+      return typeof value === "number" ? value : null;
+    } catch (error) {
+      return null;
+    }
   }
 
   function translate(key, fallback) {
@@ -212,17 +242,49 @@
 
   function hydrate() {
     var api = bridge();
+    if (!api || state.aborted) return;
+
+    // The SPA replaced `movies` wholesale. Everything this module concluded about the
+    // previous array describes data that no longer exists - above all a truncation,
+    // which it can otherwise never clear by itself. loadAppSnapshot() wipes the
+    // on-screen warning at that same moment, so leaving `truncated` set is the worst of
+    // both: a library that stays short with nothing on screen saying why (#715).
+    var epoch = snapshotEpoch(api);
+    if (epoch !== null && epoch !== state.epoch) {
+      state.epoch = epoch;
+      state.truncated = false;
+      state.hydrated = false;
+      state.attempt = 0;
+      if (state.retryTimer) {
+        window.clearTimeout(state.retryTimer);
+        state.retryTimer = null;
+      }
+      if (state.slowRetryTimer) {
+        window.clearTimeout(state.slowRetryTimer);
+        state.slowRetryTimer = null;
+      }
+      // state.slowAttempt is deliberately left alone: a snapshot reload is no evidence
+      // the backend recovered, and only a page that actually lands may unwind that
+      // backoff. state.hydrating is left alone too - a cycle already in flight must
+      // discover the reset through its own appendMovies guard rather than have a second
+      // cycle stacked on top of it.
+    }
+
     // `state.hydrated` is not checked here on purpose: it only records that a past
     // cycle finished, and the inline SPA can reset the bridge's movies/hasMore back to
     // the small first-paint set at any time, entirely outside this module (reloading
     // its snapshot on returning from a movie, an import, a bulk action). Whether there
     // is work to do is decided fresh, every call, by hasMoreMovies() alone.
-    if (!api || state.hydrating || state.truncated || state.aborted) return;
+    if (state.hydrating || state.truncated) return;
     if (typeof api.hasMoreMovies !== "function" || !api.hasMoreMovies()) return;
     state.hydrating = true;
     state.hydrated = false;
 
     var chunks = 0;
+    var staleRestarts = 0;
+    // A cycle *starts* from the loaded count - after a snapshot reset that is the only
+    // honest answer - but it does not *advance* by it. See nextOffset below.
+    var cursor = api.getLoadedCount();
 
     function step() {
       var current = bridge();
@@ -243,7 +305,13 @@
         return;
       }
       chunks += 1;
-      fetchPage(current, current.getLoadedCount())
+      var offset = cursor;
+      // Not `offset`. appendMovies() de-duplicates, so after any page that overlapped
+      // rows already held, movies.length trails the server's cursor. The guard asks
+      // "is this still the array I fetched against", which is a question about the
+      // array's length - measured here, immediately before the request goes out.
+      var expectedLoaded = current.getLoadedCount();
+      fetchPage(current, offset)
         .then(function (payload) {
           var live = bridge();
           if (!live || state.aborted) {
@@ -253,14 +321,44 @@
           state.attempt = 0;
           if (payload && typeof payload.total === "number") live.setMovieTotal(payload.total);
           var items = payload && Array.isArray(payload.items) ? payload.items : [];
-          var added = live.appendMovies(items);
+          var added = live.appendMovies(items, expectedLoaded);
+          if (added === null) {
+            // The SPA reset its snapshot while this page was in flight. Appending it is
+            // exactly what used to open the hole; drop it and restart the cycle from
+            // where the array actually is now. Nothing is wrong, so this is not a
+            // truncation - but a reset arriving on every retry is a loop like any other.
+            state.epoch = snapshotEpoch(live);
+            staleRestarts += 1;
+            if (staleRestarts > MAX_STALE_RESTARTS) {
+              stopTruncated(
+                live,
+                "collection.hydrationTruncated",
+                "Only part of the library could be loaded."
+              );
+              // Unlike MAX_CHUNKS and the cursor guard below, a burst of snapshot
+              // reloads is transient by nature and clears on its own.
+              scheduleSlowRetry();
+              return;
+            }
+            cursor = live.getLoadedCount();
+            step();
+            return;
+          }
+          // Advance on what the server says it served, never on the de-duplicated
+          // loaded count: a page overlapping rows already held would otherwise leave
+          // the cursor short and be requested again for as long as the overlap lasts.
+          var served = payload && typeof payload.offset === "number" ? payload.offset : offset;
+          var nextOffset = served + items.length;
           if (!payload || payload.hasMore !== true) {
             finishHydration(live);
             return;
           }
-          if (!added) {
-            // The server still reports more rows but sent nothing new. Continuing
-            // would loop on the same offset forever.
+          if (nextOffset <= offset) {
+            // The server reports more rows but did not move the cursor. Continuing
+            // would request the same page forever, and unlike a stale page this cannot
+            // resolve itself. Note this is the real invariant - a page that added
+            // nothing but *did* advance is survivable, and treating it as fatal is what
+            // made an unstable sort order enough to end hydration for good.
             stopTruncated(
               live,
               "collection.hydrationTruncated",
@@ -268,6 +366,7 @@
             );
             return;
           }
+          cursor = nextOffset;
           requestRender(false);
           step();
         })

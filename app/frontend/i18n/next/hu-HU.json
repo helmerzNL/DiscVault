@@ -2821,6 +2821,7 @@
   "releaseFallback.stillWorking": "A MovieVault még dolgozik a keresésen. Keress újra egy pillanat múlva - a kész eredmény készenlétben marad.",
   "releaseFallback.unreachable": "A MovieVault nem volt elérhető, ezért erről a lemezről még semmit sem tudunk. Ez általában átmeneti.",
   "releaseFallback.failed": "A MovieVault nem tudta befejezni ezt a keresést.",
+  "releaseFallback.rateLimited": "Elérted a külső források ingyenes keresési korlátját, ezért ezt a lemezt most nem sikerült megkeresni. Ez általában csak a régebbi lemezeket érinti - a legtöbb 4K és Blu-ray cím automatikusan megtalálható. Add hozzá kézzel alább.",
   "releaseFallback.retry": "Újra",
   "releaseFallback.sharingOn": "A választásod megosztjuk a MovieVaulttal, hogy mások is megtalálják ezt a lemezt beolvasáskor. Csak a kiadás adatai kerülnek elküldésre - soha semmi rólad vagy a gyűjteményedről.",
   "preferences.cardSharing": "Megosztás a MovieVaulttal",
