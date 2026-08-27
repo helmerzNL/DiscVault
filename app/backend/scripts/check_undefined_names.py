@@ -87,11 +87,23 @@ def check_path(path: Path) -> list[str]:
     """Return one message per undefined global read inside a function."""
     source = path.read_text(encoding="utf-8")
     table = symtable.symtable(source, str(path), "exec")
-    # Anything bound anywhere at module level counts as defined, including
-    # names bound only under an `if` or in a `try`/`except ImportError`
-    # fallback: whether that branch runs is not a question this check can
+    # Only names the module actually *binds* count as defined. Every symbol
+    # the module mentions appears in `get_symbols()`, referenced-but-unbound
+    # ones included, so taking the whole set let a module-level read of an
+    # undefined name vouch for the function-level read of that same name --
+    # suppressing exactly the finding this check exists to make.
+    #
+    # Bound means assigned (which covers `def`, `class`, `for`, `with as`,
+    # `except as` and plain assignment), imported, or declared `global` in
+    # some function and assigned there. Conditional bindings count: a name
+    # bound only under an `if` or in a `try`/`except ImportError` fallback is
+    # still bound, whether that branch runs is not a question this check can
     # answer, and guessing would make it refuse working modules.
-    defined = frozenset(symbol.get_name() for symbol in table.get_symbols())
+    defined = frozenset(
+        symbol.get_name()
+        for symbol in table.get_symbols()
+        if symbol.is_assigned() or symbol.is_imported() or symbol.is_declared_global()
+    )
     findings: list[tuple[int, str, str]] = []
     for child in table.get_children():
         _walk(child, [child.get_name()], defined, findings)

@@ -75,6 +75,16 @@ jobs:
       - name: Check every backend module for names that cannot resolve
         run: python scripts/check_undefined_names.py .
 
+      # The gate's own tests, both directions. A checker with no test is the
+      # thing it exists to prevent: it reports nothing, and nothing reads the
+      # same as clean. Its first version built "defined" from every symbol a
+      # module mentions, so a module-level read of an undefined name vouched
+      # for the function-level read of the same name and the finding was
+      # suppressed. The false-positive half matters just as much -- a gate
+      # that refuses working modules gets switched off.
+      - name: Test the unresolvable-name gate itself
+        run: python -m unittest tests.test_check_undefined_names
+
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
 
