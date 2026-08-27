@@ -195,6 +195,17 @@ jobs:
       - name: Test couple-and-merge identity route
         run: python -m unittest tests.test_next_movievault_contribution_identity_route
 
+      # The iOS release-selection front door, and mostly what it refuses: a
+      # selection when the gate is off, for a film the sync has not landed here
+      # yet, or with nothing of substance to say. The 404 is the one that has to
+      # keep working -- iOS reads it as "retry after the next ack", and a route
+      # that answered anything else would tell a client to give up on a film
+      # that simply had not arrived. Its own file, so this workflow -- which
+      # lists rather than discovers -- had never been given it, and the module
+      # sat red on beta with nothing reporting it.
+      - name: Test the iOS release-selection route
+        run: python -m unittest tests.test_next_movievault_release_selection_route
+
       # The conversions a field correction makes on the way out - two packaging
       # axes flattened to one list, free-text ratios filtered to the bounded
       # form, and the audio/subtitle union refused rather than half-sent. Pure
