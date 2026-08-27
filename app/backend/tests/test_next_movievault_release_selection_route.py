@@ -49,6 +49,17 @@ CANDIDATE_FILM = {"title": "Annihilation", "year": 2018, "workType": "movie", "t
 # the route's.
 BUILT_PAYLOAD = {"release": {"title": "Annihilation", "edition": "Director's Cut"}, "film": {"title": "Annihilation"}}
 
+# The film as it stands server-side once the sync mutation that created it has
+# landed -- what `movie_entity` answers on the happy path.
+LOCAL_FILM = {"id": MOVIE_ID, "title": "Annihilation", "year": 2018, "metadata": {}}
+
+# `None` is a value one test needs to *inject* -- "the film is not here yet" is
+# exactly what `movie_entity` returns then -- so it cannot also mean "the caller
+# passed nothing". It used to be both: `movie=None` was `_patches`'s default, so
+# the 404 test stubbed the default film instead of a missing one, never reached
+# the branch it was written for, and asserted 404 against the happy path's 200.
+_UNSET = object()
+
 
 @unittest.skipIf(create_app is None, "Flask is not installed in this test environment")
 class ReleaseSelectionRouteTests(unittest.TestCase):
@@ -58,11 +69,15 @@ class ReleaseSelectionRouteTests(unittest.TestCase):
         self.actor = {"id": "00000000-0000-0000-0000-0000000000c1", "permissions": ["collection.edit_all"]}
         self.conn = _ConnContext()
 
-    def _patches(self, *, enabled=True, movie=None, payload=None, job=None):
+    def _patches(self, *, enabled=True, movie=_UNSET, payload=None, job=None):
         """Every collaborator the route reaches, stubbed.
 
         `payload=None` means the builder returns the substantial `BUILT_PAYLOAD`;
         pass `{}` to simulate the substance floor refusing a thin selection.
+
+        `movie` is omitted for the film that is already here and passed as
+        `None` for the one that is not yet -- which is why its default is a
+        sentinel rather than `None`.
         """
         return (
             patch("app.backend.next_app.connect", return_value=self.conn),
@@ -71,7 +86,7 @@ class ReleaseSelectionRouteTests(unittest.TestCase):
             patch("app.backend.next_app.release_contribution_enabled", return_value=enabled),
             patch(
                 "app.backend.next_app.movie_entity",
-                return_value=movie if movie is not None else {"id": MOVIE_ID, "title": "Annihilation", "year": 2018, "metadata": {}},
+                return_value=LOCAL_FILM if movie is _UNSET else movie,
             ),
             patch("app.backend.next_app.actor_can_edit_visible_movie", return_value=True),
             patch(

@@ -67,6 +67,14 @@ jobs:
       - name: Compile Next tooling
         run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_artwork_trash.py next_worker.py
 
+      # `py_compile` above proves these modules parse; it cannot prove a line
+      # can run. Every bulk "add to box-set" returned `name 'actor' is not
+      # defined` from a line that compiled cleanly (#720), and the same file
+      # called `json.dumps` while importing the module as `json_lib`. Both are
+      # decidable statically, so they are refused here rather than in the field.
+      - name: Check every backend module for names that cannot resolve
+        run: python scripts/check_undefined_names.py .
+
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
 
@@ -186,6 +194,17 @@ jobs:
       # discovers, and the route test lives in its own file.
       - name: Test couple-and-merge identity route
         run: python -m unittest tests.test_next_movievault_contribution_identity_route
+
+      # The iOS release-selection front door, and mostly what it refuses: a
+      # selection when the gate is off, for a film the sync has not landed here
+      # yet, or with nothing of substance to say. The 404 is the one that has to
+      # keep working -- iOS reads it as "retry after the next ack", and a route
+      # that answered anything else would tell a client to give up on a film
+      # that simply had not arrived. Its own file, so this workflow -- which
+      # lists rather than discovers -- had never been given it, and the module
+      # sat red on beta with nothing reporting it.
+      - name: Test the iOS release-selection route
+        run: python -m unittest tests.test_next_movievault_release_selection_route
 
       # The conversions a field correction makes on the way out - two packaging
       # axes flattened to one list, free-text ratios filtered to the bounded
@@ -652,6 +671,21 @@ jobs:
           python -m unittest
           tests.test_next_containers
           tests.test_next_container_reorder
+
+      # The bulk membership routes the library's Select mode posts to. They had
+      # no route-level test at all, which is how #720 shipped: adding a
+      # selection to a box-set raised `NameError` on the collection-value
+      # snapshot, and the collection half is here so the list route is covered
+      # by the same reflex.
+      - name: Test the bulk box-set and list membership routes
+        run: python -m unittest tests.test_next_bulk_container_movies
+
+      # The import preview's box-set branch, which only runs when a provider
+      # actually answers with a proposal -- so nothing reached the line that
+      # hashed each proposal's identity, and it named a module that does not
+      # exist under that name.
+      - name: Test import box-set proposal suggestions
+        run: python -m unittest tests.test_next_import_box_set_proposal_suggestions
 
       # A MovieVault poster is served by its own route; the generic media route
       # refuses it. This pins that every reader of a box-set's linked cover
