@@ -19414,6 +19414,11 @@ def ui_preview_html(
     // library-paging.js pages into that array from outside the SPA and has no
     // other way to learn the array it was fetching against was thrown away.
     let librarySnapshotEpoch = 0;
+    // Movie ids this session deleted, so a hydration page fetched before the
+    // delete can never re-append them (#719). Consulted only by appendMovies:
+    // loadAppSnapshot() stays authoritative and replaces the array without
+    // looking here, so the server always wins on what actually exists.
+    const libraryDeletedMovieIds = new Set();
     let libraryMovieTotal = Number(state.moviesTotal ?? (state.movies || []).length) || 0;
     let libraryMoviePageSize = Number(state.moviesPageSize) || 200;
     let libraryMoviesHasMore = state.moviesHasMore === true;
@@ -44358,6 +44363,23 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    // The server confirmed these ids are gone; make the client agree right now
+    // rather than waiting on the snapshot reload that follows. The reload is
+    // what re-opens the race -- it resets `movies` while pages may be in flight
+    // -- so the ids also go into libraryDeletedMovieIds, where appendMovies
+    // refuses them for the rest of the session (#719).
+    function purgeDeletedMovies(movieIds) {
+      const ids = (movieIds || []).map((id) => String(id || "")).filter(Boolean);
+      if (!ids.length) return;
+      ids.forEach((id) => libraryDeletedMovieIds.add(id));
+      const before = movies.length;
+      movies = movies.filter((movie) => !libraryDeletedMovieIds.has(String(movie?.id || "")));
+      const removed = before - movies.length;
+      if (removed > 0) {
+        libraryMovieTotal = Math.max(movies.length, libraryMovieTotal - removed);
+        libraryMoviesHasMore = libraryMoviesHasMore === true && movies.length < libraryMovieTotal;
+      }
+    }
     async function deleteActiveMovie() {
       if (!activeDetailMovieId || !canDeleteMovieItem(activeDetailPayload?.movie || null)) return;
       const title = activeDetailPayload?.movie?.title || tNext("common.untitled", "Untitled");
@@ -44368,6 +44390,7 @@ def ui_preview_html(
       setMovieDetailMessage(tNext("movieDetail.deleting", "Deleting movie..."));
       try {
         await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {method: "DELETE"});
+        purgeDeletedMovies([activeDetailMovieId]);
         activeDetailMovieId = "";
         activeDetailPayload = null;
         await loadAppSnapshot();
@@ -45366,7 +45389,7 @@ def ui_preview_html(
         const parsed = Number(total);
         if (Number.isFinite(parsed) && parsed >= 0) libraryMovieTotal = parsed;
       },
-      appendMovies: (rows, expectedOffset) => {
+      appendMovies: (rows, expectedOffset, expectedEpoch) => {
         // `expectedOffset` is the movies.length the caller measured when it
         // issued the request. A page fetched against an older array must never
         // be appended: the SPA reloads its snapshot on its own (a save, an
@@ -45376,6 +45399,20 @@ def ui_preview_html(
         // never step back over (#715). `null` -- deliberately distinct from 0,
         // which means "every row was a duplicate" -- tells the caller the array
         // moved under it. Omitting the argument keeps the old contract.
+        //
+        // `expectedEpoch` closes the case the length cannot see: every reset
+        // restores `movies` to exactly the first-paint size, and the first page
+        // of every hydration cycle is fetched against that same size, so a page
+        // from before the reset still matches the length check -- which is how a
+        // movie deleted while its page was in flight came back as a black, dead
+        // tile in the list view (#719). The epoch moves on every wholesale
+        // replacement, so a page fetched against an older snapshot is refused no
+        // matter what the lengths happen to be. Omitting it keeps the previous
+        // contract for an older cached copy of library-paging.js.
+        if (expectedEpoch !== undefined && expectedEpoch !== null) {
+          const epoch = Number(expectedEpoch);
+          if (!Number.isFinite(epoch) || epoch !== librarySnapshotEpoch) return null;
+        }
         if (expectedOffset !== undefined && expectedOffset !== null) {
           const expected = Number(expectedOffset);
           if (!Number.isFinite(expected) || expected !== movies.length) return null;
@@ -45386,6 +45423,12 @@ def ui_preview_html(
         rows.forEach((row) => {
           const id = String(row?.id || "");
           if (!id || seen.has(id)) return;
+          // A row this session itself deleted can only be a stale page slipping
+          // through a gap the guards above do not cover; the id can never come
+          // back legitimately through this path, because a hard-deleted UUID is
+          // never re-issued. loadAppSnapshot() stays authoritative -- it replaces
+          // the array without consulting this set.
+          if (libraryDeletedMovieIds.has(id)) return;
           seen.add(id);
           added.push(row);
         });
@@ -45936,6 +45979,7 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
         });
+        purgeDeletedMovies(movieIds);
         finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`, {
           title: tNext("bulk.deleteSelected", "Delete selected"),
           keepSelection: false
