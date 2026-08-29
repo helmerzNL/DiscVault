@@ -39682,9 +39682,41 @@ def ui_preview_html(
     function unavailableMovieLabelHtml(entry) {
       return "";
     }
+    // One place where a personal-list entry becomes a poster. The four card
+    // renderers below wrote the same expression four times, and none of them
+    // said what to do when the address does not load -- which is the whole
+    // failure mode of an entry that outlived its movie (#719). An <img> whose
+    // fetch fails with alt="" paints nothing, so the poster frame's own
+    // gradient shows through and reads as a deliberate black poster.
+    //
+    // The server now freezes a durable address into the surviving snapshot, so
+    // this is the second line: any address that dies later -- a provider
+    // dropping an image, a snapshot older than that rule -- degrades to the
+    // same "No poster" placeholder an entry without artwork already gets. The
+    // swap is done by one capture-phase listener rather than an inline
+    // handler; see bindListsPosterFallback.
+    function listsPosterHtml(entry) {
+      const poster = usableImage(entry?.poster_url);
+      const placeholder = `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      return poster ? `<img src="${escapeHtml(poster)}" alt="" data-list-poster>` : placeholder;
+    }
+    function bindListsPosterFallback() {
+      const view = document.getElementById("listsView");
+      if (!view || view.dataset.posterFallbackBound === "true") return;
+      view.dataset.posterFallbackBound = "true";
+      // `error` does not bubble, so the listener has to capture. Registered
+      // once on the view, not per render: the cards are replaced wholesale on
+      // every render and per-node listeners would be re-added each time.
+      view.addEventListener("error", (event) => {
+        const img = event.target;
+        if (!img || img.tagName !== "IMG" || !img.hasAttribute("data-list-poster")) return;
+        const replacement = document.createElement("span");
+        replacement.textContent = tNext("collection.noPoster", "No poster");
+        img.replaceWith(replacement);
+      }, true);
+    }
     function listMovieCardHtml(movie) {
-      const poster = usableImage(movie.poster_url);
-      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const posterHtml = listsPosterHtml(movie);
       const meta = movie.year || "";
       const movieId = personalListMovieId(movie);
       const exists = personalListMovieExists(movie);
@@ -39725,8 +39757,7 @@ def ui_preview_html(
       return [...groups.entries()].map(([date, rows]) => ({date, rows}));
     }
     function watchedPosterCardHtml(entry) {
-      const poster = usableImage(entry.poster_url);
-      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const posterHtml = listsPosterHtml(entry);
       const movieId = personalListMovieId(entry);
       const exists = personalListMovieExists(entry);
       return `
@@ -39739,12 +39770,11 @@ def ui_preview_html(
       `;
     }
     function watchedListItemHtml(entry) {
-      const poster = usableImage(entry.poster_url);
       const movieId = personalListMovieId(entry);
       const exists = personalListMovieExists(entry);
       return `
         <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
+          <span class="mode-list-poster">${listsPosterHtml(entry)}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <span class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
@@ -39759,12 +39789,11 @@ def ui_preview_html(
       `;
     }
     function watchlistListItemHtml(entry) {
-      const poster = usableImage(entry.poster_url);
       const movieId = personalListMovieId(entry);
       const exists = personalListMovieExists(entry);
       return `
         <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
+          <span class="mode-list-poster">${listsPosterHtml(entry)}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
             ${personalListEpisodeLabelHtml(entry)}
@@ -40732,6 +40761,7 @@ def ui_preview_html(
         });
       });
       bindViewModeInteractions(document.getElementById("listsView") || document);
+      bindListsPosterFallback();
     }
     async function loadListsView(force = false) {
       if (!hasPermission("watchlist.manage")) return;

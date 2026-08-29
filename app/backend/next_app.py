@@ -7237,6 +7237,14 @@ def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str
             )
             watchlist_user_ids = [row.get("user_id") for row in cur.fetchall() if row.get("user_id")]
             deleted["watchlist_items"] = len(watchlist_user_ids)
+    # Watch history survives this delete, so its frozen poster address has to
+    # survive it too -- and the local one about to stop resolving does not
+    # (#719). Between the watchlist delete above and the artwork delete below
+    # is the only point where the surviving rows and the artwork they name are
+    # both still here. Its own cursor: the block below reuses one across many
+    # statements, and this reads through a helper that opens its own.
+    deleted["watch_history_images_frozen"] = freeze_surviving_snapshot_images(conn, movie_id)
+    with conn.cursor() as cur:
         if table_exists(conn, "entity_media"):
             cur.execute("DELETE FROM entity_media WHERE entity_type='movie' AND entity_id=%s", (movie_id,))
             deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
@@ -13787,6 +13795,116 @@ def personal_list_movie_snapshot(conn, movie_id: UUID) -> dict[str, Any]:
     )
 
 
+def durable_personal_list_image_urls(conn, movie_id: UUID) -> dict[str, str | None]:
+    """The poster/backdrop URLs for a movie that will still resolve once the
+    movie is gone.
+
+    A personal-list snapshot froze whatever URL the movie had at the time, and
+    for locally stored artwork that is `/api/next/media/assets/<id>` -- a route
+    that 404s as soon as the movie's `entity_media` links are deleted with it
+    (#719). The list still rendered an `<img>` at that address, the fetch
+    failed, and with `alt=""` nothing painted: the poster frame's own gradient
+    showed through as a black rectangle.
+
+    Durable means "not served by this instance on behalf of a movie that no
+    longer exists", so only an absolute http(s) address qualifies. A MovieVault
+    v2 poster route is deliberately *not* durable here: its asset is subject to
+    the same trash purge once nothing links it.
+
+    Returns `None` for a kind with no durable address rather than the dead one,
+    because a value that cannot load is worse than no value -- the caller can
+    render its ordinary "No poster" placeholder instead.
+    """
+    urls: dict[str, str | None] = {"poster_url": None, "backdrop_url": None}
+    if not movie_id or not table_exists(conn, "movies"):
+        return urls
+    if table_exists(conn, "entity_media") and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT ma.kind, ma.source_url
+                FROM entity_media em
+                JOIN media_assets ma ON ma.id = em.media_id
+                WHERE em.entity_type='movie'
+                  AND em.entity_id=%s
+                  AND em.deleted_at IS NULL
+                  AND em.hidden_at IS NULL
+                  AND ma.kind IN ('poster', 'backdrop')
+                ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                """,
+                (movie_id,),
+            )
+            for row in cur.fetchall():
+                key = f"{row.get('kind')}_url"
+                if key in urls and not urls[key]:
+                    urls[key] = server_usable_image(row.get("source_url")) or None
+    with conn.cursor() as cur:
+        cur.execute("SELECT metadata FROM movies WHERE id=%s", (movie_id,))
+        row = cur.fetchone() or {}
+    metadata = row.get("metadata") if isinstance(row.get("metadata"), dict) else {}
+    for kind in ("poster", "backdrop"):
+        key = f"{kind}_url"
+        if urls[key]:
+            continue
+        urls[key] = first_usable_image(
+            metadata.get(f"{kind}_url"),
+            metadata.get(f"{kind}Url"),
+            metadata.get(kind),
+        ) or None
+    # An instance-relative address is only durable while the movie backing it
+    # is. Both sources above can yield one, so the filter belongs here rather
+    # than at each of them.
+    for key, value in urls.items():
+        if value and not str(value).startswith(("http://", "https://")):
+            urls[key] = None
+    return urls
+
+
+def freeze_surviving_snapshot_images(conn, movie_id: UUID) -> int:
+    """Rewrite the images of the watch-history entries that outlive this movie.
+
+    Called from `delete_movie_records` **before** the artwork links and the
+    movies row go, which is the only moment both facts are still available: the
+    entry that will survive, and the address that will survive with it.
+
+    Watch history keeps its entries by design (`personal-lists-on-deletion.md`
+    2) -- deleting the disc does not un-watch the film. Keeping the entry while
+    letting its poster rot is what made a survivor look broken instead of
+    historical, so surviving here has to mean surviving whole.
+    """
+    if not table_exists(conn, "watch_history"):
+        return 0
+    urls = durable_personal_list_image_urls(conn, movie_id)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE watch_history
+            SET snapshot = CASE
+                    WHEN %(backdrop)s::text IS NULL
+                        THEN (CASE
+                                WHEN %(poster)s::text IS NULL THEN snapshot - 'poster_url' - 'poster_file' - 'poster'
+                                ELSE jsonb_set(snapshot - 'poster_file' - 'poster', '{poster_url}', to_jsonb(%(poster)s::text))
+                              END) - 'backdrop_url' - 'backdrop'
+                    ELSE jsonb_set(
+                            (CASE
+                                WHEN %(poster)s::text IS NULL THEN snapshot - 'poster_url' - 'poster_file' - 'poster'
+                                ELSE jsonb_set(snapshot - 'poster_file' - 'poster', '{poster_url}', to_jsonb(%(poster)s::text))
+                             END) - 'backdrop',
+                            '{backdrop_url}',
+                            to_jsonb(%(backdrop)s::text)
+                         )
+                END
+            WHERE movie_id=%(movie_id)s
+            """,
+            {
+                "movie_id": movie_id,
+                "poster": urls.get("poster_url"),
+                "backdrop": urls.get("backdrop_url"),
+            },
+        )
+        return max(int(cur.rowcount or 0), 0)
+
+
 def personal_list_snapshot_match_movie(conn, snapshot: dict[str, Any]) -> UUID | None:
     if not snapshot or not table_exists(conn, "movies"):
         return None
@@ -13896,6 +14014,57 @@ def apply_personal_list_snapshot_fallback(row: dict[str, Any]) -> dict[str, Any]
     return row
 
 
+def repair_orphaned_snapshot_images(conn, rows: list[dict[str, Any]]) -> None:
+    """Make the images of movie-less entries either loadable or absent.
+
+    `freeze_surviving_snapshot_images` handles every delete from now on, but it
+    cannot reach backwards: an installation that deleted movies before this
+    rule existed still holds entries whose snapshot names a local artwork URL,
+    and a sync client's tombstone never runs the delete path at all. Those are
+    exactly the black rectangles the issue reports, so they are repaired where
+    they are read instead of by a migration that would have to guess at rows a
+    later delete will produce anyway.
+
+    Two outcomes, in order of preference: the asset row may still be here (it
+    outlives its links until the artwork trash purges it), in which case its
+    remote `source_url` is a durable replacement; otherwise the address is
+    dropped so the list renders its ordinary "No poster" placeholder. Mutates
+    in place, one query for the whole page rather than one per row.
+    """
+    pending: list[tuple[dict[str, Any], str, str]] = []
+    for row in rows:
+        if row.get("movie_exists") is not False:
+            continue
+        for key in ("poster_url", "backdrop_url"):
+            value = str(row.get(key) or "")
+            if not value or value.startswith(("http://", "https://")):
+                continue
+            tail = value.rstrip("/").rsplit("/", 1)[-1].split("?", 1)[0]
+            try:
+                asset_id = str(UUID(tail))
+            except ValueError:
+                # A legacy relative path rather than an asset route: nothing to
+                # look up, and it is dropped like any other dead address.
+                asset_id = ""
+            pending.append((row, key, asset_id))
+    if not pending:
+        return
+    recovered: dict[str, str] = {}
+    candidates = {asset_id for _row, _key, asset_id in pending if asset_id}
+    if candidates and table_exists(conn, "media_assets"):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, source_url FROM media_assets WHERE id = ANY(%s::uuid[])",
+                (sorted(candidates),),
+            )
+            for asset in cur.fetchall():
+                url = server_usable_image(asset.get("source_url"))
+                if url.startswith(("http://", "https://")):
+                    recovered[str(asset.get("id"))] = url
+    for row, key, asset_id in pending:
+        row[key] = recovered.get(asset_id) or None
+
+
 def relink_personal_list_snapshot(conn, row: dict[str, Any], *, kind: str) -> dict[str, Any]:
     if row.get("movie_exists") is not False:
         return row
@@ -13946,6 +14115,7 @@ def finalize_personal_list_rows(conn, rows: list[dict[str, Any]], *, kind: str) 
             # history keeps its snapshot entries.
             continue
         finalized.append(with_preview)
+    repair_orphaned_snapshot_images(conn, finalized)
     return finalized
 
 
