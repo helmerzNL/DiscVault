@@ -422,6 +422,14 @@ jobs:
       - name: Test the watchlist deletion policy
         run: python -m unittest tests.test_next_watchlist_deletion
 
+      # The same collection that could not delete a movie cleanly also could not
+      # see past the 500th entry of its own lists. The ceiling sat in four places
+      # at once -- both entity builders, the routes and the page -- so the test
+      # asserts on all four and then proves, against the real database, that more
+      # than 500 rows actually come back.
+      - name: Test the personal-list ceiling
+        run: python -m unittest tests.test_next_personal_list_paging
+
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 

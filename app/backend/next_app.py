@@ -4700,6 +4700,22 @@ def startup_status_payload(conn) -> dict[str, Any]:
 # /api/next/collection/movies, whose ceiling is next_library_data.MAX_PAGE_SIZE.
 COLLECTION_MOVIE_PAGE_SIZE = 200
 
+# Ceiling for one page of a personal list (watchlist / watched), named once and
+# read by every route and both entity builders. It used to be a literal 500
+# repeated across all of them, and raising any subset changed nothing. A real
+# collection reaches it: a 2,509-movie library saw only the first 500 of its
+# watchlist and watch history while the counter still showed the true total
+# (#729).
+#
+# The watchlist is bounded by the collection, so this ceiling ends the
+# truncation there outright. Watch history is not bounded -- it grows by one row
+# per viewing -- so this raises that wall rather than removing it, and a very
+# long history still loses its oldest entries first. Paging the watched list
+# properly is follow-up work, and it cannot be a bigger LIMIT: the list is
+# merged in Python from two independently queried halves, so an offset would
+# have to be resolved across both.
+PERSONAL_LIST_MAX_PAGE_SIZE = 5000
+
 
 def collection_movie_total_count(conn, *, actor: dict[str, Any] | None = None) -> int:
     """Total number of movies visible to ``actor`` (ignores paging)."""
@@ -14995,7 +15011,7 @@ def create_loan_from_request(conn, request_row: dict[str, Any], actor: dict[str,
 def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit: int = 200) -> list[dict[str, Any]]:
     if not user_id or not table_exists(conn, "movies"):
         return []
-    limit = min(max(int(limit or 200), 1), 500)
+    limit = min(max(int(limit or 200), 1), PERSONAL_LIST_MAX_PAGE_SIZE)
     media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
     poster_select = (
         """
@@ -15181,7 +15197,7 @@ def personal_list_episode_entities(
     """
     if not user_id or not table_exists(conn, "series_episodes"):
         return []
-    limit = min(max(int(limit or 200), 1), 500)
+    limit = min(max(int(limit or 200), 1), PERSONAL_LIST_MAX_PAGE_SIZE)
 
     # The same fallback chain `season_episode_entities` documents, over the same
     # two artwork joins. Repeated rather than shared because the surrounding
@@ -30164,7 +30180,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/watchlist")
     def public_api_watchlist():
-        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=PERSONAL_LIST_MAX_PAGE_SIZE)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watchlist"))
             items = personal_list_movie_entities(conn, actor.get("id"), kind="watchlist", limit=limit)
@@ -30187,7 +30203,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/api/v1/watched")
     def public_api_watched():
-        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=PERSONAL_LIST_MAX_PAGE_SIZE)
         with connect() as conn:
             actor = require_any_next_permission(conn, ("api.read", "mcp.tool.get_watch_history"))
             items = personal_list_movie_entities(conn, actor.get("id"), kind="watched", limit=limit)
@@ -31802,7 +31818,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists")
     def personal_lists():
-        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=PERSONAL_LIST_MAX_PAGE_SIZE)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             user_id = actor.get("id")
@@ -31827,7 +31843,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists/watchlist")
     def personal_watchlist():
-        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=PERSONAL_LIST_MAX_PAGE_SIZE)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             return response(
@@ -31845,7 +31861,7 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/lists/watched")
     def personal_watched_list():
-        limit = parse_int_arg("limit", 200, minimum=1, maximum=500)
+        limit = parse_int_arg("limit", 200, minimum=1, maximum=PERSONAL_LIST_MAX_PAGE_SIZE)
         with connect() as conn:
             actor = require_next_permission(conn, "watchlist.manage")
             return response(

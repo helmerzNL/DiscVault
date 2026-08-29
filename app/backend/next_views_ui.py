@@ -19488,6 +19488,10 @@ def ui_preview_html(
     let activeLocationRouteId = "";
     let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
+    // Mirrors PERSONAL_LIST_MAX_PAGE_SIZE in next_app.py. Kept as one number so
+    // the page cannot ask for more than the server will ever serve, nor settle
+    // for less than it would.
+    const LISTS_MAX_PAGE_SIZE = 5000;
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let discoverState = {
       loaded: false,
@@ -40742,7 +40746,12 @@ def ui_preview_html(
       }
       try {
         const [payload, wishlistPayload, tagsPayload, loansPayload, borrowedPayload] = await Promise.all([
-          authApiJson("/api/next/lists?limit=500"),
+          // Ask for the whole list, not a round 500. The response costs what the
+          // user actually has -- a short list stays short -- and the server clamps
+          // anything above its own ceiling, so an older backend simply returns less
+          // instead of refusing. At 500 a large collection silently lost the rest
+          // while the counter still showed the true total (#729).
+          authApiJson(`/api/next/lists?limit=${LISTS_MAX_PAGE_SIZE}`),
           authApiJson("/api/next/lists/wishlist").catch(() => ({items: []})),
           authApiJson("/api/next/tags").catch(() => ({tags: []})),
           authApiJson("/api/next/loans?status=all").catch(() => ({loans: []})),
