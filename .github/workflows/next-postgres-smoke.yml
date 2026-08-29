@@ -440,6 +440,16 @@ jobs:
       - name: Test the watch-history deletion preference
         run: python -m unittest tests.test_next_watch_history_deletion_preference
 
+      # Sorting the personal lists. Half of this module reads the source and
+      # half of it runs the comparator under node, and the split is deliberate:
+      # the source half pins the wiring a copy-paste from the Library gets
+      # wrong -- the Library binds [data-sort-option] globally, so a Lists menu
+      # reusing that attribute would silently re-sort the Library -- while the
+      # node half catches what a string cannot, the way #715 got past every
+      # source-text assertion in test_next_library_paging.
+      - name: Test personal-list sorting
+        run: python -m unittest tests.test_next_lists_sorting
+
       # The same collection that could not delete a movie cleanly also could not
       # see past the 500th entry of its own lists. The ceiling sat in four places
       # at once -- both entity builders, the routes and the page -- so the test
