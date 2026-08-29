@@ -172,6 +172,14 @@ jobs:
       - name: Test query-argument parsing
         run: python -m unittest tests.test_next_query_argument_parsing
 
+      # The Discover feed, and above all its paging. This workflow lists rather
+      # than discovers, and this module had never been listed -- so the route
+      # that served every page of Discover as page 1, repeating the same twenty
+      # films forever (#736), had tests beside it that no job ever ran. A test
+      # no job names does not exist.
+      - name: Test the Discover feed and its paging
+        run: python -m unittest tests.test_next_discover
+
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
       # freeze every page load -- and nothing about that failure is visible in a

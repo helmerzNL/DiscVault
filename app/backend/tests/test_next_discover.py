@@ -66,6 +66,54 @@ class NextDiscoverRouteTests(unittest.TestCase):
         self.assertEqual(payload["items"], [])
         self.assertEqual(payload["message"], "TMDb API key is missing.")
 
+    def test_the_requested_page_reaches_the_feed_rather_than_page_one(self):
+        """The route asked for the wrong query argument, so Discover never paged.
+
+        `parse_int_arg` takes the *name* of the argument and reads it from the
+        request itself. This route handed it the already-read **value**, so the
+        parser looked up an argument called "2", found nothing, and fell back to
+        its default. Every page of the feed was therefore page 1: scrolling
+        Discover repeated the same twenty films forever (#736).
+
+        Nothing downstream could reveal it -- `discover_feed` pages correctly
+        when it is given a page, and the response echoed a "page" the client had
+        no reason to doubt. Only the boundary shows it, which is why this asserts
+        on what the route passes on rather than on what TMDb is asked.
+        """
+        client = self._build_client()
+        with (
+            mock.patch("app.backend.next_discover._require_discover_actor", return_value={"id": "actor-1"}),
+            mock.patch(
+                "app.backend.next_discover.tmdb_discover_context",
+                return_value={"configured": True, "context": {"settings": {}}},
+            ),
+            mock.patch(
+                "app.backend.next_discover.discover_feed",
+                return_value={"items": [], "mode": "popular", "page": 4, "totalPages": 9, "hasMore": True},
+            ) as feed_mock,
+        ):
+            response = client.get("/api/next/discover?page=4&kind=movie&mode=popular")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(feed_mock.call_args.kwargs["page"], 4)
+        self.assertEqual(response.get_json()["page"], 4)
+
+    def test_a_feed_request_without_a_page_still_asks_for_the_first(self):
+        client = self._build_client()
+        with (
+            mock.patch("app.backend.next_discover._require_discover_actor", return_value={"id": "actor-1"}),
+            mock.patch(
+                "app.backend.next_discover.tmdb_discover_context",
+                return_value={"configured": True, "context": {"settings": {}}},
+            ),
+            mock.patch(
+                "app.backend.next_discover.discover_feed",
+                return_value={"items": [], "mode": "popular", "page": 1, "totalPages": 1, "hasMore": False},
+            ) as feed_mock,
+        ):
+            response = client.get("/api/next/discover")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(feed_mock.call_args.kwargs["page"], 1)
+
     def test_detail_returns_unconfigured_payload_when_tmdb_unavailable(self):
         client = self._build_client()
         with (
