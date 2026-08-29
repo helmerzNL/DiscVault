@@ -46065,6 +46065,21 @@ def ui_preview_html(
         ]
       },
       {
+        // Your own lists, on Library for the same reason the sharing card
+        // below is: the Collectors tab is hidden without container-management
+        // permission, and what happens to your watch history is not a
+        // container capability -- the Lists module itself only asks for
+        // watchlist.manage.
+        key: "personalLists",
+        titleKey: "preferences.cardPersonalLists",
+        title: "Your lists",
+        helpKey: "preferences.cardPersonalListsHelp",
+        help: "Choose what a deletion takes with it.",
+        items: [
+          ["delete_removes_watch_history", "preferences.deleteRemovesWatchHistory", "preferences.deleteRemovesWatchHistoryHelp"]
+        ]
+      },
+      {
         // Deliberately on Library rather than Collectors: the Collectors tab is
         // hidden unless the user holds container-management permissions, and a
         // user who scans discs and picks editions - the one who contributes -

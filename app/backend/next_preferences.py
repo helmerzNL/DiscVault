@@ -35,6 +35,11 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
     "delete_container_members_with_container": False,
+    # Off, so the shipped behaviour is unchanged: deleting a disc does not
+    # un-watch the film, and watch history records something that happened.
+    # On, for the reader who means "gone" literally -- see
+    # personal-lists-on-deletion.md 2b (#719).
+    "delete_removes_watch_history": False,
     "show_metadata_jobs": True,
     "price_monitoring_enabled": True,
     "preferred_price_currency": "",
@@ -70,6 +75,7 @@ APP_BOOLEAN_PREFERENCES = {
     "show_container_member_badges",
     "show_digital_badge_on_tiles",
     "delete_container_members_with_container",
+    "delete_removes_watch_history",
     "show_metadata_jobs",
     "price_monitoring_enabled",
     "share_release_selections",
@@ -96,6 +102,11 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
+        # On Library rather than Collectors for the same reason the sharing
+        # preferences are: the Collectors tab is hidden unless the user holds
+        # container-management permissions, and what happens to your own watch
+        # history is not a container capability.
+        "delete_removes_watch_history",
     ),
     "collectors": (
         "collectors_mode",
@@ -277,6 +288,19 @@ def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -
     if not actor_id:
         return bool(APP_PREFERENCE_DEFAULTS["delete_container_members_with_container"])
     return bool(app_effective_preferences(conn, actor_id).get("delete_container_members_with_container"))
+
+
+def user_delete_removes_watch_history(conn, user_id: Any) -> bool:
+    """Whether this user's watch history goes when a movie is deleted.
+
+    Read per *user*, not per actor, and that distinction is the whole point:
+    one person's delete reaches every user's lists, but only the owner of a
+    history may decide whether it is history. An admin who wants deletes to be
+    absolute gets that for their own entries; someone else's stay.
+    """
+    if not user_id:
+        return bool(APP_PREFERENCE_DEFAULTS["delete_removes_watch_history"])
+    return bool(app_effective_preferences(conn, user_id).get("delete_removes_watch_history"))
 
 
 def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any]:
