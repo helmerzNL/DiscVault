@@ -414,6 +414,14 @@ jobs:
       - name: Replay library hydration against the real module
         run: python -m unittest tests.test_next_library_hydration_replay
 
+      # The other half of #719: deleting a movie must take it off every
+      # watchlist while watched history keeps its snapshot entries. Needs the
+      # real PostgreSQL because every claim is about what the database does --
+      # which rows a delete removes, what the LEFT JOIN's tombstone filter
+      # hides, and what the relink writes back.
+      - name: Test the watchlist deletion policy
+        run: python -m unittest tests.test_next_watchlist_deletion
+
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
