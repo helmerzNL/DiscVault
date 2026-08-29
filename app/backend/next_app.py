@@ -7204,7 +7204,23 @@ def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str
     if not existing:
         raise NextApiError("Movie not found", 404)
     deleted: dict[str, int] = {}
+    watchlist_user_ids: list[Any] = []
     with conn.cursor() as cur:
+        if table_exists(conn, "watchlist_items"):
+            # Deleting the movie takes it off every watchlist (#719): there is
+            # no disc left to watch, so a "to watch" entry pointing at it is
+            # dead weight that renders as an unclickable card. Watch history is
+            # deliberately left alone -- it records something that happened and
+            # survives on its snapshot. Movie rows only: an episode entry has
+            # its own lifecycle and its own "not on a disc" presentation.
+            # This must run before the movies row goes, or ON DELETE SET NULL
+            # blanks movie_id first and the rows become unfindable orphans.
+            cur.execute(
+                "DELETE FROM watchlist_items WHERE movie_id=%s AND episode_id IS NULL RETURNING user_id",
+                (movie_id,),
+            )
+            watchlist_user_ids = [row.get("user_id") for row in cur.fetchall() if row.get("user_id")]
+            deleted["watchlist_items"] = len(watchlist_user_ids)
         if table_exists(conn, "entity_media"):
             cur.execute("DELETE FROM entity_media WHERE entity_type='movie' AND entity_id=%s", (movie_id,))
             deleted["entity_media"] = max(int(cur.rowcount or 0), 0)
@@ -7222,6 +7238,10 @@ def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str
             deleted["container_primary_refs"] = max(int(cur.rowcount or 0), 0)
         cur.execute("DELETE FROM movies WHERE id=%s", (movie_id,))
         deleted["movies"] = max(int(cur.rowcount or 0), 0)
+    # Each affected watcher's private sync stream learns the entry is gone, the
+    # same way an explicit "remove from watchlist" would tell it.
+    for user_id in watchlist_user_ids:
+        emit_watchlist_change(conn, user_id, movie_id, operation="delete")
     return existing, deleted
 
 
@@ -13625,7 +13645,28 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
     }
     if table_exists(conn, "watchlist_items"):
         with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*)::int AS count FROM watchlist_items WHERE user_id=%s", (user_id,))
+            if table_exists(conn, "movies"):
+                # Counted the way the list renders (#719): a movie entry whose
+                # movie is hard-deleted or tombstoned is hidden by
+                # finalize_personal_list_rows, so it must not be counted
+                # either. Episode entries count on their own terms; their
+                # "episode gone" state stays visible in the list.
+                cur.execute(
+                    """
+                    SELECT COUNT(*)::int AS count
+                    FROM watchlist_items w
+                    LEFT JOIN movies m ON m.id = w.movie_id AND m.deleted_at IS NULL
+                    WHERE w.user_id=%s
+                      AND (
+                        m.id IS NOT NULL
+                        OR w.episode_id IS NOT NULL
+                        OR w.snapshot->>'kind' = 'episode'
+                      )
+                    """,
+                    (user_id,),
+                )
+            else:
+                cur.execute("SELECT COUNT(*)::int AS count FROM watchlist_items WHERE user_id=%s", (user_id,))
             counts["watchlist"] = int((cur.fetchone() or {}).get("count") or 0)
     if table_exists(conn, "watch_history"):
         with conn.cursor() as cur:
@@ -13737,14 +13778,17 @@ def personal_list_snapshot_match_movie(conn, snapshot: dict[str, Any]) -> UUID |
     public_id = clean_text(snapshot.get("public_id"))
     title = clean_text(snapshot.get("title") or snapshot.get("movie_title"))
     year = clean_text(snapshot.get("year") or snapshot.get("movie_year"))
+    # Every lookup below excludes tombstoned movies: relinking a list entry to
+    # a movie that is itself deleted would only rebuild the orphan this
+    # function exists to repair (#719).
     with conn.cursor() as cur:
         if barcode:
-            cur.execute("SELECT id FROM movies WHERE barcode=%s LIMIT 1", (barcode,))
+            cur.execute("SELECT id FROM movies WHERE barcode=%s AND deleted_at IS NULL LIMIT 1", (barcode,))
             row = cur.fetchone()
             if row:
                 return row["id"]
         if public_id:
-            cur.execute("SELECT id FROM movies WHERE public_id=%s LIMIT 1", (public_id,))
+            cur.execute("SELECT id FROM movies WHERE public_id=%s AND deleted_at IS NULL LIMIT 1", (public_id,))
             row = cur.fetchone()
             if row:
                 return row["id"]
@@ -13760,9 +13804,10 @@ def personal_list_snapshot_match_movie(conn, snapshot: dict[str, Any]) -> UUID |
                     continue
                 cur.execute(
                     """
-                    SELECT movie_id AS id
-                    FROM movie_identifiers
-                    WHERE provider_id=%s AND identifier_type=%s AND identifier=%s
+                    SELECT mi.movie_id AS id
+                    FROM movie_identifiers mi
+                    JOIN movies mv ON mv.id = mi.movie_id AND mv.deleted_at IS NULL
+                    WHERE mi.provider_id=%s AND mi.identifier_type=%s AND mi.identifier=%s
                     LIMIT 1
                     """,
                     (provider_id, identifier_type, identifier),
@@ -13776,7 +13821,7 @@ def personal_list_snapshot_match_movie(conn, snapshot: dict[str, Any]) -> UUID |
                     """
                     SELECT id
                     FROM movies
-                    WHERE lower(title)=lower(%s) AND year=%s
+                    WHERE lower(title)=lower(%s) AND year=%s AND deleted_at IS NULL
                     ORDER BY updated_at DESC
                     LIMIT 1
                     """,
@@ -13787,7 +13832,7 @@ def personal_list_snapshot_match_movie(conn, snapshot: dict[str, Any]) -> UUID |
                     """
                     SELECT id
                     FROM movies
-                    WHERE lower(title)=lower(%s)
+                    WHERE lower(title)=lower(%s) AND deleted_at IS NULL
                     ORDER BY updated_at DESC
                     LIMIT 1
                     """,
@@ -13875,6 +13920,15 @@ def finalize_personal_list_rows(conn, rows: list[dict[str, Any]], *, kind: str) 
         apply_personal_list_snapshot_fallback(with_preview)
         relink_personal_list_snapshot(conn, with_preview, kind=kind)
         apply_personal_list_snapshot_fallback(with_preview)
+        if kind == "watchlist" and with_preview.get("movie_exists") is False:
+            # A watchlist entry whose movie is gone is hidden, not shown as a
+            # dead card (#719): deletion now removes the rows outright, but
+            # entries orphaned before that change -- or whose movie was
+            # tombstoned by a sync client -- still exist in the table. The
+            # relink above already gave a re-added copy of the movie its
+            # chance to reclaim the row. Watched is the deliberate contrast:
+            # history keeps its snapshot entries.
+            continue
         finalized.append(with_preview)
     return finalized
 
@@ -15032,7 +15086,12 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                     latest.watched_at AS last_watched,
                     m.id IS NOT NULL AS movie_exists
                 FROM watchlist_items w
-                LEFT JOIN movies m ON m.id = w.movie_id
+                -- A movie tombstoned by a sync client (deleted_at set) is as
+                -- gone as a hard-deleted one for watchlist purposes: the join
+                -- misses, movie_exists reads false, and the row is dropped by
+                -- finalize_personal_list_rows unless the relink finds a live
+                -- replacement (#719).
+                LEFT JOIN movies m ON m.id = w.movie_id AND m.deleted_at IS NULL
                 {poster_join}
                 LEFT JOIN LATERAL (
                     SELECT MAX(watched_at) AS watched_at
