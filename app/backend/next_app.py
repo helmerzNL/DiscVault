@@ -14418,6 +14418,81 @@ def all_watch_history_sync_entities(conn, user_id) -> list[dict[str, Any]]:
     return entities
 
 
+def clear_watchlist_after_watch(conn, user_id, *, movie_id=None, episode_id=None) -> int:
+    """Recording a watch takes its subject off the watchlist.
+
+    The two lists answer different questions -- the watchlist is an intention,
+    the watched list is a record -- and a film sitting on both at once asserts
+    that you still mean to watch something you have just watched. #719 called
+    it an oxymoron, which is the right word: nothing downstream is broken by
+    it, it is simply not a state that means anything.
+
+    Movie removals are told to the user's sync stream the same way an explicit
+    "remove from watchlist" is. Episode entries have no such stream of their
+    own, so they are removed the way `remove_episode_from_watchlist` removes
+    them and no further.
+
+    `IS NOT DISTINCT FROM` on the user, matching the removal routes rather than
+    inventing a third spelling. It is worth being precise about what that does
+    and does not buy here: with authentication off the actor carries no id, but
+    `watchlist_items.user_id` is NOT NULL, so no row can be owned by nobody and
+    the clause matches nothing either way. It is consistency with
+    `remove_episode_from_watchlist`, not protection -- and specifically it does
+    *not* fall back to "every user", which is the way this shape goes wrong.
+    """
+    if not table_exists(conn, "watchlist_items"):
+        return 0
+    if movie_id is not None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM watchlist_items
+                WHERE user_id IS NOT DISTINCT FROM %s
+                  AND movie_id = %s
+                  AND episode_id IS NULL
+                """,
+                (user_id, movie_id),
+            )
+            removed = max(int(cur.rowcount or 0), 0)
+        if removed and user_id is not None:
+            emit_watchlist_change(conn, user_id, movie_id, operation="delete")
+        return removed
+    if episode_id is not None:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM watchlist_items
+                WHERE user_id IS NOT DISTINCT FROM %s AND episode_id = %s
+                """,
+                (user_id, episode_id),
+            )
+            return max(int(cur.rowcount or 0), 0)
+    return 0
+
+
+def clear_watchlist_for_watched_season(conn, user_id, season_id) -> int:
+    """The season-wide twin of `clear_watchlist_after_watch`.
+
+    One statement rather than a loop over the episodes: marking a season
+    watched already inserts its history in one statement, and matching that
+    keeps the two halves of the same button in the same transaction shape.
+    """
+    if not table_exists(conn, "watchlist_items") or not episodes_available(conn):
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            DELETE FROM watchlist_items w
+            USING series_episodes e
+            WHERE w.episode_id = e.id
+              AND e.season_id = %s
+              AND w.user_id IS NOT DISTINCT FROM %s
+            """,
+            (season_id, user_id),
+        )
+        return max(int(cur.rowcount or 0), 0)
+
+
 def emit_watchlist_change(conn, user_id, movie_id, *, operation: str) -> int:
     """Append a watchlist upsert/delete to the caller's private sync stream."""
     entity_id = str(movie_id)
@@ -27754,6 +27829,11 @@ def register_routes(flask_app: Flask) -> None:
                         (actor.get("id"), watched_at, episode_uuid),
                     )
                     entry = cur.fetchone()
+                # Same rule as a film (#719): watching it settles the question
+                # the watchlist entry was asking.
+                watchlist_cleared = clear_watchlist_after_watch(
+                    conn, actor.get("id"), episode_id=episode_uuid
+                )
                 audit_event(
                     conn,
                     event_type="watch_history.added",
@@ -27762,7 +27842,7 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="series_episode",
                     target_id=episode_uuid,
                     summary="Marked episode as watched",
-                    metadata={"watchedAt": watched_at},
+                    metadata={"watchedAt": watched_at, "watchlistCleared": bool(watchlist_cleared)},
                 )
             episodes = season_episode_entities(conn, episode["season_id"], actor=actor)
         return response(
@@ -28004,6 +28084,13 @@ def register_routes(flask_app: Flask) -> None:
                         (actor.get("id"), watched_at, season_uuid, actor.get("id")),
                     )
                     marked = cur.rowcount or 0
+                # Every episode of the season, not only the ones this press
+                # marked: the button's claim is that the season has been
+                # watched, and an episode already watched has no business
+                # still being listed as one to watch either.
+                watchlist_cleared = clear_watchlist_for_watched_season(
+                    conn, actor.get("id"), season_uuid
+                )
                 audit_event(
                     conn,
                     event_type="watch_history.added",
@@ -28012,7 +28099,11 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="series_season",
                     target_id=season_uuid,
                     summary="Marked season as watched",
-                    metadata={"watchedAt": watched_at, "episodesMarked": marked},
+                    metadata={
+                        "watchedAt": watched_at,
+                        "episodesMarked": marked,
+                        "watchlistCleared": watchlist_cleared,
+                    },
                 )
             episodes = season_episode_entities(conn, season_uuid, actor=actor)
         return response({"status": "ok", "episodesMarked": marked, "episodes": episodes})
@@ -32270,6 +32361,13 @@ def register_routes(flask_app: Flask) -> None:
                         operation="upsert",
                         movie_id=movie_uuid,
                     )
+                # Inside the same transaction as the insert: a watch that was
+                # recorded while the watchlist entry survived is exactly the
+                # state #719 called an oxymoron, and a half-applied one is
+                # worse than either whole one.
+                watchlist_cleared = clear_watchlist_after_watch(
+                    conn, actor.get("id"), movie_id=movie_uuid
+                )
                 audit_event(
                     conn,
                     event_type="watch_history.added",
@@ -32278,7 +32376,7 @@ def register_routes(flask_app: Flask) -> None:
                     target_type="movie",
                     target_id=movie_uuid,
                     summary="Marked movie as watched",
-                    metadata={"watchedAt": watched_at},
+                    metadata={"watchedAt": watched_at, "watchlistCleared": bool(watchlist_cleared)},
                 )
             entry = (
                 {"id": str(watch_entry_id), "watchedAt": watched_at}

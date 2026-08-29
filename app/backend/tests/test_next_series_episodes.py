@@ -598,10 +598,17 @@ class EpisodesOnThePersonalListsTests(EpisodePresentationTests):
         return ids
 
     def test_an_episode_reaches_both_lists_and_points_at_its_disc(self):
+        # Watched first, then put back on the watchlist. Since #719 the order
+        # matters: recording a watch clears the watchlist entry, because the
+        # two lists ask different questions and watching something answers the
+        # first. The rule is one-directional -- adding it back afterwards is an
+        # intention to see it again, and is left alone -- which is what lets
+        # one episode still stand in for both lists here. What this test is
+        # about is unchanged: that episode rows reach the page at all.
         with self.connect() as conn:
             ids = self._linked_fixture(conn)
-        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
         self.client.post(f"/api/next/series/episodes/{ids['episode']}/watched", json={})
+        self.client.post(f"/api/next/series/episodes/{ids['episode']}/watchlist")
 
         payload = self.client.get("/api/next/lists?limit=50").get_json()
         for key in ("watchlist", "watched"):

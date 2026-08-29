@@ -450,6 +450,16 @@ jobs:
       - name: Test personal-list sorting
         run: python -m unittest tests.test_next_lists_sorting
 
+      # The last of the #719 follow-ups: recording a watch takes its subject
+      # off the watchlist. The half worth guarding is the scope -- the plugin
+      # sync imports a watchlist and then a watch history in the same run, so
+      # applying the rule there would make one operation delete what it had
+      # just written. A source assertion holds that exclusion in place; the
+      # rest needs real PostgreSQL, including that an actor with no id clears
+      # nothing rather than everything.
+      - name: Test that recording a watch clears the watchlist
+        run: python -m unittest tests.test_next_watch_clears_watchlist
+
       # The same collection that could not delete a movie cleanly also could not
       # see past the 500th entry of its own lists. The ceiling sat in four places
       # at once -- both entity builders, the routes and the page -- so the test
