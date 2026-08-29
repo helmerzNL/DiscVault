@@ -144,7 +144,7 @@ def register_next_discover_routes(flask_app: Flask, *, connect) -> None:  # prag
     def next_discover_feed():
         kind = str(request.args.get("kind") or "movie").strip().lower()
         mode = normalize_discover_mode(request.args.get("mode"))
-        page = parse_int_arg(request.args.get("page"), default=1, minimum=1)
+        page = parse_int_arg("page", 1, minimum=1)
         locale = normalize_locale(request.args.get("locale"))
         with connect() as conn:
             actor = _require_discover_actor(conn)
