@@ -278,6 +278,7 @@ try:
     from .next_preferences import APP_PREFERENCE_ALIASES
     from .next_preferences import APP_PREFERENCE_SECTIONS
     from .next_preferences import actor_delete_container_members_enabled
+    from .next_preferences import user_delete_removes_watch_history
     from .next_preferences import app_effective_preferences
     from .next_preferences import app_global_preferences
     from .next_preferences import app_preference_sections_payload
@@ -565,6 +566,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_preferences import APP_PREFERENCE_ALIASES
     from next_preferences import APP_PREFERENCE_SECTIONS
     from next_preferences import actor_delete_container_members_enabled
+    from next_preferences import user_delete_removes_watch_history
     from next_preferences import app_effective_preferences
     from next_preferences import app_global_preferences
     from next_preferences import app_preference_sections_payload
@@ -847,6 +849,7 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
     "delete_container_members_with_container": False,
+    "delete_removes_watch_history": False,
     "show_metadata_jobs": True,
     "price_monitoring_enabled": True,
     "preferred_price_currency": "",
@@ -868,6 +871,7 @@ APP_BOOLEAN_PREFERENCES = {
     "show_container_member_badges",
     "show_digital_badge_on_tiles",
     "delete_container_members_with_container",
+    "delete_removes_watch_history",
     "show_metadata_jobs",
     "price_monitoring_enabled",
 }
@@ -889,6 +893,7 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
+        "delete_removes_watch_history",
     ),
     "collectors": (
         "collectors_mode",
@@ -7237,7 +7242,15 @@ def delete_movie_records(conn, movie_id: UUID) -> tuple[dict[str, Any], dict[str
             )
             watchlist_user_ids = [row.get("user_id") for row in cur.fetchall() if row.get("user_id")]
             deleted["watchlist_items"] = len(watchlist_user_ids)
-    # Watch history survives this delete, so its frozen poster address has to
+    # Each user who asked for a delete to be absolute loses their history for
+    # this movie now, before the freeze below spends work on rows that are
+    # about to go -- and before ON DELETE SET NULL makes them unfindable.
+    # Per user, not per actor: one person's delete reaches every user's lists,
+    # but only the owner of a history may decide whether it is history (#719).
+    watch_history_deletions = drop_opted_in_watch_history(conn, movie_id)
+    deleted["watch_history_entries"] = watch_history_deletions
+
+    # What is left survives this delete, so its frozen poster address has to
     # survive it too -- and the local one about to stop resolving does not
     # (#719). Between the watchlist delete above and the artwork delete below
     # is the only point where the surviving rows and the artwork they name are
@@ -13693,9 +13706,30 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
                 cur.execute("SELECT COUNT(*)::int AS count FROM watchlist_items WHERE user_id=%s", (user_id,))
             counts["watchlist"] = int((cur.fetchone() or {}).get("count") or 0)
     if table_exists(conn, "watch_history"):
+        # A count must be computed the way the list renders it, or the badge
+        # becomes the one element on screen that confirms the truncation it
+        # should have revealed (#729). So when this user hides orphaned
+        # entries, the count hides them too.
+        hide_orphans = table_exists(conn, "movies") and user_delete_removes_watch_history(conn, user_id)
+        orphan_filter = (
+            """
+                  AND NOT (
+                    -- Movie rows only. An episode watch carries movie_id IS
+                    -- NULL by design (074), so a plain "has a live movie" test
+                    -- would drop every episode from the count.
+                    wh.episode_id IS NULL
+                    AND wh.snapshot->>'kind' IS DISTINCT FROM 'episode'
+                    AND NOT EXISTS (
+                        SELECT 1 FROM movies m WHERE m.id = wh.movie_id AND m.deleted_at IS NULL
+                    )
+                  )
+            """
+            if hide_orphans
+            else ""
+        )
         with conn.cursor() as cur:
             cur.execute(
-                """
+                f"""
                 SELECT
                     COUNT(*)::int AS count,
                     -- Films only, which is what the name says. Before episodes
@@ -13704,12 +13738,12 @@ def personal_list_counts(conn, user_id: UUID | str | None) -> dict[str, int]:
                     -- whole season collapses into as many buckets as it has
                     -- distinct episode titles -- or into one, when they are
                     -- untitled.
-                    COUNT(DISTINCT COALESCE(movie_id::text, snapshot->>'movie_id', snapshot->>'movie_title', snapshot->>'title'))
-                        FILTER (WHERE episode_id IS NULL AND snapshot->>'kind' IS DISTINCT FROM 'episode')::int
+                    COUNT(DISTINCT COALESCE(wh.movie_id::text, wh.snapshot->>'movie_id', wh.snapshot->>'movie_title', wh.snapshot->>'title'))
+                        FILTER (WHERE wh.episode_id IS NULL AND wh.snapshot->>'kind' IS DISTINCT FROM 'episode')::int
                         AS movie_count,
-                    COUNT(DISTINCT COALESCE(episode_id::text, snapshot->>'episode_id'))::int AS episode_count
-                FROM watch_history
-                WHERE user_id=%s
+                    COUNT(DISTINCT COALESCE(wh.episode_id::text, wh.snapshot->>'episode_id'))::int AS episode_count
+                FROM watch_history wh
+                WHERE wh.user_id=%s{orphan_filter}
                 """,
                 (user_id,),
             )
@@ -13858,6 +13892,49 @@ def durable_personal_list_image_urls(conn, movie_id: UUID) -> dict[str, str | No
         if value and not str(value).startswith(("http://", "https://")):
             urls[key] = None
     return urls
+
+
+def drop_opted_in_watch_history(conn, movie_id: UUID) -> int:
+    """Remove this movie's watch history for the users who asked for that.
+
+    The default is that history survives a delete: it records something that
+    happened, and getting rid of the disc does not un-watch the film. But the
+    person who reported #719 put the other view plainly -- "if I delete
+    something, regardless of any statuses, I want it gone" -- and both readings
+    are defensible about *your own* history, so it is a preference rather than
+    a decision made for everybody.
+
+    Read per user, and that is the constraint that shapes this function. A
+    delete is performed by one actor but reaches every user's lists, so the
+    actor's setting must not govern anyone else's history; each affected user
+    is asked about their own. Runs before the movies row goes, or ON DELETE
+    SET NULL blanks `movie_id` first and the rows become unfindable.
+    """
+    if not table_exists(conn, "watch_history"):
+        return 0
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT DISTINCT user_id FROM watch_history WHERE movie_id=%s AND user_id IS NOT NULL",
+            (movie_id,),
+        )
+        user_ids = [row.get("user_id") for row in cur.fetchall() if row.get("user_id")]
+    removed = 0
+    for user_id in user_ids:
+        if not user_delete_removes_watch_history(conn, user_id):
+            continue
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM watch_history WHERE user_id=%s AND movie_id=%s RETURNING id",
+                (user_id, movie_id),
+            )
+            entry_ids = [row.get("id") for row in cur.fetchall() if row.get("id")]
+        for entry_id in entry_ids:
+            # Told to that user's own sync stream exactly as an explicit
+            # "remove this entry" would be, so a phone that never saw the
+            # delete does not keep showing the entry it just lost.
+            emit_watch_history_change(conn, user_id, entry_id, operation="delete", movie_id=movie_id)
+        removed += len(entry_ids)
+    return removed
 
 
 def freeze_surviving_snapshot_images(conn, movie_id: UUID) -> int:
@@ -14113,6 +14190,20 @@ def finalize_personal_list_rows(conn, rows: list[dict[str, Any]], *, kind: str) 
             # relink above already gave a re-added copy of the movie its
             # chance to reclaim the row. Watched is the deliberate contrast:
             # history keeps its snapshot entries.
+            continue
+        if (
+            kind == "watched"
+            and with_preview.get("movie_exists") is False
+            and user_delete_removes_watch_history(conn, with_preview.get("list_user_id"))
+        ):
+            # Same treatment the watchlist gets above, but only for a user who
+            # asked for it. The delete path takes these rows out going
+            # forward; this covers the ones it could not reach -- deleted
+            # before the preference existed, or tombstoned by a sync client,
+            # which never runs the delete path at all. Hiding rather than
+            # deleting on a read: a list being rendered is not the place to
+            # destroy data, and a movie that comes back makes the entry live
+            # again, which is exactly what the relink above is for.
             continue
         finalized.append(with_preview)
     repair_orphaned_snapshot_images(conn, finalized)
@@ -15325,7 +15416,16 @@ def personal_list_movie_entities(conn, user_id: UUID | str, *, kind: str, limit:
                     wh.watched_at AS last_watched,
                     m.id IS NOT NULL AS movie_exists
                 FROM watch_history wh
-                LEFT JOIN movies m ON m.id = wh.movie_id
+                -- `deleted_at IS NULL` here too, matching the watchlist branch.
+                -- Without it a movie tombstoned by a sync client still joined
+                -- as present, so its watched entry stayed clickable through to
+                -- the detail page of a soft-deleted film -- and, once
+                -- `delete_removes_watch_history` existed, could not be hidden
+                -- for a user who asked for deletes to be absolute. This closes
+                -- the open question left in personal-lists-on-deletion.md.
+                -- The entry itself still survives (§2): it merely stops
+                -- pretending its film is still here.
+                LEFT JOIN movies m ON m.id = wh.movie_id AND m.deleted_at IS NULL
                 {poster_join}
                 -- Same exclusion as the watchlist branch above, and the same
                 -- reason. An episode watch deliberately carries `movie_id IS
@@ -25406,6 +25506,7 @@ app_preference_sections_payload = _next_preferences.app_preference_sections_payl
 mobile_feature_capabilities = _next_preferences.mobile_feature_capabilities
 mobile_endpoint_contract_payload = _next_preferences.mobile_endpoint_contract_payload
 actor_delete_container_members_enabled = _next_preferences.actor_delete_container_members_enabled
+user_delete_removes_watch_history = _next_preferences.user_delete_removes_watch_history
 register_next_preferences_routes = _next_preferences.register_next_preferences_routes
 
 NOTIFICATION_PREF_DEFAULTS = _next_notifications.NOTIFICATION_PREF_DEFAULTS

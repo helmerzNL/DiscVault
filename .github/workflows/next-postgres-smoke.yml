@@ -431,6 +431,15 @@ jobs:
       - name: Test that a surviving watched entry keeps a loadable poster
         run: python -m unittest tests.test_next_watch_history_poster
 
+      # The third half of the same report: whether history survives a delete at
+      # all is the user's call, not the app's. Most of what this covers is the
+      # boundary of that choice -- it is read per user rather than per actor,
+      # because a delete is performed by one person and lands on everybody's
+      # lists, and only the owner of a history may decide whether it is
+      # history. Real PostgreSQL: two users, two settings, one delete.
+      - name: Test the watch-history deletion preference
+        run: python -m unittest tests.test_next_watch_history_deletion_preference
+
       # The same collection that could not delete a movie cleanly also could not
       # see past the 500th entry of its own lists. The ceiling sat in four places
       # at once -- both entity builders, the routes and the page -- so the test
