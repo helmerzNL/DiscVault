@@ -422,6 +422,15 @@ jobs:
       - name: Test the watchlist deletion policy
         run: python -m unittest tests.test_next_watchlist_deletion
 
+      # Its sibling: watch history keeps its entries when the movie goes, so
+      # the address of its poster has to survive too. The one it froze was
+      # `/api/next/media/assets/<id>`, which 404s the moment the movie's
+      # artwork links are deleted with it -- an <img> that paints nothing and
+      # reads as a deliberate black poster. Real PostgreSQL again: the whole
+      # claim is about what a delete leaves behind in a jsonb snapshot.
+      - name: Test that a surviving watched entry keeps a loadable poster
+        run: python -m unittest tests.test_next_watch_history_poster
+
       # The same collection that could not delete a movie cleanly also could not
       # see past the 500th entry of its own lists. The ceiling sat in four places
       # at once -- both entity builders, the routes and the page -- so the test
