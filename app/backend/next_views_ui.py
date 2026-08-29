@@ -15707,6 +15707,25 @@ def ui_preview_html(
                 <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
                 <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
               </div>
+              <div class="toolbar-menu" id="listsSortMenu">
+                <button type="button" class="icon-button toolbar-menu-trigger" id="listsSortTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Sort list" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
+                </button>
+                <!-- `data-lists-sort-option`, deliberately not the Library's
+                     `data-sort-option`. That binding is a global
+                     querySelectorAll and writes collectionSortMode, which is
+                     right for the location detail page (it shows the library)
+                     and wrong here: reusing the attribute would make a click
+                     on this menu silently re-sort the Library instead. -->
+                <div class="toolbar-menu-panel hidden" id="listsSortPanel" role="menu" aria-label="Sort options" data-next-i18n-aria="collection.sort">
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="date_desc" id="listsSortDateDesc">Newest first</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="date_asc" id="listsSortDateAsc">Oldest first</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="title_asc" data-next-i18n="collection.sortNameAsc">Name (A-Z)</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="title_desc" data-next-i18n="collection.sortNameDesc">Name (Z-A)</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="year_desc" data-next-i18n="collection.sortYearNewest">Release Year (newest)</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="year_asc" data-next-i18n="collection.sortYearOldest">Release Year (oldest)</button>
+                </div>
+              </div>
               <div class="view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
                 <button type="button" class="icon-button view-mode-button" data-lists-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7,5H21V7H7V5M7,13V11H21V13H7M4,4.5A1.5,1.5 0 0,1 5.5,6A1.5,1.5 0 0,1 4,7.5A1.5,1.5 0 0,1 2.5,6A1.5,1.5 0 0,1 4,4.5M4,10.5A1.5,1.5 0 0,1 5.5,12A1.5,1.5 0 0,1 4,13.5A1.5,1.5 0 0,1 2.5,12A1.5,1.5 0 0,1 4,10.5M7,19V17H21V19H7M4,16.5A1.5,1.5 0 0,1 5.5,18A1.5,1.5 0 0,1 4,19.5A1.5,1.5 0 0,1 2.5,18A1.5,1.5 0 0,1 4,16.5Z"/></svg>
@@ -19439,6 +19458,11 @@ def ui_preview_html(
     let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
+    // Defaults to the order the server already returns, so nobody's Watchlist
+    // silently rearranges itself on upgrade. Its own key and its own variable:
+    // sharing collectionSortMode would tie the Library's order to the Lists
+    // module, which are different questions about different data (#719).
+    let listsSortMode = localStorage.getItem("dv_next_lists_sort") || "date_desc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
     function readStoredFormatFilters() {
       try {
@@ -26384,7 +26408,11 @@ def ui_preview_html(
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
       {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"},
       {menu: "locationDetailSortMenu", trigger: "locationDetailSortTrigger", panel: "locationDetailSortPanel"},
-      {menu: "locationDetailFilterMenu", trigger: "locationDetailFilterTrigger", panel: "locationDetailFilterPanel"}
+      {menu: "locationDetailFilterMenu", trigger: "locationDetailFilterTrigger", panel: "locationDetailFilterPanel"},
+      // The Lists menu rides the same machinery -- open/close, outside-click,
+      // Escape and viewport positioning are all registry-driven -- while
+      // keeping its own option attribute so it drives its own state.
+      {menu: "listsSortMenu", trigger: "listsSortTrigger", panel: "listsSortPanel"}
     ];
     let collectionMenusBound = false;
     function closeCollectionMenu(menuId) {
@@ -39853,16 +39881,29 @@ def ui_preview_html(
     }
     function watchedGroupsHtml(entries) {
       const mode = normalizeViewMode(listsViewMode);
-      return watchedGroups(entries).map((group) => {
+      // Grouping by day is a statement about a chronological list. Under a
+      // title or year sort the same headings would still be in date order and
+      // would cut the sorted run into arbitrary pieces, so the list goes flat
+      // and the sort is the only thing organising it (#719).
+      const sortMode = normalizeListsSortMode(listsSortMode);
+      const groups = (sortMode === "date_desc" || sortMode === "date_asc")
+        ? watchedGroups(entries)
+        : [{date: null, rows: [...(entries || [])]}];
+      return groups.map((group) => {
         const body = mode === "detail"
           ? `<div class="mode-detail-grid">${watchedDetailTableHtml(group.rows)}</div>`
           : `<div class="watched-group-grid ${escapeHtml(mode)}">${group.rows.map(mode === "list" ? watchedListItemHtml : watchedPosterCardHtml).join("")}</div>`;
-        return `
-          <section class="watched-day-section">
+        const heading = group.date === null
+          ? ""
+          : `
             <header class="watched-day-head">
               <strong>${escapeHtml(watchedDateLabel(group.date))}</strong>
               <span>${escapeHtml(group.rows.length)} ${escapeHtml(tNext(group.rows.length === 1 ? "lists.watchedEntry" : "lists.watchedEntries", group.rows.length === 1 ? "film watched" : "films watched"))}</span>
             </header>
+          `;
+        return `
+          <section class="watched-day-section">
+            ${heading}
             ${body}
           </section>
         `;
@@ -40629,6 +40670,81 @@ def ui_preview_html(
       if (loansNode) loansNode.textContent = String(loansCount || 0);
       if (navNode) navNode.textContent = String(watchlistCount || 0);
     }
+    const LISTS_SORT_MODES = ["date_desc", "date_asc", "title_asc", "title_desc", "year_desc", "year_asc"];
+    function normalizeListsSortMode(mode) {
+      return LISTS_SORT_MODES.includes(mode) ? mode : "date_desc";
+    }
+    // The list's own date: when it was put on the Watchlist, or when it was
+    // watched. One mode pair covers both so a single menu serves both tabs;
+    // only the labels differ, and those are set in renderListsSortMenu.
+    function listsEntryDateValue(entry, kind) {
+      const raw = kind === "watched"
+        ? (entry?.watched_at || entry?.last_watched)
+        : (entry?.watchlist_added_at || entry?.added_at);
+      const value = Date.parse(raw || "");
+      return Number.isNaN(value) ? 0 : value;
+    }
+    // `sort_title` decides the order while `title` is what the card shows --
+    // the same split the Library makes, so "The Thing" files under T here and
+    // under T there. itemSortTitleValue is not reusable: it unwraps the
+    // library's {kind, movie, series} item, and a personal-list entry is a
+    // flat row.
+    function listsEntrySortTitle(entry) {
+      return String(entry?.sort_title || entry?.sortTitle || entry?.title || "");
+    }
+    function listsEntryYearValue(entry) {
+      return Number.parseInt(entry?.year || "0", 10) || 0;
+    }
+    function sortPersonalListEntries(entries, kind) {
+      const mode = normalizeListsSortMode(listsSortMode);
+      const rows = [...(entries || [])];
+      return rows.sort((a, b) => {
+        if (mode === "date_desc" || mode === "date_asc") {
+          const diff = listsEntryDateValue(a, kind) - listsEntryDateValue(b, kind);
+          if (diff) return mode === "date_desc" ? -diff : diff;
+        } else if (mode === "year_desc" || mode === "year_asc") {
+          const diff = listsEntryYearValue(a) - listsEntryYearValue(b);
+          if (diff) return mode === "year_desc" ? -diff : diff;
+        }
+        // Title breaks every other tie, so two films added the same second, or
+        // sharing a year, still land in a stable, explicable order.
+        const diff = listsEntrySortTitle(a).localeCompare(listsEntrySortTitle(b), localeState.locale || undefined, {sensitivity: "base"});
+        return mode === "title_desc" ? -diff : diff;
+      });
+    }
+    function renderListsSortMenu() {
+      const menu = document.getElementById("listsSortMenu");
+      if (!menu) return;
+      const active = listsState.active;
+      const sortable = active === "watchlist" || active === "watched";
+      // Wishlist, tags and loans have their own shapes and their own ordering;
+      // offering them a Watchlist sort would be a control that does nothing.
+      menu.classList.toggle("hidden", !sortable);
+      if (!sortable) {
+        document.getElementById("listsSortPanel")?.classList.add("hidden");
+        document.getElementById("listsSortTrigger")?.setAttribute("aria-expanded", "false");
+        return;
+      }
+      listsSortMode = normalizeListsSortMode(listsSortMode);
+      const watched = active === "watched";
+      const newest = document.getElementById("listsSortDateDesc");
+      const oldest = document.getElementById("listsSortDateAsc");
+      if (newest) {
+        newest.textContent = watched
+          ? tNext("lists.sortWatchedNewest", "Date Watched (newest)")
+          : tNext("lists.sortAddedNewest", "Date Added (newest)");
+      }
+      if (oldest) {
+        oldest.textContent = watched
+          ? tNext("lists.sortWatchedOldest", "Date Watched (oldest)")
+          : tNext("lists.sortAddedOldest", "Date Added (oldest)");
+      }
+      menu.querySelectorAll("[data-lists-sort-option]").forEach((button) => {
+        const isActive = button.dataset.listsSortOption === listsSortMode;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-checked", isActive ? "true" : "false");
+      });
+    }
     function renderListsView() {
       const loansOn = loansSystemEnabled();
       const loansTabButton = document.querySelector('[data-lists-tab="loans"]');
@@ -40693,14 +40809,15 @@ def ui_preview_html(
       };
       configureListNode(watchlistGrid);
       configureListNode(watchedList, true);
+      renderListsSortMenu();
       if (active === "watchlist") {
-        if (watchlistGrid) watchlistGrid.innerHTML = renderRows(listsState.watchlist || []);
+        if (watchlistGrid) watchlistGrid.innerHTML = renderRows(sortPersonalListEntries(listsState.watchlist, "watchlist"));
         if (empty) {
           empty.textContent = tNext("lists.emptyWatchlist", "Your watchlist is empty.");
           empty.classList.toggle("hidden", !!(listsState.watchlist || []).length);
         }
       } else if (active === "watched") {
-        if (watchedList) watchedList.innerHTML = watchedGroupsHtml(listsState.watched || []);
+        if (watchedList) watchedList.innerHTML = watchedGroupsHtml(sortPersonalListEntries(listsState.watched, "watched"));
         if (empty) {
           empty.textContent = tNext("lists.emptyWatched", "No watched films yet.");
           empty.classList.toggle("hidden", !!(listsState.watched || []).length);
@@ -49141,6 +49258,19 @@ def ui_preview_html(
           localStorage.setItem("dv_next_collection_sort", collectionSortMode);
           closeAllCollectionMenus();
           renderCollectionSurface();
+        });
+      });
+      // Its own attribute and its own handler. The selector above is global
+      // rather than scoped to the Library -- which is deliberate, because the
+      // location detail page shows the library too -- so a Lists menu built on
+      // `data-sort-option` would re-sort the Library on every click and never
+      // report an error.
+      document.querySelectorAll("[data-lists-sort-option]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsSortMode = normalizeListsSortMode(button.dataset.listsSortOption);
+          localStorage.setItem("dv_next_lists_sort", listsSortMode);
+          closeAllCollectionMenus();
+          renderListsView();
         });
       });
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
