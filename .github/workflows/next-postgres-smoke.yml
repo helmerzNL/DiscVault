@@ -458,6 +458,15 @@ jobs:
       - name: Test personal-list sorting
         run: python -m unittest tests.test_next_lists_sorting
 
+      # The sort button that came out of that work drew nothing: the icon
+      # sizing rule was scoped to `.collection-controls`, and the Lists
+      # toolbar is not inside one. Markup identical to the Library's, blank on
+      # screen -- the difference lives three levels up, where a diff cannot
+      # show it. This pins the rule to the trigger's own class so a new
+      # trigger works wherever it is dropped.
+      - name: Test that toolbar menu triggers draw their icon
+        run: python -m unittest tests.test_next_toolbar_menu_trigger_icon
+
       # The last of the #719 follow-ups: recording a watch takes its subject
       # off the watchlist. The half worth guarding is the scope -- the plugin
       # sync imports a watchlist and then a watch history in the same run, so

@@ -1521,6 +1521,7 @@ def ui_preview_html(
       gap: 6px;
     }
     .collection-controls .icon-button svg,
+    .toolbar-menu-trigger svg,
     .filter-toggle-row svg {
       width: 20px;
       height: 20px;
@@ -1534,8 +1535,16 @@ def ui_preview_html(
       position: relative;
       display: inline-flex;
     }
+    /* The icon sizing and centring live on `.toolbar-menu-trigger` itself, not
+       on an ancestor: the Lists sort trigger sits in `.detail-card-actions`,
+       outside `.collection-controls`, and inherited nothing there -- an inline
+       SVG with no width, height or fill, which draws as an empty button. */
     .toolbar-menu-trigger {
       position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
     .toolbar-menu.open .toolbar-menu-trigger,
     .toolbar-menu-trigger[aria-expanded="true"] {
