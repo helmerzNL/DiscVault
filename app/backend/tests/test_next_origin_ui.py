@@ -169,5 +169,60 @@ class ExportWiringTests(unittest.TestCase):
         self.assertIn("originalLanguage:", block)
 
 
+class BackfillIsReachableTests(unittest.TestCase):
+    """The backfill has a route in the admin screen, not only in the API.
+
+    Both endpoints existed from the start and nothing in the SPA called either
+    of them. The library said "{count} films have no origin data yet" beside
+    the filters, and the only way to act on that was to issue the POST by hand.
+    An operator reading the admin screen would never have found it.
+
+    That is why the assertion is about the *call*, not about the markup. A
+    button with no listener, or a panel that renders counters it never loads,
+    reproduces the original bug exactly while looking finished.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def test_the_admin_screen_reads_the_backfill_counts(self):
+        self.assertIn(
+            'authApiJson("/api/next/admin/metadata/origin-backfill")', self.source
+        )
+
+    def test_the_admin_screen_queues_the_backfill(self):
+        start = self.source.index("async function queueAppAdminOriginBackfill")
+        block = self.source[start : start + 900]
+        self.assertIn('"/api/next/admin/metadata/origin-backfill"', block)
+        self.assertIn('method: "POST"', block)
+        # The header the whole feature was broken without, twice over.
+        self.assertIn('"Content-Type": "application/json"', block)
+
+    def test_the_button_is_wired_to_the_handler(self):
+        self.assertIn(
+            'document.getElementById("appAdminOriginBackfillButton")?.addEventListener('
+            '"click", () => queueAppAdminOriginBackfill());',
+            self.source,
+        )
+
+    def test_the_counts_load_with_the_metadata_panel(self):
+        """Opening the panel must fill the counters, not just offer the button.
+
+        The counters are the answer to "why is my origin filter empty"; a card
+        showing two dashes says nothing and invites a pointless run.
+        """
+        start = self.source.index("async function refreshAppAdminMetadataJobs")
+        block = self.source[start : start + 1600]
+        self.assertIn("await refreshAppAdminOriginBackfill();", block)
+
+    def test_both_counters_are_rendered(self):
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 900]
+        self.assertIn("appAdminOriginBackfillPending", block)
+        self.assertIn("appAdminOriginBackfillUnresolvable", block)
+
+
 if __name__ == "__main__":
     unittest.main()

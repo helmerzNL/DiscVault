@@ -19391,6 +19391,24 @@ def ui_preview_html(
                   <strong id="appAdminMetadataArtworkTotal">-</strong>
                 </article>
               </div>
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.originBackfill">Country of origin</h3>
+                <p data-next-i18n="appAdmin.originBackfillHelp">Films added before this feature have no country of origin or original language, so they stay out of those filters. This asks TMDB for the bare record and writes those two fields, which takes minutes rather than the hours a full metadata refresh needs.</p>
+                <div class="app-admin-summary-grid">
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillPending">Films still missing it</span>
+                    <strong id="appAdminOriginBackfillPending">-</strong>
+                  </article>
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillUnresolvable">Not matched to TMDB</span>
+                    <strong id="appAdminOriginBackfillUnresolvable">-</strong>
+                  </article>
+                </div>
+                <p class="import-source-meta" data-next-i18n="appAdmin.originBackfillUnresolvableHelp">Films with no TMDB match cannot be filled in this way, so that number is counted separately and does not reach zero.</p>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminOriginBackfillButton" data-next-i18n="appAdmin.originBackfillRun">Fill in origin data</button>
+                </div>
+              </div>
             </div>
             <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelArtwork" role="tabpanel" aria-labelledby="appAdminMetadataTabArtwork" aria-hidden="true" data-app-admin-metadata-panel="artwork">
               <div class="detail-card profile-card full">
@@ -25574,6 +25592,7 @@ def ui_preview_html(
         appAdmin.metadataArtworkTrash = trashPayload || {items: [], settings: {}, purge: {}};
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
+        await refreshAppAdminOriginBackfill();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
@@ -25611,6 +25630,51 @@ def ui_preview_html(
         await refreshAppAdminMetadataJobs();
         if (activeDetailPayload || activeContainerPayload) await refreshCurrentDetail();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.artworkRestored", "Artwork restored."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    function renderAppAdminOriginBackfill(counts) {
+      const pending = document.getElementById("appAdminOriginBackfillPending");
+      const unresolvable = document.getElementById("appAdminOriginBackfillUnresolvable");
+      if (pending) pending.textContent = String(counts?.pending ?? "-");
+      if (unresolvable) unresolvable.textContent = String(counts?.unresolvable ?? "-");
+      const button = document.getElementById("appAdminOriginBackfillButton");
+      // Nothing left to fill is a disabled button, not a hidden card: the two
+      // counters are the answer to "why is my origin filter empty", and they
+      // have to stay readable once they reach zero.
+      if (button) button.disabled = !(Number(counts?.pending) > 0);
+    }
+    async function refreshAppAdminOriginBackfill() {
+      if (!canUseAdminTab("metadata")) return;
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/origin-backfill");
+        appAdmin.originBackfill = payload;
+        renderAppAdminOriginBackfill(payload);
+      } catch (error) {
+        // Silent on read: this rides along with the metadata panel load, and a
+        // failure here must not overwrite the message that load just set.
+        renderAppAdminOriginBackfill(null);
+      }
+    }
+    async function queueAppAdminOriginBackfill() {
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.originBackfillQueueing", "Queueing origin backfill..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/origin-backfill", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({batchSize: 100})
+        });
+        renderAppAdminOriginBackfill(payload);
+        const queued = Number(payload.queued || 0);
+        setAppAdminMessage(
+          "appAdminMetadataMessage",
+          queued
+            ? tNext("appAdmin.originBackfillQueued", "{count} origin backfill jobs queued.").replace("{count}", String(queued))
+            : tNext("appAdmin.originBackfillNothing", "Every film that can be filled already has its origin data."),
+          queued ? "good" : ""
+        );
+        await refreshAppAdminMetadataJobs();
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }
@@ -50954,6 +51018,7 @@ def ui_preview_html(
       });
       document.getElementById("appAdminSaveArtworkTrashSettingsButton")?.addEventListener("click", () => saveAppAdminArtworkTrashSettings());
       document.getElementById("appAdminPurgeArtworkTrashButton")?.addEventListener("click", () => purgeAppAdminArtworkTrash());
+      document.getElementById("appAdminOriginBackfillButton")?.addEventListener("click", () => queueAppAdminOriginBackfill());
       document.getElementById("appAdminArtworkTrashList")?.addEventListener("click", (event) => {
         const restoreButton = event.target.closest("[data-app-admin-artwork-restore]");
         if (restoreButton) {
