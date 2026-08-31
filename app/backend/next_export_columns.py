@@ -61,7 +61,53 @@ DEFAULT_EXPORT_COLUMN_KEYS: tuple[str, ...] = tuple(
 MAX_EXPORT_ROWS = 100_000
 
 
-def export_column_catalogue() -> list[dict[str, Any]]:
+#: Custom-field columns are namespaced so they can never collide with a built-in
+#: key, and so `normalize_columns` can tell "unknown built-in" (a typo, worth a
+#: 400) from "a field this instance defines" without guessing.
+CUSTOM_COLUMN_PREFIX = "custom:"
+
+
+def custom_column_key(field_key: str) -> str:
+    return f"{CUSTOM_COLUMN_PREFIX}{field_key}"
+
+
+def custom_export_columns(custom_fields: Any) -> list[dict[str, Any]]:
+    """Catalogue entries for one instance's custom fields.
+
+    Always default-off, and never part of DEFAULT_EXPORT_COLUMN_KEYS. §1 of
+    App-Guidance's library-export-columns.md rules that a column absent from some
+    *implementation* ships off so the default selection is the same file
+    everywhere. A custom field is absent from another *instance*, which that
+    document does not yet have a category for -- but the same answer holds, and
+    more strongly: two installations legitimately define different fields, and no
+    amount of default-on could make their default exports match.
+
+    Archived fields keep their column. A film may still carry a value, and an
+    export that dropped it would lose data the user typed.
+    """
+    columns: list[dict[str, Any]] = []
+    for field in custom_fields or []:
+        if not isinstance(field, dict):
+            continue
+        key = str(field.get("key") or "").strip()
+        if not key:
+            continue
+        columns.append(
+            {
+                "key": custom_column_key(key),
+                # No i18nKey: the label is what the owner typed, and there is no
+                # translation catalogue that could ever hold it.
+                "i18nKey": "",
+                "label": str(field.get("name") or key),
+                "default": False,
+                "weight": 1.4,
+                "custom": True,
+            }
+        )
+    return columns
+
+
+def export_column_catalogue(custom_fields: Any = None) -> list[dict[str, Any]]:
     """Serialisable catalogue for the frontend column picker."""
     return [
         {
@@ -69,12 +115,13 @@ def export_column_catalogue() -> list[dict[str, Any]]:
             "i18nKey": column["i18nKey"],
             "label": column["label"],
             "default": bool(column.get("default")),
+            **({"custom": True} if column.get("custom") else {}),
         }
-        for column in EXPORT_COLUMNS
+        for column in (*EXPORT_COLUMNS, *custom_export_columns(custom_fields))
     ]
 
 
-def normalize_columns(requested: Any) -> list[str]:
+def normalize_columns(requested: Any, custom_fields: Any = None) -> list[str]:
     """Return the requested column keys in catalogue order.
 
     Unknown keys are rejected so a typo surfaces immediately instead of
@@ -84,17 +131,45 @@ def normalize_columns(requested: Any) -> list[str]:
         return list(DEFAULT_EXPORT_COLUMN_KEYS)
     if not isinstance(requested, (list, tuple)):
         raise NextApiError("columns must be a list", 400)
+    allowed_custom = {
+        custom_column_key(str(field.get("key")))
+        for field in (custom_fields or [])
+        if isinstance(field, dict) and field.get("key")
+    }
     seen: set[str] = set()
+    custom_seen: list[str] = []
     for entry in requested:
         key = str(entry or "").strip()
         if not key:
             continue
+        if key.startswith(CUSTOM_COLUMN_PREFIX):
+            # Still rejected when unknown: a field that was never defined is as
+            # much a typo as a misspelled built-in, and a silently dropped column
+            # produces an export missing something the caller asked for.
+            if key not in allowed_custom:
+                raise NextApiError(f"Unknown export column: {key}", 400)
+            if key not in custom_seen:
+                custom_seen.append(key)
+            continue
         if key not in EXPORT_COLUMNS_BY_KEY:
             raise NextApiError(f"Unknown export column: {key}", 400)
         seen.add(key)
-    if not seen:
+    if not seen and not custom_seen:
         raise NextApiError("At least one column is required", 400)
-    return [key for key in EXPORT_COLUMN_KEYS if key in seen]
+    # Built-ins in catalogue order, then custom fields in the order the instance
+    # defines them -- appended, never interleaved, so a stored column selection
+    # keeps producing the same column order.
+    ordered_custom = [key for key in allowed_custom_order(custom_fields) if key in custom_seen]
+    return [key for key in EXPORT_COLUMN_KEYS if key in seen] + ordered_custom
+
+
+def allowed_custom_order(custom_fields: Any) -> list[str]:
+    """Custom column keys in the order the instance defines its fields."""
+    return [
+        custom_column_key(str(field.get("key")))
+        for field in (custom_fields or [])
+        if isinstance(field, dict) and field.get("key")
+    ]
 
 
 def column_headers(columns: list[str], labels: Any = None) -> list[str]:
