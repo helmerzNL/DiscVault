@@ -638,6 +638,17 @@ jobs:
           tests.test_next_movie_ratings
           tests.test_next_movie_rating_ui
 
+      # The flags beside the content-rating age label. This whole failure is
+      # silent from both ends: a flag is an <img> at /api/next/flags/<code>.svg,
+      # a name with no file behind it answers 404, and the browser draws its
+      # broken-image glyph while the age label keeps rendering -- so it reads as
+      # a styling glitch. Eight of the twenty-three countries the picker offers
+      # had no flag (#749), two of them because Denmark's and Sweden's files
+      # were named by language code. Nothing but this ties the picker's list and
+      # the flag directory together.
+      - name: Test the content-rating flag icons
+        run: python -m unittest tests.test_next_flag_icons
+
       # Instance-defined custom fields. The claim that needs a real database is
       # that a value lands in the column matching its declared type: that pairing
       # needs a join, so it cannot be a CHECK, and nothing but this stands behind

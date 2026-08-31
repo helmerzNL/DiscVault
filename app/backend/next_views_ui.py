@@ -20457,21 +20457,38 @@ def ui_preview_html(
         .replace(/[_-]+/g, " ")
         .replace(/\\b\\w/g, (char) => char.toUpperCase());
     }
+    // Flag files are named by ISO 3166-1 alpha-2 COUNTRY code, never by
+    // language code. Denmark and Sweden used to sit on disk as da.svg/sv.svg,
+    // so every caller -- which passes a country, "DK" or "SE" -- asked for a
+    // file that was not there (#749). Nothing reports that: the route answers
+    // 404 and the browser draws its broken-image glyph beside an age label that
+    // rendered fine, so it reads as a styling glitch.
+    // FLAG_FILE_CODES mirrors the directory, and resolving to a code outside it
+    // returns "" so the caller draws no icon instead of a broken one. Keep it in
+    // step with app/frontend/flags/ -- tests/test_next_flag_icons.py compares the
+    // two, and ties RATING_COUNTRIES_ORDER to it as well.
+    const FLAG_FILE_CODES = ["au", "bg", "br", "ca", "cn", "cz", "de", "dk", "ee", "es", "fi", "fr", "gb", "gr", "hr", "hu", "in", "it", "jp", "kr", "lt", "lv", "my", "nl", "no", "nz", "ph", "pl", "pt", "ro", "se", "si", "sk", "tr", "tw", "ua", "us"];
     function flagCodeForLocale(value) {
       const raw = String(value || "").replace("_", "-").toLowerCase();
       const base = raw.split("-")[0];
       const region = raw.split("-")[1] || "";
-      const map = {en: "us", nb: "no", no: "no", da: "da", sv: "sv", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", pl: "pl", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", el: "gr", uk: "ua", hr: "hr", sl: "si", et: "ee", lv: "lv", lt: "lt", tr: "tr", ja: "jp", zh: "cn", ko: "kr"};
-      if (["us", "gb", "ca", "nl", "de", "fr", "es", "pt", "it", "da", "sv", "fi", "no", "pl", "cz", "sk", "hu", "ro", "bg", "gr", "ua", "hr", "si", "ee", "lv", "lt", "tr", "jp", "cn", "tw", "kr"].includes(region)) return region;
-      return map[base] || base || "us";
+      // Language code -> country whose flag stands in for it.
+      const map = {en: "us", nb: "no", nn: "no", no: "no", da: "dk", sv: "se", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", pl: "pl", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", el: "gr", uk: "ua", hr: "hr", sl: "si", et: "ee", lv: "lv", lt: "lt", tr: "tr", ja: "jp", zh: "cn", ko: "kr", hi: "in", ms: "my", fil: "ph", tl: "ph"};
+      if (FLAG_FILE_CODES.includes(region)) return region;
+      const code = map[base] || base;
+      return FLAG_FILE_CODES.includes(code) ? code : "";
     }
     function flagCodeForCountry(value) {
       const raw = String(value || "").trim().toLowerCase();
-      const map = {uk: "gb", gb: "gb", us: "us", ca: "ca", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", da: "da", sv: "sv", fi: "fi", nb: "no", no: "no", pl: "pl", cz: "cz", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", gr: "gr", el: "gr", ua: "ua", hr: "hr", si: "si", sl: "si", ee: "ee", et: "ee", lv: "lv", lt: "lt", tr: "tr", jp: "jp", ja: "jp", cn: "cn", zh: "cn", tw: "tw", kr: "kr", ko: "kr"};
+      // Country aliases only -- "uk" is the United Kingdom here, where in a
+      // locale the same two letters are the Ukrainian language.
+      const map = {uk: "gb", el: "gr", cs: "cz", nb: "no", ja: "jp", zh: "cn", ko: "kr", sl: "si", et: "ee", da: "dk", sv: "se"};
+      if (FLAG_FILE_CODES.includes(raw)) return raw;
       return map[raw] || flagCodeForLocale(raw);
     }
     function flagIconHtml(value, label = "") {
       const code = flagCodeForCountry(value);
+      if (!code) return "";
       return `<img class="flag-icon" src="/api/next/flags/${escapeHtml(code)}.svg" alt="${escapeHtml(label || code.toUpperCase())}">`;
     }
     function debugIdHtml(id, label = "ID") {
