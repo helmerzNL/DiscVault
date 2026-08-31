@@ -142,6 +142,14 @@ jobs:
       - name: Test that the MCP tool catalogue agrees with the MCP server
         run: python -m unittest tests.test_next_mcp_tool_catalog
 
+      # /mcp on the API port is a proxy, and its target was hardcoded to
+      # loopback: right for the all-in-one image, and the API's own loopback in
+      # every split deployment, where it refused every call however healthy the
+      # MCP server was. Nothing failed in CI because both halves were fine on
+      # their own -- only the compose file that wires them was wrong.
+      - name: Test where the MCP proxy forwards to
+        run: python -m unittest tests.test_next_mcp_proxy_target
+
       # A token's scope is only a limit if both halves have to agree, and only
       # honestly a limit if the gates that consult no permission at all -- role
       # management, user deletion, the auth toggle, ownership transfer -- refuse
