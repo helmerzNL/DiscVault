@@ -420,3 +420,179 @@ class CustomFieldStorageTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+@unittest.skipUnless(
+    DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
+)
+class UpwardMutationShapeTests(unittest.TestCase):
+    """Values go up per field, and that shape is the protection.
+
+    A set-shaped upward path would mean a phone modelling three of five fields
+    sends its three back and deletes the other two -- no error, no log, which is
+    what §4d.2 already says about own images. The alternative is an echo
+    obligation nothing on the wire enforces. Per-field operations make the loss
+    impossible rather than agreed, so the test that matters is that a mutation
+    naming one field leaves every other field alone.
+    """
+
+    def setUp(self):
+        self.conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        self.field_ids = []
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO movies (public_id, title) VALUES (%s, %s) RETURNING id",
+                (f"cfm-{uuid.uuid4().hex[:9]}", "Mutation probe"),
+            )
+            self.movie_id = cur.fetchone()["id"]
+        self.conn.commit()
+
+    def tearDown(self):
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM movie_custom_field_values WHERE movie_id=%s", (self.movie_id,)
+                )
+                cur.execute("DELETE FROM movies WHERE id=%s", (self.movie_id,))
+                if self.field_ids:
+                    cur.execute(
+                        "DELETE FROM custom_field_definitions WHERE id = ANY(%s)", (self.field_ids,)
+                    )
+            self.conn.commit()
+        finally:
+            self.conn.close()
+
+    def _field(self, key, field_type="text"):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO custom_field_definitions (key, name, field_type)"
+                " VALUES (%s, %s, %s) RETURNING id",
+                (key, key.title(), field_type),
+            )
+            field_id = cur.fetchone()["id"]
+        self.conn.commit()
+        self.field_ids.append(field_id)
+        return field_id
+
+    def _mutation(self, operation, payload):
+        return {
+            "clientMutationId": uuid.uuid4().hex,
+            "entityType": "movieCustomValue",
+            "operation": operation,
+            "payload": payload,
+        }
+
+    def _apply(self, operation, payload):
+        import next_app
+
+        applier = (
+            next_app.apply_custom_value_upsert
+            if operation == "upsert"
+            else next_app.apply_custom_value_delete
+        )
+        return applier(
+            self.conn,
+            client_id="probe-device",
+            idem_key=uuid.uuid4().hex,
+            mutation=self._mutation(operation, payload),
+        )
+
+    def test_a_mutation_names_one_field_and_leaves_the_rest_alone(self):
+        import next_app
+
+        self._field("shelf")
+        self._field("bought", "date")
+        next_app.replace_movie_custom_values(
+            self.conn, self.movie_id, {"shelf": "A3", "bought": "2024-05-01"}
+        )
+        self.conn.commit()
+        self._apply("upsert", {"movieId": str(self.movie_id), "key": "shelf", "value": "B7"})
+        self.conn.commit()
+        values = {
+            item["key"]: item["value"]
+            for item in next_app.movie_custom_values(self.conn, self.movie_id)
+        }
+        self.assertEqual(values["shelf"], "B7")
+        # The whole point: a field the mutation never mentioned is untouched.
+        self.assertEqual(values["bought"], "2024-05-01")
+
+    def test_the_applier_returns_the_whole_set_so_one_round_trip_converges(self):
+        self._field("shelf")
+        result = self._apply(
+            "upsert", {"movieId": str(self.movie_id), "key": "shelf", "value": "A3"}
+        )
+        self.conn.commit()
+        self.assertEqual(result["status"], "applied")
+        self.assertEqual(result["entityType"], "movieCustomValue")
+        self.assertEqual(result["entityId"], str(self.movie_id))
+        self.assertEqual([item["key"] for item in result["customValues"]], ["shelf"])
+
+    def test_delete_is_its_own_operation_and_is_safe_to_repeat(self):
+        import next_app
+
+        self._field("shelf")
+        next_app.replace_movie_custom_values(self.conn, self.movie_id, {"shelf": "A3"})
+        self.conn.commit()
+        first = self._apply("delete", {"movieId": str(self.movie_id), "key": "shelf"})
+        self.conn.commit()
+        second = self._apply("delete", {"movieId": str(self.movie_id), "key": "shelf"})
+        self.conn.commit()
+        self.assertEqual(first["changed"], 1)
+        # A queued delete may be offered again after a dropped connection; the
+        # state the caller asked for is the state that holds.
+        self.assertEqual(second["status"], "applied")
+        self.assertEqual(second["changed"], 0)
+
+    def test_an_unknown_field_is_rejected_by_name_not_ignored(self):
+        with self.assertRaises(NextApiError) as caught:
+            self._apply("upsert", {"movieId": str(self.movie_id), "key": "nope", "value": "x"})
+        self.assertIn("nope", str(caught.exception))
+        self.conn.rollback()
+
+    def test_a_value_for_an_archived_field_is_refused(self):
+        # A phone that filled one in offline while the owner archived the field
+        # should hear about it. An ignored mutation cannot be told apart from a
+        # successful one.
+        field_id = self._field("shelf")
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE custom_field_definitions SET archived_at=now() WHERE id=%s", (field_id,)
+            )
+        self.conn.commit()
+        with self.assertRaises(NextApiError):
+            self._apply("upsert", {"movieId": str(self.movie_id), "key": "shelf", "value": "A3"})
+        self.conn.rollback()
+
+    def test_a_field_can_be_named_by_id_as_well_as_by_key(self):
+        import next_app
+
+        field_id = self._field("shelf")
+        self._apply(
+            "upsert", {"movieId": str(self.movie_id), "fieldId": str(field_id), "value": "A3"}
+        )
+        self.conn.commit()
+        values = next_app.movie_custom_values(self.conn, self.movie_id)
+        self.assertEqual(values[0]["value"], "A3")
+
+
+class MutationsAreAdvertisedTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        with open(os.path.join(BACKEND_DIR, "next_app.py"), encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def test_the_two_operations_are_dispatched_and_advertised(self):
+        for operation in ("upsert", "delete"):
+            with self.subTest(operation=operation):
+                self.assertIn(
+                    f'entity_type == "movieCustomValue" and operation == "{operation}"', self.source
+                )
+                self.assertIn(f'"movieCustomValue.{operation}"', self.source)
+
+    def test_a_definition_has_no_mutation_arm(self):
+        # Definitions are created against the server (§4e.3a), not from an
+        # offline queue: a create path with no tier 1 produces exactly the
+        # duplicates this contract exists to prevent — 1.11's reason for denying
+        # locations one.
+        self.assertNotIn('entity_type == "customField"', self.source)
+        self.assertNotIn('"customField.upsert"', self.source)

@@ -24546,6 +24546,121 @@ def apply_collection_item_delete(
     }
 
 
+def _custom_value_mutation_target(conn, payload: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    """Resolve the film and the definition one custom-value mutation names."""
+    movie_ref = clean_text(payload.get("movieId") or payload.get("movie_id"))
+    if not movie_ref:
+        raise NextApiError("movieId is required", 400)
+    movie_uuid = parse_uuid(movie_ref, "movieId")
+    if not table_exists(conn, "movie_custom_field_values"):
+        raise NextApiError("Custom fields are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM movies WHERE id=%s AND deleted_at IS NULL", (movie_uuid,))
+        if not cur.fetchone():
+            raise NextApiError("Movie not found", 404)
+    field_ref = clean_text(payload.get("fieldId") or payload.get("field_id") or payload.get("key"))
+    if not field_ref:
+        raise NextApiError("fieldId or key is required", 400)
+    fields = custom_field_rows(conn)
+    field = next(
+        (row for row in fields if str(row.get("id")) == field_ref or str(row.get("key")) == field_ref),
+        None,
+    )
+    if field is None:
+        # By name, and a 400 rather than a silent drop. A definition is created
+        # against the server (§4e.3a), so a client naming one the server has
+        # never seen is out of step -- and an ignored mutation cannot be told
+        # apart from a successful one.
+        raise NextApiError(f"Unknown custom field: {field_ref}", 400)
+    return movie_uuid, field
+
+
+def apply_custom_value_upsert(
+    conn, *, client_id: str, idem_key: str, mutation: dict[str, Any], actor: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """One device's value for one field on one film.
+
+    Per field, never a whole set -- §4e.3, which is §4d.2 applied a second time.
+    A client that does not name a field cannot touch it, so a phone modelling
+    three of five fields cannot delete the other two. The echo obligation that a
+    set-shaped push would need is an agreement nothing on the wire can enforce;
+    this shape makes the loss impossible instead of agreed.
+    """
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("movieCustomValue upsert payload must be an object", 400)
+    movie_uuid, field = _custom_value_mutation_target(conn, payload)
+    replace_movie_custom_values(
+        conn, movie_uuid, {str(field.get("key")): payload.get("value")}, fields=[field]
+    )
+    revision = emit_movie_custom_values_change(conn, movie_uuid)
+    audit_event(
+        conn,
+        event_type="custom_values.updated",
+        category="collection",
+        actor=actor,
+        target_type="movie",
+        target_id=movie_uuid,
+        summary="Updated custom field value",
+        metadata={"field": field.get("key"), "clientId": client_id},
+    )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "movieCustomValue",
+        "operation": "upsert",
+        "entityId": str(movie_uuid),
+        "fieldId": str(field.get("id")),
+        "customValues": movie_custom_values(conn, movie_uuid),
+        "revision": revision or current_revision(conn),
+    }
+
+
+def apply_custom_value_delete(
+    conn, *, client_id: str, idem_key: str, mutation: dict[str, Any], actor: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Clear one field's value on one film.
+
+    Its own operation rather than an upsert carrying null, because the two are
+    different statements: a client that queued "clear this" while offline said
+    something, and folding it into an upsert would make it indistinguishable
+    from a client that had no opinion.
+    """
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("movieCustomValue delete payload must be an object", 400)
+    movie_uuid, field = _custom_value_mutation_target(conn, payload)
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM movie_custom_field_values WHERE movie_id=%s AND field_id=%s RETURNING movie_id",
+            (movie_uuid, field.get("id")),
+        )
+        removed = cur.fetchone() is not None
+    revision = emit_movie_custom_values_change(conn, movie_uuid) if removed else current_revision(conn)
+    if removed:
+        audit_event(
+            conn,
+            event_type="custom_values.cleared",
+            category="collection",
+            actor=actor,
+            target_type="movie",
+            target_id=movie_uuid,
+            summary="Cleared custom field value",
+            metadata={"field": field.get("key"), "clientId": client_id},
+        )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "movieCustomValue",
+        "operation": "delete",
+        "entityId": str(movie_uuid),
+        "fieldId": str(field.get("id")),
+        "changed": 1 if removed else 0,
+        "customValues": movie_custom_values(conn, movie_uuid),
+        "revision": revision,
+    }
+
+
 def apply_sync_mutation(
     conn,
     *,
@@ -24601,6 +24716,18 @@ def apply_sync_mutation(
         )
     elif entity_type == "ownImage" and operation == "delete":
         result = apply_own_image_delete(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
+        )
+    # Per field, never a whole set (§4e.3). `custom_field` itself has no mutation
+    # here on purpose: a definition is created against the server (§4e.3a),
+    # because a create path out of an offline queue has no tier 1 to match on and
+    # two phones inventing the same field produce two definitions with one key.
+    elif entity_type == "movieCustomValue" and operation == "upsert":
+        result = apply_custom_value_upsert(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
+        )
+    elif entity_type == "movieCustomValue" and operation == "delete":
+        result = apply_custom_value_delete(
             conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
         )
     else:
@@ -38150,11 +38277,38 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "collection.edit_all")
             if not table_exists(conn, "custom_field_definitions"):
                 raise NextApiError("Custom fields are not available", 503)
+            # Creating a field whose key already exists returns the existing one
+            # rather than a conflict. That is the contract's own create-path
+            # shape (§4.2: "Bestond al -> created: false, bestaand entityId, plus
+            # matchedBy") and it is what makes creation safe to retry from a
+            # phone that lost its connection mid-request.
+            #
+            # The key is a deterministic slug of the name, so two people typing
+            # "Rip status" mean the same field -- a natural key, tier-3 shaped:
+            # exact, not fuzzy, and guaranteed by a unique index rather than
+            # inferred. Tier 3 also demands a sanity check, and here it is a
+            # differing type: same name, different shape, is not the same field
+            # and must not silently adopt the other's storage column.
+            existing = next(
+                (row for row in custom_field_rows(conn) if str(row.get("key")) == key), None
+            )
+            if existing is not None:
+                if str(existing.get("field_type")) != field_type:
+                    raise NextApiError(
+                        f"A custom field '{key}' already exists as {existing.get('field_type')}, "
+                        f"not {field_type}",
+                        409,
+                    )
+                return response(
+                    {
+                        "status": "ok",
+                        "created": False,
+                        "matchedBy": "key",
+                        "field": field_definition_entity(existing),
+                    }
+                )
             with conn.transaction():
                 with conn.cursor() as cur:
-                    cur.execute("SELECT 1 FROM custom_field_definitions WHERE key=%s", (key,))
-                    if cur.fetchone():
-                        raise NextApiError(f"A custom field with key '{key}' already exists", 409)
                     cur.execute(
                         """
                         INSERT INTO custom_field_definitions (key, name, field_type, options, sort_order)
@@ -38177,7 +38331,7 @@ def register_routes(flask_app: Flask) -> None:
                     metadata={"key": key, "fieldType": field_type},
                 )
             entity = custom_field_sync_entity(conn, field_id)
-        return response({"status": "ok", "field": entity})
+        return response({"status": "ok", "created": True, "field": entity})
 
     @flask_app.patch("/api/next/admin/custom-fields/<field_id>")
     def update_custom_field(field_id: str):
@@ -39871,6 +40025,10 @@ def register_routes(flask_app: Flask) -> None:
                     "containerMovie.delete",
                     "collectionItem.upsert",
                     "collectionItem.delete",
+                    "ownImage.update",
+                    "ownImage.delete",
+                    "movieCustomValue.upsert",
+                    "movieCustomValue.delete",
                 ],
                 "userEntityTypes": [
                     "watchlist",
