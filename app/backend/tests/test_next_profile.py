@@ -583,6 +583,90 @@ class NextProfileUiTests(unittest.TestCase):
         asset = next_app.next_frontend_dir() / "buymeacoffee-button.png"
         self.assertTrue(asset.is_file(), asset)
 
+    def test_support_prompt_is_hidden_until_something_decides_to_show_it(self):
+        """The one-time donation dialog ships in the document, closed."""
+        self.assertIn(
+            '<section class="support-prompt-backdrop hidden" id="supportPromptBackdrop" '
+            'aria-modal="true" role="dialog" aria-labelledby="supportPromptTitle">',
+            self.html,
+        )
+        for key in (
+            "support.promptTitle",
+            "support.promptBody",
+            "support.promptLater",
+            "support.promptFoot",
+        ):
+            self.assertIn(f'data-next-i18n="{key}"', self.html)
+        self.assertIn(
+            '<a class="profile-about-coffee" id="supportPromptCoffeeLink" '
+            'href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">',
+            self.html,
+        )
+        # Same locally served button as the About card, for the same reasons.
+        self.assertEqual(self.html.count('src="/api/next/assets/buymeacoffee-button.png"'), 2)
+        self.assertIn(".support-prompt-backdrop {", self.html)
+
+    def test_support_prompt_asks_once_per_browser_and_never_by_version(self):
+        """Beta ships a build most days, so the flag must not carry a version.
+
+        A version-keyed flag would put this dialog back in front of the same
+        reader every few days. The stored value is a bare marker, and nothing
+        in the code clears it.
+        """
+        self.assertIn(
+            'const SUPPORT_PROMPT_STORAGE_KEY = "dv_next_support_prompt_seen";',
+            self.html,
+        )
+        self.assertIn("localStorage.getItem(SUPPORT_PROMPT_STORAGE_KEY) === \"1\"", self.html)
+        self.assertIn('localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY, "1")', self.html)
+        self.assertNotIn("removeItem(SUPPORT_PROMPT_STORAGE_KEY", self.html)
+        # A browser that cannot store the answer is treated as having answered:
+        # the alternative is the dialog on every visit with no way to stop it.
+        seen = self.html.split("function supportPromptAlreadySeen()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("catch (error) {", seen)
+        self.assertIn("return true;", seen)
+
+    def test_support_prompt_skips_deep_links_and_empty_collections(self):
+        body = self.html.split("function maybeShowSupportPrompt(route)", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("if (!appMode) return;", body)
+        self.assertIn("if (supportPromptAlreadySeen()) return;", body)
+        self.assertIn('if ((route || {}).view !== "library") return;', body)
+        self.assertIn("if (libraryMovieTotal < 1) return;", body)
+        # Fired once the library has been routed to, not during startup.
+        self.assertIn(
+            '      else showLibraryPage(false);\n      maybeShowSupportPrompt(route);',
+            self.html,
+        )
+
+    def test_every_way_out_of_the_support_prompt_counts_as_asked(self):
+        """Later, the ×, the backdrop, Escape and the link itself all close it.
+
+        A route that closed the dialog without recording it would ask the same
+        reader again on the next visit, which is the one outcome the single-ask
+        rule exists to prevent.
+        """
+        for element_id in (
+            "supportPromptLaterButton",
+            "supportPromptCloseButton",
+            "supportPromptCoffeeLink",
+        ):
+            self.assertIn(
+                f'document.getElementById("{element_id}")?.addEventListener("click", () => closeSupportPrompt());',
+                self.html,
+            )
+        self.assertIn(
+            'if (event.target.id === "supportPromptBackdrop") closeSupportPrompt();',
+            self.html,
+        )
+        self.assertIn(
+            'if (event.key === "Escape" && !document.getElementById("supportPromptBackdrop")?'
+            '.classList.contains("hidden")) {',
+            self.html,
+        )
+        close_body = self.html.split("function closeSupportPrompt()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn('classList.add("hidden")', close_body)
+        self.assertIn("localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY", close_body)
+
     def test_sidebar_support_link_reaches_the_about_panel_on_desktop_only(self):
         """A quiet text link in the sidebar, hidden wherever the version block is.
 

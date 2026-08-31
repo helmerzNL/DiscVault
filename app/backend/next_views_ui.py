@@ -13205,6 +13205,78 @@ def ui_preview_html(
       font-size: .9rem;
       font-weight: 620;
     }
+    .support-prompt-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 130;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.42);
+      backdrop-filter: blur(18px);
+    }
+    .support-prompt-panel {
+      position: relative;
+      width: min(430px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: clamp(20px, 4vw, 26px);
+      background: var(--bg-solid);
+      box-shadow: var(--shadow-strong);
+      display: grid;
+      gap: 16px;
+    }
+    .support-prompt-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+    }
+    .support-prompt-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      padding-right: 28px;
+    }
+    .support-prompt-head h2 {
+      margin: 0 0 4px;
+      font-size: 1.2rem;
+      overflow-wrap: anywhere;
+    }
+    .support-prompt-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .92rem;
+      line-height: 1.5;
+    }
+    /* Buy Me a Coffee's own yellow rather than the accent: the mark belongs to
+       the button underneath it, and an accent-coloured cup would read as a
+       DiscVault feature instead of an invitation to somewhere else. */
+    .support-prompt-mark {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #FFDD00;
+      color: #12181F;
+    }
+    .support-prompt-mark svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+    .support-prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+    .support-prompt-foot {
+      margin: 0;
+      color: var(--subtle);
+      font-size: .8rem;
+    }
     .location-qr-backdrop {
       position: fixed;
       inset: 0;
@@ -19445,6 +19517,25 @@ def ui_preview_html(
       <h2 class="visually-hidden" id="commandPaletteTitle" data-next-i18n="commandPalette.title">Command palette</h2>
       <input id="commandPaletteInput" autocomplete="off" placeholder="Search commands..." data-next-i18n-placeholder="commandPalette.placeholder" aria-labelledby="commandPaletteTitle">
       <div class="command-list" id="commandPaletteList"></div>
+    </div>
+  </section>
+  <section class="support-prompt-backdrop hidden" id="supportPromptBackdrop" aria-modal="true" role="dialog" aria-labelledby="supportPromptTitle">
+    <div class="support-prompt-panel">
+      <button type="button" class="icon-button support-prompt-close" id="supportPromptCloseButton" aria-label="Close" data-next-i18n-aria="common.close">×</button>
+      <div class="support-prompt-head">
+        <span class="support-prompt-mark" aria-hidden="true">""" + nav_icon("support") + """</span>
+        <div>
+          <h2 id="supportPromptTitle" data-next-i18n="support.promptTitle">Enjoying DiscVault?</h2>
+          <p data-next-i18n="support.promptBody">DiscVault is built and maintained in my own time. If it earns a place on your shelf, a coffee helps keep the development going.</p>
+        </div>
+      </div>
+      <div class="support-prompt-actions">
+        <a class="profile-about-coffee" id="supportPromptCoffeeLink" href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">
+          <img src="/api/next/assets/buymeacoffee-button.png" width="545" height="153" alt="Buy me a coffee">
+        </a>
+        <button type="button" class="secondary-button" id="supportPromptLaterButton" data-next-i18n="support.promptLater">Maybe later</button>
+      </div>
+      <p class="support-prompt-foot" data-next-i18n="support.promptFoot">You can find this again under Profile → About.</p>
     </div>
   </section>
   <section class="location-qr-backdrop hidden" id="locationQrBackdrop" aria-modal="true" role="dialog" aria-labelledby="locationQrTitle">
@@ -47619,6 +47710,52 @@ def ui_preview_html(
         setLocationMessage(error.message || String(error), "bad");
       }
     }
+    // Once per browser, never again — not once per version. Beta publishes a
+    // build most days, so a version-keyed flag would put this dialog back in
+    // front of the same reader every few days, which is nagging rather than
+    // asking. Once it closes, the invitation lives on the About page only.
+    const SUPPORT_PROMPT_STORAGE_KEY = "dv_next_support_prompt_seen";
+    function supportPromptAlreadySeen() {
+      try {
+        return localStorage.getItem(SUPPORT_PROMPT_STORAGE_KEY) === "1";
+      } catch (error) {
+        // Storage is blocked, so nothing can be remembered. Reading that as
+        // "already seen" is the safe end of the trade: the alternative is the
+        // dialog on every single visit, with no way for the reader to stop it.
+        return true;
+      }
+    }
+    function closeSupportPrompt() {
+      document.getElementById("supportPromptBackdrop")?.classList.add("hidden");
+      try {
+        localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY, "1");
+      } catch (error) {
+        // Nothing to do here: the dialog is closed either way, and the read
+        // above already keeps a browser without storage from being asked again.
+      }
+    }
+    function maybeShowSupportPrompt(route) {
+      if (!appMode) return;
+      if (supportPromptAlreadySeen()) return;
+      // Not on a deep link. Someone who opened a movie, a person or the profile
+      // directly came for that page, and a dialog over it is an interruption
+      // rather than an invitation.
+      if ((route || {}).view !== "library") return;
+      // Not while the shelf is empty. Asking for money before anyone has added
+      // a disc reads as a paywall; whoever has one has had something out of it.
+      if (libraryMovieTotal < 1) return;
+      const backdrop = document.getElementById("supportPromptBackdrop");
+      if (!backdrop) return;
+      // After the library is drawn, not during startup: a dialog over a
+      // half-rendered app reads as an error message rather than a question.
+      window.setTimeout(() => {
+        if (supportPromptAlreadySeen()) return;
+        const library = document.getElementById("libraryView");
+        if (!library || library.classList.contains("hidden")) return;
+        backdrop.classList.remove("hidden");
+        document.getElementById("supportPromptLaterButton")?.focus();
+      }, 1500);
+    }
     function closeLocationQr() {
       document.getElementById("locationQrBackdrop")?.classList.add("hidden");
       document.body.classList.remove("location-qr-print-open");
@@ -49204,6 +49341,7 @@ def ui_preview_html(
       else if (route.view === "notifications") showNotificationsPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
+      maybeShowSupportPrompt(route);
     }
     function movieMeta(movie) {
       return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);
@@ -50322,6 +50460,14 @@ def ui_preview_html(
         document.body.classList.add("location-qr-print-open");
         window.print();
       });
+      document.getElementById("supportPromptLaterButton")?.addEventListener("click", () => closeSupportPrompt());
+      document.getElementById("supportPromptCloseButton")?.addEventListener("click", () => closeSupportPrompt());
+      // The link opens in a new tab, so without this the dialog would still
+      // be standing over the library when the reader comes back to it.
+      document.getElementById("supportPromptCoffeeLink")?.addEventListener("click", () => closeSupportPrompt());
+      document.getElementById("supportPromptBackdrop")?.addEventListener("click", (event) => {
+        if (event.target.id === "supportPromptBackdrop") closeSupportPrompt();
+      });
       document.getElementById("locationQrBackdrop")?.addEventListener("click", (event) => {
         if (event.target.id === "locationQrBackdrop") closeLocationQr();
       });
@@ -50799,6 +50945,11 @@ def ui_preview_html(
             runCommandPaletteCommand();
             return;
           }
+        }
+        if (event.key === "Escape" && !document.getElementById("supportPromptBackdrop")?.classList.contains("hidden")) {
+          event.preventDefault();
+          closeSupportPrompt();
+          return;
         }
         if (event.key === "Escape" && !document.getElementById("locationQrBackdrop")?.classList.contains("hidden")) {
           event.preventDefault();
