@@ -6108,6 +6108,10 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "series": collection_series_preview_entities(conn, actor=user),
         "seriesSeasonCoverage": collection_series_membership_entities(conn, actor=user),
         "locations": location_list_entities(conn),
+        # Archived ones ride along: a film may still hold a value for one, and
+        # the edit form needs the name and type to render it (§4e.5). The form
+        # filters the archived ones out of its own inputs.
+        "customFields": all_custom_field_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
         "attributions": collection_attribution_entities(conn),
@@ -6145,6 +6149,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "series": [],
         "seriesSeasonCoverage": [],
         "locations": [],
+        "customFields": [],
         "mediaGroups": [],
         "plugins": [],
         "attributions": [],

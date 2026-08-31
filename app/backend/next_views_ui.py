@@ -16894,6 +16894,7 @@ def ui_preview_html(
                       <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
                     </label>
                   </div>
+                  <div class="movie-edit-grid hidden" id="movieEditCustomFields"></div>
                 </div>
               </div>
               <div class="movie-edit-actions">
@@ -18529,6 +18530,7 @@ def ui_preview_html(
             """ + admin_tab("plugins", "appAdmin.tabPlugins", "Plugins", "structure") + """
             """ + admin_tab("digital", "appAdmin.tabDigital", "Digital", "devices") + """
             """ + admin_tab("metadata", "appAdmin.tabMetadata", "Metadata", "library_preferences") + """
+            """ + admin_tab("custom_fields", "appAdmin.tabCustomFields", "Custom fields", "edit_notes") + """
             """ + admin_tab("backup", "appAdmin.tabBackup", "Backup", "import") + """
             """ + admin_tab("audit", "appAdmin.tabAudit", "Audit", "lists") + """
           </nav>
@@ -19429,7 +19431,54 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
+        <section class="app-admin-panel" id="appAdminPanelCustomFields" role="tabpanel" aria-labelledby="appAdminTabCustomFields" aria-hidden="true" tabindex="0" data-app-admin-panel="custom_fields">
+          <section class="profile-grid">
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("edit_notes") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.tabCustomFields">Custom fields</h3>
+                    <p data-next-i18n="appAdmin.customFieldsHelp">Fields you define yourself. They appear on every film, sync to the apps, and can be filtered and exported.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="login-message" id="appAdminCustomFieldsMessage"></div>
+            </section>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.customFieldsAdd">Add a field</h3>
+              <form class="profile-form" id="appAdminCustomFieldForm">
+                <label class="profile-field">
+                  <span data-next-i18n="appAdmin.customFieldName">Name</span>
+                  <input id="appAdminCustomFieldName" type="text" maxlength="80" required data-next-i18n-placeholder="appAdmin.customFieldNamePlaceholder" placeholder="Rip status">
+                </label>
+                <label class="profile-field">
+                  <span data-next-i18n="appAdmin.customFieldType">Type</span>
+                  <select id="appAdminCustomFieldType">
+                    <option value="text" data-next-i18n="appAdmin.customFieldTypeText">Text</option>
+                    <option value="number" data-next-i18n="appAdmin.customFieldTypeNumber">Number</option>
+                    <option value="date" data-next-i18n="appAdmin.customFieldTypeDate">Date</option>
+                    <option value="boolean" data-next-i18n="appAdmin.customFieldTypeBoolean">Yes / no</option>
+                    <option value="select" data-next-i18n="appAdmin.customFieldTypeSelect">Choice list</option>
+                  </select>
+                </label>
+                <label class="profile-field hidden" id="appAdminCustomFieldOptionsRow">
+                  <span data-next-i18n="appAdmin.customFieldOptions">Choices</span>
+                  <textarea id="appAdminCustomFieldOptions" rows="4" data-next-i18n-placeholder="appAdmin.customFieldOptionsPlaceholder" placeholder="One per line"></textarea>
+                </label>
+                <p class="import-source-meta" data-next-i18n="appAdmin.customFieldTypeFixedHelp">The type cannot be changed later: it decides how the value is stored, sorted and filtered.</p>
+                <div class="button-row">
+                  <button type="submit" class="primary-button" data-next-i18n="appAdmin.customFieldsAdd">Add a field</button>
+                </div>
+              </form>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.customFieldsExisting">Your fields</h3>
+              <div id="appAdminCustomFieldsList"></div>
+            </div>
+          </section>
+        </section>
+                <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
           <section class="profile-grid">
             <section class="profile-dashboard-card primary full">
               <div class="profile-dashboard-card-head">
@@ -20911,6 +20960,10 @@ def ui_preview_html(
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "plugins.delete", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_artwork_trash", "admin.view_jobs"],
+        // Defining a field changes the shape of every record in the collection,
+        // so it sits with editing the collection rather than with the
+        // administrative surfaces beside it. Same key the routes require.
+        custom_fields: ["collection.edit_all"],
         backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
         audit: ["admin.view_audit"]
       },
@@ -21031,6 +21084,173 @@ def ui_preview_html(
       if (!plugins.length) return true;
       return plugins.find((plugin) => plugin.id === "tmdb")?.enabled === true;
     }
+    // ---- Custom fields (admin) --------------------------------------------
+    // Definitions are instance-wide, so this screen is the whole of their
+    // management. Field *labels* are typed by the owner and never translated --
+    // only the chrome around them has i18n keys.
+    let appAdminCustomFields = [];
+
+    function setAppAdminCustomFieldsMessage(text, tone) {
+      const node = document.getElementById("appAdminCustomFieldsMessage");
+      if (!node) return;
+      node.textContent = text || "";
+      node.className = "login-message" + (tone ? " " + tone : "");
+    }
+    function customFieldTypeLabel(fieldType) {
+      const labels = {
+        text: tNext("appAdmin.customFieldTypeText", "Text"),
+        number: tNext("appAdmin.customFieldTypeNumber", "Number"),
+        date: tNext("appAdmin.customFieldTypeDate", "Date"),
+        boolean: tNext("appAdmin.customFieldTypeBoolean", "Yes / no"),
+        select: tNext("appAdmin.customFieldTypeSelect", "Choice list")
+      };
+      // An unknown type is shown as itself rather than blanked: this screen may
+      // outlive a server that knows a type it does not (contract 4e.4).
+      return labels[fieldType] || fieldType;
+    }
+    function parseCustomFieldOptions(text) {
+      return String(text || "")
+        .split("\\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((label) => ({key: "", label}));
+    }
+    async function loadAppAdminCustomFields() {
+      if (!hasPermission("collection.edit_all")) return;
+      try {
+        const payload = await authApiJson("/api/next/custom-fields");
+        appAdminCustomFields = Array.isArray(payload.fields) ? payload.fields : [];
+        renderAppAdminCustomFields();
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    function renderAppAdminCustomFields() {
+      const list = document.getElementById("appAdminCustomFieldsList");
+      if (!list) return;
+      if (!appAdminCustomFields.length) {
+        list.innerHTML = `<p class="import-source-meta">${escapeHtml(tNext("appAdmin.customFieldsEmpty", "No fields defined yet."))}</p>`;
+        return;
+      }
+      list.innerHTML = appAdminCustomFields.map((field, index) => {
+        const archived = Boolean(field.archivedAt);
+        const options = Array.isArray(field.options) ? field.options : [];
+        return `
+          <div class="bulk-target${archived ? " danger" : ""}" data-custom-field-row="${escapeHtml(field.id)}">
+            <div class="detail-card-head compact">
+              <h4>${escapeHtml(field.name || field.key)}</h4>
+              <span class="tag">${escapeHtml(customFieldTypeLabel(field.fieldType))}</span>
+              ${archived ? `<span class="tag" data-next-i18n="appAdmin.customFieldArchived">Archived</span>` : ""}
+            </div>
+            <p class="import-source-meta"><code>${escapeHtml(field.key)}</code>${options.length ? " &middot; " + escapeHtml(options.map((option) => option.label).join(", ")) : ""}</p>
+            <div class="button-row compact">
+              <button type="button" class="secondary-button" data-custom-field-rename="${escapeHtml(field.id)}" data-next-i18n="appAdmin.customFieldRename">Rename</button>
+              <button type="button" class="secondary-button" data-custom-field-move="${escapeHtml(field.id)}" data-direction="up"${index === 0 ? " disabled" : ""} aria-label="${escapeHtml(tNext("appAdmin.customFieldMoveUp", "Move up"))}">&uarr;</button>
+              <button type="button" class="secondary-button" data-custom-field-move="${escapeHtml(field.id)}" data-direction="down"${index === appAdminCustomFields.length - 1 ? " disabled" : ""} aria-label="${escapeHtml(tNext("appAdmin.customFieldMoveDown", "Move down"))}">&darr;</button>
+              <button type="button" class="secondary-button${archived ? "" : " danger"}" data-custom-field-archive="${escapeHtml(field.id)}" data-archived="${archived ? "true" : "false"}">${escapeHtml(archived ? tNext("appAdmin.customFieldRestore", "Restore") : tNext("appAdmin.customFieldArchive", "Archive"))}</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+    async function patchAppAdminCustomField(fieldId, body, successKey, successFallback) {
+      try {
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}`, {
+          method: "PATCH",
+          body: JSON.stringify(body)
+        });
+        await loadAppAdminCustomFields();
+        setAppAdminCustomFieldsMessage(tNext(successKey, successFallback), "good");
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminCustomField(event) {
+      event.preventDefault();
+      const name = document.getElementById("appAdminCustomFieldName")?.value || "";
+      const fieldType = document.getElementById("appAdminCustomFieldType")?.value || "text";
+      const body = {name, fieldType};
+      if (fieldType === "select") {
+        body.options = parseCustomFieldOptions(document.getElementById("appAdminCustomFieldOptions")?.value);
+      }
+      try {
+        const payload = await authApiJson("/api/next/admin/custom-fields", {
+          method: "POST",
+          body: JSON.stringify(body)
+        });
+        document.getElementById("appAdminCustomFieldForm")?.reset();
+        syncAppAdminCustomFieldOptionsRow();
+        await loadAppAdminCustomFields();
+        // Creating a field whose key already exists returns the existing one
+        // rather than an error, so the message has to say which happened --
+        // otherwise a typo silently looks like a successful create.
+        setAppAdminCustomFieldsMessage(
+          payload.created === false
+            ? tNext("appAdmin.customFieldExists", "That field already exists.")
+            : tNext("appAdmin.customFieldCreated", "Field added."),
+          payload.created === false ? "" : "good"
+        );
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    async function archiveAppAdminCustomField(fieldId, archived) {
+      if (!archived) {
+        // Show how much data is behind the field before hiding its input. The
+        // values survive archiving, and saying so is what stops this reading as
+        // a delete.
+        let usage = 0;
+        try {
+          const payload = await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}/usage`);
+          usage = Number(payload.movies || 0);
+        } catch (error) {
+          usage = 0;
+        }
+        const question = usage
+          ? tNext("appAdmin.customFieldArchiveConfirmUsed", "{count} films have a value for this field. Archiving hides the input; the values stay.").replace("{count}", String(usage))
+          : tNext("appAdmin.customFieldArchiveConfirm", "Archive this field? The input disappears; anything already filled in stays.");
+        if (!window.confirm(question)) return;
+      }
+      await patchAppAdminCustomField(
+        fieldId,
+        {archived: !archived},
+        archived ? "appAdmin.customFieldRestored" : "appAdmin.customFieldArchivedDone",
+        archived ? "Field restored." : "Field archived."
+      );
+    }
+    async function renameAppAdminCustomField(fieldId) {
+      const field = appAdminCustomFields.find((item) => String(item.id) === String(fieldId));
+      if (!field) return;
+      const name = window.prompt(tNext("appAdmin.customFieldRenamePrompt", "New name for this field"), field.name || "");
+      if (name === null) return;
+      if (!String(name).trim()) return;
+      // Only the label moves. The key is what stored values and saved filters
+      // name, so it stays put -- which is the whole reason the two are separate.
+      await patchAppAdminCustomField(fieldId, {name}, "appAdmin.customFieldRenamed", "Field renamed.");
+    }
+    async function moveAppAdminCustomField(fieldId, direction) {
+      const index = appAdminCustomFields.findIndex((item) => String(item.id) === String(fieldId));
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (index < 0 || target < 0 || target >= appAdminCustomFields.length) return;
+      const moving = appAdminCustomFields[index];
+      const other = appAdminCustomFields[target];
+      try {
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(moving.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({sortOrder: other.sortOrder})
+        });
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(other.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({sortOrder: moving.sortOrder})
+        });
+        await loadAppAdminCustomFields();
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    function syncAppAdminCustomFieldOptionsRow() {
+      const type = document.getElementById("appAdminCustomFieldType")?.value || "text";
+      document.getElementById("appAdminCustomFieldOptionsRow")?.classList.toggle("hidden", type !== "select");
+    }
     function canManageLoansSystem() {
       return hasActualPermission("security.manage_loans_system");
     }
@@ -21073,7 +21293,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "backup", "audit"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "custom_fields", "backup", "audit"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -21327,6 +21547,7 @@ def ui_preview_html(
       if (appAdmin.activeTab === "digital") setAppAdminDigitalTab(appAdmin.activeDigitalTab);
       if (appAdmin.activeTab === "metadata") setAppAdminMetadataTab(appAdmin.activeMetadataTab);
       if (appAdmin.activeTab === "backup") setAppAdminBackupTab(appAdmin.activeBackupTab);
+      if (appAdmin.activeTab === "custom_fields") loadAppAdminCustomFields();
       if (appAdmin.activeTab === "audit") setAppAdminAuditTab(appAdmin.activeAuditTab);
     }
     function handleAppAdminTabKeydown(button, event) {
@@ -31194,6 +31415,73 @@ def ui_preview_html(
       return Array.from(seasons.querySelectorAll("input[type=checkbox]:checked")).map((input) => input.value);
     }
 
+    // Definitions arrive on the dashboard snapshot, like locations, so the edit
+    // form can render a field the owner added without a deploy -- which is the
+    // point of the feature, and also why none of these labels are translated:
+    // the owner typed them.
+    function customFieldDefinitions() {
+      return Array.isArray(state?.customFields) ? state.customFields : [];
+    }
+    function renderMovieEditCustomFields(detail) {
+      const container = document.getElementById("movieEditCustomFields");
+      if (!container) return;
+      const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      const values = new Map(
+        (detail?.customValues || []).map((item) => [String(item.key), item.value])
+      );
+      container.classList.toggle("hidden", !definitions.length);
+      container.innerHTML = definitions.map((field) => {
+        const value = values.has(field.key) ? values.get(field.key) : "";
+        const id = `movieEditCustom_${field.key}`;
+        const label = `<span>${escapeHtml(field.name || field.key)}</span>`;
+        if (field.fieldType === "boolean") {
+          return `<label for="${id}" class="wide">${label}
+            <select id="${id}" data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="boolean">
+              <option value=""${value === null || value === "" ? " selected" : ""}>${escapeHtml(tNext("common.notSet", "Not set"))}</option>
+              <option value="true"${value === true ? " selected" : ""}>${escapeHtml(tNext("common.yes", "Yes"))}</option>
+              <option value="false"${value === false ? " selected" : ""}>${escapeHtml(tNext("common.no", "No"))}</option>
+            </select></label>`;
+        }
+        if (field.fieldType === "select") {
+          const options = Array.isArray(field.options) ? field.options : [];
+          // A stored value whose option was removed is injected back, so an
+          // unrelated save cannot silently rewrite it -- the trackSelectHtml
+          // rule, one feature over.
+          const known = options.some((option) => String(option.key) === String(value));
+          const extra = !known && value ? `<option value="${escapeHtml(String(value))}" selected>${escapeHtml(String(value))}</option>` : "";
+          return `<label for="${id}" class="wide">${label}
+            <select id="${id}" data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="select">
+              <option value="">${escapeHtml(tNext("common.notSet", "Not set"))}</option>
+              ${extra}
+              ${options.map((option) => `<option value="${escapeHtml(option.key)}"${String(option.key) === String(value) ? " selected" : ""}>${escapeHtml(option.label || option.key)}</option>`).join("")}
+            </select></label>`;
+        }
+        const inputType = field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text";
+        const step = field.fieldType === "number" ? ' step="any"' : "";
+        return `<label for="${id}" class="wide">${label}
+          <input id="${id}" type="${inputType}"${step} data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="${escapeHtml(field.fieldType)}" value="${escapeHtml(value === null || value === undefined ? "" : String(value))}"></label>`;
+      }).join("");
+    }
+    function collectMovieEditCustomValues() {
+      const values = {};
+      document.querySelectorAll("[data-custom-field-input]").forEach((node) => {
+        const key = node.dataset.customFieldInput;
+        const raw = String(node.value ?? "").trim();
+        // An emptied input clears the value: the server deletes the row rather
+        // than storing something that claims to exist and says nothing.
+        if (!raw) { values[key] = null; return; }
+        values[key] = node.dataset.customFieldType === "boolean" ? raw === "true" : raw;
+      });
+      return values;
+    }
+    async function saveMovieCustomValues() {
+      const values = collectMovieEditCustomValues();
+      if (!Object.keys(values).length) return;
+      await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/custom-values`, {
+        method: "PUT",
+        body: JSON.stringify({values})
+      });
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const seriesDetail = detail.series || null;
@@ -31207,6 +31495,7 @@ def ui_preview_html(
         seriesDetail ? seriesDetail.id : "",
         (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
       ).then(() => renderMovieEditDiscs(collectMovieEditDiscs())).catch(() => {});
+      renderMovieEditCustomFields(detail);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -44689,6 +44978,7 @@ def ui_preview_html(
         let identifierError = null;
         let identifiersWritten = 0;
         try {
+          await saveMovieCustomValues();
           await saveMovieIdentifiers();
           // The database ids, on the same terms and for the same reason: their
           // own tables, their own routes, and a refusal that has to name the
@@ -50207,6 +50497,24 @@ def ui_preview_html(
         const restoreButton = event.target.closest("[data-app-admin-backup-restore]");
         if (downloadButton) downloadStoredAppAdminBackup(downloadButton.dataset.appAdminBackupDownload);
         if (restoreButton) restoreStoredAppAdminBackup(restoreButton.dataset.appAdminBackupRestore);
+      });
+      document.getElementById("appAdminCustomFieldForm")?.addEventListener("submit", createAppAdminCustomField);
+      document.getElementById("appAdminCustomFieldType")?.addEventListener("change", syncAppAdminCustomFieldOptionsRow);
+      // Delegated against the static container: a re-render replaces the rows
+      // without orphaning a listener or stacking a second one.
+      document.getElementById("appAdminCustomFieldsList")?.addEventListener("click", (event) => {
+        const archiveButton = event.target.closest("[data-custom-field-archive]");
+        if (archiveButton) {
+          archiveAppAdminCustomField(
+            archiveButton.dataset.customFieldArchive,
+            archiveButton.dataset.archived === "true"
+          );
+          return;
+        }
+        const renameButton = event.target.closest("[data-custom-field-rename]");
+        if (renameButton) { renameAppAdminCustomField(renameButton.dataset.customFieldRename); return; }
+        const moveButton = event.target.closest("[data-custom-field-move]");
+        if (moveButton) moveAppAdminCustomField(moveButton.dataset.customFieldMove, moveButton.dataset.direction);
       });
       document.getElementById("appAdminRefreshAuditButton")?.addEventListener("click", () => refreshAppAdminAudit());
       document.getElementById("appAdminAuditCategory")?.addEventListener("change", () => refreshAppAdminAudit());

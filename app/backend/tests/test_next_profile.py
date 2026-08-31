@@ -589,12 +589,16 @@ class NextProfileUiTests(unittest.TestCase):
             "Plugins",
             "Digital",
             "Metadata",
+            "CustomFields",
             "Backup",
             "Audit",
         ):
             self.assertIn(f'id="appAdminTab{tab}" role="tab"', self.html)
-        self.assertEqual(self.html.count('class="app-admin-tab-icon"'), 9)
-        self.assertEqual(self.html.count('class="app-admin-tab-label"'), 9)
+        # 10 since custom fields joined. Every tab carries both an icon and a
+        # label so the submenu can collapse to icons on a narrow screen; a tab
+        # added with only one of the two would break that silently.
+        self.assertEqual(self.html.count('class="app-admin-tab-icon"'), 10)
+        self.assertEqual(self.html.count('class="app-admin-tab-label"'), 10)
         self.assertIn(
             'html[data-profile-menu-style="icon_only"] .app-admin-workspace {',
             self.html,
