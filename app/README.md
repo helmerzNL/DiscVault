@@ -130,8 +130,26 @@ For domain setup, configure DNS and custom domain in repository Pages settings.
 
 ## MCP endpoint usage
 
-Default endpoint: `http://<host>:6090/mcp`  
-Proxied via web port: `http://<host>:6080/mcp`
+Two ways in, and they are not the same path:
+
+- **Direct**, on the MCP server's own published port: `http://<host>:6090/mcp`.
+- **Through the API**, which proxies `/mcp` to the MCP server:
+  `http://<host>:<api-port>/mcp` (`6180` by default in `deploy/next/`).
+
+The proxy forwards to `DISCVAULT_MCP_URL`, default `http://127.0.0.1:6090`.
+That default is correct for the all-in-one image, where Supervisor runs the API
+and the MCP server in one container. **When they are separate containers, set
+it** — `deploy/next/` sets `http://next-mcp:6090` — because `127.0.0.1` is then
+the API's own loopback and the proxy answers:
+
+```json
+{"status":"error","error":"MCP server is not reachable","target":"http://127.0.0.1:6090"}
+```
+
+The address is the *container's*, not the published one: `DISCVAULT_NEXT_MCP_PORT`
+republishes the host port and leaves `6090` inside. `GET /mcp-health` proxies to
+the MCP server's own health endpoint and is the quickest way to tell a broken
+proxy from a broken MCP server.
 
 ### MCP authentication
 
@@ -145,7 +163,7 @@ Use it as a Bearer token in your MCP client config:
   "mcpServers": {
     "discvault": {
       "transport": "streamable-http",
-      "url": "http://your-server:6080/mcp",
+      "url": "http://your-server:6180/mcp",
       "headers": {
         "Authorization": "Bearer your-personal-api-key"
       }

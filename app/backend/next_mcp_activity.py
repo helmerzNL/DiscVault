@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import ipaddress
+import os
 import re
 from typing import Any
 
@@ -63,6 +64,36 @@ MCP_TOOL_NAMES = (
 MCP_STATISTICS_TOOL_PERMISSIONS = tuple(
     f"mcp.tool.{tool}" for tool in MCP_STATISTICS_TOOL_NAMES
 )
+
+# Where the MCP server listens, seen from the API process.
+#
+# The default is the all-in-one image, where supervisord runs the API and the
+# MCP server in one network namespace and loopback is right. A split deployment
+# runs the MCP server in its own container, where 127.0.0.1 is the API's own
+# loopback and always refuses -- so /mcp answered "MCP server is not reachable"
+# there no matter how healthy the MCP server was, and no setting could move the
+# address. app/deploy/next/docker-compose.yml sets this to next-mcp:6090.
+#
+# Note this is the *container* address, not the published one: changing
+# DISCVAULT_NEXT_MCP_PORT republishes the host port and leaves 6090 inside.
+MCP_PROXY_DEFAULT_URL = "http://127.0.0.1:6090"
+
+
+def mcp_proxy_base_url() -> str:
+    """Base URL the /mcp proxy forwards to, from DISCVAULT_MCP_URL.
+
+    Read per request rather than at import so a deployment can change it
+    without a rebuild. A value without a scheme is treated as http, because
+    `next-mcp:6090` is the obvious thing to write and requests rejects it with
+    an error that names neither the variable nor the omission.
+    """
+    configured = str(os.environ.get("DISCVAULT_MCP_URL") or "").strip().rstrip("/")
+    if not configured:
+        return MCP_PROXY_DEFAULT_URL
+    if "://" not in configured:
+        return f"http://{configured}"
+    return configured
+
 
 MCP_IOS_CLIENT_PATTERNS = ("ios", "discvault-ios", "discvault/ios")
 MCP_ANDROID_CLIENT_PATTERNS = ("android", "discvault-android", "discvault/android")
@@ -432,7 +463,8 @@ def register_next_mcp_routes(flask_app: Flask, *, connect) -> None:  # pragma: n
         return response({"logs": logs})
 
     def mcp_proxy_request(path: str = "/mcp"):
-        target = f"http://127.0.0.1:6090{path}"
+        base_url = mcp_proxy_base_url()
+        target = f"{base_url}{path}"
         body_bytes = request.get_data()
         body_json = request.get_json(silent=True) if body_bytes else None
         bearer_actor: dict[str, Any] | None = None
@@ -478,6 +510,7 @@ def register_next_mcp_routes(flask_app: Flask, *, connect) -> None:  # pragma: n
                             extra={
                                 "category": "mcp",
                                 "mcpPath": path,
+                                "proxyTarget": base_url,
                                 "proxyError": str(exc),
                             },
                         ),
@@ -487,6 +520,9 @@ def register_next_mcp_routes(flask_app: Flask, *, connect) -> None:  # pragma: n
                     "status": "error",
                     "error": "MCP server is not reachable",
                     "detail": str(exc),
+                    # Naming where it looked turns "not reachable" into a
+                    # fixable statement: the address is DISCVAULT_MCP_URL.
+                    "target": base_url,
                 },
                 503,
             )
