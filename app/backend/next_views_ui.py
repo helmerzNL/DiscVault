@@ -209,6 +209,7 @@ def ui_preview_html(
         "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
         "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
+        "support": "M2,21H20V19H2M20,8H18V5H20M20,3H4V13A4,4 0 0,0 8,17H14A4,4 0 0,0 18,13V10H20A2,2 0 0,0 22,8V5C22,3.89 21.1,3 20,3Z",
         "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
         "appearance": "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 16.7,10 17.5,10Z",
         "library_preferences": "M9 3V18H12V3H9M12 5L16 18L19 17L15 4L12 5M5 5V18H8V5H5M3 19V21H21V19H3Z",
@@ -1168,6 +1169,28 @@ def ui_preview_html(
       display: block;
       fill: currentColor;
     }
+    /* Deliberately quiet: it sits in the same corner as the version block and
+       must never compete with the primary navigation above it. */
+    .sidebar-support {
+      margin-top: auto;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      text-align: left;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+    .sidebar-support:hover,
+    .sidebar-support:focus-visible {
+      color: var(--accent-bright);
+    }
+    .sidebar-support + .sidebar-footer {
+      margin-top: 10px;
+    }
     .sidebar-footer {
       margin-top: auto;
       padding: 12px;
@@ -1186,6 +1209,7 @@ def ui_preview_html(
     .preview-shell.sidebar-collapsed .brand > div:last-child,
     .preview-shell.sidebar-collapsed .nav-item-label span:last-child,
     .preview-shell.sidebar-collapsed .nav-item small,
+    .preview-shell.sidebar-collapsed .sidebar-support,
     .preview-shell.sidebar-collapsed .sidebar-footer {
       display: none;
     }
@@ -12076,6 +12100,30 @@ def ui_preview_html(
       font-size: .88rem;
       line-height: 1.5;
     }
+    .profile-about-card--support p {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+    /* The button image is served from DiscVault's own asset route rather than
+       Buy Me a Coffee's CDN: a donation invitation is not allowed to cost the
+       visitor a page view at a third party, and a self-hosted install that
+       cannot reach the internet still has to render the About page intact. */
+    .profile-about-coffee {
+      display: inline-flex;
+      align-self: start;
+      border-radius: 12px;
+    }
+    .profile-about-coffee img {
+      display: block;
+      width: auto;
+      height: 44px;
+      max-width: 100%;
+    }
+    .profile-about-coffee:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 3px;
+    }
     .profile-about-source-logo {
       display: block;
       width: 60px;
@@ -13157,6 +13205,78 @@ def ui_preview_html(
       font-size: .9rem;
       font-weight: 620;
     }
+    .support-prompt-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 130;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.42);
+      backdrop-filter: blur(18px);
+    }
+    .support-prompt-panel {
+      position: relative;
+      width: min(430px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: clamp(20px, 4vw, 26px);
+      background: var(--bg-solid);
+      box-shadow: var(--shadow-strong);
+      display: grid;
+      gap: 16px;
+    }
+    .support-prompt-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+    }
+    .support-prompt-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      padding-right: 28px;
+    }
+    .support-prompt-head h2 {
+      margin: 0 0 4px;
+      font-size: 1.2rem;
+      overflow-wrap: anywhere;
+    }
+    .support-prompt-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .92rem;
+      line-height: 1.5;
+    }
+    /* Buy Me a Coffee's own yellow rather than the accent: the mark belongs to
+       the button underneath it, and an accent-coloured cup would read as a
+       DiscVault feature instead of an invitation to somewhere else. */
+    .support-prompt-mark {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #FFDD00;
+      color: #12181F;
+    }
+    .support-prompt-mark svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+    .support-prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+    .support-prompt-foot {
+      margin: 0;
+      color: var(--subtle);
+      font-size: .8rem;
+    }
     .location-qr-backdrop {
       position: fixed;
       inset: 0;
@@ -13595,6 +13715,7 @@ def ui_preview_html(
         overflow-x: auto;
       }
       .sidebar-collapse-toggle { display: none; }
+      .sidebar-support { display: none; }
       .sidebar-footer { display: none; }
       .preview-layout { grid-template-columns: 1fr; }
     }
@@ -15283,6 +15404,7 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
+      <button type="button" class="sidebar-support" id="sidebarSupportLink" data-next-i18n="uiPreview.supportDiscVault">Support DiscVault</button>
       <div class="sidebar-footer">
         <strong data-next-i18n="profile.appVersion">App version</strong><br>
         """ + h(build.get("version") or "unknown") + """<br>
@@ -18358,6 +18480,18 @@ def ui_preview_html(
                       </div>
                     </div>
                   </section>
+                  <section class="profile-dashboard-card profile-about-card profile-about-card--support">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("support") + """</span>
+                      <div class="profile-about-card-copy">
+                        <span data-next-i18n="profile.supportDevelopment">Support development</span>
+                        <p data-next-i18n="profile.supportDevelopmentHelp">DiscVault is built and maintained in my own time. If it is useful to you, a coffee helps keep the development going.</p>
+                      </div>
+                    </div>
+                    <a class="profile-about-coffee" id="profileBuyMeACoffee" href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">
+                      <img src="/api/next/assets/buymeacoffee-button.png" width="545" height="153" alt="Buy me a coffee">
+                    </a>
+                  </section>
 """ + attribution_cards + """
                   <section class="profile-dashboard-card profile-about-card profile-about-card--debug">
                     <div class="profile-dashboard-card-head">
@@ -19383,6 +19517,25 @@ def ui_preview_html(
       <h2 class="visually-hidden" id="commandPaletteTitle" data-next-i18n="commandPalette.title">Command palette</h2>
       <input id="commandPaletteInput" autocomplete="off" placeholder="Search commands..." data-next-i18n-placeholder="commandPalette.placeholder" aria-labelledby="commandPaletteTitle">
       <div class="command-list" id="commandPaletteList"></div>
+    </div>
+  </section>
+  <section class="support-prompt-backdrop hidden" id="supportPromptBackdrop" aria-modal="true" role="dialog" aria-labelledby="supportPromptTitle">
+    <div class="support-prompt-panel">
+      <button type="button" class="icon-button support-prompt-close" id="supportPromptCloseButton" aria-label="Close" data-next-i18n-aria="common.close">×</button>
+      <div class="support-prompt-head">
+        <span class="support-prompt-mark" aria-hidden="true">""" + nav_icon("support") + """</span>
+        <div>
+          <h2 id="supportPromptTitle" data-next-i18n="support.promptTitle">Enjoying DiscVault?</h2>
+          <p data-next-i18n="support.promptBody">DiscVault is built and maintained in my own time. If it earns a place on your shelf, a coffee helps keep the development going.</p>
+        </div>
+      </div>
+      <div class="support-prompt-actions">
+        <a class="profile-about-coffee" id="supportPromptCoffeeLink" href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">
+          <img src="/api/next/assets/buymeacoffee-button.png" width="545" height="153" alt="Buy me a coffee">
+        </a>
+        <button type="button" class="secondary-button" id="supportPromptLaterButton" data-next-i18n="support.promptLater">Maybe later</button>
+      </div>
+      <p class="support-prompt-foot" data-next-i18n="support.promptFoot">You can find this again under Profile → About.</p>
     </div>
   </section>
   <section class="location-qr-backdrop hidden" id="locationQrBackdrop" aria-modal="true" role="dialog" aria-labelledby="locationQrTitle">
@@ -44117,6 +44270,13 @@ def ui_preview_html(
         }
       }
     }
+    function openAboutPage() {
+      // setProfileTab writes the tab into localStorage, so the panel has to be
+      // selected before the page renders: doing it the other way round opens
+      // whichever tab was last used and then swaps it out under the reader.
+      setProfileTab("about");
+      showProfilePage();
+    }
     function openAppRoute(route) {
       if (route === "admin") {
         showAdminPage();
@@ -47550,6 +47710,52 @@ def ui_preview_html(
         setLocationMessage(error.message || String(error), "bad");
       }
     }
+    // Once per browser, never again — not once per version. Beta publishes a
+    // build most days, so a version-keyed flag would put this dialog back in
+    // front of the same reader every few days, which is nagging rather than
+    // asking. Once it closes, the invitation lives on the About page only.
+    const SUPPORT_PROMPT_STORAGE_KEY = "dv_next_support_prompt_seen";
+    function supportPromptAlreadySeen() {
+      try {
+        return localStorage.getItem(SUPPORT_PROMPT_STORAGE_KEY) === "1";
+      } catch (error) {
+        // Storage is blocked, so nothing can be remembered. Reading that as
+        // "already seen" is the safe end of the trade: the alternative is the
+        // dialog on every single visit, with no way for the reader to stop it.
+        return true;
+      }
+    }
+    function closeSupportPrompt() {
+      document.getElementById("supportPromptBackdrop")?.classList.add("hidden");
+      try {
+        localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY, "1");
+      } catch (error) {
+        // Nothing to do here: the dialog is closed either way, and the read
+        // above already keeps a browser without storage from being asked again.
+      }
+    }
+    function maybeShowSupportPrompt(route) {
+      if (!appMode) return;
+      if (supportPromptAlreadySeen()) return;
+      // Not on a deep link. Someone who opened a movie, a person or the profile
+      // directly came for that page, and a dialog over it is an interruption
+      // rather than an invitation.
+      if ((route || {}).view !== "library") return;
+      // Not while the shelf is empty. Asking for money before anyone has added
+      // a disc reads as a paywall; whoever has one has had something out of it.
+      if (libraryMovieTotal < 1) return;
+      const backdrop = document.getElementById("supportPromptBackdrop");
+      if (!backdrop) return;
+      // After the library is drawn, not during startup: a dialog over a
+      // half-rendered app reads as an error message rather than a question.
+      window.setTimeout(() => {
+        if (supportPromptAlreadySeen()) return;
+        const library = document.getElementById("libraryView");
+        if (!library || library.classList.contains("hidden")) return;
+        backdrop.classList.remove("hidden");
+        document.getElementById("supportPromptLaterButton")?.focus();
+      }, 1500);
+    }
     function closeLocationQr() {
       document.getElementById("locationQrBackdrop")?.classList.add("hidden");
       document.body.classList.remove("location-qr-print-open");
@@ -49135,6 +49341,7 @@ def ui_preview_html(
       else if (route.view === "notifications") showNotificationsPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
+      maybeShowSupportPrompt(route);
     }
     function movieMeta(movie) {
       return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);
@@ -49423,6 +49630,7 @@ def ui_preview_html(
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
+      document.getElementById("sidebarSupportLink")?.addEventListener("click", () => openAboutPage());
       let peopleSearchTimer = null;
       document.getElementById("peopleSearch")?.addEventListener("input", (event) => {
         peopleState.query = event.target.value || "";
@@ -50252,6 +50460,14 @@ def ui_preview_html(
         document.body.classList.add("location-qr-print-open");
         window.print();
       });
+      document.getElementById("supportPromptLaterButton")?.addEventListener("click", () => closeSupportPrompt());
+      document.getElementById("supportPromptCloseButton")?.addEventListener("click", () => closeSupportPrompt());
+      // The link opens in a new tab, so without this the dialog would still
+      // be standing over the library when the reader comes back to it.
+      document.getElementById("supportPromptCoffeeLink")?.addEventListener("click", () => closeSupportPrompt());
+      document.getElementById("supportPromptBackdrop")?.addEventListener("click", (event) => {
+        if (event.target.id === "supportPromptBackdrop") closeSupportPrompt();
+      });
       document.getElementById("locationQrBackdrop")?.addEventListener("click", (event) => {
         if (event.target.id === "locationQrBackdrop") closeLocationQr();
       });
@@ -50729,6 +50945,11 @@ def ui_preview_html(
             runCommandPaletteCommand();
             return;
           }
+        }
+        if (event.key === "Escape" && !document.getElementById("supportPromptBackdrop")?.classList.contains("hidden")) {
+          event.preventDefault();
+          closeSupportPrompt();
+          return;
         }
         if (event.key === "Escape" && !document.getElementById("locationQrBackdrop")?.classList.contains("hidden")) {
           event.preventDefault();
