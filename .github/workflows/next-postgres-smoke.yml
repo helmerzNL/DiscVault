@@ -594,6 +594,32 @@ jobs:
       - name: Test the library list and its sort order
         run: python -m unittest tests.test_next_library_list_ui
 
+      # The library page is one function with two SQL branches, and only the one
+      # that finds entity_media/media_assets is ever exercised. A column added to
+      # that branch alone is absent on the fallback, where the feature reading it
+      # then does nothing at all -- no error, no empty state, just a field that is
+      # never there. This is the same class of gap the two steps above closed by
+      # naming their modules; it needs no database, only the source.
+      - name: Test that both library preview branches select the same columns
+        run: python -m unittest tests.test_next_library_preview_branch_parity
+
+      # The export catalogue and everything that has to stay in step with it: the
+      # client-side row builder, the column label map, and the i18n key for every
+      # column in all 29 locales. Adding one column touches four files plus the
+      # catalogues, and tests.test_next_export is the only thing that notices when
+      # one of them is missed -- it has never been named by a workflow, so it has
+      # never run on a pull request. Same argument as test_next_library_paging
+      # above, and the same fix.
+      #
+      # tests.test_next_genres rides along: it is the closest thing to a contract
+      # test for a relational, TMDB-owned movie dimension, and it was equally
+      # unrun. Neither needs a database.
+      - name: Test the export catalogue and the genre dimension
+        run: >-
+          python -m unittest
+          tests.test_next_export
+          tests.test_next_genres
+
       # The series detail page. The PostgreSQL half is the one that matters: it
       # pins that series artwork really is stored with entity_type='series', a
       # value migration 003 leaves unconstrained and which therefore has nothing
