@@ -629,6 +629,15 @@ jobs:
           tests.test_next_movie_ratings
           tests.test_next_movie_rating_ui
 
+      # Instance-defined custom fields. The claim that needs a real database is
+      # that a value lands in the column matching its declared type: that pairing
+      # needs a join, so it cannot be a CHECK, and nothing but this stands behind
+      # it. A number written into value_text would sort as a string and nobody
+      # would see why "10" came before "9". The RESTRICT that makes "archive,
+      # never delete" more than a convention is equally untestable in a stub.
+      - name: Test instance-defined custom fields
+        run: python -m unittest tests.test_next_custom_fields
+
       # The export catalogue and everything that has to stay in step with it: the
       # client-side row builder, the column label map, and the i18n key for every
       # column in all 29 locales. Adding one column touches four files plus the

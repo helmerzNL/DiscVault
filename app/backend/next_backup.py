@@ -122,6 +122,23 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
         "movie_origin_countries",
         ("movie_id", "country_code", "sort_order", "created_at"),
     ),
+    # Both tables are mandatory here, unlike tags, locations, wishlist and loans
+    # which next_backup has never carried. Those are survivable because their
+    # data is derived or duplicated elsewhere. These are not: a definition and a
+    # value were typed by the user and exist in no other place -- not in TMDB,
+    # not in MovieVault, and not on a device, since clients are read-only for
+    # them (sync-contract 4e.3). A backup that omits them loses the only copy.
+    TableSpec(
+        "custom_field_definitions",
+        ("id", "key", "name", "field_type", "options", "sort_order",
+         "archived_at", "created_at", "updated_at"),
+        frozenset({"options"}),
+    ),
+    TableSpec(
+        "movie_custom_field_values",
+        ("movie_id", "field_id", "value_text", "value_number", "value_date",
+         "value_boolean", "created_at", "updated_at"),
+    ),
     TableSpec(
         "movie_localizations",
         ("movie_id", "lang", "title", "overview", "created_at", "updated_at"),
@@ -397,6 +414,8 @@ CONFLICT_KEYS: dict[str, tuple[str, ...]] = {
     "movie_localizations": ("movie_id", "lang"),
     "movie_user_ratings": ("user_id", "movie_id"),
     "movie_origin_countries": ("movie_id", "country_code"),
+    "custom_field_definitions": ("id",),
+    "movie_custom_field_values": ("movie_id", "field_id"),
     "movie_technical_specs": ("movie_id",),
     "people": ("id",),
     "person_identifiers": ("person_id", "provider_id", "identifier_type", "identifier"),
@@ -438,6 +457,8 @@ SCOPE_TABLES: dict[str, tuple[str, ...]] = {
         "movies",
         "movie_identifiers",
         "movie_origin_countries",
+        "custom_field_definitions",
+        "movie_custom_field_values",
         "movie_localizations",
         "movie_technical_specs",
         "containers",
@@ -494,7 +515,11 @@ ALL_SELECTABLE_SCOPES: tuple[str, ...] = (
 # So a collection table added after the fact is named here instead. Bumping the
 # format version would be the alternative and is worse -- it would refuse the old
 # archives outright rather than reading them as what they are.
-COLLECTION_TABLES_ADDED_AFTER_V2: tuple[str, ...] = ("movie_origin_countries",)
+COLLECTION_TABLES_ADDED_AFTER_V2: tuple[str, ...] = (
+    "movie_origin_countries",
+    "custom_field_definitions",
+    "movie_custom_field_values",
+)
 
 # Tables that older (v1) backups always omitted, plus the new scope-gated tables, are
 # all optional members so any scope subset validates and restores. Only the mandatory
@@ -520,6 +545,8 @@ RESTORE_DELETE_ORDER = (
     "movie_credits",
     "movie_technical_specs",
     "movie_localizations",
+    "movie_custom_field_values",
+    "custom_field_definitions",
     "movie_origin_countries",
     "movie_identifiers",
     "person_localizations",

@@ -120,6 +120,16 @@ try:
     from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
     from .next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from .next_custom_fields import FIELD_TYPES
+    from .next_custom_fields import VALUE_COLUMNS
+    from .next_custom_fields import field_definition_entity
+    from .next_custom_fields import normalize_field_key
+    from .next_custom_fields import normalize_field_name
+    from .next_custom_fields import normalize_field_type
+    from .next_custom_fields import normalize_field_value
+    from .next_custom_fields import normalize_options
+    from .next_custom_fields import value_column_for_type
+    from .next_custom_fields import value_entity
     from .next_genres import GENRE_KEYS
     from .next_genres import GENRE_KEY_TO_LABEL
     from .next_genres import map_legacy_genre_text
@@ -413,6 +423,16 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
     from next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from next_custom_fields import FIELD_TYPES
+    from next_custom_fields import VALUE_COLUMNS
+    from next_custom_fields import field_definition_entity
+    from next_custom_fields import normalize_field_key
+    from next_custom_fields import normalize_field_name
+    from next_custom_fields import normalize_field_type
+    from next_custom_fields import normalize_field_value
+    from next_custom_fields import normalize_options
+    from next_custom_fields import value_column_for_type
+    from next_custom_fields import value_entity
     from next_genres import GENRE_KEYS
     from next_genres import GENRE_KEY_TO_LABEL
     from next_genres import map_legacy_genre_text
@@ -5149,6 +5169,43 @@ def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, An
     return movies
 
 
+def attach_movie_custom_values(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach each film's custom values (movie["custom_values"]).
+
+    One batched query for the page. Sets the key on every row, including films
+    with no values -- a filter reading `undefined` and a filter reading `[]`
+    behave differently, and only one of them is a decision anybody made.
+    """
+    if not movies:
+        return movies
+    for movie in movies:
+        movie["custom_values"] = []
+    if not table_exists(conn, "movie_custom_field_values"):
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    if not movie_ids:
+        return movies
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT v.movie_id, v.field_id, d.key, d.field_type, v.updated_at,
+                   {', '.join('v.' + column for column in VALUE_COLUMNS)}
+            FROM movie_custom_field_values v
+            JOIN custom_field_definitions d ON d.id = v.field_id
+            WHERE v.movie_id = ANY(%s)
+            ORDER BY v.movie_id, d.sort_order, d.key
+            """,
+            (movie_ids,),
+        )
+        rows = cur.fetchall()
+    by_movie: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_movie.setdefault(str(row.get("movie_id")), []).append(value_entity(dict(row)))
+    for movie in movies:
+        movie["custom_values"] = by_movie.get(str(movie.get("id")), [])
+    return movies
+
+
 def attach_movie_origin_countries(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Attach the film's origin countries (movie["origin_countries"]).
 
@@ -5357,6 +5414,7 @@ def attach_library_movie_enrichments(
     movies = attach_movie_series_membership(conn, movies)
     movies = attach_movie_ratings(conn, movies, user_id)
     movies = attach_movie_origin_countries(conn, movies)
+    movies = attach_movie_custom_values(conn, movies)
     return movies
 
 
@@ -8303,6 +8361,217 @@ def emit_container_change(conn, container_id, *, operation: str, entity: dict[st
         entity_id=str(container_id),
         operation=operation,
         payload=payload,
+    )
+    return revision
+
+
+def custom_field_rows(conn, *, include_archived: bool = True) -> list[dict[str, Any]]:
+    """Every custom-field definition, in the owner's chosen order."""
+    if not table_exists(conn, "custom_field_definitions"):
+        return []
+    where = "" if include_archived else "WHERE archived_at IS NULL"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, key, name, field_type, options, sort_order,
+                   archived_at, created_at, updated_at
+            FROM custom_field_definitions
+            {where}
+            ORDER BY sort_order, key
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def custom_field_row(conn, field_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "custom_field_definitions"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, key, name, field_type, options, sort_order,
+                   archived_at, created_at, updated_at
+            FROM custom_field_definitions
+            WHERE id=%s
+            """,
+            (field_id,),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def custom_field_sync_entity(conn, field_id) -> dict[str, Any] | None:
+    row = custom_field_row(conn, field_id)
+    return field_definition_entity(row) if row else None
+
+
+def all_custom_field_entities(conn) -> list[dict[str, Any]]:
+    """The bootstrap array. Archived definitions are included deliberately.
+
+    A client holding a value for an archived field still needs the field's name
+    and type to render it -- contract §4e.5 says existing values keep showing.
+    Omitting archived definitions here would leave exactly those values
+    unrenderable on a fresh install, which is the shape of bug §4e.5 exists to
+    prevent.
+    """
+    return [field_definition_entity(row) for row in custom_field_rows(conn)]
+
+
+def replace_movie_custom_values(conn, movie_id, values: Any, *, fields: list[dict[str, Any]] | None = None) -> bool:
+    """Apply a sparse map of {field key or id: value} to one film.
+
+    Sparse on purpose: the caller states only the fields it means to change, and
+    a field left out keeps its value. That is the same absent-preserves rule the
+    rest of the edit path follows, and it lets the edit form send only its own
+    inputs without mirroring fields it does not render.
+
+    Clearing is an explicit null or empty string, which deletes the row. An empty
+    row would be a value that claims to exist and says nothing.
+
+    Returns True when anything changed, so the caller knows whether to emit.
+    """
+    if not isinstance(values, dict) or not table_exists(conn, "movie_custom_field_values"):
+        return False
+    known = fields if fields is not None else custom_field_rows(conn)
+    by_key = {str(row.get("key")): row for row in known}
+    by_id = {str(row.get("id")): row for row in known}
+    changed = False
+    for raw_key, raw_value in values.items():
+        field = by_key.get(str(raw_key)) or by_id.get(str(raw_key))
+        if field is None:
+            raise NextApiError(f"Unknown custom field: {raw_key}", 400)
+        if field.get("archived_at"):
+            # Archived means "no new input", not "invisible". Refusing by name is
+            # kinder than accepting a write nobody will ever see again.
+            raise NextApiError(f"Custom field is archived: {field.get('key')}", 400)
+        resolved = normalize_field_value(raw_value, field=field)
+        with conn.cursor() as cur:
+            if resolved is None:
+                cur.execute(
+                    "DELETE FROM movie_custom_field_values WHERE movie_id=%s AND field_id=%s RETURNING movie_id",
+                    (movie_id, field.get("id")),
+                )
+                changed = cur.fetchone() is not None or changed
+                continue
+            column, value = resolved
+            others = [name for name in VALUE_COLUMNS if name != column]
+            cur.execute(
+                f"""
+                INSERT INTO movie_custom_field_values (movie_id, field_id, {column})
+                VALUES (%s, %s, %s)
+                ON CONFLICT (movie_id, field_id) DO UPDATE
+                SET {column}=EXCLUDED.{column},
+                    {', '.join(f'{name}=NULL' for name in others)},
+                    updated_at=now()
+                """,
+                (movie_id, field.get("id"), value),
+            )
+            changed = True
+    return changed
+
+
+def emit_custom_field_change(conn, field_id, *, operation: str = "upsert") -> int:
+    """A definition change on the catalogue stream.
+
+    There is no `delete` operation for a definition and there must not be one:
+    §4e.5 makes archiving an ordinary update, because a filter naming a field
+    that vanished silently becomes "any" and shows the user their whole library.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(field_id)}
+    entity = custom_field_sync_entity(conn, field_id)
+    if entity is not None:
+        payload["entity"] = entity
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="custom_field",
+        entity_id=str(field_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
+def movie_custom_values(conn, movie_id) -> list[dict[str, Any]]:
+    """One film's whole value set, in definition order."""
+    if not table_exists(conn, "movie_custom_field_values"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT v.field_id, d.key, d.field_type, v.updated_at,
+                   {', '.join('v.' + column for column in VALUE_COLUMNS)}
+            FROM movie_custom_field_values v
+            JOIN custom_field_definitions d ON d.id = v.field_id
+            WHERE v.movie_id=%s
+            ORDER BY d.sort_order, d.key
+            """,
+            (movie_id,),
+        )
+        return [value_entity(dict(row)) for row in cur.fetchall()]
+
+
+def movie_custom_values_sync_entity(conn, movie_id) -> dict[str, Any]:
+    """The set-shaped entity: one film, its whole set.
+
+    Always returns an object, never None, and an empty `values` is meaningful --
+    the receiver replaces the set wholesale, so an empty set is how the last
+    value on a film is removed. A None here would read as "no change".
+    """
+    return {"movieId": str(movie_id), "values": movie_custom_values(conn, movie_id)}
+
+
+def all_movie_custom_values_entities(conn, *, limit: int = 1000) -> list[dict[str, Any]]:
+    """The bootstrap array: only films that actually carry a value.
+
+    A film with no custom values needs no entry -- the absence of an entry and an
+    entry with an empty set say the same thing to a receiver that replaces
+    wholesale, and sending one row per film in the library would dwarf the
+    payload it rides in.
+    """
+    if not table_exists(conn, "movie_custom_field_values"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT v.movie_id, v.field_id, d.key, d.field_type, v.updated_at,
+                   {', '.join('v.' + column for column in VALUE_COLUMNS)}
+            FROM movie_custom_field_values v
+            JOIN custom_field_definitions d ON d.id = v.field_id
+            JOIN movies m ON m.id = v.movie_id AND m.deleted_at IS NULL
+            ORDER BY v.movie_id, d.sort_order, d.key
+            """
+        )
+        rows = cur.fetchall()
+    by_movie: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_movie.setdefault(str(row.get("movie_id")), []).append(value_entity(dict(row)))
+    entities = [{"movieId": movie_id, "values": values} for movie_id, values in by_movie.items()]
+    return entities[:limit]
+
+
+def emit_movie_custom_values_change(conn, movie_id) -> int:
+    """A film's whole value set, as one change.
+
+    Set-shaped like `movie_identifier` and `container_membership`: the receiver
+    replaces the set, so absence within it is the deletion. That is the property
+    the `metadata` blob could not provide -- its `||` merge cannot remove a key.
+    There is therefore no `delete` operation here either; clearing every value is
+    an upsert carrying an empty set.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie_custom_values",
+        entity_id=str(movie_id),
+        operation="upsert",
+        payload={"id": str(movie_id), "entity": movie_custom_values_sync_entity(conn, movie_id)},
     )
     return revision
 
@@ -17165,6 +17434,11 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     if not movie:
         return None
     attach_location_summaries(conn, [movie])
+    # On the detail payload, deliberately not on `movie_entity`. Values travel as
+    # their own entity type (`movie_custom_values`, contract §4e.2); riding on
+    # the movie as well would give one fact two carriers and leave a client to
+    # decide which wins. The parity test caught the first attempt.
+    attach_movie_custom_values(conn, [movie])
     metadata_debug = None
     try:
         metadata_debug = movie_metadata_debug_entity(conn, movie_id)
@@ -37850,6 +38124,179 @@ def register_routes(flask_app: Flask) -> None:
             counts = metadata_refresh_job_counts(conn, movie_id=movie_id)
         return response({"status": "ok", "jobs": jobs, "counts": counts})
 
+    @flask_app.get("/api/next/custom-fields")
+    def list_custom_fields():
+        """Every definition, for anyone who may see the collection.
+
+        Not admin-gated on read: the fields are part of the shape of a film, and
+        a viewer who cannot list them cannot render the values they already see.
+        Archived ones ride along with their flag -- see §4e.5.
+        """
+        with connect() as conn:
+            require_any_next_permission(conn, ("collection.view_own", "collection.view_group", "collection.view_all"))
+            fields = all_custom_field_entities(conn)
+        return response({"status": "ok", "fields": fields})
+
+    @flask_app.post("/api/next/admin/custom-fields")
+    def create_custom_field():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Custom field body must be an object", 400)
+        name = normalize_field_name(body.get("name"))
+        field_type = normalize_field_type(body.get("fieldType") or body.get("field_type"))
+        key = normalize_field_key(body.get("key"), name=name)
+        options = normalize_options(body.get("options"), field_type=field_type)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "custom_field_definitions"):
+                raise NextApiError("Custom fields are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT 1 FROM custom_field_definitions WHERE key=%s", (key,))
+                    if cur.fetchone():
+                        raise NextApiError(f"A custom field with key '{key}' already exists", 409)
+                    cur.execute(
+                        """
+                        INSERT INTO custom_field_definitions (key, name, field_type, options, sort_order)
+                        VALUES (%s, %s, %s, %s,
+                                COALESCE((SELECT MAX(sort_order) + 1 FROM custom_field_definitions), 0))
+                        RETURNING id
+                        """,
+                        (key, name, field_type, Jsonb(options)),
+                    )
+                    field_id = cur.fetchone()["id"]
+                emit_custom_field_change(conn, field_id)
+                audit_event(
+                    conn,
+                    event_type="custom_field.created",
+                    category="settings",
+                    actor=actor,
+                    target_type="custom_field",
+                    target_id=field_id,
+                    summary="Created custom field",
+                    metadata={"key": key, "fieldType": field_type},
+                )
+            entity = custom_field_sync_entity(conn, field_id)
+        return response({"status": "ok", "field": entity})
+
+    @flask_app.patch("/api/next/admin/custom-fields/<field_id>")
+    def update_custom_field(field_id: str):
+        """Rename, reorder, change options, archive or restore.
+
+        `key` and `fieldType` are deliberately not editable. The key is what
+        saved filters and stored values name; the type decides which column a
+        value lives in. Changing either would silently invalidate data that is
+        already correct -- a rename of the label does everything an owner
+        actually wants here.
+        """
+        field_uuid = parse_uuid(field_id, "fieldId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Custom field body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            existing = custom_field_row(conn, field_uuid)
+            if existing is None:
+                raise NextApiError("Custom field not found", 404)
+            assignments: list[str] = ["updated_at=now()"]
+            values: list[Any] = []
+            if "name" in body:
+                assignments.append("name=%s")
+                values.append(normalize_field_name(body.get("name")))
+            if "options" in body:
+                assignments.append("options=%s")
+                values.append(Jsonb(normalize_options(body.get("options"), field_type=existing["field_type"])))
+            if "sortOrder" in body or "sort_order" in body:
+                try:
+                    order = int(body.get("sortOrder", body.get("sort_order")) or 0)
+                except (TypeError, ValueError):
+                    raise NextApiError("sortOrder must be a number", 400)
+                assignments.append("sort_order=%s")
+                values.append(order)
+            if "archived" in body:
+                archived = parse_bool_value(body.get("archived"), default=False)
+                assignments.append("archived_at=%s")
+                values.append(datetime.utcnow() if archived else None)
+            if len(assignments) == 1:
+                raise NextApiError("Nothing to update", 400)
+            values.append(field_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE custom_field_definitions SET {', '.join(assignments)} WHERE id=%s",
+                        values,
+                    )
+                emit_custom_field_change(conn, field_uuid)
+                audit_event(
+                    conn,
+                    event_type="custom_field.updated",
+                    category="settings",
+                    actor=actor,
+                    target_type="custom_field",
+                    target_id=field_uuid,
+                    summary="Updated custom field",
+                    metadata={"key": existing.get("key")},
+                )
+            entity = custom_field_sync_entity(conn, field_uuid)
+        return response({"status": "ok", "field": entity})
+
+    @flask_app.get("/api/next/admin/custom-fields/<field_id>/usage")
+    def custom_field_usage(field_id: str):
+        """How many films carry a value. What the archive confirmation shows."""
+        field_uuid = parse_uuid(field_id, "fieldId")
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movie_custom_field_values"):
+                return response({"status": "ok", "movies": 0})
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*)::int AS movies FROM movie_custom_field_values WHERE field_id=%s",
+                    (field_uuid,),
+                )
+                row = cur.fetchone()
+        return response({"status": "ok", "movies": int((row or {}).get("movies") or 0)})
+
+    @flask_app.put("/api/next/movies/<movie_id>/custom-values")
+    def set_movie_custom_values(movie_id: str):
+        """Set values on one film.
+
+        Its own route rather than a branch of the sync mutations path, for the
+        reason §4e.3 gives: values travel down only, so there is nothing for a
+        client to push here. The PWA writes through this; iOS and Android read.
+
+        The body is sparse -- only the fields being changed. Null or an empty
+        string clears one.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Custom values body must be an object", 400)
+        values = body.get("values")
+        if not isinstance(values, dict):
+            raise NextApiError("values must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movie_custom_field_values"):
+                raise NextApiError("Custom fields are not available", 503)
+            if not actor_can_edit_visible_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                changed = replace_movie_custom_values(conn, movie_uuid, values)
+                if changed:
+                    emit_movie_custom_values_change(conn, movie_uuid)
+                    audit_event(
+                        conn,
+                        event_type="custom_values.updated",
+                        category="collection",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary="Updated custom field values",
+                        metadata={"fields": sorted(str(key) for key in values)},
+                    )
+            entity = movie_custom_values_sync_entity(conn, movie_uuid)
+        return response({"status": "ok", "customValues": entity.get("values", [])})
+
     @flask_app.get("/api/next/admin/metadata/origin-backfill")
     def movie_origin_backfill_status():
         """How many films still have no country of origin or original language.
@@ -39397,14 +39844,23 @@ def register_routes(flask_app: Flask) -> None:
                 "currentRevision": revision,
                 "streamId": stream_id,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                # Hand-maintained, and it had drifted in both directions: it
+                # advertised `metadata_plugin` and `setting`, which nothing has
+                # ever emitted, while `series` and the three `*_scans` types were
+                # emitted and never advertised. Corrected here rather than left
+                # as a fourth touchpoint the next entity type also misses.
                 "supportedEntityTypes": [
                     "movie",
                     "container",
                     "container_membership",
                     "movie_identifier",
                     "location",
-                    "metadata_plugin",
-                    "setting",
+                    "series",
+                    "movie_scans",
+                    "container_scans",
+                    "series_scans",
+                    "custom_field",
+                    "movie_custom_values",
                 ],
                 "supportedMutations": [
                     "movie.upsert",
@@ -39419,6 +39875,11 @@ def register_routes(flask_app: Flask) -> None:
                 "userEntityTypes": [
                     "watchlist",
                     "watch_history",
+                    "wishlist",
+                    "tag",
+                    "movieTag",
+                    "movieRating",
+                    "loan",
                 ],
                 "userSync": {
                     "bootstrap": "/api/next/sync/user/bootstrap",
@@ -39506,6 +39967,11 @@ def register_routes(flask_app: Flask) -> None:
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
+                # Definitions carry archived ones too: a client holding a value
+                # for an archived field still needs its name and type to render
+                # it (§4e.5). Values are one entry per film that has any.
+                "customFields": all_custom_field_entities(conn),
+                "movieCustomValues": all_movie_custom_values_entities(conn, limit=limit),
                 "metadataPlugins": metadata_plugin_entities(conn),
                 "settings": non_secret_settings(conn),
             }
