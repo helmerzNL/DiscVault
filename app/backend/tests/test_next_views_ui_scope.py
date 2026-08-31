@@ -94,6 +94,77 @@ class InlineScriptScopeTests(unittest.TestCase):
             self.assertIn("languageWithCode", body, f"{row} does not name the language")
 
 
+class JsonRequestContentTypeTests(unittest.TestCase):
+    """A JSON body needs the header that says so, or the server never sees it.
+
+    `apiJson` and `authApiJson` do not set `Content-Type`; each caller does,
+    and 140 of them do. Omit it and `fetch` sends the string as `text/plain`,
+    which makes Flask's `request.get_json(silent=True)` return `None`. The
+    route then reads its arguments out of an empty dict and rejects the
+    request naming whichever field it checks first.
+
+    Nothing errors on the way. The request is sent, the server answers, and
+    the message is a plausible validation complaint about a field the user
+    did fill in -- "name is required" on a form whose name box is not empty.
+    The whole write half of a feature can ship like this, which is what
+    happened to custom fields and personal ratings.
+
+    Server-side tests cannot see it: Flask's test client sets the JSON content
+    type itself, so the header a browser actually sends is never exercised.
+    The check therefore has to read the emitted script.
+
+    The rule is written against `JSON.stringify` rather than against a list of
+    exempt endpoints. The uploads that legitimately omit the header send a
+    `FormData` body -- there the browser must set the multipart boundary
+    itself, and setting it by hand breaks the request. They fall outside the
+    rule because of what they send, not because they are named here.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        with open(NEXT_VIEWS_UI_PATH, encoding="utf-8") as handle:
+            cls.source = handle.read()
+
+    def json_body_calls(self):
+        """Every apiJson/authApiJson call whose body is a JSON string.
+
+        The options object is found by matching parentheses rather than by a
+        regular expression, because the calls span lines and nest their own
+        parentheses in template-literal URLs.
+        """
+        calls = []
+        for match in re.finditer(r"\b(?:authApiJson|apiJson)\s*\(", self.source):
+            index, depth = match.end(), 1
+            while index < len(self.source) and depth:
+                if self.source[index] == "(":
+                    depth += 1
+                elif self.source[index] == ")":
+                    depth -= 1
+                index += 1
+            text = self.source[match.start():index]
+            if "body:" not in text or "JSON.stringify" not in text:
+                continue
+            line = self.source.count("\n", 0, match.start()) + 1
+            calls.append((line, text))
+        return calls
+
+    def test_every_json_body_declares_its_content_type(self):
+        calls = self.json_body_calls()
+        self.assertGreater(len(calls), 100, "the call scanner found almost nothing")
+        missing = [
+            "line {0}: {1}".format(line, re.sub(r"\s+", " ", text)[:100])
+            for line, text in calls
+            if not re.search(r"[Cc]ontent-[Tt]ype", text)
+        ]
+        self.assertEqual(
+            missing,
+            [],
+            "JSON body sent without a JSON Content-Type; the server will read an "
+            "empty body and reject the request naming an unrelated field:\n"
+            + "\n".join(missing),
+        )
+
+
 class ContributionReadabilityTests(unittest.TestCase):
     """A correction is read by comparing it to the film on screen.
 
