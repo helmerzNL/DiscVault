@@ -13,12 +13,14 @@ if repo_root not in sys.path:
 try:
     from app.backend import next_app
     from app.backend import next_profile
+    from app.backend import next_push
     from app.backend import next_views_ui
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
     next_app = None
     next_profile = None
+    next_push = None
     next_views_ui = None
 
 
@@ -542,6 +544,75 @@ class NextProfileUiTests(unittest.TestCase):
             self.assertEqual(self.html.count(f'id="{element_id}"'), 1, element_id)
         self.assertIn(".profile-about-grid {", self.html)
         self.assertIn(".profile-about-version {", self.html)
+
+    def test_about_dashboard_invites_support_through_a_locally_served_button(self):
+        """The donation card, and the sidebar link that reaches it.
+
+        Two things are asserted rather than assumed. The button image resolves
+        to DiscVault's own asset route: linking Buy Me a Coffee's CDN would
+        report every visit to the About page to a third party and would leave
+        the card broken on an install with no route to the internet. And the
+        link opens in a new tab with ``rel="noopener noreferrer"``, because the
+        opener reference is what an external page would otherwise be handed.
+        """
+        self.assertIn(
+            'class="profile-dashboard-card profile-about-card profile-about-card--support"',
+            self.html,
+        )
+        self.assertIn('data-next-i18n="profile.supportDevelopment"', self.html)
+        self.assertIn('data-next-i18n="profile.supportDevelopmentHelp"', self.html)
+        self.assertIn('src="/api/next/assets/buymeacoffee-button.png"', self.html)
+        self.assertNotIn("cdn.buymeacoffee.com", self.html)
+        self.assertIn(
+            '<a class="profile-about-coffee" id="profileBuyMeACoffee" '
+            'href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">',
+            self.html,
+        )
+        self.assertEqual(self.html.count('id="profileBuyMeACoffee"'), 1)
+        self.assertIn(".profile-about-coffee {", self.html)
+
+    def test_buy_me_a_coffee_button_is_whitelisted_and_present_on_disk(self):
+        """The two halves of a served asset, checked together.
+
+        The route only answers for names in ``PWA_ICON_ASSETS`` and only when
+        the file is there, and it answers a miss with a 404 rather than an
+        error. So a card that references the button while either half is
+        missing renders a broken image and nothing anywhere reports why.
+        """
+        self.assertIn("buymeacoffee-button.png", next_push.PWA_ICON_ASSETS)
+        asset = next_app.next_frontend_dir() / "buymeacoffee-button.png"
+        self.assertTrue(asset.is_file(), asset)
+
+    def test_sidebar_support_link_reaches_the_about_panel_on_desktop_only(self):
+        """A quiet text link in the sidebar, hidden wherever the version block is.
+
+        It shares the collapsed-rail and narrow-viewport rules with
+        ``.sidebar-footer`` deliberately: those are the two states where the
+        sidebar has no room for supporting text, and a link that survived them
+        would either overflow the rail or crowd the mobile top bar.
+        """
+        self.assertIn(
+            '<button type="button" class="sidebar-support" id="sidebarSupportLink" '
+            'data-next-i18n="uiPreview.supportDiscVault">Support DiscVault</button>',
+            self.html,
+        )
+        self.assertIn(".preview-shell.sidebar-collapsed .sidebar-support,", self.html)
+        self.assertIn("      .sidebar-support { display: none; }", self.html)
+        self.assertIn(
+            'document.getElementById("sidebarSupportLink")?.addEventListener("click", () => openAboutPage());',
+            self.html,
+        )
+        # The tab is selected before the page renders, so the About panel is
+        # what opens rather than whichever tab the reader last used.
+        self.assertIn(
+            'function openAboutPage() {',
+            self.html,
+        )
+        about_page = self.html.split("function openAboutPage() {", 1)[1].split("}", 1)[0]
+        self.assertLess(
+            about_page.index('setProfileTab("about")'),
+            about_page.index("showProfilePage()"),
+        )
 
     def test_admin_access_dashboard_preserves_invite_and_passkey_management(self):
         self.assertIn(

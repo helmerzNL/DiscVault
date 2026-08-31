@@ -75,6 +75,11 @@ PWA_ICON_ASSETS = {
     "apple-touch-icon-152.png",
     "apple-touch-icon-167.png",
     "apple-touch-icon.png",
+    # Buy Me a Coffee's own button artwork, served from here rather than
+    # linked from their CDN: an About page must not report a visit to a
+    # third party, and the card still has to render on an install with no
+    # route to the internet.
+    "buymeacoffee-button.png",
     "favicon-32.png",
     "favicon-192.png",
     "favicon-512.png",
