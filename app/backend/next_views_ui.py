@@ -5536,6 +5536,89 @@ def ui_preview_html(
       flex-wrap: wrap;
       gap: 8px;
     }
+    .movie-rating-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .movie-rating-star {
+      width: 26px;
+      height: 26px;
+      border: 0;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      color: color-mix(in srgb, var(--text) 26%, transparent);
+      display: inline-grid;
+      place-items: center;
+    }
+    .movie-rating-star svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+      pointer-events: none;
+    }
+    .movie-rating-star.filled,
+    .movie-rating-star.half {
+      color: var(--accent);
+    }
+    .movie-rating-star:hover {
+      color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    }
+    .movie-rating-value {
+      margin-left: 8px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 760;
+      color: var(--text);
+    }
+    .movie-rating-owner {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 620;
+    }
+    .movie-rating-clear-button {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      cursor: pointer;
+    }
+    .movie-rating-clear-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+    /* The tile badge. Only ever one number -- the personal or owner rating --
+       because a second number beside it would reintroduce exactly the ambiguity
+       with the external score that the detail page works to avoid. */
+    .poster-rating-badge {
+      position: absolute;
+      left: 6px;
+      bottom: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, #000 62%, transparent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+      pointer-events: none;
+    }
+    .poster-rating-badge svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
+    }
     .movie-tag-add-button {
       width: 34px;
       height: 34px;
@@ -15505,6 +15588,8 @@ def ui_preview_html(
                     <option value="watched" data-next-i18n="lists.watched">Watched</option>
                     <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
                     <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
+                    <option value="rated" data-next-i18n="collection.personalRated">Rated by me</option>
+                    <option value="unrated" data-next-i18n="collection.personalUnrated">Not rated by me</option>
                     <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
                   </select>
                 </label>
@@ -16892,6 +16977,16 @@ def ui_preview_html(
                       </button>
                     </div>
                     <div class="movie-tags-chips" id="movieTagsChips"></div>
+                  </div>
+                  <div class="movie-rating-section" id="movieRatingSection">
+                    <div class="detail-card-head compact">
+                      <h4 data-next-i18n="lists.myRatingTitle">My rating</h4>
+                      <button type="button" class="movie-rating-clear-button hidden" id="movieRatingClearButton" aria-label="Clear rating" title="Clear rating" data-next-i18n-aria="lists.clearRating" data-next-i18n-title="lists.clearRating">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path></svg>
+                      </button>
+                    </div>
+                    <div class="movie-rating-picker" id="movieRatingPicker"></div>
+                    <div class="movie-rating-owner" id="movieRatingOwner"></div>
                   </div>
                   <div class="movie-loan-section" id="movieLoanSection">
                     <div class="detail-card-head compact">
@@ -26590,7 +26685,7 @@ def ui_preview_html(
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
-        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
+        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(source.personal) ? source.personal : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
         location: String(source.location || "any").trim() || "any",
         // Validated on SHAPE, deliberately not against the movies that happen to
@@ -27348,6 +27443,10 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      // The viewer's OWN score, not the owner's: "films I have rated" must not
+      // be answered with films somebody else rated.
+      if (filters.personal === "rated" && !movie?.personal_rating) return false;
+      if (filters.personal === "unrated" && movie?.personal_rating) return false;
       if (filters.originCountry !== "any" && !movieOriginCountryValues(movie).includes(filters.originCountry)) return false;
       if (filters.originalLanguage !== "any" && movieOriginLanguageValue(movie) !== filters.originalLanguage) return false;
       if (filters.location !== "any") {
@@ -27465,7 +27564,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any") {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any") {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -27889,7 +27988,12 @@ def ui_preview_html(
     function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
       const allowed = compact
         ? new Set(["title", "format", "behavior"])
-        : new Set(["title", "director", "actors", "studios", "rating", "tags", "behavior"]);
+        // "rating" here is the age certificate, which is why the personal score
+        // is "personalRating": reusing the key would silently repurpose the
+        // content-rating column. Wide set only -- the column is desktop-only, and
+        // a key allowed in the compact set renders a header whose click resets
+        // the sort to title with nothing failing.
+        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "tags", "behavior"]);
       const key = allowed.has(value?.key) ? value.key : "title";
       return {
         key,
@@ -28065,6 +28169,7 @@ def ui_preview_html(
         watchActivity: libraryExportWatchActivityText(item),
         originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
         originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
+        personalRating: formatRatingScore(itemPersonalRatingValue(item)),
       };
     }
     function libraryListSortValue(item, key) {
@@ -28084,9 +28189,46 @@ def ui_preview_html(
         || (left.watchlistTime - right.watchlistTime)
         || (Number(left.onWatchlist) - Number(right.onWatchlist));
     }
+    function libraryListPersonalRatingHtml(item) {
+      const score = itemPersonalRatingValue(item);
+      if (score === null) return "";
+      const movie = item?.movie || item;
+      // A borrowed number is labelled as one. Without the title an owner's 9
+      // reads as the viewer's own, and there is nothing on the row to correct it.
+      const ownName = movie?.personal_rating ? "" : String(movie?.owner_rating_by || "");
+      const title = ownName
+        ? tNext("lists.ownerRating", "{name} rated this {score}")
+            .replace("{name}", ownName)
+            .replace("{score}", formatRatingScore(score))
+        : tNext("lists.myRating", "My rating");
+      return `<span class="library-list-rating-value" title="${escapeHtml(title)}">${escapeHtml(formatRatingScore(score))}${ownName ? ` <span class="library-list-rating-owner">${escapeHtml(ownName)}</span>` : ""}</span>`;
+    }
+    function itemPersonalRatingValue(item) {
+      const movie = item?.movie || item;
+      const score = Number(movie?.personal_rating ?? movie?.owner_rating);
+      return Number.isFinite(score) && score > 0 ? score : null;
+    }
+    // Unrated sorts last in BOTH directions, which is why the direction is
+    // applied here instead of by the caller flipping the sign. Somebody sorting
+    // by rating wants their best films or their worst; either way they do not
+    // want 1,800 blanks first.
+    function comparePersonalRating(a, b, direction) {
+      const left = itemPersonalRatingValue(a);
+      const right = itemPersonalRatingValue(b);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const diff = left - right;
+      return direction === "desc" ? -diff : diff;
+    }
     function sortLibraryListItems(items, sortState = libraryDetailSort) {
       const state = normalizeLibraryDetailSort(sortState);
       return [...(items || [])].sort((a, b) => {
+        if (state.key === "personalRating") {
+          const diff = comparePersonalRating(a, b, state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
         const diff = state.key === "behavior"
           ? compareLibraryBehavior(a, b)
           : String(libraryListSortValue(a, state.key)).localeCompare(
@@ -28159,6 +28301,7 @@ def ui_preview_html(
                 ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
               </tr>
@@ -28192,6 +28335,7 @@ def ui_preview_html(
                     <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
                     <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
                     <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
+                    <td class="library-list-personal-rating-column library-list-desktop-column">${libraryListPersonalRatingHtml(item)}</td>
                     <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
                     <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
                   </tr>
@@ -28535,9 +28679,17 @@ def ui_preview_html(
         </article>
       `;
     }
+    // The EXTERNAL aggregate score -- TMDB's vote average or OMDb's IMDb rating,
+    // written only by a metadata plugin and settable by nobody. Labelled to name
+    // that, because a personal rating now sits on the same 0-10 axis and "Rating
+    // 7.4" beside "8.5" gives a reader nothing to tell them apart.
+    //
+    // The stronger distinction is not the wording: this pill is inert, and the
+    // personal one is a button you press to change it. One you can act on, one
+    // you cannot -- which reads correctly with no colour and in every locale.
     function movieScoreLabel(movie) {
       const value = valueText(movie?.rating || movie?.metadata?.rating || "");
-      return value ? `${tNext("movieDetail.rating", "Rating")} ${value}` : "";
+      return value ? `${tNext("movieDetail.externalScore", "Score")} ${value}` : "";
     }
     function localeCandidates() {
       const locale = String(localeState.locale || "en-US").replace("_", "-").toLowerCase();
@@ -28574,6 +28726,17 @@ def ui_preview_html(
       const parts = String(format || "").split(",").map((item) => item.trim()).filter(Boolean);
       return parts.length === 1 ? parts[0] : "";
     }
+    // One number on a tile, never two. The external score is deliberately not
+    // here: the tile already carries a digital badge and a format badge, and a
+    // second number beside this one would recreate exactly the ambiguity the
+    // detail page works to avoid. With only one possible, a star on a tile
+    // unambiguously means somebody rated this.
+    function posterRatingBadgeHtml(movie) {
+      if (preferences.show_rating_badge_on_tiles === false) return "";
+      const score = Number(movie?.personal_rating ?? movie?.owner_rating);
+      if (!Number.isFinite(score) || score <= 0) return "";
+      return `<span class="poster-rating-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${RATING_STAR_PATH}"></path></svg>${escapeHtml(formatRatingScore(score))}</span>`;
+    }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -28581,7 +28744,7 @@ def ui_preview_html(
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
-          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
+          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${posterRatingBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           ${debugIdHtml(movie.id, "Movie ID")}
@@ -31444,6 +31607,7 @@ def ui_preview_html(
           : `<span class="import-source-meta">${escapeHtml(tNext("lists.noWatchHistoryForMovie", "No watched dates for this film yet."))}</span>`;
       }
       renderMovieTags(state);
+      renderMovieRating(state);
       renderMovieLoan(state);
     }
     function renderMovieTags(state) {
@@ -31458,6 +31622,91 @@ def ui_preview_html(
             </span>
           `).join("")
         : `<span class="import-source-meta">${escapeHtml(tNext("lists.tagsEmpty", "No tags on this film yet."))}</span>`;
+    }
+    // Twenty half steps, 0.5 to 10, drawn as ten stars. A fixed picker rather
+    // than a number field because the stored set is fixed: the API refuses a
+    // value between the steps instead of rounding it, so an input that could
+    // produce one would only ever produce an error.
+    const RATING_STAR_COUNT = 10;
+    const RATING_STAR_PATH = "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
+    const RATING_HALF_STAR_PATH = "M12,15.4V6.1L13.71,10.13L18.09,10.5L14.77,13.39L15.76,17.67M22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27L18.18,21L16.55,13.97L22,9.24Z";
+    function ratingStarHtml(index, score) {
+      // index is 1..10; each star covers a whole point, its half covers x.5.
+      const filled = score >= index;
+      const half = !filled && score >= index - 0.5;
+      const cls = filled ? "movie-rating-star filled" : half ? "movie-rating-star half" : "movie-rating-star";
+      const path = half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH;
+      // Two hit targets per star so a half step is reachable by pointer, and the
+      // aria-label carries the value because a star is not self-describing.
+      return `
+        <button type="button" class="${cls}" data-set-rating="${index - 0.5}" aria-label="${escapeHtml(String(index - 0.5))}" style="margin-right:-13px;width:13px;clip-path:inset(0 50% 0 0)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>
+        </button>
+        <button type="button" class="${cls}" data-set-rating="${index}" aria-label="${escapeHtml(String(index))}" style="width:13px;clip-path:inset(0 0 0 50%)">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-13px"><path d="${path}"></path></svg>
+        </button>`;
+    }
+    function renderMovieRating(state) {
+      const section = document.getElementById("movieRatingSection");
+      const picker = document.getElementById("movieRatingPicker");
+      const owner = document.getElementById("movieRatingOwner");
+      const clearButton = document.getElementById("movieRatingClearButton");
+      if (!section || !picker) return;
+      const score = Number(state?.rating);
+      const hasScore = Number.isFinite(score) && score > 0;
+      const stars = [];
+      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
+        stars.push(ratingStarHtml(index, hasScore ? score : 0));
+      }
+      picker.innerHTML = stars.join("") + (hasScore
+        ? `<span class="movie-rating-value">${escapeHtml(formatRatingScore(score))}</span>`
+        : `<span class="import-source-meta">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`);
+      if (clearButton) clearButton.classList.toggle("hidden", !hasScore);
+      if (owner) {
+        // ownerRating is set by the server only when the movie has an owner who
+        // is somebody else -- never derived here from owner_id, which reads as
+        // "everyone is the owner" when it is NULL.
+        const ownerScore = Number(state?.ownerRating);
+        const ownerName = String(state?.ownerRatingBy || "");
+        owner.textContent = Number.isFinite(ownerScore) && ownerScore > 0
+          ? tNext("lists.ownerRating", "{name} rated this {score}")
+              .replace("{name}", ownerName || tNext("lists.theOwner", "The owner"))
+              .replace("{score}", formatRatingScore(ownerScore))
+          : "";
+        owner.classList.toggle("hidden", !owner.textContent);
+      }
+    }
+    function formatRatingScore(score) {
+      const value = Number(score);
+      if (!Number.isFinite(value)) return "";
+      // Half steps keep one decimal, whole numbers drop it: "8" reads better
+      // than "8.0" and there is no precision to lose.
+      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    }
+    async function setActiveMovieRating(score) {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {
+          method: "PUT",
+          body: JSON.stringify({score: Number(score)})
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.ratingSaved", "Rating saved."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function clearActiveMovieRating() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {method: "DELETE"});
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.ratingCleared", "Rating cleared."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
     }
     function renderMovieLoan(state) {
       const statusNode = document.getElementById("movieLoanStatus");
@@ -45822,6 +46071,7 @@ def ui_preview_html(
         watchActivity: tNext("collection.behaviorColumn", "Viewing activity"),
         originCountry: tNext("movieDetail.originCountry", "Country of origin"),
         originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
+        personalRating: tNext("lists.myRating", "My rating"),
       }),
       getExportRows: () => {
         const sortState = normalizeLibraryDetailSort(libraryDetailSort);
@@ -50649,6 +50899,11 @@ def ui_preview_html(
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
       });
+      document.getElementById("movieRatingPicker")?.addEventListener("click", (event) => {
+        const star = event.target.closest("[data-set-rating]");
+        if (star) setActiveMovieRating(star.dataset.setRating);
+      });
+      document.getElementById("movieRatingClearButton")?.addEventListener("click", () => clearActiveMovieRating());
       document.getElementById("movieLoanAddForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
         lendActiveMovie(

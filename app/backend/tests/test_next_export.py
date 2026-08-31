@@ -67,6 +67,7 @@ class ExportColumnCatalogueTests(unittest.TestCase):
                 "watchActivity",
                 "originCountry",
                 "originalLanguage",
+                "personalRating",
             ],
         )
 

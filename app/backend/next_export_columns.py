@@ -47,6 +47,7 @@ EXPORT_COLUMNS: tuple[dict[str, Any], ...] = (
     # two carry them.
     {"key": "originCountry", "i18nKey": "movieDetail.originCountry", "label": "Country of origin", "default": False, "weight": 1.4},
     {"key": "originalLanguage", "i18nKey": "movieDetail.originalLanguage", "label": "Original language", "default": False, "weight": 1.4},
+    {"key": "personalRating", "i18nKey": "lists.myRating", "label": "My rating", "default": False, "weight": 0.9},
 )
 
 EXPORT_COLUMN_KEYS: tuple[str, ...] = tuple(column["key"] for column in EXPORT_COLUMNS)

@@ -34,6 +34,7 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_container_format_badges": True,
     "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
+    "show_rating_badge_on_tiles": True,
     "delete_container_members_with_container": False,
     # Off, so the shipped behaviour is unchanged: deleting a disc does not
     # un-watch the film, and watch history records something that happened.
@@ -74,6 +75,7 @@ APP_BOOLEAN_PREFERENCES = {
     "show_container_format_badges",
     "show_container_member_badges",
     "show_digital_badge_on_tiles",
+    "show_rating_badge_on_tiles",
     "delete_container_members_with_container",
     "delete_removes_watch_history",
     "show_metadata_jobs",
@@ -98,6 +100,7 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_local_title",
         "show_extended_people_pages",
         "show_digital_badge_on_tiles",
+        "show_rating_badge_on_tiles",
         "price_monitoring_enabled",
         "preferred_price_currency",
         "rating_country",
