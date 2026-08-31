@@ -639,6 +639,7 @@ jobs:
         run: >-
           python -m unittest
           tests.test_next_custom_fields
+          tests.test_next_custom_fields_routes
           tests.test_next_custom_fields_ui
           tests.test_next_custom_field_filters
 

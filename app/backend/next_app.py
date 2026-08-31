@@ -38437,7 +38437,14 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "collection.edit_all")
             if not table_exists(conn, "movie_custom_field_values"):
                 raise NextApiError("Custom fields are not available", 503)
-            if not actor_can_edit_visible_movie(conn, actor, movie_uuid):
+            # The entity, not the id: `actor_can_edit_visible_movie` reads
+            # `movie["id"]` and `movie["owner_id"]` off what it is given. Its
+            # near-namesake `actor_can_view_movie` does take an id, which is the
+            # confusion that put a UUID here and crashed every save.
+            existing = movie_entity(conn, movie_uuid)
+            if not existing:
+                raise NextApiError("Movie not found", 404)
+            if not actor_can_edit_visible_movie(conn, actor, existing):
                 raise NextApiError("Movie not found", 404)
             with conn.transaction():
                 changed = replace_movie_custom_values(conn, movie_uuid, values)
