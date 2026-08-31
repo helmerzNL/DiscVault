@@ -133,6 +133,15 @@ jobs:
           tests.test_next_api_token
           tests.test_next_api_tokens
 
+      # The MCP server offers one list of tools; the backend catalogue decides
+      # which of them a call may use, and every call is checked against it.
+      # Nothing forces the two together, so #654 shipped five statistics tools
+      # that `tools/list` advertised and every call refused, for every role,
+      # with no permission that could grant them. Source-level agreement is the
+      # only place this is checkable: both sides are internally consistent.
+      - name: Test that the MCP tool catalogue agrees with the MCP server
+        run: python -m unittest tests.test_next_mcp_tool_catalog
+
       # A token's scope is only a limit if both halves have to agree, and only
       # honestly a limit if the gates that consult no permission at all -- role
       # management, user deletion, the auth toggle, ownership transfer -- refuse

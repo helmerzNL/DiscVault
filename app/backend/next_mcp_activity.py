@@ -30,6 +30,22 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import clean_text
 
 
+# The statistics tools all read the same endpoint (/api/next/stats/personal),
+# so they are named once and reused by the route that gates it. They were added
+# to the MCP server in #654 but never to this catalogue, which is the list the
+# server checks every call against -- so all five answered "Permission denied"
+# for every role, owner included, with no permission that could grant them.
+MCP_STATISTICS_TOOL_NAMES = (
+    "get_collection_stats_detailed",
+    "get_top_formats",
+    "get_top_genres",
+    "get_top_directors",
+    "get_top_actors",
+)
+
+# Every tool the MCP server may offer. A name missing here is refused by
+# execute_tool() in app/mcp-server/server.py no matter what the caller holds:
+# tests/test_next_mcp_tool_catalog.py keeps the two lists identical.
 MCP_TOOL_NAMES = (
     "search_collection",
     "get_collection_stats",
@@ -41,7 +57,13 @@ MCP_TOOL_NAMES = (
     "get_watchlist",
     "get_watch_history",
     "get_groups",
+    *MCP_STATISTICS_TOOL_NAMES,
 )
+
+MCP_STATISTICS_TOOL_PERMISSIONS = tuple(
+    f"mcp.tool.{tool}" for tool in MCP_STATISTICS_TOOL_NAMES
+)
+
 MCP_IOS_CLIENT_PATTERNS = ("ios", "discvault-ios", "discvault/ios")
 MCP_ANDROID_CLIENT_PATTERNS = ("android", "discvault-android", "discvault/android")
 MCP_WEB_CLIENT_PATTERNS = ("mozilla/", "chrome/", "safari/", "firefox/", "edg/", "applewebkit/")

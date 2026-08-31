@@ -9,6 +9,11 @@ MCP_TOOLS = [
     "get_watchlist",
     "get_watch_history",
     "get_groups",
+    "get_collection_stats_detailed",
+    "get_top_formats",
+    "get_top_genres",
+    "get_top_directors",
+    "get_top_actors",
 ]
 
 

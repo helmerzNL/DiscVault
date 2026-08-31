@@ -1,7 +1,7 @@
 {
   "id": "discvault_mcp",
   "name": "DiscVault MCP Server",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "manifestVersion": 1,
   "discVaultPluginApi": "next-1",
   "kind": "mcp",
@@ -17,7 +17,12 @@
     "list_all_movies",
     "get_watchlist",
     "get_watch_history",
-    "get_groups"
+    "get_groups",
+    "get_collection_stats_detailed",
+    "get_top_formats",
+    "get_top_genres",
+    "get_top_directors",
+    "get_top_actors"
   ],
   "defaultEnabled": true,
   "orderIndex": 910,
