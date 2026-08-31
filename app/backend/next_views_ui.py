@@ -1479,6 +1479,18 @@ def ui_preview_html(
     .advanced-search-group.release .advanced-search-field:last-child {
       grid-column: 1 / -1;
     }
+    .custom-filter-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+      gap: 6px;
+      align-items: center;
+    }
+    .custom-filter-row > .custom-filter-value.hidden {
+      display: none;
+    }
+    .custom-filter-row > .custom-filter-value.hidden ~ * {
+      grid-column: 1 / -1;
+    }
     .advanced-search-hint {
       grid-column: 1 / -1;
       margin: 0;
@@ -15658,6 +15670,13 @@ def ui_preview_html(
                 <p class="advanced-search-hint hidden" id="advancedOriginHint"></p>
               </div>
             </details>
+            <details class="library-adaptive-group advanced-search-group hidden" data-library-adaptive-group data-library-advanced-group="custom" id="advancedCustomFilterGroup">
+              <summary>
+                <span data-next-i18n="appAdmin.tabCustomFields">Custom fields</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body" id="advancedCustomFilters"></div>
+            </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="media">
               <summary>
                 <span data-next-i18n="collection.mediaAssets">Media assets</span>
@@ -27036,6 +27055,25 @@ def ui_preview_html(
       const candidate = parts.join("-");
       return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(candidate) ? candidate : "any";
     }
+    // A custom-field constraint is {fieldKey: {op, value}}. `op` is closed;
+    // `value` is kept as the user gave it, because what is valid depends on the
+    // field's type and that is decided when matching, not when storing.
+    const CUSTOM_FILTER_OPS = ["is", "contains", "gte", "lte", "set", "unset"];
+    function normalizeCustomFilters(value) {
+      if (!value || typeof value !== "object") return {};
+      const result = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        if (!/^[a-z][a-z0-9_]{0,47}$/.test(String(key))) return;
+        const source = entry && typeof entry === "object" ? entry : {op: "is", value: entry};
+        const op = CUSTOM_FILTER_OPS.includes(source.op) ? source.op : "is";
+        const raw = source.value;
+        // `set` and `unset` carry no value; everything else needs one, and an
+        // empty one means the row was left blank rather than constrained.
+        if (op !== "set" && op !== "unset" && (raw === null || raw === undefined || String(raw).trim() === "")) return;
+        result[key] = op === "set" || op === "unset" ? {op} : {op, value: raw};
+      });
+      return result;
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
@@ -27047,7 +27085,11 @@ def ui_preview_html(
         itemType: "any",
         location: "any",
         originCountry: "any",
-        originalLanguage: "any"
+        originalLanguage: "any",
+        // One entry per constrained custom field, keyed by field key. An empty
+        // object is "no custom constraint" and is what every filter saved before
+        // custom fields existed normalizes to.
+        custom: {}
       };
     }
     function normalizeAdvancedSearch(value) {
@@ -27072,7 +27114,14 @@ def ui_preview_html(
         originCountry: /^[A-Za-z]{2}$/.test(String(source.originCountry || "").trim())
           ? String(source.originCountry).trim().toUpperCase()
           : "any",
-        originalLanguage: normalizeOriginLanguageValue(source.originalLanguage)
+        originalLanguage: normalizeOriginLanguageValue(source.originalLanguage),
+        // Same rule as the two above, and it matters more here: a custom field
+        // can be archived while a saved smart filter still names it. Dropping
+        // the clause would turn that filter into "any" and show the whole
+        // library as though everything matched. The values are kept as given and
+        // resolved at match time, so an archived field keeps filtering and a
+        // field that never existed simply matches nothing.
+        custom: normalizeCustomFilters(source.custom)
       };
     }
     function effectiveAdvancedSearchFilters(options = {}) {
@@ -27096,6 +27145,9 @@ def ui_preview_html(
       if (normalized.location !== "any") count += 1;
       if (normalized.originCountry !== "any") count += 1;
       if (normalized.originalLanguage !== "any") count += 1;
+      // Each constrained field counts once, so the badge matches what the user
+      // actually set rather than counting "custom fields" as one thing.
+      count += Object.keys(normalized.custom || {}).length;
       return count;
     }
     function setAdvancedControlValue(id, value) {
@@ -27113,8 +27165,25 @@ def ui_preview_html(
         itemType: document.getElementById("advancedContainerType")?.value || "any",
         location: document.getElementById("advancedLocationFilter")?.value || "any",
         originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
-        originalLanguage: document.getElementById("advancedOriginLanguage")?.value || "any"
+        originalLanguage: document.getElementById("advancedOriginLanguage")?.value || "any",
+        custom: readCustomFilterControls()
       });
+    }
+    // The rows are generated from the definitions, so this is a DOM scan rather
+    // than a list of literal ids like every filter above it.
+    function readCustomFilterControls() {
+      const custom = {};
+      document.querySelectorAll("[data-custom-filter-op]").forEach((opNode) => {
+        const key = opNode.dataset.customFilterOp;
+        const op = opNode.value || "any";
+        if (op === "any") return;
+        if (op === "set" || op === "unset") { custom[key] = {op}; return; }
+        const valueNode = document.querySelector(`[data-custom-filter-value="${key}"]`);
+        const raw = valueNode ? String(valueNode.value ?? "").trim() : "";
+        if (!raw) return;
+        custom[key] = {op, value: raw};
+      });
+      return custom;
     }
     function persistAdvancedSearch() {
       localStorage.setItem("dv_next_advanced_search", JSON.stringify(normalizeAdvancedSearch(advancedSearch)));
@@ -27162,6 +27231,76 @@ def ui_preview_html(
       ].join("");
       node.value = current && current !== "any" ? current : "any";
     }
+    // One row per live field. Archived fields get no row -- but a stored
+    // constraint naming one still filters, because normalizeAdvancedSearch keeps
+    // it and the predicate resolves against the values, not against this list.
+    // That is the difference between a filter the user can no longer edit and a
+    // filter that silently stopped meaning anything.
+    function customFilterOperatorsFor(fieldType) {
+      const presence = [
+        {op: "set", label: tNext("collection.customFilterSet", "Has a value")},
+        {op: "unset", label: tNext("collection.customFilterUnset", "Has no value")}
+      ];
+      if (fieldType === "number" || fieldType === "date") {
+        return [
+          {op: "is", label: tNext("collection.customFilterIs", "is")},
+          {op: "gte", label: tNext("collection.customFilterGte", "is at least")},
+          {op: "lte", label: tNext("collection.customFilterLte", "is at most")},
+          ...presence
+        ];
+      }
+      if (fieldType === "boolean" || fieldType === "select") {
+        return [{op: "is", label: tNext("collection.customFilterIs", "is")}, ...presence];
+      }
+      return [
+        {op: "contains", label: tNext("collection.customFilterContains", "contains")},
+        {op: "is", label: tNext("collection.customFilterIs", "is")},
+        ...presence
+      ];
+    }
+    function customFilterValueInputHtml(field, value) {
+      const key = escapeHtml(field.key);
+      if (field.fieldType === "boolean") {
+        return `<select data-custom-filter-value="${key}">
+          <option value="true"${String(value) === "true" ? " selected" : ""}>${escapeHtml(tNext("common.yes", "Yes"))}</option>
+          <option value="false"${String(value) === "false" ? " selected" : ""}>${escapeHtml(tNext("common.no", "No"))}</option>
+        </select>`;
+      }
+      if (field.fieldType === "select") {
+        const options = Array.isArray(field.options) ? field.options : [];
+        const known = options.some((option) => String(option.key) === String(value));
+        const extra = !known && value ? `<option value="${escapeHtml(String(value))}" selected>${escapeHtml(String(value))}</option>` : "";
+        return `<select data-custom-filter-value="${key}">${extra}${options.map((option) => `<option value="${escapeHtml(option.key)}"${String(option.key) === String(value) ? " selected" : ""}>${escapeHtml(option.label || option.key)}</option>`).join("")}</select>`;
+      }
+      const inputType = field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "search";
+      const step = field.fieldType === "number" ? ' step="any"' : "";
+      return `<input type="${inputType}"${step} data-custom-filter-value="${key}" value="${escapeHtml(value === undefined ? "" : String(value))}">`;
+    }
+    function renderCustomFilterControls() {
+      const container = document.getElementById("advancedCustomFilters");
+      const group = document.getElementById("advancedCustomFilterGroup");
+      if (!container) return;
+      const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      if (group) group.classList.toggle("hidden", !definitions.length);
+      if (!definitions.length) { container.innerHTML = ""; return; }
+      const stored = normalizeAdvancedSearch(advancedSearch).custom || {};
+      container.innerHTML = definitions.map((field) => {
+        const constraint = stored[field.key] || {};
+        const operators = customFilterOperatorsFor(field.fieldType);
+        const activeOp = operators.some((item) => item.op === constraint.op) ? constraint.op : "any";
+        const valueHidden = activeOp === "any" || activeOp === "set" || activeOp === "unset";
+        return `<label class="advanced-search-field">
+          <span>${escapeHtml(field.name || field.key)}</span>
+          <div class="custom-filter-row">
+            <select data-custom-filter-op="${escapeHtml(field.key)}">
+              <option value="any"${activeOp === "any" ? " selected" : ""}>${escapeHtml(tNext("common.any", "Any"))}</option>
+              ${operators.map((item) => `<option value="${item.op}"${activeOp === item.op ? " selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
+            </select>
+            <span class="custom-filter-value${valueHidden ? " hidden" : ""}" data-custom-filter-value-wrap="${escapeHtml(field.key)}">${customFilterValueInputHtml(field, constraint.value)}</span>
+          </div>
+        </label>`;
+      }).join("");
+    }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
       const toggle = document.getElementById("advancedSearchToggleButton");
@@ -27188,6 +27327,7 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      renderCustomFilterControls();
       populateOriginFilterSelect(
         "advancedOriginCountry",
         collectionOriginCountryOptionValues(),
@@ -27798,6 +27938,54 @@ def ui_preview_html(
     function movieOriginLanguageValue(movie) {
       return normalizeOriginLanguageValue(movie?.original_language);
     }
+    function movieCustomValueMap(movie) {
+      const values = new Map();
+      (movie?.custom_values || []).forEach((item) => values.set(String(item.key), item));
+      return values;
+    }
+    // One comparison per operator, typed by what the value actually is. A number
+    // field compares numerically and a date lexically -- ISO dates sort
+    // correctly as strings, which is why they are stored and compared that way
+    // rather than parsed into a Date on every row of a few thousand.
+    function customValueMatches(entry, constraint) {
+      const op = constraint.op;
+      if (op === "set") return entry !== undefined;
+      if (op === "unset") return entry === undefined;
+      if (entry === undefined) return false;
+      const actual = entry.value;
+      if (actual === null || actual === undefined) return false;
+      const wanted = constraint.value;
+      if (op === "contains") {
+        return String(actual).toLowerCase().includes(String(wanted).toLowerCase());
+      }
+      if (op === "gte" || op === "lte") {
+        if (entry.type === "number") {
+          const left = Number(actual);
+          const right = Number(wanted);
+          if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
+          return op === "gte" ? left >= right : left <= right;
+        }
+        const left = String(actual);
+        const right = String(wanted);
+        return op === "gte" ? left >= right : left <= right;
+      }
+      // "is": exact, but tolerant about how the wire spelled a boolean.
+      if (entry.type === "boolean") {
+        const wantedBool = wanted === true || String(wanted).toLowerCase() === "true";
+        return actual === wantedBool;
+      }
+      if (entry.type === "number") return Number(actual) === Number(wanted);
+      return String(actual) === String(wanted);
+    }
+    function movieMatchesCustomFilters(movie, custom) {
+      const constraints = Object.entries(custom || {});
+      if (!constraints.length) return true;
+      const values = movieCustomValueMap(movie);
+      // Every constraint must hold. A film that has no value at all for a
+      // constrained field fails, except under `unset`, which is what asks for
+      // exactly those films.
+      return constraints.every(([key, constraint]) => customValueMatches(values.get(key), constraint));
+    }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
@@ -27823,6 +28011,7 @@ def ui_preview_html(
       if (filters.personal === "unrated" && movie?.personal_rating) return false;
       if (filters.originCountry !== "any" && !movieOriginCountryValues(movie).includes(filters.originCountry)) return false;
       if (filters.originalLanguage !== "any" && movieOriginLanguageValue(movie) !== filters.originalLanguage) return false;
+      if (!movieMatchesCustomFilters(movie, filters.custom)) return false;
       if (filters.location !== "any") {
         const movieLoc = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
         if (!movieLoc || !locationSubtreeIds(filters.location).has(movieLoc)) return false;
@@ -27938,7 +28127,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any") {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -28368,6 +28557,17 @@ def ui_preview_html(
         // a key allowed in the compact set renders a header whose click resets
         // the sort to title with nothing failing.
         : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "tags", "behavior"]);
+      // A custom field is sortable on the wide layout too, but it cannot be in a
+      // literal set: the keys only exist at runtime. Shape check plus a lookup
+      // against the live definitions, so a sort naming a field that no longer
+      // exists falls back to title rather than silently sorting on nothing.
+      const raw = value?.key;
+      if (!compact && typeof raw === "string" && raw.startsWith("custom:")) {
+        const fieldKey = raw.slice(7);
+        if (customFieldDefinitions().some((field) => field.key === fieldKey)) {
+          return {key: raw, direction: value?.direction === "desc" ? "desc" : "asc"};
+        }
+      }
       const key = allowed.has(value?.key) ? value.key : "title";
       return {
         key,
@@ -28544,7 +28744,33 @@ def ui_preview_html(
         originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
         originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
         personalRating: formatRatingScore(itemPersonalRatingValue(item)),
+        ...customExportCells(movie),
       };
+    }
+    // Custom cells are keyed `custom:<fieldKey>`, matching the catalogue. The
+    // displayed value, not the stored one -- a select exports its label and a
+    // boolean exports Yes/No, because an export is for the reader.
+    function customExportCells(movie) {
+      const cells = {};
+      customFieldDefinitions().forEach((field) => {
+        cells[`custom:${field.key}`] = customValueDisplay(field, movieCustomValueMap(movie).get(field.key));
+      });
+      return cells;
+    }
+    function customValueDisplay(field, entry) {
+      if (!entry || entry.value === null || entry.value === undefined || entry.value === "") return "";
+      if (field.fieldType === "boolean") {
+        return entry.value === true || String(entry.value) === "true"
+          ? tNext("common.yes", "Yes")
+          : tNext("common.no", "No");
+      }
+      if (field.fieldType === "select") {
+        const option = (field.options || []).find((item) => String(item.key) === String(entry.value));
+        // An option that was removed still shows its stored key rather than a
+        // blank: the value is real even if the choice list moved on.
+        return option ? (option.label || option.key) : String(entry.value);
+      }
+      return String(entry.value);
     }
     function libraryListSortValue(item, key) {
       if (key === "format") return itemFormatValues(item).map((format) => format.label).join(" ").toLowerCase();
@@ -28586,6 +28812,28 @@ def ui_preview_html(
     // applied here instead of by the caller flipping the sign. Somebody sorting
     // by rating wants their best films or their worst; either way they do not
     // want 1,800 blanks first.
+    // Empty sorts last in BOTH directions, like the personal rating: somebody
+    // sorting on a shelf number wants the shelved films, not the blanks. Numbers
+    // compare numerically; everything else compares as a string, which is right
+    // for ISO dates too.
+    function compareCustomFieldValue(a, b, fieldKey, direction) {
+      const left = movieCustomValueMap(a?.movie || a).get(fieldKey);
+      const right = movieCustomValueMap(b?.movie || b).get(fieldKey);
+      const leftHas = left !== undefined && left.value !== null && left.value !== "";
+      const rightHas = right !== undefined && right.value !== null && right.value !== "";
+      if (!leftHas && !rightHas) return 0;
+      if (!leftHas) return 1;
+      if (!rightHas) return -1;
+      let diff;
+      if (left.type === "number") {
+        diff = Number(left.value) - Number(right.value);
+      } else if (left.type === "boolean") {
+        diff = (left.value === true ? 1 : 0) - (right.value === true ? 1 : 0);
+      } else {
+        diff = String(left.value).localeCompare(String(right.value), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+      }
+      return direction === "desc" ? -diff : diff;
+    }
     function comparePersonalRating(a, b, direction) {
       const left = itemPersonalRatingValue(a);
       const right = itemPersonalRatingValue(b);
@@ -28598,6 +28846,11 @@ def ui_preview_html(
     function sortLibraryListItems(items, sortState = libraryDetailSort) {
       const state = normalizeLibraryDetailSort(sortState);
       return [...(items || [])].sort((a, b) => {
+        if (typeof state.key === "string" && state.key.startsWith("custom:")) {
+          const diff = compareCustomFieldValue(a, b, state.key.slice(7), state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
         if (state.key === "personalRating") {
           const diff = comparePersonalRating(a, b, state.direction);
           if (diff) return diff;
@@ -46522,6 +46775,10 @@ def ui_preview_html(
         originCountry: tNext("movieDetail.originCountry", "Country of origin"),
         originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
         personalRating: tNext("lists.myRating", "My rating"),
+        // The owner typed these; there is no key to look up.
+        ...Object.fromEntries(
+          customFieldDefinitions().map((field) => [`custom:${field.key}`, field.name || field.key])
+        ),
       }),
       getExportRows: () => {
         const sortState = normalizeLibraryDetailSort(libraryDetailSort);
@@ -50166,6 +50423,17 @@ def ui_preview_html(
         advancedSearchOpen = !advancedSearchOpen;
         localStorage.setItem("dv_next_advanced_search_open", advancedSearchOpen ? "true" : "false");
         syncAdvancedSearchControls();
+      });
+      // Delegated against the static container: the rows are re-rendered from
+      // the definitions on every sync, so a listener per row would stack.
+      document.getElementById("advancedCustomFilters")?.addEventListener("change", (event) => {
+        const opNode = event.target.closest("[data-custom-filter-op]");
+        if (!opNode) return;
+        // "Has a value" and "has no value" take no value, so the input goes away
+        // rather than sitting there implying it still counts.
+        const wrap = document.querySelector(`[data-custom-filter-value-wrap="${opNode.dataset.customFilterOp}"]`);
+        const op = opNode.value;
+        wrap?.classList.toggle("hidden", op === "any" || op === "set" || op === "unset");
       });
       document.getElementById("advancedSearchApplyButton")?.addEventListener("click", applyAdvancedSearchFromControls);
       document.getElementById("advancedSearchResetButton")?.addEventListener("click", resetAdvancedSearch);

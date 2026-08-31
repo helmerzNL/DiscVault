@@ -221,12 +221,12 @@ def _pdf_text(value: str) -> str:
     return escaped.replace("\n", "<br/>")
 
 
-def build_export(payload: dict[str, Any]) -> tuple[bytes, str, str]:
+def build_export(payload: dict[str, Any], custom_fields: Any = None) -> tuple[bytes, str, str]:
     """Render ``payload`` and return ``(body, filename, mimetype)``."""
     if not isinstance(payload, dict):
         raise NextApiError("Invalid export payload", 400)
     fmt = normalize_format(payload.get("format"))
-    columns = normalize_columns(payload.get("columns"))
+    columns = normalize_columns(payload.get("columns"), custom_fields)
     rows = normalize_rows(payload.get("rows"), columns)
     if not rows:
         raise NextApiError("There is nothing to export", 400)
@@ -258,7 +258,14 @@ def build_export(payload: dict[str, Any]) -> tuple[bytes, str, str]:
 def register_next_export_routes(flask_app: Flask, *, connect) -> None:  # pragma: no cover - Flask integration
     @flask_app.get("/api/next/collection/export/columns")
     def collection_export_columns():
-        return response({"status": "ok", "columns": export_column_catalogue()})
+        # The catalogue is instance-dependent now: two installations
+        # legitimately offer different columns, because they define different
+        # fields. The built-in half is identical everywhere and is the only half
+        # the cross-platform default selection draws from.
+        app = _next_app()
+        with connect() as conn:
+            custom_fields = app.all_custom_field_entities(conn)
+        return response({"status": "ok", "columns": export_column_catalogue(custom_fields)})
 
     @flask_app.post("/api/next/collection/export")
     def collection_export():
@@ -268,7 +275,13 @@ def register_next_export_routes(flask_app: Flask, *, connect) -> None:  # pragma
             user = app.next_auth_current_user(conn) if auth_enabled else None
             if auth_enabled and not user:
                 raise NextApiError("Authentication required", 401)
-        body, filename, mimetype = build_export(request.get_json(silent=True, force=True) or {})
+            # On the connection that is already open. The definitions decide
+            # which `custom:` column keys are legal, so they have to be read
+            # before the payload is validated.
+            custom_fields = app.all_custom_field_entities(conn)
+        body, filename, mimetype = build_export(
+            request.get_json(silent=True, force=True) or {}, custom_fields
+        )
         result = flask_app.response_class(body, mimetype=mimetype)
         result.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
         result.headers["Content-Length"] = str(len(body))

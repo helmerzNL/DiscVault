@@ -384,6 +384,9 @@ class ExportRequestParsingTests(unittest.TestCase):
         next_export._next_app = lambda: SimpleNamespace(
             next_auth_effective_enabled=lambda conn, table_exists: False,
             next_auth_current_user=lambda conn: None,
+            # The export routes read the instance's custom-field definitions to
+            # decide which `custom:` column keys are legal.
+            all_custom_field_entities=lambda conn: [],
         )
         flask_app = Flask(__name__)
         next_export.register_next_export_routes(flask_app, connect=connect)
