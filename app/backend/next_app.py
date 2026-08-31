@@ -83,6 +83,9 @@ try:
     from .next_public_http import public_url_hostname
     from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import count_movies_missing_film_origin
+    from .next_metadata import movies_missing_film_origin
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -117,9 +120,21 @@ try:
     from .next_metadata import movie_genre_keys
     from .next_metadata import MOVIE_LOCKABLE_FIELDS
     from .next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from .next_custom_fields import FIELD_TYPES
+    from .next_custom_fields import VALUE_COLUMNS
+    from .next_custom_fields import field_definition_entity
+    from .next_custom_fields import normalize_field_key
+    from .next_custom_fields import normalize_field_name
+    from .next_custom_fields import normalize_field_type
+    from .next_custom_fields import normalize_field_value
+    from .next_custom_fields import normalize_options
+    from .next_custom_fields import value_column_for_type
+    from .next_custom_fields import value_entity
     from .next_genres import GENRE_KEYS
     from .next_genres import GENRE_KEY_TO_LABEL
     from .next_genres import map_legacy_genre_text
+    from .next_origin import normalize_language_code
+    from .next_origin import normalize_region_code
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -371,6 +386,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_public_http import public_url_hostname
     from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import count_movies_missing_film_origin
+    from next_metadata import movies_missing_film_origin
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -405,9 +423,21 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import movie_genre_keys
     from next_metadata import MOVIE_LOCKABLE_FIELDS
     from next_metadata import MOVIE_METADATA_LOCKS_KEY
+    from next_custom_fields import FIELD_TYPES
+    from next_custom_fields import VALUE_COLUMNS
+    from next_custom_fields import field_definition_entity
+    from next_custom_fields import normalize_field_key
+    from next_custom_fields import normalize_field_name
+    from next_custom_fields import normalize_field_type
+    from next_custom_fields import normalize_field_value
+    from next_custom_fields import normalize_options
+    from next_custom_fields import value_column_for_type
+    from next_custom_fields import value_entity
     from next_genres import GENRE_KEYS
     from next_genres import GENRE_KEY_TO_LABEL
     from next_genres import map_legacy_genre_text
+    from next_origin import normalize_language_code
+    from next_origin import normalize_region_code
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -4787,6 +4817,7 @@ def collection_movie_preview_entities(
                     m.media_type,
                     m.edition,
                     m.location,
+                    m.original_language,
                     m.metadata->>'audience_rating' AS audience_rating,
                     m.metadata->>'studios' AS studios,
                     m.metadata->>'director' AS director,
@@ -4872,6 +4903,7 @@ def collection_movie_preview_entities(
                 m.media_type,
                 m.edition,
                 m.location,
+                m.original_language,
                 m.metadata->>'audience_rating' AS audience_rating,
                 m.metadata->>'studios' AS studios,
                 m.metadata->>'director' AS director,
@@ -5137,6 +5169,84 @@ def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, An
     return movies
 
 
+def attach_movie_custom_values(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach each film's custom values (movie["custom_values"]).
+
+    One batched query for the page. Sets the key on every row, including films
+    with no values -- a filter reading `undefined` and a filter reading `[]`
+    behave differently, and only one of them is a decision anybody made.
+    """
+    if not movies:
+        return movies
+    for movie in movies:
+        movie["custom_values"] = []
+    if not table_exists(conn, "movie_custom_field_values"):
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    if not movie_ids:
+        return movies
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT v.movie_id, v.field_id, d.key, d.field_type, v.updated_at,
+                   {', '.join('v.' + column for column in VALUE_COLUMNS)}
+            FROM movie_custom_field_values v
+            JOIN custom_field_definitions d ON d.id = v.field_id
+            WHERE v.movie_id = ANY(%s)
+            ORDER BY v.movie_id, d.sort_order, d.key
+            """,
+            (movie_ids,),
+        )
+        rows = cur.fetchall()
+    by_movie: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_movie.setdefault(str(row.get("movie_id")), []).append(value_entity(dict(row)))
+    for movie in movies:
+        movie["custom_values"] = by_movie.get(str(movie.get("id")), [])
+    return movies
+
+
+def attach_movie_origin_countries(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the film's origin countries (movie["origin_countries"]).
+
+    One batched query for the page, the shape `attach_movie_genres` uses.
+
+    Deliberately sets exactly one key. `attach_movie_genres` also writes a
+    derived `genre_search`, which `movie_entity` does not -- so the bootstrap
+    payload carries a field the delta never does, and the parity test cannot see
+    it because it compares column lists rather than attached keys. Not a pattern
+    to copy: if origin ever needs a search projection it should be built where
+    search is built, for both paths at once.
+
+    Order is TMDB's own (lead producer first), preserved by sort_order.
+    """
+    if not movies or not table_exists(conn, "movie_origin_countries"):
+        for movie in movies:
+            movie["origin_countries"] = []
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    countries_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT movie_id, country_code
+                FROM movie_origin_countries
+                WHERE movie_id = ANY(%s)
+                ORDER BY movie_id, sort_order, country_code
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                key = str(row.get("movie_id"))
+                values = countries_by_movie.get(key)
+                if values is not None:
+                    values.append(str(row.get("country_code")))
+    for movie in movies:
+        movie["origin_countries"] = countries_by_movie.get(str(movie.get("id")), [])
+    return movies
+
+
 def attach_movie_series_membership(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Attach the series a disc belongs to, as `movie["series"]` or None.
 
@@ -5181,6 +5291,109 @@ def attach_movie_series_membership(conn, movies: list[dict[str, Any]]) -> list[d
     return movies
 
 
+MOVIE_RATING_MIN = Decimal("0.5")
+MOVIE_RATING_MAX = Decimal("10.0")
+MOVIE_RATING_STEP = Decimal("0.5")
+
+
+def normalize_movie_rating_score(value: Any) -> Decimal:
+    """Validate a personal score, or raise.
+
+    Deliberately strict rather than clamping. A slider that sends 7.34 and gets
+    7.3 back has silently recorded something the person did not choose, and they
+    have no way to see that it happened -- so an out-of-step value is refused
+    with a message naming the allowed set instead.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise NextApiError("score is required", 400)
+    try:
+        score = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError):
+        raise NextApiError("score must be a number between 0.5 and 10 in steps of 0.5", 400)
+    if score < MOVIE_RATING_MIN or score > MOVIE_RATING_MAX:
+        raise NextApiError("score must be between 0.5 and 10", 400)
+    if (score / MOVIE_RATING_STEP) % 1 != 0:
+        raise NextApiError("score must be a whole or half number, e.g. 7 or 7.5", 400)
+    return score.quantize(Decimal("0.1"))
+
+
+def movie_rating_value(score: Any) -> float | None:
+    """A stored score as a float for JSON, or None when there is no rating.
+
+    None, never 0. An unrated film is the absence of a row, and a zero here
+    would rank it below every rated film while claiming somebody scored it that
+    way.
+    """
+    if score is None:
+        return None
+    return float(score)
+
+
+def attach_movie_ratings(
+    conn, movies: list[dict[str, Any]], user_id: UUID | str | None
+) -> list[dict[str, Any]]:
+    """Attach the viewer's own score and, separately, the owner's.
+
+    One query for the page rather than one per row -- `movie_user_ratings` is
+    keyed on the movie for exactly this read.
+
+    The owner's score is set only when the movie has an owner who is somebody
+    else. That test belongs here and not in the browser: a client comparing
+    `owner_id === viewerId` treats a NULL owner_id as "everyone is the owner",
+    which is the shape of bug renderMovieLoan already carries a comment about.
+
+    The asymmetry is deliberate and is the feature: the owner of a film publishes
+    their score to anyone who may see it, and nobody else's score is visible to
+    anyone but themselves.
+    """
+    if not movies:
+        return movies
+    for movie in movies:
+        movie["personal_rating"] = None
+        movie["owner_rating"] = None
+        movie["owner_rating_by"] = None
+    if not user_id or not table_exists(conn, "movie_user_ratings"):
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    if not movie_ids:
+        return movies
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT r.movie_id, r.user_id, r.score, m.owner_id, u.display_name, u.username
+            FROM movie_user_ratings r
+            JOIN movies m ON m.id = r.movie_id
+            LEFT JOIN users u ON u.id = r.user_id
+            WHERE r.movie_id = ANY(%s)
+              AND (
+                r.user_id = %s
+                OR (m.owner_id IS NOT NULL AND m.owner_id <> %s AND r.user_id = m.owner_id)
+              )
+            """,
+            (movie_ids, user_id, user_id),
+        )
+        rows = cur.fetchall()
+    own_by_movie: dict[Any, Any] = {}
+    owner_by_movie: dict[Any, dict[str, Any]] = {}
+    for row in rows:
+        movie_id = row.get("movie_id")
+        if str(row.get("user_id")) == str(user_id):
+            own_by_movie[movie_id] = row.get("score")
+        else:
+            owner_by_movie[movie_id] = {
+                "score": row.get("score"),
+                "by": row.get("display_name") or row.get("username") or "",
+            }
+    for movie in movies:
+        movie_id = movie.get("id")
+        movie["personal_rating"] = movie_rating_value(own_by_movie.get(movie_id))
+        owner = owner_by_movie.get(movie_id)
+        if owner:
+            movie["owner_rating"] = movie_rating_value(owner["score"])
+            movie["owner_rating_by"] = owner["by"]
+    return movies
+
+
 def attach_library_movie_enrichments(
     conn, movies: list[dict[str, Any]], user: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
@@ -5199,6 +5412,9 @@ def attach_library_movie_enrichments(
     user_id = user.get("id") if user else None
     movies = attach_personal_list_state(conn, movies, user_id)
     movies = attach_movie_series_membership(conn, movies)
+    movies = attach_movie_ratings(conn, movies, user_id)
+    movies = attach_movie_origin_countries(conn, movies)
+    movies = attach_movie_custom_values(conn, movies)
     return movies
 
 
@@ -5892,6 +6108,10 @@ def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> d
         "series": collection_series_preview_entities(conn, actor=user),
         "seriesSeasonCoverage": collection_series_membership_entities(conn, actor=user),
         "locations": location_list_entities(conn),
+        # Archived ones ride along: a film may still hold a value for one, and
+        # the edit form needs the name and type to render it (§4e.5). The form
+        # filters the archived ones out of its own inputs.
+        "customFields": all_custom_field_entities(conn),
         "mediaGroups": media_group_entities(conn, limit=200, actor=user),
         "plugins": collection_plugin_preview_entities(conn),
         "attributions": collection_attribution_entities(conn),
@@ -5929,6 +6149,7 @@ def empty_collection_dashboard_snapshot() -> dict[str, Any]:
         "series": [],
         "seriesSeasonCoverage": [],
         "locations": [],
+        "customFields": [],
         "mediaGroups": [],
         "plugins": [],
         "attributions": [],
@@ -8145,6 +8366,217 @@ def emit_container_change(conn, container_id, *, operation: str, entity: dict[st
         entity_id=str(container_id),
         operation=operation,
         payload=payload,
+    )
+    return revision
+
+
+def custom_field_rows(conn, *, include_archived: bool = True) -> list[dict[str, Any]]:
+    """Every custom-field definition, in the owner's chosen order."""
+    if not table_exists(conn, "custom_field_definitions"):
+        return []
+    where = "" if include_archived else "WHERE archived_at IS NULL"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, key, name, field_type, options, sort_order,
+                   archived_at, created_at, updated_at
+            FROM custom_field_definitions
+            {where}
+            ORDER BY sort_order, key
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def custom_field_row(conn, field_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "custom_field_definitions"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, key, name, field_type, options, sort_order,
+                   archived_at, created_at, updated_at
+            FROM custom_field_definitions
+            WHERE id=%s
+            """,
+            (field_id,),
+        )
+        row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def custom_field_sync_entity(conn, field_id) -> dict[str, Any] | None:
+    row = custom_field_row(conn, field_id)
+    return field_definition_entity(row) if row else None
+
+
+def all_custom_field_entities(conn) -> list[dict[str, Any]]:
+    """The bootstrap array. Archived definitions are included deliberately.
+
+    A client holding a value for an archived field still needs the field's name
+    and type to render it -- contract §4e.5 says existing values keep showing.
+    Omitting archived definitions here would leave exactly those values
+    unrenderable on a fresh install, which is the shape of bug §4e.5 exists to
+    prevent.
+    """
+    return [field_definition_entity(row) for row in custom_field_rows(conn)]
+
+
+def replace_movie_custom_values(conn, movie_id, values: Any, *, fields: list[dict[str, Any]] | None = None) -> bool:
+    """Apply a sparse map of {field key or id: value} to one film.
+
+    Sparse on purpose: the caller states only the fields it means to change, and
+    a field left out keeps its value. That is the same absent-preserves rule the
+    rest of the edit path follows, and it lets the edit form send only its own
+    inputs without mirroring fields it does not render.
+
+    Clearing is an explicit null or empty string, which deletes the row. An empty
+    row would be a value that claims to exist and says nothing.
+
+    Returns True when anything changed, so the caller knows whether to emit.
+    """
+    if not isinstance(values, dict) or not table_exists(conn, "movie_custom_field_values"):
+        return False
+    known = fields if fields is not None else custom_field_rows(conn)
+    by_key = {str(row.get("key")): row for row in known}
+    by_id = {str(row.get("id")): row for row in known}
+    changed = False
+    for raw_key, raw_value in values.items():
+        field = by_key.get(str(raw_key)) or by_id.get(str(raw_key))
+        if field is None:
+            raise NextApiError(f"Unknown custom field: {raw_key}", 400)
+        if field.get("archived_at"):
+            # Archived means "no new input", not "invisible". Refusing by name is
+            # kinder than accepting a write nobody will ever see again.
+            raise NextApiError(f"Custom field is archived: {field.get('key')}", 400)
+        resolved = normalize_field_value(raw_value, field=field)
+        with conn.cursor() as cur:
+            if resolved is None:
+                cur.execute(
+                    "DELETE FROM movie_custom_field_values WHERE movie_id=%s AND field_id=%s RETURNING movie_id",
+                    (movie_id, field.get("id")),
+                )
+                changed = cur.fetchone() is not None or changed
+                continue
+            column, value = resolved
+            others = [name for name in VALUE_COLUMNS if name != column]
+            cur.execute(
+                f"""
+                INSERT INTO movie_custom_field_values (movie_id, field_id, {column})
+                VALUES (%s, %s, %s)
+                ON CONFLICT (movie_id, field_id) DO UPDATE
+                SET {column}=EXCLUDED.{column},
+                    {', '.join(f'{name}=NULL' for name in others)},
+                    updated_at=now()
+                """,
+                (movie_id, field.get("id"), value),
+            )
+            changed = True
+    return changed
+
+
+def emit_custom_field_change(conn, field_id, *, operation: str = "upsert") -> int:
+    """A definition change on the catalogue stream.
+
+    There is no `delete` operation for a definition and there must not be one:
+    §4e.5 makes archiving an ordinary update, because a filter naming a field
+    that vanished silently becomes "any" and shows the user their whole library.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    payload: dict[str, Any] = {"id": str(field_id)}
+    entity = custom_field_sync_entity(conn, field_id)
+    if entity is not None:
+        payload["entity"] = entity
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="custom_field",
+        entity_id=str(field_id),
+        operation=operation,
+        payload=payload,
+    )
+    return revision
+
+
+def movie_custom_values(conn, movie_id) -> list[dict[str, Any]]:
+    """One film's whole value set, in definition order."""
+    if not table_exists(conn, "movie_custom_field_values"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT v.field_id, d.key, d.field_type, v.updated_at,
+                   {', '.join('v.' + column for column in VALUE_COLUMNS)}
+            FROM movie_custom_field_values v
+            JOIN custom_field_definitions d ON d.id = v.field_id
+            WHERE v.movie_id=%s
+            ORDER BY d.sort_order, d.key
+            """,
+            (movie_id,),
+        )
+        return [value_entity(dict(row)) for row in cur.fetchall()]
+
+
+def movie_custom_values_sync_entity(conn, movie_id) -> dict[str, Any]:
+    """The set-shaped entity: one film, its whole set.
+
+    Always returns an object, never None, and an empty `values` is meaningful --
+    the receiver replaces the set wholesale, so an empty set is how the last
+    value on a film is removed. A None here would read as "no change".
+    """
+    return {"movieId": str(movie_id), "values": movie_custom_values(conn, movie_id)}
+
+
+def all_movie_custom_values_entities(conn, *, limit: int = 1000) -> list[dict[str, Any]]:
+    """The bootstrap array: only films that actually carry a value.
+
+    A film with no custom values needs no entry -- the absence of an entry and an
+    entry with an empty set say the same thing to a receiver that replaces
+    wholesale, and sending one row per film in the library would dwarf the
+    payload it rides in.
+    """
+    if not table_exists(conn, "movie_custom_field_values"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT v.movie_id, v.field_id, d.key, d.field_type, v.updated_at,
+                   {', '.join('v.' + column for column in VALUE_COLUMNS)}
+            FROM movie_custom_field_values v
+            JOIN custom_field_definitions d ON d.id = v.field_id
+            JOIN movies m ON m.id = v.movie_id AND m.deleted_at IS NULL
+            ORDER BY v.movie_id, d.sort_order, d.key
+            """
+        )
+        rows = cur.fetchall()
+    by_movie: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        by_movie.setdefault(str(row.get("movie_id")), []).append(value_entity(dict(row)))
+    entities = [{"movieId": movie_id, "values": values} for movie_id, values in by_movie.items()]
+    return entities[:limit]
+
+
+def emit_movie_custom_values_change(conn, movie_id) -> int:
+    """A film's whole value set, as one change.
+
+    Set-shaped like `movie_identifier` and `container_membership`: the receiver
+    replaces the set, so absence within it is the deletion. That is the property
+    the `metadata` blob could not provide -- its `||` merge cannot remove a key.
+    There is therefore no `delete` operation here either; clearing every value is
+    an upsert carrying an empty set.
+    """
+    if not table_exists(conn, "sync_state") or not table_exists(conn, "sync_changes"):
+        return 0
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie_custom_values",
+        entity_id=str(movie_id),
+        operation="upsert",
+        payload={"id": str(movie_id), "entity": movie_custom_values_sync_entity(conn, movie_id)},
     )
     return revision
 
@@ -12998,6 +13430,16 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "edition_type",
     "country",
     "language",
+    # Published, not accepted -- and deliberately adjacent to `country` and
+    # `language`, which describe the *disc*: which market this pressing was made
+    # for. This one describes the *film*. A Dutch Blu-ray of a Japanese film has
+    # country='NL' and original_language='ja', and the two must never be derived
+    # from one another.
+    #
+    # Not accepted on push because TMDB owns it: a client that could set it would
+    # be asserting a fact about the film rather than about its own copy, and the
+    # next metadata refresh would silently overwrite the assertion anyway.
+    "original_language",
     "runtime_minutes",
     # Published as well as accepted. A field the server takes on push and never
     # sends back is write-only: a client can set it and never confirm it, and
@@ -13070,6 +13512,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         row["genres"] = movie_genre_keys(conn, movie_id)
         # Also reaches the delta: a sync change stores this entity verbatim as
         # its payload, so anything missing here is missing from the delta too.
+        attach_movie_origin_countries(conn, [row])
         attach_movie_technical_specs(conn, [row])
         attach_movie_seasons(conn, [row])
         attach_movie_discs(conn, [row])
@@ -14218,6 +14661,11 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         "watchCount": 0,
         "history": [],
         "tags": [],
+        # The viewer's own score, and separately the owner's when the owner is
+        # somebody else. None means unrated -- never 0, which is a real score.
+        "rating": None,
+        "ownerRating": None,
+        "ownerRatingBy": None,
         "activeLoan": None,
         "loanRequest": None,
         "incomingLoanRequests": 0,
@@ -14280,6 +14728,33 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
             }
             for r in tag_rows
         ]
+    if table_exists(conn, "movie_user_ratings"):
+        # The owner's score is published to anyone who may see the film; nobody
+        # else's is visible to anyone but themselves. The owner test is made here
+        # rather than in the browser because a client comparing owner_id against
+        # its own id reads a NULL owner_id as "I am the owner".
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT r.user_id, r.score, u.display_name, u.username
+                FROM movie_user_ratings r
+                JOIN movies m ON m.id = r.movie_id
+                LEFT JOIN users u ON u.id = r.user_id
+                WHERE r.movie_id=%s
+                  AND (
+                    r.user_id = %s
+                    OR (m.owner_id IS NOT NULL AND m.owner_id <> %s AND r.user_id = m.owner_id)
+                  )
+                """,
+                (movie_id, user_id, user_id),
+            )
+            rating_rows = cur.fetchall()
+        for r in rating_rows:
+            if str(r.get("user_id")) == str(user_id):
+                state["rating"] = movie_rating_value(r.get("score"))
+            else:
+                state["ownerRating"] = movie_rating_value(r.get("score"))
+                state["ownerRatingBy"] = r.get("display_name") or r.get("username") or ""
     if table_exists(conn, "loans"):
         with conn.cursor() as cur:
             cur.execute(
@@ -14949,6 +15424,76 @@ def emit_movie_tag_change(
         conn,
         user_id,
         entity_type="movieTag",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def _movie_rating_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "movieId": str(row.get("movie_id")),
+        "score": movie_rating_value(row.get("score")),
+        "ratedAt": row.get("rated_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def movie_rating_sync_entity(conn, user_id, movie_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "movie_user_ratings"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, score, rated_at, updated_at
+            FROM movie_user_ratings
+            WHERE user_id=%s AND movie_id=%s
+            """,
+            (user_id, movie_id),
+        )
+        row = cur.fetchone()
+    return _movie_rating_row_entity(row) if row else None
+
+
+def all_movie_rating_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "movie_user_ratings"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, score, rated_at, updated_at
+            FROM movie_user_ratings
+            WHERE user_id=%s
+            ORDER BY rated_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_movie_rating_row_entity(row) for row in rows]
+
+
+def emit_movie_rating_change(conn, user_id, movie_id, *, operation: str) -> int:
+    """A rating change on the per-user stream, never the global one.
+
+    The score belongs to one person, so it rides `user_sync_change` like every
+    other personal entity (025). The movie id is the entity id: unlike a tag
+    assignment there is no triple to identify, and the stream is already scoped
+    by user.
+
+    The owner's score, which other viewers can see, deliberately does not ride
+    this stream -- it is not the syncing user's data. Clients read it off the
+    movie payload like any other shared fact.
+    """
+    entity_id = str(movie_id)
+    payload: dict[str, Any] = {"id": entity_id, "movieId": entity_id}
+    if operation != "delete":
+        entity = movie_rating_sync_entity(conn, user_id, movie_id)
+        if entity is not None:
+            payload["entity"] = entity
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="movieRating",
         entity_id=entity_id,
         operation=operation,
         payload=payload,
@@ -16894,6 +17439,11 @@ def movie_detail_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
     if not movie:
         return None
     attach_location_summaries(conn, [movie])
+    # On the detail payload, deliberately not on `movie_entity`. Values travel as
+    # their own entity type (`movie_custom_values`, contract §4e.2); riding on
+    # the movie as well would give one fact two carriers and leave a client to
+    # decide which wins. The parity test caught the first attempt.
+    attach_movie_custom_values(conn, [movie])
     metadata_debug = None
     try:
         metadata_debug = movie_metadata_debug_entity(conn, movie_id)
@@ -21508,7 +22058,11 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             attach_movie_discs(
                 conn,
                 attach_movie_seasons(
-                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, rows))
+                    conn,
+                    attach_movie_technical_specs(
+                        conn,
+                        attach_movie_origin_countries(conn, attach_movie_genres(conn, rows)),
+                    ),
                 ),
             )
         )
@@ -23997,6 +24551,121 @@ def apply_collection_item_delete(
     }
 
 
+def _custom_value_mutation_target(conn, payload: dict[str, Any]) -> tuple[Any, dict[str, Any]]:
+    """Resolve the film and the definition one custom-value mutation names."""
+    movie_ref = clean_text(payload.get("movieId") or payload.get("movie_id"))
+    if not movie_ref:
+        raise NextApiError("movieId is required", 400)
+    movie_uuid = parse_uuid(movie_ref, "movieId")
+    if not table_exists(conn, "movie_custom_field_values"):
+        raise NextApiError("Custom fields are not available", 503)
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM movies WHERE id=%s AND deleted_at IS NULL", (movie_uuid,))
+        if not cur.fetchone():
+            raise NextApiError("Movie not found", 404)
+    field_ref = clean_text(payload.get("fieldId") or payload.get("field_id") or payload.get("key"))
+    if not field_ref:
+        raise NextApiError("fieldId or key is required", 400)
+    fields = custom_field_rows(conn)
+    field = next(
+        (row for row in fields if str(row.get("id")) == field_ref or str(row.get("key")) == field_ref),
+        None,
+    )
+    if field is None:
+        # By name, and a 400 rather than a silent drop. A definition is created
+        # against the server (§4e.3a), so a client naming one the server has
+        # never seen is out of step -- and an ignored mutation cannot be told
+        # apart from a successful one.
+        raise NextApiError(f"Unknown custom field: {field_ref}", 400)
+    return movie_uuid, field
+
+
+def apply_custom_value_upsert(
+    conn, *, client_id: str, idem_key: str, mutation: dict[str, Any], actor: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """One device's value for one field on one film.
+
+    Per field, never a whole set -- §4e.3, which is §4d.2 applied a second time.
+    A client that does not name a field cannot touch it, so a phone modelling
+    three of five fields cannot delete the other two. The echo obligation that a
+    set-shaped push would need is an agreement nothing on the wire can enforce;
+    this shape makes the loss impossible instead of agreed.
+    """
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("movieCustomValue upsert payload must be an object", 400)
+    movie_uuid, field = _custom_value_mutation_target(conn, payload)
+    replace_movie_custom_values(
+        conn, movie_uuid, {str(field.get("key")): payload.get("value")}, fields=[field]
+    )
+    revision = emit_movie_custom_values_change(conn, movie_uuid)
+    audit_event(
+        conn,
+        event_type="custom_values.updated",
+        category="collection",
+        actor=actor,
+        target_type="movie",
+        target_id=movie_uuid,
+        summary="Updated custom field value",
+        metadata={"field": field.get("key"), "clientId": client_id},
+    )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "movieCustomValue",
+        "operation": "upsert",
+        "entityId": str(movie_uuid),
+        "fieldId": str(field.get("id")),
+        "customValues": movie_custom_values(conn, movie_uuid),
+        "revision": revision or current_revision(conn),
+    }
+
+
+def apply_custom_value_delete(
+    conn, *, client_id: str, idem_key: str, mutation: dict[str, Any], actor: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    """Clear one field's value on one film.
+
+    Its own operation rather than an upsert carrying null, because the two are
+    different statements: a client that queued "clear this" while offline said
+    something, and folding it into an upsert would make it indistinguishable
+    from a client that had no opinion.
+    """
+    payload = mutation.get("payload")
+    if not isinstance(payload, dict):
+        raise NextApiError("movieCustomValue delete payload must be an object", 400)
+    movie_uuid, field = _custom_value_mutation_target(conn, payload)
+    with conn.cursor() as cur:
+        cur.execute(
+            "DELETE FROM movie_custom_field_values WHERE movie_id=%s AND field_id=%s RETURNING movie_id",
+            (movie_uuid, field.get("id")),
+        )
+        removed = cur.fetchone() is not None
+    revision = emit_movie_custom_values_change(conn, movie_uuid) if removed else current_revision(conn)
+    if removed:
+        audit_event(
+            conn,
+            event_type="custom_values.cleared",
+            category="collection",
+            actor=actor,
+            target_type="movie",
+            target_id=movie_uuid,
+            summary="Cleared custom field value",
+            metadata={"field": field.get("key"), "clientId": client_id},
+        )
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "movieCustomValue",
+        "operation": "delete",
+        "entityId": str(movie_uuid),
+        "fieldId": str(field.get("id")),
+        "changed": 1 if removed else 0,
+        "customValues": movie_custom_values(conn, movie_uuid),
+        "revision": revision,
+    }
+
+
 def apply_sync_mutation(
     conn,
     *,
@@ -24052,6 +24721,18 @@ def apply_sync_mutation(
         )
     elif entity_type == "ownImage" and operation == "delete":
         result = apply_own_image_delete(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
+        )
+    # Per field, never a whole set (§4e.3). `custom_field` itself has no mutation
+    # here on purpose: a definition is created against the server (§4e.3a),
+    # because a create path out of an offline queue has no tier 1 to match on and
+    # two phones inventing the same field produce two definitions with one key.
+    elif entity_type == "movieCustomValue" and operation == "upsert":
+        result = apply_custom_value_upsert(
+            conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
+        )
+    elif entity_type == "movieCustomValue" and operation == "delete":
+        result = apply_custom_value_delete(
             conn, client_id=client_id, idem_key=key, mutation=mutation, actor=actor
         )
     else:
@@ -29911,13 +30592,35 @@ def register_routes(flask_app: Flask) -> None:
         media_format = clean_text(request.args.get("format"))
         raw_media_type = clean_text(request.args.get("media_type") or request.args.get("mediaType"))
         media_type = normalize_media_type(raw_media_type)
+        # The film's origin, not the disc's release market -- `country` and
+        # `language` on the record answer that other question and are not
+        # filterable here on purpose, because a caller asking for Japanese films
+        # would otherwise silently get Japanese *pressings*.
+        raw_origin_country = clean_text(
+            request.args.get("origin_country") or request.args.get("originCountry")
+        )
+        origin_country = normalize_region_code(raw_origin_country)
+        if raw_origin_country and not origin_country:
+            raise NextApiError(
+                "origin_country (or originCountry) must be an ISO 3166-1 alpha-2 code, e.g. JP",
+                400,
+            )
+        raw_original_language = clean_text(
+            request.args.get("original_language") or request.args.get("originalLanguage")
+        )
+        original_language = normalize_language_code(raw_original_language)
+        if raw_original_language and not original_language:
+            raise NextApiError(
+                "original_language (or originalLanguage) must be a language code, e.g. ja",
+                400,
+            )
         if raw_media_type and media_type is None:
             raise NextApiError(
                 f"media_type (or mediaType) must be one of "
                 f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
                 400,
             )
-        searching = bool(query or media_format or media_type)
+        searching = bool(query or media_format or media_type or origin_country or original_language)
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
@@ -29969,6 +30672,25 @@ def register_routes(flask_app: Flask) -> None:
             if media_type:
                 filters.append("m.media_type=%s")
                 params.append(media_type)
+            if origin_country:
+                if not table_exists(conn, "movie_origin_countries"):
+                    # An install that has not run migration 087 yet cannot answer
+                    # this. Returning everything would be worse than returning
+                    # nothing: the caller cannot tell an unfiltered list from a
+                    # filtered one, and would read it as "all these films are
+                    # from there".
+                    return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
+                filters.append(
+                    """EXISTS (
+                        SELECT 1
+                        FROM movie_origin_countries moc
+                        WHERE moc.movie_id = m.id AND moc.country_code = %s
+                    )"""
+                )
+                params.append(origin_country)
+            if original_language:
+                filters.append("m.original_language=%s")
+                params.append(original_language)
             visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
             filters.append(visibility_where)
             params.extend(visibility_params)
@@ -29990,6 +30712,7 @@ def register_routes(flask_app: Flask) -> None:
                         m.edition,
                         m.country,
                         m.language,
+                        m.original_language,
                         m.overview,
                         m.rating,
                         m.location,
@@ -30003,7 +30726,7 @@ def register_routes(flask_app: Flask) -> None:
                     """,
                     (*params, limit, offset),
                 )
-                items = attach_movie_genres(conn, cur.fetchall())
+                items = attach_movie_origin_countries(conn, attach_movie_genres(conn, cur.fetchall()))
                 for item in items:
                     item.pop("genre_search", None)
             audit_api_interaction(
@@ -33509,6 +34232,92 @@ def register_routes(flask_app: Flask) -> None:
                         metadata={"tagId": str(tag_id)},
                     )
             return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
+
+    @flask_app.put("/api/next/movies/<movie_id>/rating")
+    def set_movie_rating(movie_id: str):
+        """Set the acting user's own score for a movie.
+
+        Gated on `watchlist.manage`, the permission every per-user personal
+        feature already uses -- tags, watchlist, watch history, wishlist, loans.
+        A dedicated `ratings.manage` would need a migration, a grant in every
+        role, and a row in the role-management UI, to draw a distinction nobody
+        asked for.
+
+        A movie the actor cannot see is a 404, not a 403: a permission error
+        would confirm the film exists to somebody who may not know that.
+
+        There is no bulk endpoint on purpose. A tag is a label you apply to
+        twenty films at once; a score is a judgement about one.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Rating request body must be an object", 400)
+        score = normalize_movie_rating_score(body.get("score"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "movie_user_ratings"):
+                raise NextApiError("Ratings table is not available", 503)
+            user_id = actor.get("id")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movie_user_ratings (user_id, movie_id, score)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, movie_id)
+                        DO UPDATE SET score=EXCLUDED.score, rated_at=now(), updated_at=now()
+                        """,
+                        (user_id, movie_uuid, score),
+                    )
+                emit_movie_rating_change(conn, user_id, movie_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="rating.set",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Set personal rating",
+                    metadata={"score": float(score)},
+                )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, user_id)})
+
+    @flask_app.delete("/api/next/movies/<movie_id>/rating")
+    def clear_movie_rating(movie_id: str):
+        """Clear the acting user's own score.
+
+        Deletes the row rather than nulling a column: an unrated film is the
+        absence of a rating, and a stored NULL invites a COALESCE downstream that
+        would present it as a zero somebody chose.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "movie_user_ratings"):
+                raise NextApiError("Ratings table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM movie_user_ratings WHERE user_id=%s AND movie_id=%s RETURNING movie_id",
+                        (user_id, movie_uuid),
+                    )
+                    removed = cur.fetchone() is not None
+                if removed:
+                    emit_movie_rating_change(conn, user_id, movie_uuid, operation="delete")
+                    audit_event(
+                        conn,
+                        event_type="rating.cleared",
+                        category="personal",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary="Cleared personal rating",
+                    )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, user_id)})
 
     @flask_app.delete("/api/next/movies/<movie_id>/tags/<tag_id>")
     def remove_tag_from_movie(movie_id: str, tag_id: str):
@@ -37447,6 +38256,273 @@ def register_routes(flask_app: Flask) -> None:
             counts = metadata_refresh_job_counts(conn, movie_id=movie_id)
         return response({"status": "ok", "jobs": jobs, "counts": counts})
 
+    @flask_app.get("/api/next/custom-fields")
+    def list_custom_fields():
+        """Every definition, for anyone who may see the collection.
+
+        Not admin-gated on read: the fields are part of the shape of a film, and
+        a viewer who cannot list them cannot render the values they already see.
+        Archived ones ride along with their flag -- see §4e.5.
+        """
+        with connect() as conn:
+            require_any_next_permission(conn, ("collection.view_own", "collection.view_group", "collection.view_all"))
+            fields = all_custom_field_entities(conn)
+        return response({"status": "ok", "fields": fields})
+
+    @flask_app.post("/api/next/admin/custom-fields")
+    def create_custom_field():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Custom field body must be an object", 400)
+        name = normalize_field_name(body.get("name"))
+        field_type = normalize_field_type(body.get("fieldType") or body.get("field_type"))
+        key = normalize_field_key(body.get("key"), name=name)
+        options = normalize_options(body.get("options"), field_type=field_type)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "custom_field_definitions"):
+                raise NextApiError("Custom fields are not available", 503)
+            # Creating a field whose key already exists returns the existing one
+            # rather than a conflict. That is the contract's own create-path
+            # shape (§4.2: "Bestond al -> created: false, bestaand entityId, plus
+            # matchedBy") and it is what makes creation safe to retry from a
+            # phone that lost its connection mid-request.
+            #
+            # The key is a deterministic slug of the name, so two people typing
+            # "Rip status" mean the same field -- a natural key, tier-3 shaped:
+            # exact, not fuzzy, and guaranteed by a unique index rather than
+            # inferred. Tier 3 also demands a sanity check, and here it is a
+            # differing type: same name, different shape, is not the same field
+            # and must not silently adopt the other's storage column.
+            existing = next(
+                (row for row in custom_field_rows(conn) if str(row.get("key")) == key), None
+            )
+            if existing is not None:
+                if str(existing.get("field_type")) != field_type:
+                    raise NextApiError(
+                        f"A custom field '{key}' already exists as {existing.get('field_type')}, "
+                        f"not {field_type}",
+                        409,
+                    )
+                return response(
+                    {
+                        "status": "ok",
+                        "created": False,
+                        "matchedBy": "key",
+                        "field": field_definition_entity(existing),
+                    }
+                )
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO custom_field_definitions (key, name, field_type, options, sort_order)
+                        VALUES (%s, %s, %s, %s,
+                                COALESCE((SELECT MAX(sort_order) + 1 FROM custom_field_definitions), 0))
+                        RETURNING id
+                        """,
+                        (key, name, field_type, Jsonb(options)),
+                    )
+                    field_id = cur.fetchone()["id"]
+                emit_custom_field_change(conn, field_id)
+                audit_event(
+                    conn,
+                    event_type="custom_field.created",
+                    category="settings",
+                    actor=actor,
+                    target_type="custom_field",
+                    target_id=field_id,
+                    summary="Created custom field",
+                    metadata={"key": key, "fieldType": field_type},
+                )
+            entity = custom_field_sync_entity(conn, field_id)
+        return response({"status": "ok", "created": True, "field": entity})
+
+    @flask_app.patch("/api/next/admin/custom-fields/<field_id>")
+    def update_custom_field(field_id: str):
+        """Rename, reorder, change options, archive or restore.
+
+        `key` and `fieldType` are deliberately not editable. The key is what
+        saved filters and stored values name; the type decides which column a
+        value lives in. Changing either would silently invalidate data that is
+        already correct -- a rename of the label does everything an owner
+        actually wants here.
+        """
+        field_uuid = parse_uuid(field_id, "fieldId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Custom field body must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            existing = custom_field_row(conn, field_uuid)
+            if existing is None:
+                raise NextApiError("Custom field not found", 404)
+            assignments: list[str] = ["updated_at=now()"]
+            values: list[Any] = []
+            if "name" in body:
+                assignments.append("name=%s")
+                values.append(normalize_field_name(body.get("name")))
+            if "options" in body:
+                assignments.append("options=%s")
+                values.append(Jsonb(normalize_options(body.get("options"), field_type=existing["field_type"])))
+            if "sortOrder" in body or "sort_order" in body:
+                try:
+                    order = int(body.get("sortOrder", body.get("sort_order")) or 0)
+                except (TypeError, ValueError):
+                    raise NextApiError("sortOrder must be a number", 400)
+                assignments.append("sort_order=%s")
+                values.append(order)
+            if "archived" in body:
+                archived = parse_bool_value(body.get("archived"), default=False)
+                assignments.append("archived_at=%s")
+                values.append(datetime.utcnow() if archived else None)
+            if len(assignments) == 1:
+                raise NextApiError("Nothing to update", 400)
+            values.append(field_uuid)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        f"UPDATE custom_field_definitions SET {', '.join(assignments)} WHERE id=%s",
+                        values,
+                    )
+                emit_custom_field_change(conn, field_uuid)
+                audit_event(
+                    conn,
+                    event_type="custom_field.updated",
+                    category="settings",
+                    actor=actor,
+                    target_type="custom_field",
+                    target_id=field_uuid,
+                    summary="Updated custom field",
+                    metadata={"key": existing.get("key")},
+                )
+            entity = custom_field_sync_entity(conn, field_uuid)
+        return response({"status": "ok", "field": entity})
+
+    @flask_app.get("/api/next/admin/custom-fields/<field_id>/usage")
+    def custom_field_usage(field_id: str):
+        """How many films carry a value. What the archive confirmation shows."""
+        field_uuid = parse_uuid(field_id, "fieldId")
+        with connect() as conn:
+            require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movie_custom_field_values"):
+                return response({"status": "ok", "movies": 0})
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT COUNT(*)::int AS movies FROM movie_custom_field_values WHERE field_id=%s",
+                    (field_uuid,),
+                )
+                row = cur.fetchone()
+        return response({"status": "ok", "movies": int((row or {}).get("movies") or 0)})
+
+    @flask_app.put("/api/next/movies/<movie_id>/custom-values")
+    def set_movie_custom_values(movie_id: str):
+        """Set values on one film.
+
+        Its own route rather than a branch of the sync mutations path, for the
+        reason §4e.3 gives: values travel down only, so there is nothing for a
+        client to push here. The PWA writes through this; iOS and Android read.
+
+        The body is sparse -- only the fields being changed. Null or an empty
+        string clears one.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Custom values body must be an object", 400)
+        values = body.get("values")
+        if not isinstance(values, dict):
+            raise NextApiError("values must be an object", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not table_exists(conn, "movie_custom_field_values"):
+                raise NextApiError("Custom fields are not available", 503)
+            if not actor_can_edit_visible_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                changed = replace_movie_custom_values(conn, movie_uuid, values)
+                if changed:
+                    emit_movie_custom_values_change(conn, movie_uuid)
+                    audit_event(
+                        conn,
+                        event_type="custom_values.updated",
+                        category="collection",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary="Updated custom field values",
+                        metadata={"fields": sorted(str(key) for key in values)},
+                    )
+            entity = movie_custom_values_sync_entity(conn, movie_uuid)
+        return response({"status": "ok", "customValues": entity.get("values", [])})
+
+    @flask_app.get("/api/next/admin/metadata/origin-backfill")
+    def movie_origin_backfill_status():
+        """How many films still have no country of origin or original language.
+
+        `unresolvable` is counted separately and deliberately: a film with no
+        TMDB identifier cannot be answered by this job at all, and folding it
+        into `pending` would leave a counter that never reaches zero with
+        nothing to explain why.
+        """
+        with connect() as conn:
+            require_next_permission(conn, "metadata.refresh_bulk")
+            counts = count_movies_missing_film_origin(conn)
+        return response({"status": "ok", **counts})
+
+    @flask_app.post("/api/next/admin/metadata/origin-backfill")
+    def queue_movie_origin_backfill():
+        """Queue origin backfill for films that have none.
+
+        Not the bulk metadata refresh. That one caps at 50 ids per request, asks
+        TMDB with append_to_response for credits, videos, images, release dates
+        and translations, and runs the whole merge pipeline -- hours for a large
+        library, rewriting artwork, credits and provenance across the catalogue
+        and emitting a global sync change per film. This asks for the bare record
+        and writes two fields, so 100 films fit in one job and a 2,500-film
+        library is 25 of them.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Origin backfill body must be an object", 400)
+        try:
+            batch_size = int(body.get("batchSize") or 100)
+        except (TypeError, ValueError):
+            raise NextApiError("batchSize must be a number", 400)
+        batch_size = max(1, min(batch_size, 500))
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_bulk")
+            if not table_exists(conn, "movie_origin_countries"):
+                raise NextApiError("Origin storage is not available", 503)
+            counts = count_movies_missing_film_origin(conn)
+            pending = counts.get("pending", 0)
+            if not pending:
+                return response({"status": "ok", "queued": 0, **counts})
+            jobs = []
+            with conn.transaction():
+                remaining = pending
+                while remaining > 0:
+                    jobs.append(
+                        create_background_job(
+                            conn,
+                            job_type=MOVIE_ORIGIN_BACKFILL_JOB_TYPE,
+                            payload={"limit": batch_size, "requestedBy": actor_job_payload(actor)},
+                        )
+                    )
+                    remaining -= batch_size
+                # One audit event for the batch, not one per film. A 25-job run
+                # that wrote 25 audit rows would say the same thing 25 times.
+                audit_event(
+                    conn,
+                    event_type="metadata.origin_backfill",
+                    category="metadata",
+                    actor=actor,
+                    target_type="collection",
+                    summary="Queued country-of-origin backfill",
+                    metadata={"pending": pending, "jobs": len(jobs), "batchSize": batch_size},
+                )
+        return response({"status": "ok", "queued": len(jobs), "jobs": jobs, **counts})
+
     @flask_app.post("/api/next/metadata/jobs")
     def queue_metadata_refresh_jobs():
         body = request.get_json(silent=True) or {}
@@ -38927,14 +40003,23 @@ def register_routes(flask_app: Flask) -> None:
                 "currentRevision": revision,
                 "streamId": stream_id,
                 "serverTime": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+                # Hand-maintained, and it had drifted in both directions: it
+                # advertised `metadata_plugin` and `setting`, which nothing has
+                # ever emitted, while `series` and the three `*_scans` types were
+                # emitted and never advertised. Corrected here rather than left
+                # as a fourth touchpoint the next entity type also misses.
                 "supportedEntityTypes": [
                     "movie",
                     "container",
                     "container_membership",
                     "movie_identifier",
                     "location",
-                    "metadata_plugin",
-                    "setting",
+                    "series",
+                    "movie_scans",
+                    "container_scans",
+                    "series_scans",
+                    "custom_field",
+                    "movie_custom_values",
                 ],
                 "supportedMutations": [
                     "movie.upsert",
@@ -38945,10 +40030,19 @@ def register_routes(flask_app: Flask) -> None:
                     "containerMovie.delete",
                     "collectionItem.upsert",
                     "collectionItem.delete",
+                    "ownImage.update",
+                    "ownImage.delete",
+                    "movieCustomValue.upsert",
+                    "movieCustomValue.delete",
                 ],
                 "userEntityTypes": [
                     "watchlist",
                     "watch_history",
+                    "wishlist",
+                    "tag",
+                    "movieTag",
+                    "movieRating",
+                    "loan",
                 ],
                 "userSync": {
                     "bootstrap": "/api/next/sync/user/bootstrap",
@@ -39036,6 +40130,11 @@ def register_routes(flask_app: Flask) -> None:
                 "moviePeople": movie_people,
                 "movieCast": [credit for credit in movie_people if credit.get("department") == "cast"],
                 "movieCrew": [credit for credit in movie_people if credit.get("department") == "crew"],
+                # Definitions carry archived ones too: a client holding a value
+                # for an archived field still needs its name and type to render
+                # it (§4e.5). Values are one entry per film that has any.
+                "customFields": all_custom_field_entities(conn),
+                "movieCustomValues": all_movie_custom_values_entities(conn, limit=limit),
                 "metadataPlugins": metadata_plugin_entities(conn),
                 "settings": non_secret_settings(conn),
             }
@@ -39420,6 +40519,7 @@ def register_routes(flask_app: Flask) -> None:
                 "wishlist": all_wishlist_sync_entities(conn, user_id),
                 "tags": all_tag_sync_entities(conn, user_id),
                 "movieTags": all_movie_tag_sync_entities(conn, user_id),
+                "movieRatings": all_movie_rating_sync_entities(conn, user_id),
                 "loans": all_loan_sync_entities(conn, user_id),
             }
         return response(

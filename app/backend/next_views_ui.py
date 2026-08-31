@@ -1479,6 +1479,14 @@ def ui_preview_html(
     .advanced-search-group.release .advanced-search-field:last-child {
       grid-column: 1 / -1;
     }
+    .advanced-search-hint {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
     .advanced-search-field {
       display: grid;
       gap: 6px;
@@ -5551,6 +5559,89 @@ def ui_preview_html(
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+    }
+    .movie-rating-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .movie-rating-star {
+      width: 26px;
+      height: 26px;
+      border: 0;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      color: color-mix(in srgb, var(--text) 26%, transparent);
+      display: inline-grid;
+      place-items: center;
+    }
+    .movie-rating-star svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+      pointer-events: none;
+    }
+    .movie-rating-star.filled,
+    .movie-rating-star.half {
+      color: var(--accent);
+    }
+    .movie-rating-star:hover {
+      color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    }
+    .movie-rating-value {
+      margin-left: 8px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 760;
+      color: var(--text);
+    }
+    .movie-rating-owner {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 620;
+    }
+    .movie-rating-clear-button {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      cursor: pointer;
+    }
+    .movie-rating-clear-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+    /* The tile badge. Only ever one number -- the personal or owner rating --
+       because a second number beside it would reintroduce exactly the ambiguity
+       with the external score that the detail page works to avoid. */
+    .poster-rating-badge {
+      position: absolute;
+      left: 6px;
+      bottom: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, #000 62%, transparent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+      pointer-events: none;
+    }
+    .poster-rating-badge svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
     }
     .movie-tag-add-button {
       width: 34px;
@@ -15550,6 +15641,23 @@ def ui_preview_html(
                 </label>
               </div>
             </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="origin">
+              <summary>
+                <span data-next-i18n="collection.originFilter">Origin</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.originCountryFilter">Country of origin</span>
+                  <select id="advancedOriginCountry"></select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.originalLanguageFilter">Original language</span>
+                  <select id="advancedOriginLanguage"></select>
+                </label>
+                <p class="advanced-search-hint hidden" id="advancedOriginHint"></p>
+              </div>
+            </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="media">
               <summary>
                 <span data-next-i18n="collection.mediaAssets">Media assets</span>
@@ -15602,6 +15710,8 @@ def ui_preview_html(
                     <option value="watched" data-next-i18n="lists.watched">Watched</option>
                     <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
                     <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
+                    <option value="rated" data-next-i18n="collection.personalRated">Rated by me</option>
+                    <option value="unrated" data-next-i18n="collection.personalUnrated">Not rated by me</option>
                     <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
                   </select>
                 </label>
@@ -16906,6 +17016,7 @@ def ui_preview_html(
                       <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
                     </label>
                   </div>
+                  <div class="movie-edit-grid hidden" id="movieEditCustomFields"></div>
                 </div>
               </div>
               <div class="movie-edit-actions">
@@ -16989,6 +17100,16 @@ def ui_preview_html(
                       </button>
                     </div>
                     <div class="movie-tags-chips" id="movieTagsChips"></div>
+                  </div>
+                  <div class="movie-rating-section" id="movieRatingSection">
+                    <div class="detail-card-head compact">
+                      <h4 data-next-i18n="lists.myRatingTitle">My rating</h4>
+                      <button type="button" class="movie-rating-clear-button hidden" id="movieRatingClearButton" aria-label="Clear rating" title="Clear rating" data-next-i18n-aria="lists.clearRating" data-next-i18n-title="lists.clearRating">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path></svg>
+                      </button>
+                    </div>
+                    <div class="movie-rating-picker" id="movieRatingPicker"></div>
+                    <div class="movie-rating-owner" id="movieRatingOwner"></div>
                   </div>
                   <div class="movie-loan-section" id="movieLoanSection">
                     <div class="detail-card-head compact">
@@ -18543,6 +18664,7 @@ def ui_preview_html(
             """ + admin_tab("plugins", "appAdmin.tabPlugins", "Plugins", "structure") + """
             """ + admin_tab("digital", "appAdmin.tabDigital", "Digital", "devices") + """
             """ + admin_tab("metadata", "appAdmin.tabMetadata", "Metadata", "library_preferences") + """
+            """ + admin_tab("custom_fields", "appAdmin.tabCustomFields", "Custom fields", "edit_notes") + """
             """ + admin_tab("backup", "appAdmin.tabBackup", "Backup", "import") + """
             """ + admin_tab("audit", "appAdmin.tabAudit", "Audit", "lists") + """
           </nav>
@@ -19443,7 +19565,54 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
+        <section class="app-admin-panel" id="appAdminPanelCustomFields" role="tabpanel" aria-labelledby="appAdminTabCustomFields" aria-hidden="true" tabindex="0" data-app-admin-panel="custom_fields">
+          <section class="profile-grid">
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("edit_notes") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.tabCustomFields">Custom fields</h3>
+                    <p data-next-i18n="appAdmin.customFieldsHelp">Fields you define yourself. They appear on every film, sync to the apps, and can be filtered and exported.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="login-message" id="appAdminCustomFieldsMessage"></div>
+            </section>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.customFieldsAdd">Add a field</h3>
+              <form class="profile-form" id="appAdminCustomFieldForm">
+                <label class="profile-field">
+                  <span data-next-i18n="appAdmin.customFieldName">Name</span>
+                  <input id="appAdminCustomFieldName" type="text" maxlength="80" required data-next-i18n-placeholder="appAdmin.customFieldNamePlaceholder" placeholder="Rip status">
+                </label>
+                <label class="profile-field">
+                  <span data-next-i18n="appAdmin.customFieldType">Type</span>
+                  <select id="appAdminCustomFieldType">
+                    <option value="text" data-next-i18n="appAdmin.customFieldTypeText">Text</option>
+                    <option value="number" data-next-i18n="appAdmin.customFieldTypeNumber">Number</option>
+                    <option value="date" data-next-i18n="appAdmin.customFieldTypeDate">Date</option>
+                    <option value="boolean" data-next-i18n="appAdmin.customFieldTypeBoolean">Yes / no</option>
+                    <option value="select" data-next-i18n="appAdmin.customFieldTypeSelect">Choice list</option>
+                  </select>
+                </label>
+                <label class="profile-field hidden" id="appAdminCustomFieldOptionsRow">
+                  <span data-next-i18n="appAdmin.customFieldOptions">Choices</span>
+                  <textarea id="appAdminCustomFieldOptions" rows="4" data-next-i18n-placeholder="appAdmin.customFieldOptionsPlaceholder" placeholder="One per line"></textarea>
+                </label>
+                <p class="import-source-meta" data-next-i18n="appAdmin.customFieldTypeFixedHelp">The type cannot be changed later: it decides how the value is stored, sorted and filtered.</p>
+                <div class="button-row">
+                  <button type="submit" class="primary-button" data-next-i18n="appAdmin.customFieldsAdd">Add a field</button>
+                </div>
+              </form>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.customFieldsExisting">Your fields</h3>
+              <div id="appAdminCustomFieldsList"></div>
+            </div>
+          </section>
+        </section>
+                <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
           <section class="profile-grid">
             <section class="profile-dashboard-card primary full">
               <div class="profile-dashboard-card-head">
@@ -19942,6 +20111,37 @@ def ui_preview_html(
       const raw = String(code || "").trim();
       const label = languageLabel(raw);
       return label && label !== raw ? `${label} (${raw})` : raw;
+    }
+    // Country names, on the same terms as language names above: 250 regions
+    // across 29 locales is not a translation task, the browser knows the answer
+    // for the locale the user picked, and the stored value stays the code.
+    //
+    // Memoized per locale like languageLabel. ratingCountryLabel used to build a
+    // fresh Intl.DisplayNames on every call, which is fine for the two dozen
+    // certificate countries and not for a filter list built by walking a few
+    // thousand movies.
+    let regionDisplayNames = null;
+    let regionDisplayLocale = null;
+    function regionLabel(code) {
+      const raw = String(code || "").trim().toUpperCase();
+      if (!raw) return "";
+      if (regionDisplayLocale !== localeState.locale) {
+        regionDisplayLocale = localeState.locale;
+        try {
+          regionDisplayNames = new Intl.DisplayNames([localeState.locale], {type: "region"});
+        } catch (error) {
+          regionDisplayNames = null;
+        }
+      }
+      if (!regionDisplayNames) return raw;
+      try {
+        // Intl echoes the input back for a subtag it does not know, which is a
+        // code rather than a blank -- the same fallback the feed is lenient
+        // about for languages.
+        return regionDisplayNames.of(raw) || raw;
+      } catch (error) {
+        return raw;
+      }
     }
     function enumLabel(prefix, value, fallback) {
       const raw = String(value || "").trim();
@@ -20913,6 +21113,10 @@ def ui_preview_html(
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "plugins.delete", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_artwork_trash", "admin.view_jobs"],
+        // Defining a field changes the shape of every record in the collection,
+        // so it sits with editing the collection rather than with the
+        // administrative surfaces beside it. Same key the routes require.
+        custom_fields: ["collection.edit_all"],
         backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
         audit: ["admin.view_audit"]
       },
@@ -21033,6 +21237,173 @@ def ui_preview_html(
       if (!plugins.length) return true;
       return plugins.find((plugin) => plugin.id === "tmdb")?.enabled === true;
     }
+    // ---- Custom fields (admin) --------------------------------------------
+    // Definitions are instance-wide, so this screen is the whole of their
+    // management. Field *labels* are typed by the owner and never translated --
+    // only the chrome around them has i18n keys.
+    let appAdminCustomFields = [];
+
+    function setAppAdminCustomFieldsMessage(text, tone) {
+      const node = document.getElementById("appAdminCustomFieldsMessage");
+      if (!node) return;
+      node.textContent = text || "";
+      node.className = "login-message" + (tone ? " " + tone : "");
+    }
+    function customFieldTypeLabel(fieldType) {
+      const labels = {
+        text: tNext("appAdmin.customFieldTypeText", "Text"),
+        number: tNext("appAdmin.customFieldTypeNumber", "Number"),
+        date: tNext("appAdmin.customFieldTypeDate", "Date"),
+        boolean: tNext("appAdmin.customFieldTypeBoolean", "Yes / no"),
+        select: tNext("appAdmin.customFieldTypeSelect", "Choice list")
+      };
+      // An unknown type is shown as itself rather than blanked: this screen may
+      // outlive a server that knows a type it does not (contract 4e.4).
+      return labels[fieldType] || fieldType;
+    }
+    function parseCustomFieldOptions(text) {
+      return String(text || "")
+        .split("\\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((label) => ({key: "", label}));
+    }
+    async function loadAppAdminCustomFields() {
+      if (!hasPermission("collection.edit_all")) return;
+      try {
+        const payload = await authApiJson("/api/next/custom-fields");
+        appAdminCustomFields = Array.isArray(payload.fields) ? payload.fields : [];
+        renderAppAdminCustomFields();
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    function renderAppAdminCustomFields() {
+      const list = document.getElementById("appAdminCustomFieldsList");
+      if (!list) return;
+      if (!appAdminCustomFields.length) {
+        list.innerHTML = `<p class="import-source-meta">${escapeHtml(tNext("appAdmin.customFieldsEmpty", "No fields defined yet."))}</p>`;
+        return;
+      }
+      list.innerHTML = appAdminCustomFields.map((field, index) => {
+        const archived = Boolean(field.archivedAt);
+        const options = Array.isArray(field.options) ? field.options : [];
+        return `
+          <div class="bulk-target${archived ? " danger" : ""}" data-custom-field-row="${escapeHtml(field.id)}">
+            <div class="detail-card-head compact">
+              <h4>${escapeHtml(field.name || field.key)}</h4>
+              <span class="tag">${escapeHtml(customFieldTypeLabel(field.fieldType))}</span>
+              ${archived ? `<span class="tag" data-next-i18n="appAdmin.customFieldArchived">Archived</span>` : ""}
+            </div>
+            <p class="import-source-meta"><code>${escapeHtml(field.key)}</code>${options.length ? " &middot; " + escapeHtml(options.map((option) => option.label).join(", ")) : ""}</p>
+            <div class="button-row compact">
+              <button type="button" class="secondary-button" data-custom-field-rename="${escapeHtml(field.id)}" data-next-i18n="appAdmin.customFieldRename">Rename</button>
+              <button type="button" class="secondary-button" data-custom-field-move="${escapeHtml(field.id)}" data-direction="up"${index === 0 ? " disabled" : ""} aria-label="${escapeHtml(tNext("appAdmin.customFieldMoveUp", "Move up"))}">&uarr;</button>
+              <button type="button" class="secondary-button" data-custom-field-move="${escapeHtml(field.id)}" data-direction="down"${index === appAdminCustomFields.length - 1 ? " disabled" : ""} aria-label="${escapeHtml(tNext("appAdmin.customFieldMoveDown", "Move down"))}">&darr;</button>
+              <button type="button" class="secondary-button${archived ? "" : " danger"}" data-custom-field-archive="${escapeHtml(field.id)}" data-archived="${archived ? "true" : "false"}">${escapeHtml(archived ? tNext("appAdmin.customFieldRestore", "Restore") : tNext("appAdmin.customFieldArchive", "Archive"))}</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+    async function patchAppAdminCustomField(fieldId, body, successKey, successFallback) {
+      try {
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}`, {
+          method: "PATCH",
+          body: JSON.stringify(body)
+        });
+        await loadAppAdminCustomFields();
+        setAppAdminCustomFieldsMessage(tNext(successKey, successFallback), "good");
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminCustomField(event) {
+      event.preventDefault();
+      const name = document.getElementById("appAdminCustomFieldName")?.value || "";
+      const fieldType = document.getElementById("appAdminCustomFieldType")?.value || "text";
+      const body = {name, fieldType};
+      if (fieldType === "select") {
+        body.options = parseCustomFieldOptions(document.getElementById("appAdminCustomFieldOptions")?.value);
+      }
+      try {
+        const payload = await authApiJson("/api/next/admin/custom-fields", {
+          method: "POST",
+          body: JSON.stringify(body)
+        });
+        document.getElementById("appAdminCustomFieldForm")?.reset();
+        syncAppAdminCustomFieldOptionsRow();
+        await loadAppAdminCustomFields();
+        // Creating a field whose key already exists returns the existing one
+        // rather than an error, so the message has to say which happened --
+        // otherwise a typo silently looks like a successful create.
+        setAppAdminCustomFieldsMessage(
+          payload.created === false
+            ? tNext("appAdmin.customFieldExists", "That field already exists.")
+            : tNext("appAdmin.customFieldCreated", "Field added."),
+          payload.created === false ? "" : "good"
+        );
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    async function archiveAppAdminCustomField(fieldId, archived) {
+      if (!archived) {
+        // Show how much data is behind the field before hiding its input. The
+        // values survive archiving, and saying so is what stops this reading as
+        // a delete.
+        let usage = 0;
+        try {
+          const payload = await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}/usage`);
+          usage = Number(payload.movies || 0);
+        } catch (error) {
+          usage = 0;
+        }
+        const question = usage
+          ? tNext("appAdmin.customFieldArchiveConfirmUsed", "{count} films have a value for this field. Archiving hides the input; the values stay.").replace("{count}", String(usage))
+          : tNext("appAdmin.customFieldArchiveConfirm", "Archive this field? The input disappears; anything already filled in stays.");
+        if (!window.confirm(question)) return;
+      }
+      await patchAppAdminCustomField(
+        fieldId,
+        {archived: !archived},
+        archived ? "appAdmin.customFieldRestored" : "appAdmin.customFieldArchivedDone",
+        archived ? "Field restored." : "Field archived."
+      );
+    }
+    async function renameAppAdminCustomField(fieldId) {
+      const field = appAdminCustomFields.find((item) => String(item.id) === String(fieldId));
+      if (!field) return;
+      const name = window.prompt(tNext("appAdmin.customFieldRenamePrompt", "New name for this field"), field.name || "");
+      if (name === null) return;
+      if (!String(name).trim()) return;
+      // Only the label moves. The key is what stored values and saved filters
+      // name, so it stays put -- which is the whole reason the two are separate.
+      await patchAppAdminCustomField(fieldId, {name}, "appAdmin.customFieldRenamed", "Field renamed.");
+    }
+    async function moveAppAdminCustomField(fieldId, direction) {
+      const index = appAdminCustomFields.findIndex((item) => String(item.id) === String(fieldId));
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (index < 0 || target < 0 || target >= appAdminCustomFields.length) return;
+      const moving = appAdminCustomFields[index];
+      const other = appAdminCustomFields[target];
+      try {
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(moving.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({sortOrder: other.sortOrder})
+        });
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(other.id)}`, {
+          method: "PATCH",
+          body: JSON.stringify({sortOrder: moving.sortOrder})
+        });
+        await loadAppAdminCustomFields();
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    function syncAppAdminCustomFieldOptionsRow() {
+      const type = document.getElementById("appAdminCustomFieldType")?.value || "text";
+      document.getElementById("appAdminCustomFieldOptionsRow")?.classList.toggle("hidden", type !== "select");
+    }
     function canManageLoansSystem() {
       return hasActualPermission("security.manage_loans_system");
     }
@@ -21075,7 +21446,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "backup", "audit"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "custom_fields", "backup", "audit"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -21329,6 +21700,7 @@ def ui_preview_html(
       if (appAdmin.activeTab === "digital") setAppAdminDigitalTab(appAdmin.activeDigitalTab);
       if (appAdmin.activeTab === "metadata") setAppAdminMetadataTab(appAdmin.activeMetadataTab);
       if (appAdmin.activeTab === "backup") setAppAdminBackupTab(appAdmin.activeBackupTab);
+      if (appAdmin.activeTab === "custom_fields") loadAppAdminCustomFields();
       if (appAdmin.activeTab === "audit") setAppAdminAuditTab(appAdmin.activeAuditTab);
     }
     function handleAppAdminTabKeydown(button, event) {
@@ -26652,6 +27024,18 @@ def ui_preview_html(
         });
       }
     }
+    // The stored form of an original-language filter value: primary subtag lower
+    // case, any script/region subtags left as given ("cmn-Hans"), mirroring
+    // next_origin.normalize_language_code on the server. Anything else is "any"
+    // rather than an error -- a filter is not a place to refuse input.
+    function normalizeOriginLanguageValue(value) {
+      const raw = String(value || "").trim();
+      if (!raw || raw === "any") return "any";
+      const parts = raw.split("-");
+      parts[0] = parts[0].toLowerCase();
+      const candidate = parts.join("-");
+      return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(candidate) ? candidate : "any";
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
@@ -26661,7 +27045,9 @@ def ui_preview_html(
         artwork: "any",
         personal: "any",
         itemType: "any",
-        location: "any"
+        location: "any",
+        originCountry: "any",
+        originalLanguage: "any"
       };
     }
     function normalizeAdvancedSearch(value) {
@@ -26673,9 +27059,20 @@ def ui_preview_html(
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
-        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
+        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(source.personal) ? source.personal : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
-        location: String(source.location || "any").trim() || "any"
+        location: String(source.location || "any").trim() || "any",
+        // Validated on SHAPE, deliberately not against the movies that happen to
+        // be loaded. The genre filter self-heals a stored value that matches no
+        // loaded row (applyGenreOptions), and gets away with it only because a
+        // genre filter cannot be saved. These two can: they live inside every
+        // saved smart filter, and hydration is progressive -- a filter naming
+        // Japan applied while page 1 of 6 is in would silently reset itself to
+        // "any" and show the user their whole library as if it matched.
+        originCountry: /^[A-Za-z]{2}$/.test(String(source.originCountry || "").trim())
+          ? String(source.originCountry).trim().toUpperCase()
+          : "any",
+        originalLanguage: normalizeOriginLanguageValue(source.originalLanguage)
       };
     }
     function effectiveAdvancedSearchFilters(options = {}) {
@@ -26697,6 +27094,8 @@ def ui_preview_html(
       if (normalized.personal !== "any") count += 1;
       if (normalized.itemType !== "any") count += 1;
       if (normalized.location !== "any") count += 1;
+      if (normalized.originCountry !== "any") count += 1;
+      if (normalized.originalLanguage !== "any") count += 1;
       return count;
     }
     function setAdvancedControlValue(id, value) {
@@ -26712,13 +27111,56 @@ def ui_preview_html(
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
         itemType: document.getElementById("advancedContainerType")?.value || "any",
-        location: document.getElementById("advancedLocationFilter")?.value || "any"
+        location: document.getElementById("advancedLocationFilter")?.value || "any",
+        originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
+        originalLanguage: document.getElementById("advancedOriginLanguage")?.value || "any"
       });
     }
     function persistAdvancedSearch() {
       localStorage.setItem("dv_next_advanced_search", JSON.stringify(normalizeAdvancedSearch(advancedSearch)));
       localStorage.setItem("dv_next_smart_filters", JSON.stringify(Array.isArray(smartFilters) ? smartFilters : []));
       localStorage.setItem("dv_next_active_smart_filter", activeSmartFilterId || "");
+    }
+    // Options are derived from the movies actually loaded, like the genre and
+    // location lists. Because hydration is progressive the list grows as pages
+    // arrive -- which is why populateOriginFilterSelect keeps a stored value
+    // that matches nothing yet instead of dropping it.
+    function collectionOriginCountryOptionValues() {
+      const values = new Set();
+      movies.forEach((movie) => movieOriginCountryValues(movie).forEach((code) => values.add(code)));
+      return [...values].sort((a, b) => regionLabel(a).localeCompare(regionLabel(b), localeState.locale));
+    }
+    function collectionOriginLanguageOptionValues() {
+      const values = new Set();
+      movies.forEach((movie) => {
+        const code = movieOriginLanguageValue(movie);
+        if (code !== "any") values.add(code);
+      });
+      return [...values].sort((a, b) => languageLabel(a).localeCompare(languageLabel(b), localeState.locale));
+    }
+    // How many loaded films have no origin at all. Shown as a hint so an empty
+    // filter list reads as "the data is not in yet" rather than "this is
+    // broken" -- the answer is the admin backfill, not a bug report.
+    function originDataMissingCount() {
+      return movies.reduce(
+        (total, movie) =>
+          total + (movieOriginCountryValues(movie).length || movieOriginLanguageValue(movie) !== "any" ? 0 : 1),
+        0
+      );
+    }
+    function populateOriginFilterSelect(id, values, current, labelFor, anyLabel) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      const options = [...values];
+      // A stored value the loaded pages do not cover yet is appended rather than
+      // discarded. Dropping it would silently widen a saved smart filter to the
+      // whole library mid-hydration.
+      if (current && current !== "any" && !options.includes(current)) options.push(current);
+      node.innerHTML = [
+        `<option value="any">${escapeHtml(anyLabel)}</option>`,
+        ...options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(labelFor(value) || value)}</option>`)
+      ].join("");
+      node.value = current && current !== "any" ? current : "any";
     }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
@@ -26746,6 +27188,28 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      populateOriginFilterSelect(
+        "advancedOriginCountry",
+        collectionOriginCountryOptionValues(),
+        advancedSearch.originCountry,
+        regionLabel,
+        tNext("collection.originCountryAny", "Any country")
+      );
+      populateOriginFilterSelect(
+        "advancedOriginLanguage",
+        collectionOriginLanguageOptionValues(),
+        advancedSearch.originalLanguage,
+        languageLabel,
+        tNext("collection.originalLanguageAny", "Any language")
+      );
+      const originHint = document.getElementById("advancedOriginHint");
+      if (originHint) {
+        const missing = originDataMissingCount();
+        originHint.textContent = missing
+          ? tNext("collection.originDataMissing", "{count} films have no origin data yet").replace("{count}", String(missing))
+          : "";
+        originHint.classList.toggle("hidden", missing === 0);
+      }
       const locationFilter = document.getElementById("advancedLocationFilter");
       if (locationFilter) {
         const anyLabel = tNext("collection.locationFilterAny", "Any location");
@@ -27322,6 +27786,18 @@ def ui_preview_html(
       if (hideWatched && movieIsWatched(movie)) return false;
       return true;
     }
+    // The FILM's origin, from movie_origin_countries / movies.original_language.
+    // Not movie.country / movie.language -- those are the release country and
+    // language of the disc, so a Dutch pressing of a Japanese film reads NL
+    // there and JP here, and filtering the wrong one answers a different
+    // question than the user asked.
+    function movieOriginCountryValues(movie) {
+      const values = movie?.origin_countries;
+      return Array.isArray(values) ? values.filter(Boolean).map((code) => String(code).toUpperCase()) : [];
+    }
+    function movieOriginLanguageValue(movie) {
+      return normalizeOriginLanguageValue(movie?.original_language);
+    }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
@@ -27341,6 +27817,12 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      // The viewer's OWN score, not the owner's: "films I have rated" must not
+      // be answered with films somebody else rated.
+      if (filters.personal === "rated" && !movie?.personal_rating) return false;
+      if (filters.personal === "unrated" && movie?.personal_rating) return false;
+      if (filters.originCountry !== "any" && !movieOriginCountryValues(movie).includes(filters.originCountry)) return false;
+      if (filters.originalLanguage !== "any" && movieOriginLanguageValue(movie) !== filters.originalLanguage) return false;
       if (filters.location !== "any") {
         const movieLoc = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
         if (!movieLoc || !locationSubtreeIds(filters.location).has(movieLoc)) return false;
@@ -27456,7 +27938,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any") {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -27880,7 +28362,12 @@ def ui_preview_html(
     function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
       const allowed = compact
         ? new Set(["title", "format", "behavior"])
-        : new Set(["title", "director", "actors", "studios", "rating", "tags", "behavior"]);
+        // "rating" here is the age certificate, which is why the personal score
+        // is "personalRating": reusing the key would silently repurpose the
+        // content-rating column. Wide set only -- the column is desktop-only, and
+        // a key allowed in the compact set renders a header whose click resets
+        // the sort to title with nothing failing.
+        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "tags", "behavior"]);
       const key = allowed.has(value?.key) ? value.key : "title";
       return {
         key,
@@ -28054,6 +28541,9 @@ def ui_preview_html(
         contentRating: itemRatingValues(item).join(", "),
         tags: itemTagValues(item).map((tag) => tag.name).join(", "),
         watchActivity: libraryExportWatchActivityText(item),
+        originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
+        originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
+        personalRating: formatRatingScore(itemPersonalRatingValue(item)),
       };
     }
     function libraryListSortValue(item, key) {
@@ -28073,9 +28563,46 @@ def ui_preview_html(
         || (left.watchlistTime - right.watchlistTime)
         || (Number(left.onWatchlist) - Number(right.onWatchlist));
     }
+    function libraryListPersonalRatingHtml(item) {
+      const score = itemPersonalRatingValue(item);
+      if (score === null) return "";
+      const movie = item?.movie || item;
+      // A borrowed number is labelled as one. Without the title an owner's 9
+      // reads as the viewer's own, and there is nothing on the row to correct it.
+      const ownName = movie?.personal_rating ? "" : String(movie?.owner_rating_by || "");
+      const title = ownName
+        ? tNext("lists.ownerRating", "{name} rated this {score}")
+            .replace("{name}", ownName)
+            .replace("{score}", formatRatingScore(score))
+        : tNext("lists.myRating", "My rating");
+      return `<span class="library-list-rating-value" title="${escapeHtml(title)}">${escapeHtml(formatRatingScore(score))}${ownName ? ` <span class="library-list-rating-owner">${escapeHtml(ownName)}</span>` : ""}</span>`;
+    }
+    function itemPersonalRatingValue(item) {
+      const movie = item?.movie || item;
+      const score = Number(movie?.personal_rating ?? movie?.owner_rating);
+      return Number.isFinite(score) && score > 0 ? score : null;
+    }
+    // Unrated sorts last in BOTH directions, which is why the direction is
+    // applied here instead of by the caller flipping the sign. Somebody sorting
+    // by rating wants their best films or their worst; either way they do not
+    // want 1,800 blanks first.
+    function comparePersonalRating(a, b, direction) {
+      const left = itemPersonalRatingValue(a);
+      const right = itemPersonalRatingValue(b);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const diff = left - right;
+      return direction === "desc" ? -diff : diff;
+    }
     function sortLibraryListItems(items, sortState = libraryDetailSort) {
       const state = normalizeLibraryDetailSort(sortState);
       return [...(items || [])].sort((a, b) => {
+        if (state.key === "personalRating") {
+          const diff = comparePersonalRating(a, b, state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
         const diff = state.key === "behavior"
           ? compareLibraryBehavior(a, b)
           : String(libraryListSortValue(a, state.key)).localeCompare(
@@ -28148,6 +28675,7 @@ def ui_preview_html(
                 ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
               </tr>
@@ -28181,6 +28709,7 @@ def ui_preview_html(
                     <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
                     <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
                     <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
+                    <td class="library-list-personal-rating-column library-list-desktop-column">${libraryListPersonalRatingHtml(item)}</td>
                     <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
                     <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
                   </tr>
@@ -28363,12 +28892,7 @@ def ui_preview_html(
     }
     const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "AU", "BR", "DK", "FI", "NO", "SE", "NZ", "IN", "PH", "MY", "PL", "HU", "BG", "LT"];
     function ratingCountryLabel(code) {
-      try {
-        const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
-        return displayNames.of(code) || code;
-      } catch (error) {
-        return code;
-      }
+      return regionLabel(code) || code;
     }
     function normalizedRatingCountryCode(value) {
       const raw = String(value || "").trim().replace("_", "-");
@@ -28529,9 +29053,17 @@ def ui_preview_html(
         </article>
       `;
     }
+    // The EXTERNAL aggregate score -- TMDB's vote average or OMDb's IMDb rating,
+    // written only by a metadata plugin and settable by nobody. Labelled to name
+    // that, because a personal rating now sits on the same 0-10 axis and "Rating
+    // 7.4" beside "8.5" gives a reader nothing to tell them apart.
+    //
+    // The stronger distinction is not the wording: this pill is inert, and the
+    // personal one is a button you press to change it. One you can act on, one
+    // you cannot -- which reads correctly with no colour and in every locale.
     function movieScoreLabel(movie) {
       const value = valueText(movie?.rating || movie?.metadata?.rating || "");
-      return value ? `${tNext("movieDetail.rating", "Rating")} ${value}` : "";
+      return value ? `${tNext("movieDetail.externalScore", "Score")} ${value}` : "";
     }
     function localeCandidates() {
       const locale = String(localeState.locale || "en-US").replace("_", "-").toLowerCase();
@@ -28568,6 +29100,17 @@ def ui_preview_html(
       const parts = String(format || "").split(",").map((item) => item.trim()).filter(Boolean);
       return parts.length === 1 ? parts[0] : "";
     }
+    // One number on a tile, never two. The external score is deliberately not
+    // here: the tile already carries a digital badge and a format badge, and a
+    // second number beside this one would recreate exactly the ambiguity the
+    // detail page works to avoid. With only one possible, a star on a tile
+    // unambiguously means somebody rated this.
+    function posterRatingBadgeHtml(movie) {
+      if (preferences.show_rating_badge_on_tiles === false) return "";
+      const score = Number(movie?.personal_rating ?? movie?.owner_rating);
+      if (!Number.isFinite(score) || score <= 0) return "";
+      return `<span class="poster-rating-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${RATING_STAR_PATH}"></path></svg>${escapeHtml(formatRatingScore(score))}</span>`;
+    }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -28575,7 +29118,7 @@ def ui_preview_html(
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
-          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
+          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${posterRatingBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           ${debugIdHtml(movie.id, "Movie ID")}
@@ -31025,6 +31568,73 @@ def ui_preview_html(
       return Array.from(seasons.querySelectorAll("input[type=checkbox]:checked")).map((input) => input.value);
     }
 
+    // Definitions arrive on the dashboard snapshot, like locations, so the edit
+    // form can render a field the owner added without a deploy -- which is the
+    // point of the feature, and also why none of these labels are translated:
+    // the owner typed them.
+    function customFieldDefinitions() {
+      return Array.isArray(state?.customFields) ? state.customFields : [];
+    }
+    function renderMovieEditCustomFields(detail) {
+      const container = document.getElementById("movieEditCustomFields");
+      if (!container) return;
+      const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      const values = new Map(
+        (detail?.customValues || []).map((item) => [String(item.key), item.value])
+      );
+      container.classList.toggle("hidden", !definitions.length);
+      container.innerHTML = definitions.map((field) => {
+        const value = values.has(field.key) ? values.get(field.key) : "";
+        const id = `movieEditCustom_${field.key}`;
+        const label = `<span>${escapeHtml(field.name || field.key)}</span>`;
+        if (field.fieldType === "boolean") {
+          return `<label for="${id}" class="wide">${label}
+            <select id="${id}" data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="boolean">
+              <option value=""${value === null || value === "" ? " selected" : ""}>${escapeHtml(tNext("common.notSet", "Not set"))}</option>
+              <option value="true"${value === true ? " selected" : ""}>${escapeHtml(tNext("common.yes", "Yes"))}</option>
+              <option value="false"${value === false ? " selected" : ""}>${escapeHtml(tNext("common.no", "No"))}</option>
+            </select></label>`;
+        }
+        if (field.fieldType === "select") {
+          const options = Array.isArray(field.options) ? field.options : [];
+          // A stored value whose option was removed is injected back, so an
+          // unrelated save cannot silently rewrite it -- the trackSelectHtml
+          // rule, one feature over.
+          const known = options.some((option) => String(option.key) === String(value));
+          const extra = !known && value ? `<option value="${escapeHtml(String(value))}" selected>${escapeHtml(String(value))}</option>` : "";
+          return `<label for="${id}" class="wide">${label}
+            <select id="${id}" data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="select">
+              <option value="">${escapeHtml(tNext("common.notSet", "Not set"))}</option>
+              ${extra}
+              ${options.map((option) => `<option value="${escapeHtml(option.key)}"${String(option.key) === String(value) ? " selected" : ""}>${escapeHtml(option.label || option.key)}</option>`).join("")}
+            </select></label>`;
+        }
+        const inputType = field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text";
+        const step = field.fieldType === "number" ? ' step="any"' : "";
+        return `<label for="${id}" class="wide">${label}
+          <input id="${id}" type="${inputType}"${step} data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="${escapeHtml(field.fieldType)}" value="${escapeHtml(value === null || value === undefined ? "" : String(value))}"></label>`;
+      }).join("");
+    }
+    function collectMovieEditCustomValues() {
+      const values = {};
+      document.querySelectorAll("[data-custom-field-input]").forEach((node) => {
+        const key = node.dataset.customFieldInput;
+        const raw = String(node.value ?? "").trim();
+        // An emptied input clears the value: the server deletes the row rather
+        // than storing something that claims to exist and says nothing.
+        if (!raw) { values[key] = null; return; }
+        values[key] = node.dataset.customFieldType === "boolean" ? raw === "true" : raw;
+      });
+      return values;
+    }
+    async function saveMovieCustomValues() {
+      const values = collectMovieEditCustomValues();
+      if (!Object.keys(values).length) return;
+      await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/custom-values`, {
+        method: "PUT",
+        body: JSON.stringify({values})
+      });
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const seriesDetail = detail.series || null;
@@ -31038,6 +31648,7 @@ def ui_preview_html(
         seriesDetail ? seriesDetail.id : "",
         (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
       ).then(() => renderMovieEditDiscs(collectMovieEditDiscs())).catch(() => {});
+      renderMovieEditCustomFields(detail);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -31438,6 +32049,7 @@ def ui_preview_html(
           : `<span class="import-source-meta">${escapeHtml(tNext("lists.noWatchHistoryForMovie", "No watched dates for this film yet."))}</span>`;
       }
       renderMovieTags(state);
+      renderMovieRating(state);
       renderMovieLoan(state);
     }
     function renderMovieTags(state) {
@@ -31452,6 +32064,91 @@ def ui_preview_html(
             </span>
           `).join("")
         : `<span class="import-source-meta">${escapeHtml(tNext("lists.tagsEmpty", "No tags on this film yet."))}</span>`;
+    }
+    // Twenty half steps, 0.5 to 10, drawn as ten stars. A fixed picker rather
+    // than a number field because the stored set is fixed: the API refuses a
+    // value between the steps instead of rounding it, so an input that could
+    // produce one would only ever produce an error.
+    const RATING_STAR_COUNT = 10;
+    const RATING_STAR_PATH = "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
+    const RATING_HALF_STAR_PATH = "M12,15.4V6.1L13.71,10.13L18.09,10.5L14.77,13.39L15.76,17.67M22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27L18.18,21L16.55,13.97L22,9.24Z";
+    function ratingStarHtml(index, score) {
+      // index is 1..10; each star covers a whole point, its half covers x.5.
+      const filled = score >= index;
+      const half = !filled && score >= index - 0.5;
+      const cls = filled ? "movie-rating-star filled" : half ? "movie-rating-star half" : "movie-rating-star";
+      const path = half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH;
+      // Two hit targets per star so a half step is reachable by pointer, and the
+      // aria-label carries the value because a star is not self-describing.
+      return `
+        <button type="button" class="${cls}" data-set-rating="${index - 0.5}" aria-label="${escapeHtml(String(index - 0.5))}" style="margin-right:-13px;width:13px;clip-path:inset(0 50% 0 0)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>
+        </button>
+        <button type="button" class="${cls}" data-set-rating="${index}" aria-label="${escapeHtml(String(index))}" style="width:13px;clip-path:inset(0 0 0 50%)">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-13px"><path d="${path}"></path></svg>
+        </button>`;
+    }
+    function renderMovieRating(state) {
+      const section = document.getElementById("movieRatingSection");
+      const picker = document.getElementById("movieRatingPicker");
+      const owner = document.getElementById("movieRatingOwner");
+      const clearButton = document.getElementById("movieRatingClearButton");
+      if (!section || !picker) return;
+      const score = Number(state?.rating);
+      const hasScore = Number.isFinite(score) && score > 0;
+      const stars = [];
+      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
+        stars.push(ratingStarHtml(index, hasScore ? score : 0));
+      }
+      picker.innerHTML = stars.join("") + (hasScore
+        ? `<span class="movie-rating-value">${escapeHtml(formatRatingScore(score))}</span>`
+        : `<span class="import-source-meta">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`);
+      if (clearButton) clearButton.classList.toggle("hidden", !hasScore);
+      if (owner) {
+        // ownerRating is set by the server only when the movie has an owner who
+        // is somebody else -- never derived here from owner_id, which reads as
+        // "everyone is the owner" when it is NULL.
+        const ownerScore = Number(state?.ownerRating);
+        const ownerName = String(state?.ownerRatingBy || "");
+        owner.textContent = Number.isFinite(ownerScore) && ownerScore > 0
+          ? tNext("lists.ownerRating", "{name} rated this {score}")
+              .replace("{name}", ownerName || tNext("lists.theOwner", "The owner"))
+              .replace("{score}", formatRatingScore(ownerScore))
+          : "";
+        owner.classList.toggle("hidden", !owner.textContent);
+      }
+    }
+    function formatRatingScore(score) {
+      const value = Number(score);
+      if (!Number.isFinite(value)) return "";
+      // Half steps keep one decimal, whole numbers drop it: "8" reads better
+      // than "8.0" and there is no precision to lose.
+      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    }
+    async function setActiveMovieRating(score) {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {
+          method: "PUT",
+          body: JSON.stringify({score: Number(score)})
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.ratingSaved", "Rating saved."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function clearActiveMovieRating() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {method: "DELETE"});
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.ratingCleared", "Rating cleared."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
     }
     function renderMovieLoan(state) {
       const statusNode = document.getElementById("movieLoanStatus");
@@ -32652,6 +33349,18 @@ def ui_preview_html(
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
+        // Directly under the two rows above, deliberately. Those describe the
+        // disc -- which market this pressing was made for -- and these describe
+        // the film. Seeing "Release country: NL" and "Country of origin: JP" on
+        // one screen is what stops a reader treating either as the other.
+        [
+          tNext("movieDetail.originCountry", "Country of origin"),
+          movieOriginCountryValues(movie).map(regionLabel).join(", ")
+        ],
+        [
+          tNext("movieDetail.originalLanguage", "Original language"),
+          movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : ""
+        ],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
@@ -44429,6 +45138,7 @@ def ui_preview_html(
         let identifierError = null;
         let identifiersWritten = 0;
         try {
+          await saveMovieCustomValues();
           await saveMovieIdentifiers();
           // The database ids, on the same terms and for the same reason: their
           // own tables, their own routes, and a refusal that has to name the
@@ -45809,6 +46519,9 @@ def ui_preview_html(
         contentRating: tNext("movieDetail.contentRating", "Content rating"),
         tags: tNext("lists.tags", "Tags"),
         watchActivity: tNext("collection.behaviorColumn", "Viewing activity"),
+        originCountry: tNext("movieDetail.originCountry", "Country of origin"),
+        originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
+        personalRating: tNext("lists.myRating", "My rating"),
       }),
       getExportRows: () => {
         const sortState = normalizeLibraryDetailSort(libraryDetailSort);
@@ -49993,6 +50706,24 @@ def ui_preview_html(
         if (downloadButton) downloadStoredAppAdminBackup(downloadButton.dataset.appAdminBackupDownload);
         if (restoreButton) restoreStoredAppAdminBackup(restoreButton.dataset.appAdminBackupRestore);
       });
+      document.getElementById("appAdminCustomFieldForm")?.addEventListener("submit", createAppAdminCustomField);
+      document.getElementById("appAdminCustomFieldType")?.addEventListener("change", syncAppAdminCustomFieldOptionsRow);
+      // Delegated against the static container: a re-render replaces the rows
+      // without orphaning a listener or stacking a second one.
+      document.getElementById("appAdminCustomFieldsList")?.addEventListener("click", (event) => {
+        const archiveButton = event.target.closest("[data-custom-field-archive]");
+        if (archiveButton) {
+          archiveAppAdminCustomField(
+            archiveButton.dataset.customFieldArchive,
+            archiveButton.dataset.archived === "true"
+          );
+          return;
+        }
+        const renameButton = event.target.closest("[data-custom-field-rename]");
+        if (renameButton) { renameAppAdminCustomField(renameButton.dataset.customFieldRename); return; }
+        const moveButton = event.target.closest("[data-custom-field-move]");
+        if (moveButton) moveAppAdminCustomField(moveButton.dataset.customFieldMove, moveButton.dataset.direction);
+      });
       document.getElementById("appAdminRefreshAuditButton")?.addEventListener("click", () => refreshAppAdminAudit());
       document.getElementById("appAdminAuditCategory")?.addEventListener("change", () => refreshAppAdminAudit());
       document.getElementById("appAdminAuditList")?.addEventListener("click", (event) => {
@@ -50692,6 +51423,11 @@ def ui_preview_html(
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
       });
+      document.getElementById("movieRatingPicker")?.addEventListener("click", (event) => {
+        const star = event.target.closest("[data-set-rating]");
+        if (star) setActiveMovieRating(star.dataset.setRating);
+      });
+      document.getElementById("movieRatingClearButton")?.addEventListener("click", () => clearActiveMovieRating());
       document.getElementById("movieLoanAddForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
         lendActiveMovie(

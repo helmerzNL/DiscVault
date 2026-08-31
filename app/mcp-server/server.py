@@ -130,7 +130,7 @@ def api_delete(path: str, bearer: str | None = None) -> Any:
 TOOLS = [
     {
         "name": "search_collection",
-        "description": "Search the DiscVault collection by title, barcode, director, actor, genre, format or media type.",
+        "description": "Search the DiscVault collection by title, barcode, director, actor, genre, format, media type, country of origin or original language.",
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -140,6 +140,21 @@ TOOLS = [
                     "type": "string",
                     "enum": ["MOVIE", "SHOW", ""],
                     "description": "MOVIE for films, SHOW for TV series",
+                },
+                "origin_country": {
+                    "type": "string",
+                    "description": (
+                        "The country the film is FROM, as an ISO 3166-1 alpha-2 code "
+                        "(JP, FR, US). This is the film's origin, not the region the "
+                        "disc was released in."
+                    ),
+                },
+                "original_language": {
+                    "type": "string",
+                    "description": (
+                        "The language the film was made in, as a language code "
+                        "(ja, fr, en). Not the audio tracks the disc happens to carry."
+                    ),
                 },
             },
             "required": [],
@@ -282,7 +297,14 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
         if name == "search_collection":
             data = api_get(
                 "/api/next/api/v1/movies",
-                {"q": args.get("query", ""), "format": args.get("format", ""), "limit": 50},
+                {
+                    "q": args.get("query", ""),
+                    "format": args.get("format", ""),
+                    "media_type": args.get("media_type", ""),
+                    "origin_country": args.get("origin_country", ""),
+                    "original_language": args.get("original_language", ""),
+                    "limit": 50,
+                },
                 bearer=bearer,
             )
             items = data.get("items", []) if isinstance(data, dict) else []
@@ -299,6 +321,12 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
                 genres = movie.get("genres")
                 if genres:
                     lines.append(f"  Genre: {', '.join(_genre_label(key) for key in genres)}")
+                origin_countries = movie.get("origin_countries")
+                if origin_countries:
+                    lines.append(f"  Country of origin: {', '.join(origin_countries)}")
+                original_language = movie.get("original_language")
+                if original_language:
+                    lines.append(f"  Original language: {original_language}")
             return "\n".join(lines)
 
         if name == "get_collection_stats":

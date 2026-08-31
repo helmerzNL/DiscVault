@@ -34,6 +34,20 @@ EXPORT_COLUMNS: tuple[dict[str, Any], ...] = (
     {"key": "contentRating", "i18nKey": "movieDetail.contentRating", "label": "Content rating", "default": True, "weight": 1.1},
     {"key": "tags", "i18nKey": "lists.tags", "label": "Tags", "default": True, "weight": 1.8},
     {"key": "watchActivity", "i18nKey": "collection.behaviorColumn", "label": "Viewing activity", "default": True, "weight": 1.6},
+    # Appended, and default off. Both are rules rather than preferences.
+    #
+    # Appended because a stored column selection is a list of keys, and inserting
+    # a column between the existing ten would change the order of a file somebody
+    # already has.
+    #
+    # Default off because the export column set is a contract shared by the PWA,
+    # iOS and Android (App-Guidance library-export-columns.md 1): a column that
+    # does not exist on every implementation ships off, so an export with the
+    # default selection is the same file everywhere. They turn on once the other
+    # two carry them.
+    {"key": "originCountry", "i18nKey": "movieDetail.originCountry", "label": "Country of origin", "default": False, "weight": 1.4},
+    {"key": "originalLanguage", "i18nKey": "movieDetail.originalLanguage", "label": "Original language", "default": False, "weight": 1.4},
+    {"key": "personalRating", "i18nKey": "lists.myRating", "label": "My rating", "default": False, "weight": 0.9},
 )
 
 EXPORT_COLUMN_KEYS: tuple[str, ...] = tuple(column["key"] for column in EXPORT_COLUMNS)

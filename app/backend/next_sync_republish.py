@@ -72,10 +72,15 @@ BATCH_SIZE = 200
 ENTITY_ORDER = (
     "location",
     "series",
+    # Before `movie_custom_values`: a value names its definition, and a client
+    # applying the stream in revision order should never hold a value whose
+    # field it has not seen.
+    "custom_field",
     "container",
     "movie",
     "movie_identifier",
     "container_membership",
+    "movie_custom_values",
 )
 
 #: How to enumerate the live rows of each kind. `movie_identifier` and
@@ -111,6 +116,26 @@ SOURCE_QUERIES = {
         ORDER BY c.id
         """,
     ),
+    # Archived definitions are republished too: a client holding a value for one
+    # still needs its name and type to render it (sync-contract 4e.5).
+    "custom_field": (
+        "custom_field_definitions",
+        "SELECT id FROM custom_field_definitions ORDER BY sort_order, key",
+    ),
+    # Keyed by the film, like movie_identifier: one emission carries that film's
+    # whole value set. Only films that actually carry a value -- for a receiver
+    # that replaces the set wholesale, no entry and an empty entry say the same
+    # thing, and one row per film would dwarf the sweep.
+    "movie_custom_values": (
+        "movie_custom_field_values",
+        """
+        SELECT DISTINCT m.id AS id
+        FROM movies m
+        JOIN movie_custom_field_values v ON v.movie_id = m.id
+        WHERE m.deleted_at IS NULL
+        ORDER BY m.id
+        """,
+    ),
 }
 
 
@@ -130,6 +155,8 @@ def emitters():
             from .next_app import (
                 emit_container_change,
                 emit_container_membership_change,
+                emit_custom_field_change,
+                emit_movie_custom_values_change,
                 emit_location_change,
                 emit_movie_change,
                 emit_movie_identifiers_change,
@@ -139,6 +166,8 @@ def emitters():
             from next_app import (  # type: ignore[no-redef]
                 emit_container_change,
                 emit_container_membership_change,
+                emit_custom_field_change,
+                emit_movie_custom_values_change,
                 emit_location_change,
                 emit_movie_change,
                 emit_movie_identifiers_change,
@@ -163,6 +192,10 @@ def emitters():
                 conn, entity_id
             ),
             "container_membership": lambda conn, entity_id: emit_container_membership_change(
+                conn, entity_id
+            ),
+            "custom_field": lambda conn, entity_id: emit_custom_field_change(conn, entity_id),
+            "movie_custom_values": lambda conn, entity_id: emit_movie_custom_values_change(
                 conn, entity_id
             ),
         },
