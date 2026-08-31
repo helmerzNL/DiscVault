@@ -21328,6 +21328,7 @@ def ui_preview_html(
       try {
         await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}`, {
           method: "PATCH",
+          headers: {"Content-Type": "application/json"},
           body: JSON.stringify(body)
         });
         await loadAppAdminCustomFields();
@@ -21347,6 +21348,7 @@ def ui_preview_html(
       try {
         const payload = await authApiJson("/api/next/admin/custom-fields", {
           method: "POST",
+          headers: {"Content-Type": "application/json"},
           body: JSON.stringify(body)
         });
         document.getElementById("appAdminCustomFieldForm")?.reset();
@@ -21408,10 +21410,12 @@ def ui_preview_html(
       try {
         await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(moving.id)}`, {
           method: "PATCH",
+          headers: {"Content-Type": "application/json"},
           body: JSON.stringify({sortOrder: other.sortOrder})
         });
         await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(other.id)}`, {
           method: "PATCH",
+          headers: {"Content-Type": "application/json"},
           body: JSON.stringify({sortOrder: moving.sortOrder})
         });
         await loadAppAdminCustomFields();
@@ -31885,6 +31889,7 @@ def ui_preview_html(
       if (!Object.keys(values).length) return;
       await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/custom-values`, {
         method: "PUT",
+        headers: {"Content-Type": "application/json"},
         body: JSON.stringify({values})
       });
     }
@@ -32383,6 +32388,7 @@ def ui_preview_html(
       try {
         const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {
           method: "PUT",
+          headers: {"Content-Type": "application/json"},
           body: JSON.stringify({score: Number(score)})
         });
         activeDetailPayload.userState = payload.userState || {};
