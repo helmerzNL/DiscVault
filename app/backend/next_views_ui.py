@@ -49664,7 +49664,12 @@ def ui_preview_html(
       "mcp.tool.list_all_movies": "List every film",
       "mcp.tool.get_watchlist": "Read the watchlist",
       "mcp.tool.get_watch_history": "Read the watch history",
-      "mcp.tool.get_groups": "Read groups"
+      "mcp.tool.get_groups": "Read groups",
+      "mcp.tool.get_collection_stats_detailed": "Read detailed statistics",
+      "mcp.tool.get_top_formats": "Read the format breakdown",
+      "mcp.tool.get_top_genres": "Read the genre breakdown",
+      "mcp.tool.get_top_directors": "Read the top directors",
+      "mcp.tool.get_top_actors": "Read the top actors"
     };
     function profileApiPermissionLabel(permission, mcpToolLabels) {
       const value = String(permission || "");

@@ -211,6 +211,7 @@ try:
     from .next_collection_value import movie_value_lock
     from .next_collection_value import movie_value_locked_sql
     from .next_collection_value import record_collection_value_snapshot
+    from .next_mcp_activity import MCP_STATISTICS_TOOL_PERMISSIONS
     from .next_mcp_activity import MCP_TOOL_NAMES
     from .next_mcp_activity import mcp_request_api_token_value
     from .next_mcp_activity import register_next_mcp_routes
@@ -514,6 +515,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_collection_value import movie_value_lock
     from next_collection_value import movie_value_locked_sql
     from next_collection_value import record_collection_value_snapshot
+    from next_mcp_activity import MCP_STATISTICS_TOOL_PERMISSIONS
     from next_mcp_activity import MCP_TOOL_NAMES
     from next_mcp_activity import mcp_request_api_token_value
     from next_mcp_activity import register_next_mcp_routes
@@ -35215,7 +35217,22 @@ def register_routes(flask_app: Flask) -> None:
                 400,
             )
         with connect() as conn:
-            actor = require_next_permission(conn, "watchlist.manage")
+            # The five MCP statistics tools read this endpoint and nothing
+            # else, so a token scoped to them alone must pass here too.
+            # watchlist.manage stays first: it is what the signed-in
+            # statistics page holds, and its behaviour is unchanged.
+            #
+            # The response is all-or-nothing -- a token holding only
+            # mcp.tool.get_top_actors also receives the wishlist, loan and
+            # collection-value blocks it does not render. Every one of those is
+            # the caller's own data, scoped by visible_movie_where_sql below,
+            # so this widens what a narrow token can read but never whose data
+            # it can read. Splitting the payload per tool is the alternative,
+            # and it buys nothing until a second consumer wants one block.
+            actor = require_any_next_permission(
+                conn,
+                ("watchlist.manage", *MCP_STATISTICS_TOOL_PERMISSIONS),
+            )
             user_id = actor.get("id")
             # Two shapes of the same visibility filter: the unscoped one keeps
             # answering "what is the whole collection worth", the scoped one
