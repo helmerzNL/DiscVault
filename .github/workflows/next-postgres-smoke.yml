@@ -616,6 +616,15 @@ jobs:
           tests.test_next_origin
           tests.test_next_origin_postgres
 
+      # The personal rating. Two of its claims fail silently rather than loudly,
+      # so both are asserted against a real database: that an unrated film reads
+      # as absent rather than as a zero somebody chose, and that the "is this the
+      # owner" test is made server-side -- a client comparing owner_id to its own
+      # id reads a NULL owner_id as "I am the owner", which is the bug shape
+      # renderMovieLoan already carries a comment about.
+      - name: Test the personal rating
+        run: python -m unittest tests.test_next_movie_ratings
+
       # The export catalogue and everything that has to stay in step with it: the
       # client-side row builder, the column label map, and the i18n key for every
       # column in all 29 locales. Adding one column touches four files plus the

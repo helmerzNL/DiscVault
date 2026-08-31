@@ -5226,6 +5226,109 @@ def attach_movie_series_membership(conn, movies: list[dict[str, Any]]) -> list[d
     return movies
 
 
+MOVIE_RATING_MIN = Decimal("0.5")
+MOVIE_RATING_MAX = Decimal("10.0")
+MOVIE_RATING_STEP = Decimal("0.5")
+
+
+def normalize_movie_rating_score(value: Any) -> Decimal:
+    """Validate a personal score, or raise.
+
+    Deliberately strict rather than clamping. A slider that sends 7.34 and gets
+    7.3 back has silently recorded something the person did not choose, and they
+    have no way to see that it happened -- so an out-of-step value is refused
+    with a message naming the allowed set instead.
+    """
+    if value is None or (isinstance(value, str) and not value.strip()):
+        raise NextApiError("score is required", 400)
+    try:
+        score = Decimal(str(value).strip())
+    except (InvalidOperation, ValueError):
+        raise NextApiError("score must be a number between 0.5 and 10 in steps of 0.5", 400)
+    if score < MOVIE_RATING_MIN or score > MOVIE_RATING_MAX:
+        raise NextApiError("score must be between 0.5 and 10", 400)
+    if (score / MOVIE_RATING_STEP) % 1 != 0:
+        raise NextApiError("score must be a whole or half number, e.g. 7 or 7.5", 400)
+    return score.quantize(Decimal("0.1"))
+
+
+def movie_rating_value(score: Any) -> float | None:
+    """A stored score as a float for JSON, or None when there is no rating.
+
+    None, never 0. An unrated film is the absence of a row, and a zero here
+    would rank it below every rated film while claiming somebody scored it that
+    way.
+    """
+    if score is None:
+        return None
+    return float(score)
+
+
+def attach_movie_ratings(
+    conn, movies: list[dict[str, Any]], user_id: UUID | str | None
+) -> list[dict[str, Any]]:
+    """Attach the viewer's own score and, separately, the owner's.
+
+    One query for the page rather than one per row -- `movie_user_ratings` is
+    keyed on the movie for exactly this read.
+
+    The owner's score is set only when the movie has an owner who is somebody
+    else. That test belongs here and not in the browser: a client comparing
+    `owner_id === viewerId` treats a NULL owner_id as "everyone is the owner",
+    which is the shape of bug renderMovieLoan already carries a comment about.
+
+    The asymmetry is deliberate and is the feature: the owner of a film publishes
+    their score to anyone who may see it, and nobody else's score is visible to
+    anyone but themselves.
+    """
+    if not movies:
+        return movies
+    for movie in movies:
+        movie["personal_rating"] = None
+        movie["owner_rating"] = None
+        movie["owner_rating_by"] = None
+    if not user_id or not table_exists(conn, "movie_user_ratings"):
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    if not movie_ids:
+        return movies
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT r.movie_id, r.user_id, r.score, m.owner_id, u.display_name, u.username
+            FROM movie_user_ratings r
+            JOIN movies m ON m.id = r.movie_id
+            LEFT JOIN users u ON u.id = r.user_id
+            WHERE r.movie_id = ANY(%s)
+              AND (
+                r.user_id = %s
+                OR (m.owner_id IS NOT NULL AND m.owner_id <> %s AND r.user_id = m.owner_id)
+              )
+            """,
+            (movie_ids, user_id, user_id),
+        )
+        rows = cur.fetchall()
+    own_by_movie: dict[Any, Any] = {}
+    owner_by_movie: dict[Any, dict[str, Any]] = {}
+    for row in rows:
+        movie_id = row.get("movie_id")
+        if str(row.get("user_id")) == str(user_id):
+            own_by_movie[movie_id] = row.get("score")
+        else:
+            owner_by_movie[movie_id] = {
+                "score": row.get("score"),
+                "by": row.get("display_name") or row.get("username") or "",
+            }
+    for movie in movies:
+        movie_id = movie.get("id")
+        movie["personal_rating"] = movie_rating_value(own_by_movie.get(movie_id))
+        owner = owner_by_movie.get(movie_id)
+        if owner:
+            movie["owner_rating"] = movie_rating_value(owner["score"])
+            movie["owner_rating_by"] = owner["by"]
+    return movies
+
+
 def attach_library_movie_enrichments(
     conn, movies: list[dict[str, Any]], user: dict[str, Any] | None
 ) -> list[dict[str, Any]]:
@@ -5244,6 +5347,7 @@ def attach_library_movie_enrichments(
     user_id = user.get("id") if user else None
     movies = attach_personal_list_state(conn, movies, user_id)
     movies = attach_movie_series_membership(conn, movies)
+    movies = attach_movie_ratings(conn, movies, user_id)
     return movies
 
 
@@ -14274,6 +14378,11 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
         "watchCount": 0,
         "history": [],
         "tags": [],
+        # The viewer's own score, and separately the owner's when the owner is
+        # somebody else. None means unrated -- never 0, which is a real score.
+        "rating": None,
+        "ownerRating": None,
+        "ownerRatingBy": None,
         "activeLoan": None,
         "loanRequest": None,
         "incomingLoanRequests": 0,
@@ -14336,6 +14445,33 @@ def personal_movie_state(conn, movie_id: UUID, user_id: UUID | str | None) -> di
             }
             for r in tag_rows
         ]
+    if table_exists(conn, "movie_user_ratings"):
+        # The owner's score is published to anyone who may see the film; nobody
+        # else's is visible to anyone but themselves. The owner test is made here
+        # rather than in the browser because a client comparing owner_id against
+        # its own id reads a NULL owner_id as "I am the owner".
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT r.user_id, r.score, u.display_name, u.username
+                FROM movie_user_ratings r
+                JOIN movies m ON m.id = r.movie_id
+                LEFT JOIN users u ON u.id = r.user_id
+                WHERE r.movie_id=%s
+                  AND (
+                    r.user_id = %s
+                    OR (m.owner_id IS NOT NULL AND m.owner_id <> %s AND r.user_id = m.owner_id)
+                  )
+                """,
+                (movie_id, user_id, user_id),
+            )
+            rating_rows = cur.fetchall()
+        for r in rating_rows:
+            if str(r.get("user_id")) == str(user_id):
+                state["rating"] = movie_rating_value(r.get("score"))
+            else:
+                state["ownerRating"] = movie_rating_value(r.get("score"))
+                state["ownerRatingBy"] = r.get("display_name") or r.get("username") or ""
     if table_exists(conn, "loans"):
         with conn.cursor() as cur:
             cur.execute(
@@ -15005,6 +15141,76 @@ def emit_movie_tag_change(
         conn,
         user_id,
         entity_type="movieTag",
+        entity_id=entity_id,
+        operation=operation,
+        payload=payload,
+    )
+
+
+def _movie_rating_row_entity(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "movieId": str(row.get("movie_id")),
+        "score": movie_rating_value(row.get("score")),
+        "ratedAt": row.get("rated_at"),
+        "updatedAt": row.get("updated_at"),
+    }
+
+
+def movie_rating_sync_entity(conn, user_id, movie_id) -> dict[str, Any] | None:
+    if not table_exists(conn, "movie_user_ratings"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, score, rated_at, updated_at
+            FROM movie_user_ratings
+            WHERE user_id=%s AND movie_id=%s
+            """,
+            (user_id, movie_id),
+        )
+        row = cur.fetchone()
+    return _movie_rating_row_entity(row) if row else None
+
+
+def all_movie_rating_sync_entities(conn, user_id) -> list[dict[str, Any]]:
+    if not user_id or not table_exists(conn, "movie_user_ratings"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT movie_id, score, rated_at, updated_at
+            FROM movie_user_ratings
+            WHERE user_id=%s
+            ORDER BY rated_at
+            """,
+            (user_id,),
+        )
+        rows = cur.fetchall()
+    return [_movie_rating_row_entity(row) for row in rows]
+
+
+def emit_movie_rating_change(conn, user_id, movie_id, *, operation: str) -> int:
+    """A rating change on the per-user stream, never the global one.
+
+    The score belongs to one person, so it rides `user_sync_change` like every
+    other personal entity (025). The movie id is the entity id: unlike a tag
+    assignment there is no triple to identify, and the stream is already scoped
+    by user.
+
+    The owner's score, which other viewers can see, deliberately does not ride
+    this stream -- it is not the syncing user's data. Clients read it off the
+    movie payload like any other shared fact.
+    """
+    entity_id = str(movie_id)
+    payload: dict[str, Any] = {"id": entity_id, "movieId": entity_id}
+    if operation != "delete":
+        entity = movie_rating_sync_entity(conn, user_id, movie_id)
+        if entity is not None:
+            payload["entity"] = entity
+    return user_sync_change(
+        conn,
+        user_id,
+        entity_type="movieRating",
         entity_id=entity_id,
         operation=operation,
         payload=payload,
@@ -33612,6 +33818,92 @@ def register_routes(flask_app: Flask) -> None:
                     )
             return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, actor.get("id"))})
 
+    @flask_app.put("/api/next/movies/<movie_id>/rating")
+    def set_movie_rating(movie_id: str):
+        """Set the acting user's own score for a movie.
+
+        Gated on `watchlist.manage`, the permission every per-user personal
+        feature already uses -- tags, watchlist, watch history, wishlist, loans.
+        A dedicated `ratings.manage` would need a migration, a grant in every
+        role, and a row in the role-management UI, to draw a distinction nobody
+        asked for.
+
+        A movie the actor cannot see is a 404, not a 403: a permission error
+        would confirm the film exists to somebody who may not know that.
+
+        There is no bulk endpoint on purpose. A tag is a label you apply to
+        twenty films at once; a score is a judgement about one.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Rating request body must be an object", 400)
+        score = normalize_movie_rating_score(body.get("score"))
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "movie_user_ratings"):
+                raise NextApiError("Ratings table is not available", 503)
+            user_id = actor.get("id")
+            if not actor_can_view_movie(conn, actor, movie_uuid):
+                raise NextApiError("Movie not found", 404)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO movie_user_ratings (user_id, movie_id, score)
+                        VALUES (%s, %s, %s)
+                        ON CONFLICT (user_id, movie_id)
+                        DO UPDATE SET score=EXCLUDED.score, rated_at=now(), updated_at=now()
+                        """,
+                        (user_id, movie_uuid, score),
+                    )
+                emit_movie_rating_change(conn, user_id, movie_uuid, operation="upsert")
+                audit_event(
+                    conn,
+                    event_type="rating.set",
+                    category="personal",
+                    actor=actor,
+                    target_type="movie",
+                    target_id=movie_uuid,
+                    summary="Set personal rating",
+                    metadata={"score": float(score)},
+                )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, user_id)})
+
+    @flask_app.delete("/api/next/movies/<movie_id>/rating")
+    def clear_movie_rating(movie_id: str):
+        """Clear the acting user's own score.
+
+        Deletes the row rather than nulling a column: an unrated film is the
+        absence of a rating, and a stored NULL invites a COALESCE downstream that
+        would present it as a zero somebody chose.
+        """
+        movie_uuid = parse_uuid(movie_id, "movieId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "watchlist.manage")
+            if not table_exists(conn, "movie_user_ratings"):
+                raise NextApiError("Ratings table is not available", 503)
+            user_id = actor.get("id")
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "DELETE FROM movie_user_ratings WHERE user_id=%s AND movie_id=%s RETURNING movie_id",
+                        (user_id, movie_uuid),
+                    )
+                    removed = cur.fetchone() is not None
+                if removed:
+                    emit_movie_rating_change(conn, user_id, movie_uuid, operation="delete")
+                    audit_event(
+                        conn,
+                        event_type="rating.cleared",
+                        category="personal",
+                        actor=actor,
+                        target_type="movie",
+                        target_id=movie_uuid,
+                        summary="Cleared personal rating",
+                    )
+            return response({"status": "ok", "userState": personal_movie_state(conn, movie_uuid, user_id)})
+
     @flask_app.delete("/api/next/movies/<movie_id>/tags/<tag_id>")
     def remove_tag_from_movie(movie_id: str, tag_id: str):
         movie_uuid = parse_uuid(movie_id, "movieId")
@@ -39522,6 +39814,7 @@ def register_routes(flask_app: Flask) -> None:
                 "wishlist": all_wishlist_sync_entities(conn, user_id),
                 "tags": all_tag_sync_entities(conn, user_id),
                 "movieTags": all_movie_tag_sync_entities(conn, user_id),
+                "movieRatings": all_movie_rating_sync_entities(conn, user_id),
                 "loans": all_loan_sync_entities(conn, user_id),
             }
         return response(

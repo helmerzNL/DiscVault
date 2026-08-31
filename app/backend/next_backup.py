@@ -369,6 +369,12 @@ PERSONAL_LIST_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
         ("id", "user_id", "movie_id", "watched_at", "created_at", "snapshot"),
         frozenset({"snapshot"}),
     ),
+    # Personal scope, so it lands in OPTIONAL_BACKUP_TABLES by derivation and an
+    # archive taken before it existed still restores. No jsonb columns.
+    TableSpec(
+        "movie_user_ratings",
+        ("user_id", "movie_id", "score", "rated_at", "created_at", "updated_at"),
+    ),
 )
 
 BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
@@ -389,6 +395,7 @@ CONFLICT_KEYS: dict[str, tuple[str, ...]] = {
     "movies": ("id",),
     "movie_identifiers": ("movie_id", "provider_id", "identifier_type", "identifier"),
     "movie_localizations": ("movie_id", "lang"),
+    "movie_user_ratings": ("user_id", "movie_id"),
     "movie_origin_countries": ("movie_id", "country_code"),
     "movie_technical_specs": ("movie_id",),
     "people": ("id",),
@@ -449,7 +456,7 @@ SCOPE_TABLES: dict[str, tuple[str, ...]] = {
         "recovery_codes",
         "api_access_tokens",
     ),
-    SCOPE_PERSONAL_LISTS: ("watchlist_items", "watch_history"),
+    SCOPE_PERSONAL_LISTS: ("watchlist_items", "watch_history", "movie_user_ratings"),
 }
 
 ARTWORK_SCOPES: dict[str, dict[str, frozenset[str]]] = {
@@ -504,6 +511,7 @@ RESTORE_DELETE_ORDER = (
     "media_group_movies",
     "watchlist_items",
     "watch_history",
+    "movie_user_ratings",
     "entity_media",
     "collection_items",
     "container_movies",
