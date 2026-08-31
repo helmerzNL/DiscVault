@@ -1081,7 +1081,10 @@ class NextProfileUiTests(unittest.TestCase):
             self.assertIn(f'disabled data-bulk-action="{action}"', self.html, action)
 
     def test_library_action_groups_adapt_at_mobile_breakpoint(self):
-        self.assertEqual(self.html.count("data-library-adaptive-group "), 10)
+        # 11 since the advanced search gained an Origin group. The collapse
+        # wiring is attribute-driven, so a new group inherits it -- this count is
+        # here to notice a group added by hand somewhere the attribute is not.
+        self.assertEqual(self.html.count("data-library-adaptive-group "), 11)
         self.assertIn("function syncLibraryAdaptiveGroups()", self.html)
         self.assertIn('window.matchMedia("(max-width: 760px)").matches', self.html)
         self.assertIn("groups.forEach((group) => { group.open = !mobile; });", self.html)

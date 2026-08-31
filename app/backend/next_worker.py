@@ -37,6 +37,8 @@ try:
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import backfill_movie_origins
     from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
     from .next_product_identifiers import add_movie_identifiers
@@ -86,6 +88,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
+    from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import backfill_movie_origins
     from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
     from next_product_identifiers import add_movie_identifiers
@@ -555,6 +559,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == SERIES_METADATA_REFRESH_JOB_TYPE:
         return process_series_metadata_refresh(payload, worker_id)
 
+    if job_type == MOVIE_ORIGIN_BACKFILL_JOB_TYPE:
+        return process_movie_origin_backfill(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
@@ -583,6 +590,22 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
         return process_movievault_v2_poster_cleanup(payload, worker_id)
 
     raise RuntimeError(f"Unsupported job type: {job_type}")
+
+
+def process_movie_origin_backfill(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Fill country of origin and original language for films that have neither.
+
+    A batch of movie ids, or the next `limit` films that still need it. Narrow
+    on purpose: unlike a metadata refresh it asks TMDB for the bare record and
+    writes two fields, so it can run over a whole library in minutes instead of
+    hours and without rewriting artwork, credits or provenance on the way.
+    """
+    raw_ids = payload.get("movieIds") or payload.get("movie_ids") or []
+    movie_ids = [clean_text(item) for item in raw_ids if clean_text(item)] if isinstance(raw_ids, list) else []
+    limit = int(payload.get("limit") or 100)
+    with connect() as conn:
+        summary = backfill_movie_origins(conn, movie_ids or None, limit=limit)
+    return {"workerId": worker_id, "summary": summary}
 
 
 def process_series_metadata_refresh(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:

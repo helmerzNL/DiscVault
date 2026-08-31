@@ -83,6 +83,9 @@ try:
     from .next_public_http import public_url_hostname
     from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
+    from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import count_movies_missing_film_origin
+    from .next_metadata import movies_missing_film_origin
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import media_asset_uuid
     from .next_metadata import lookup_metadata_sources
@@ -373,6 +376,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_public_http import public_url_hostname
     from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
+    from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import count_movies_missing_film_origin
+    from next_metadata import movies_missing_film_origin
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import media_asset_uuid
     from next_metadata import lookup_metadata_sources
@@ -4791,6 +4797,7 @@ def collection_movie_preview_entities(
                     m.media_type,
                     m.edition,
                     m.location,
+                    m.original_language,
                     m.metadata->>'audience_rating' AS audience_rating,
                     m.metadata->>'studios' AS studios,
                     m.metadata->>'director' AS director,
@@ -4876,6 +4883,7 @@ def collection_movie_preview_entities(
                 m.media_type,
                 m.edition,
                 m.location,
+                m.original_language,
                 m.metadata->>'audience_rating' AS audience_rating,
                 m.metadata->>'studios' AS studios,
                 m.metadata->>'director' AS director,
@@ -5348,6 +5356,7 @@ def attach_library_movie_enrichments(
     movies = attach_personal_list_state(conn, movies, user_id)
     movies = attach_movie_series_membership(conn, movies)
     movies = attach_movie_ratings(conn, movies, user_id)
+    movies = attach_movie_origin_countries(conn, movies)
     return movies
 
 
@@ -37840,6 +37849,73 @@ def register_routes(flask_app: Flask) -> None:
             jobs = metadata_refresh_jobs(conn, movie_id=movie_id, status=status, limit=limit)
             counts = metadata_refresh_job_counts(conn, movie_id=movie_id)
         return response({"status": "ok", "jobs": jobs, "counts": counts})
+
+    @flask_app.get("/api/next/admin/metadata/origin-backfill")
+    def movie_origin_backfill_status():
+        """How many films still have no country of origin or original language.
+
+        `unresolvable` is counted separately and deliberately: a film with no
+        TMDB identifier cannot be answered by this job at all, and folding it
+        into `pending` would leave a counter that never reaches zero with
+        nothing to explain why.
+        """
+        with connect() as conn:
+            require_next_permission(conn, "metadata.refresh_bulk")
+            counts = count_movies_missing_film_origin(conn)
+        return response({"status": "ok", **counts})
+
+    @flask_app.post("/api/next/admin/metadata/origin-backfill")
+    def queue_movie_origin_backfill():
+        """Queue origin backfill for films that have none.
+
+        Not the bulk metadata refresh. That one caps at 50 ids per request, asks
+        TMDB with append_to_response for credits, videos, images, release dates
+        and translations, and runs the whole merge pipeline -- hours for a large
+        library, rewriting artwork, credits and provenance across the catalogue
+        and emitting a global sync change per film. This asks for the bare record
+        and writes two fields, so 100 films fit in one job and a 2,500-film
+        library is 25 of them.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Origin backfill body must be an object", 400)
+        try:
+            batch_size = int(body.get("batchSize") or 100)
+        except (TypeError, ValueError):
+            raise NextApiError("batchSize must be a number", 400)
+        batch_size = max(1, min(batch_size, 500))
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_bulk")
+            if not table_exists(conn, "movie_origin_countries"):
+                raise NextApiError("Origin storage is not available", 503)
+            counts = count_movies_missing_film_origin(conn)
+            pending = counts.get("pending", 0)
+            if not pending:
+                return response({"status": "ok", "queued": 0, **counts})
+            jobs = []
+            with conn.transaction():
+                remaining = pending
+                while remaining > 0:
+                    jobs.append(
+                        create_background_job(
+                            conn,
+                            job_type=MOVIE_ORIGIN_BACKFILL_JOB_TYPE,
+                            payload={"limit": batch_size, "requestedBy": actor_job_payload(actor)},
+                        )
+                    )
+                    remaining -= batch_size
+                # One audit event for the batch, not one per film. A 25-job run
+                # that wrote 25 audit rows would say the same thing 25 times.
+                audit_event(
+                    conn,
+                    event_type="metadata.origin_backfill",
+                    category="metadata",
+                    actor=actor,
+                    target_type="collection",
+                    summary="Queued country-of-origin backfill",
+                    metadata={"pending": pending, "jobs": len(jobs), "batchSize": batch_size},
+                )
+        return response({"status": "ok", "queued": len(jobs), "jobs": jobs, **counts})
 
     @flask_app.post("/api/next/metadata/jobs")
     def queue_metadata_refresh_jobs():

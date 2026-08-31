@@ -1455,6 +1455,14 @@ def ui_preview_html(
     .advanced-search-group.release .advanced-search-field:last-child {
       grid-column: 1 / -1;
     }
+    .advanced-search-hint {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
     .advanced-search-field {
       display: grid;
       gap: 6px;
@@ -15428,6 +15436,23 @@ def ui_preview_html(
                 </label>
               </div>
             </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="origin">
+              <summary>
+                <span data-next-i18n="collection.originFilter">Origin</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.originCountryFilter">Country of origin</span>
+                  <select id="advancedOriginCountry"></select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.originalLanguageFilter">Original language</span>
+                  <select id="advancedOriginLanguage"></select>
+                </label>
+                <p class="advanced-search-hint hidden" id="advancedOriginHint"></p>
+              </div>
+            </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="media">
               <summary>
                 <span data-next-i18n="collection.mediaAssets">Media assets</span>
@@ -19789,6 +19814,37 @@ def ui_preview_html(
       const raw = String(code || "").trim();
       const label = languageLabel(raw);
       return label && label !== raw ? `${label} (${raw})` : raw;
+    }
+    // Country names, on the same terms as language names above: 250 regions
+    // across 29 locales is not a translation task, the browser knows the answer
+    // for the locale the user picked, and the stored value stays the code.
+    //
+    // Memoized per locale like languageLabel. ratingCountryLabel used to build a
+    // fresh Intl.DisplayNames on every call, which is fine for the two dozen
+    // certificate countries and not for a filter list built by walking a few
+    // thousand movies.
+    let regionDisplayNames = null;
+    let regionDisplayLocale = null;
+    function regionLabel(code) {
+      const raw = String(code || "").trim().toUpperCase();
+      if (!raw) return "";
+      if (regionDisplayLocale !== localeState.locale) {
+        regionDisplayLocale = localeState.locale;
+        try {
+          regionDisplayNames = new Intl.DisplayNames([localeState.locale], {type: "region"});
+        } catch (error) {
+          regionDisplayNames = null;
+        }
+      }
+      if (!regionDisplayNames) return raw;
+      try {
+        // Intl echoes the input back for a subtag it does not know, which is a
+        // code rather than a blank -- the same fallback the feed is lenient
+        // about for languages.
+        return regionDisplayNames.of(raw) || raw;
+      } catch (error) {
+        return raw;
+      }
     }
     function enumLabel(prefix, value, fallback) {
       const raw = String(value || "").trim();
@@ -26499,6 +26555,18 @@ def ui_preview_html(
         });
       }
     }
+    // The stored form of an original-language filter value: primary subtag lower
+    // case, any script/region subtags left as given ("cmn-Hans"), mirroring
+    // next_origin.normalize_language_code on the server. Anything else is "any"
+    // rather than an error -- a filter is not a place to refuse input.
+    function normalizeOriginLanguageValue(value) {
+      const raw = String(value || "").trim();
+      if (!raw || raw === "any") return "any";
+      const parts = raw.split("-");
+      parts[0] = parts[0].toLowerCase();
+      const candidate = parts.join("-");
+      return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(candidate) ? candidate : "any";
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
@@ -26508,7 +26576,9 @@ def ui_preview_html(
         artwork: "any",
         personal: "any",
         itemType: "any",
-        location: "any"
+        location: "any",
+        originCountry: "any",
+        originalLanguage: "any"
       };
     }
     function normalizeAdvancedSearch(value) {
@@ -26522,7 +26592,18 @@ def ui_preview_html(
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
         personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
-        location: String(source.location || "any").trim() || "any"
+        location: String(source.location || "any").trim() || "any",
+        // Validated on SHAPE, deliberately not against the movies that happen to
+        // be loaded. The genre filter self-heals a stored value that matches no
+        // loaded row (applyGenreOptions), and gets away with it only because a
+        // genre filter cannot be saved. These two can: they live inside every
+        // saved smart filter, and hydration is progressive -- a filter naming
+        // Japan applied while page 1 of 6 is in would silently reset itself to
+        // "any" and show the user their whole library as if it matched.
+        originCountry: /^[A-Za-z]{2}$/.test(String(source.originCountry || "").trim())
+          ? String(source.originCountry).trim().toUpperCase()
+          : "any",
+        originalLanguage: normalizeOriginLanguageValue(source.originalLanguage)
       };
     }
     function effectiveAdvancedSearchFilters(options = {}) {
@@ -26544,6 +26625,8 @@ def ui_preview_html(
       if (normalized.personal !== "any") count += 1;
       if (normalized.itemType !== "any") count += 1;
       if (normalized.location !== "any") count += 1;
+      if (normalized.originCountry !== "any") count += 1;
+      if (normalized.originalLanguage !== "any") count += 1;
       return count;
     }
     function setAdvancedControlValue(id, value) {
@@ -26559,13 +26642,56 @@ def ui_preview_html(
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
         itemType: document.getElementById("advancedContainerType")?.value || "any",
-        location: document.getElementById("advancedLocationFilter")?.value || "any"
+        location: document.getElementById("advancedLocationFilter")?.value || "any",
+        originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
+        originalLanguage: document.getElementById("advancedOriginLanguage")?.value || "any"
       });
     }
     function persistAdvancedSearch() {
       localStorage.setItem("dv_next_advanced_search", JSON.stringify(normalizeAdvancedSearch(advancedSearch)));
       localStorage.setItem("dv_next_smart_filters", JSON.stringify(Array.isArray(smartFilters) ? smartFilters : []));
       localStorage.setItem("dv_next_active_smart_filter", activeSmartFilterId || "");
+    }
+    // Options are derived from the movies actually loaded, like the genre and
+    // location lists. Because hydration is progressive the list grows as pages
+    // arrive -- which is why populateOriginFilterSelect keeps a stored value
+    // that matches nothing yet instead of dropping it.
+    function collectionOriginCountryOptionValues() {
+      const values = new Set();
+      movies.forEach((movie) => movieOriginCountryValues(movie).forEach((code) => values.add(code)));
+      return [...values].sort((a, b) => regionLabel(a).localeCompare(regionLabel(b), localeState.locale));
+    }
+    function collectionOriginLanguageOptionValues() {
+      const values = new Set();
+      movies.forEach((movie) => {
+        const code = movieOriginLanguageValue(movie);
+        if (code !== "any") values.add(code);
+      });
+      return [...values].sort((a, b) => languageLabel(a).localeCompare(languageLabel(b), localeState.locale));
+    }
+    // How many loaded films have no origin at all. Shown as a hint so an empty
+    // filter list reads as "the data is not in yet" rather than "this is
+    // broken" -- the answer is the admin backfill, not a bug report.
+    function originDataMissingCount() {
+      return movies.reduce(
+        (total, movie) =>
+          total + (movieOriginCountryValues(movie).length || movieOriginLanguageValue(movie) !== "any" ? 0 : 1),
+        0
+      );
+    }
+    function populateOriginFilterSelect(id, values, current, labelFor, anyLabel) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      const options = [...values];
+      // A stored value the loaded pages do not cover yet is appended rather than
+      // discarded. Dropping it would silently widen a saved smart filter to the
+      // whole library mid-hydration.
+      if (current && current !== "any" && !options.includes(current)) options.push(current);
+      node.innerHTML = [
+        `<option value="any">${escapeHtml(anyLabel)}</option>`,
+        ...options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(labelFor(value) || value)}</option>`)
+      ].join("");
+      node.value = current && current !== "any" ? current : "any";
     }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
@@ -26593,6 +26719,28 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      populateOriginFilterSelect(
+        "advancedOriginCountry",
+        collectionOriginCountryOptionValues(),
+        advancedSearch.originCountry,
+        regionLabel,
+        tNext("collection.originCountryAny", "Any country")
+      );
+      populateOriginFilterSelect(
+        "advancedOriginLanguage",
+        collectionOriginLanguageOptionValues(),
+        advancedSearch.originalLanguage,
+        languageLabel,
+        tNext("collection.originalLanguageAny", "Any language")
+      );
+      const originHint = document.getElementById("advancedOriginHint");
+      if (originHint) {
+        const missing = originDataMissingCount();
+        originHint.textContent = missing
+          ? tNext("collection.originDataMissing", "{count} films have no origin data yet").replace("{count}", String(missing))
+          : "";
+        originHint.classList.toggle("hidden", missing === 0);
+      }
       const locationFilter = document.getElementById("advancedLocationFilter");
       if (locationFilter) {
         const anyLabel = tNext("collection.locationFilterAny", "Any location");
@@ -27169,6 +27317,18 @@ def ui_preview_html(
       if (hideWatched && movieIsWatched(movie)) return false;
       return true;
     }
+    // The FILM's origin, from movie_origin_countries / movies.original_language.
+    // Not movie.country / movie.language -- those are the release country and
+    // language of the disc, so a Dutch pressing of a Japanese film reads NL
+    // there and JP here, and filtering the wrong one answers a different
+    // question than the user asked.
+    function movieOriginCountryValues(movie) {
+      const values = movie?.origin_countries;
+      return Array.isArray(values) ? values.filter(Boolean).map((code) => String(code).toUpperCase()) : [];
+    }
+    function movieOriginLanguageValue(movie) {
+      return normalizeOriginLanguageValue(movie?.original_language);
+    }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
@@ -27188,6 +27348,8 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      if (filters.originCountry !== "any" && !movieOriginCountryValues(movie).includes(filters.originCountry)) return false;
+      if (filters.originalLanguage !== "any" && movieOriginLanguageValue(movie) !== filters.originalLanguage) return false;
       if (filters.location !== "any") {
         const movieLoc = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
         if (!movieLoc || !locationSubtreeIds(filters.location).has(movieLoc)) return false;
@@ -27303,7 +27465,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any") {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -27901,6 +28063,8 @@ def ui_preview_html(
         contentRating: itemRatingValues(item).join(", "),
         tags: itemTagValues(item).map((tag) => tag.name).join(", "),
         watchActivity: libraryExportWatchActivityText(item),
+        originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
+        originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
       };
     }
     function libraryListSortValue(item, key) {
@@ -28210,12 +28374,7 @@ def ui_preview_html(
     }
     const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "AU", "BR", "DK", "FI", "NO", "SE", "NZ", "IN", "PH", "MY", "PL", "HU", "BG", "LT"];
     function ratingCountryLabel(code) {
-      try {
-        const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
-        return displayNames.of(code) || code;
-      } catch (error) {
-        return code;
-      }
+      return regionLabel(code) || code;
     }
     function normalizedRatingCountryCode(value) {
       const raw = String(value || "").trim().replace("_", "-");
@@ -32499,6 +32658,18 @@ def ui_preview_html(
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
+        // Directly under the two rows above, deliberately. Those describe the
+        // disc -- which market this pressing was made for -- and these describe
+        // the film. Seeing "Release country: NL" and "Country of origin: JP" on
+        // one screen is what stops a reader treating either as the other.
+        [
+          tNext("movieDetail.originCountry", "Country of origin"),
+          movieOriginCountryValues(movie).map(regionLabel).join(", ")
+        ],
+        [
+          tNext("movieDetail.originalLanguage", "Original language"),
+          movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : ""
+        ],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
@@ -45649,6 +45820,8 @@ def ui_preview_html(
         contentRating: tNext("movieDetail.contentRating", "Content rating"),
         tags: tNext("lists.tags", "Tags"),
         watchActivity: tNext("collection.behaviorColumn", "Viewing activity"),
+        originCountry: tNext("movieDetail.originCountry", "Country of origin"),
+        originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
       }),
       getExportRows: () => {
         const sortState = normalizeLibraryDetailSort(libraryDetailSort);

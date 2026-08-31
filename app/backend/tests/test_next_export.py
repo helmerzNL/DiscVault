@@ -65,6 +65,30 @@ class ExportColumnCatalogueTests(unittest.TestCase):
                 "contentRating",
                 "tags",
                 "watchActivity",
+                "originCountry",
+                "originalLanguage",
+            ],
+        )
+
+    def test_the_default_selection_is_still_the_original_ten(self):
+        # The export column set is a contract shared by the PWA, iOS and Android
+        # (App-Guidance library-export-columns.md 1). A column that does not
+        # exist on every implementation ships default-off, so an export taken
+        # with the default selection is the same file on all three. Appending a
+        # column must never change what somebody gets without asking.
+        self.assertEqual(
+            list(next_export_columns.DEFAULT_EXPORT_COLUMN_KEYS),
+            [
+                "title",
+                "year",
+                "barcode",
+                "format",
+                "director",
+                "actors",
+                "studio",
+                "contentRating",
+                "tags",
+                "watchActivity",
             ],
         )
 

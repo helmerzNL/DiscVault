@@ -615,6 +615,7 @@ jobs:
           python -m unittest
           tests.test_next_origin
           tests.test_next_origin_postgres
+          tests.test_next_origin_ui
 
       # The personal rating. Two of its claims fail silently rather than loudly,
       # so both are asserted against a real database: that an unrated film reads

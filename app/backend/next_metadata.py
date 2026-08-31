@@ -899,6 +899,152 @@ def movie_film_origin(conn, movie_id: UUID) -> dict[str, Any]:
     return origin
 
 
+MOVIE_ORIGIN_BACKFILL_JOB_TYPE = "metadata.backfill_origin"
+
+
+def movies_missing_film_origin(conn, *, limit: int = 100) -> list[dict[str, Any]]:
+    """Films that have a TMDB id and no origin yet, oldest first.
+
+    Only films carrying a `tmdb` identifier can be answered at all; the rest
+    cannot be backfilled and must not be counted as pending forever.
+    """
+    if not table_exists(conn, "movie_identifiers") or not table_exists(conn, "movie_origin_countries"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id, mi.identifier AS tmdb_id
+            FROM movies m
+            JOIN movie_identifiers mi
+              ON mi.movie_id = m.id
+             AND mi.provider_id='tmdb'
+             AND mi.identifier_type='movie_id'
+            WHERE m.deleted_at IS NULL
+              AND m.original_language IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
+              )
+            ORDER BY m.created_at, m.id
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def count_movies_missing_film_origin(conn) -> dict[str, int]:
+    """How many films still need origin, and how many can never get it here."""
+    counts = {"pending": 0, "unresolvable": 0}
+    if not table_exists(conn, "movies") or not table_exists(conn, "movie_origin_countries"):
+        return counts
+    has_identifiers = table_exists(conn, "movie_identifiers")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                COUNT(*) FILTER (WHERE {'has_tmdb' if has_identifiers else 'FALSE'})::int AS pending,
+                COUNT(*) FILTER (WHERE NOT {'has_tmdb' if has_identifiers else 'TRUE'})::int AS unresolvable
+            FROM (
+                SELECT
+                    m.id,
+                    {'EXISTS (SELECT 1 FROM movie_identifiers mi WHERE mi.movie_id=m.id AND mi.provider_id=%s AND mi.identifier_type=%s)' if has_identifiers else 'FALSE'} AS has_tmdb
+                FROM movies m
+                WHERE m.deleted_at IS NULL
+                  AND m.original_language IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
+                  )
+            ) AS missing
+            """,
+            ("tmdb", "movie_id") if has_identifiers else (),
+        )
+        row = cur.fetchone()
+    if row:
+        counts["pending"] = int(row.get("pending") or 0)
+        counts["unresolvable"] = int(row.get("unresolvable") or 0)
+    return counts
+
+
+def backfill_movie_origins(conn, movie_ids: list[Any] | None = None, *, limit: int = 100) -> dict[str, Any]:
+    """Fill origin for films that have none, and touch nothing else.
+
+    Deliberately not `refresh_movie_metadata`. That one asks TMDB with
+    append_to_response=credits,videos,images,release_dates,translations and walks
+    the whole merge pipeline: for a 2,500-film library it runs for hours, rewrites
+    posters, credits, provenance and localizations across the entire catalogue,
+    and emits 2,500 global sync_changes that every connected client then
+    downloads. All of that to fill two fields nobody had before.
+
+    This asks for the bare record, writes only `movies.original_language` and
+    `movie_origin_countries`, and emits no global sync change: origin travels on
+    the next ordinary movie payload. A film that already has origin is skipped
+    unless `force`.
+    """
+    summary = {"requested": 0, "updated": 0, "skipped": 0, "failed": 0, "unresolved": 0}
+    if movie_ids:
+        rows = []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT m.id, mi.identifier AS tmdb_id
+                FROM movies m
+                LEFT JOIN movie_identifiers mi
+                  ON mi.movie_id = m.id
+                 AND mi.provider_id='tmdb'
+                 AND mi.identifier_type='movie_id'
+                WHERE m.id = ANY(%s) AND m.deleted_at IS NULL
+                """,
+                (list(movie_ids),),
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+    else:
+        rows = movies_missing_film_origin(conn, limit=limit)
+    summary["requested"] = len(rows)
+    if not rows:
+        return summary
+    plugin, _source = discovered_plugin(TMDB_PLUGIN_ID)
+    if not plugin:
+        summary["failed"] = len(rows)
+        return summary
+    config = plugin_config_from_db(conn, TMDB_PLUGIN_ID)
+    context = plugin_execution_context(conn, plugin, config)
+    for row in rows:
+        tmdb_id = clean_text(row.get("tmdb_id"))
+        if not tmdb_id:
+            summary["unresolved"] += 1
+            continue
+        # Every write below reopens the transaction, so the release belongs
+        # inside the loop rather than once before it: holding one open across a
+        # TMDB round trip -- times the whole library -- is what this job would
+        # otherwise do for minutes at a stretch.
+        release_read_transaction(conn)
+        try:
+            execution = run_plugin_entrypoint(
+                TMDB_PLUGIN_ID,
+                "movie_details",
+                {"tmdbId": tmdb_id, "id": tmdb_id},
+                context,
+            )
+        except Exception:
+            logger.warning("origin backfill failed for movie %s", row.get("id"), exc_info=True)
+            summary["failed"] += 1
+            continue
+        if not isinstance(execution, dict) or execution.get("status") != "ok":
+            summary["failed"] += 1
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        origin = normalize_film_origin(result.get("filmOrigin"))
+        if origin is None:
+            # TMDB answered but said nothing about origin. Not a failure, and not
+            # something to write -- leaving the film pending means a later run
+            # picks it up if TMDB learns the answer.
+            summary["skipped"] += 1
+            continue
+        replace_movie_film_origin(conn, row["id"], origin)
+        summary["updated"] += 1
+    return summary
+
+
 def replace_movie_film_origin(conn, movie_id: UUID, origin: Any) -> dict[str, Any]:
     """Transactionally replace a movie's origin.
 
