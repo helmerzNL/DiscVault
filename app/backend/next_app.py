@@ -120,6 +120,8 @@ try:
     from .next_genres import GENRE_KEYS
     from .next_genres import GENRE_KEY_TO_LABEL
     from .next_genres import map_legacy_genre_text
+    from .next_origin import normalize_language_code
+    from .next_origin import normalize_region_code
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_backup import BackupError as NextBackupError
     from .next_backup import backup_restore_plan
@@ -408,6 +410,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_genres import GENRE_KEYS
     from next_genres import GENRE_KEY_TO_LABEL
     from next_genres import map_legacy_genre_text
+    from next_origin import normalize_language_code
+    from next_origin import normalize_region_code
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_backup import BackupError as NextBackupError
     from next_backup import backup_restore_plan
@@ -5134,6 +5138,47 @@ def attach_movie_genres(conn, movies: list[dict[str, Any]]) -> list[dict[str, An
         movie["genre_search"] = " ".join(
             f"{key} {GENRE_KEY_TO_LABEL.get(key, key)}" for key in keys
         )
+    return movies
+
+
+def attach_movie_origin_countries(conn, movies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach the film's origin countries (movie["origin_countries"]).
+
+    One batched query for the page, the shape `attach_movie_genres` uses.
+
+    Deliberately sets exactly one key. `attach_movie_genres` also writes a
+    derived `genre_search`, which `movie_entity` does not -- so the bootstrap
+    payload carries a field the delta never does, and the parity test cannot see
+    it because it compares column lists rather than attached keys. Not a pattern
+    to copy: if origin ever needs a search projection it should be built where
+    search is built, for both paths at once.
+
+    Order is TMDB's own (lead producer first), preserved by sort_order.
+    """
+    if not movies or not table_exists(conn, "movie_origin_countries"):
+        for movie in movies:
+            movie["origin_countries"] = []
+        return movies
+    movie_ids = [movie.get("id") for movie in movies if movie.get("id")]
+    countries_by_movie: dict[str, list[str]] = {str(movie_id): [] for movie_id in movie_ids}
+    if movie_ids:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT movie_id, country_code
+                FROM movie_origin_countries
+                WHERE movie_id = ANY(%s)
+                ORDER BY movie_id, sort_order, country_code
+                """,
+                (movie_ids,),
+            )
+            for row in cur.fetchall():
+                key = str(row.get("movie_id"))
+                values = countries_by_movie.get(key)
+                if values is not None:
+                    values.append(str(row.get("country_code")))
+    for movie in movies:
+        movie["origin_countries"] = countries_by_movie.get(str(movie.get("id")), [])
     return movies
 
 
@@ -12998,6 +13043,16 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "edition_type",
     "country",
     "language",
+    # Published, not accepted -- and deliberately adjacent to `country` and
+    # `language`, which describe the *disc*: which market this pressing was made
+    # for. This one describes the *film*. A Dutch Blu-ray of a Japanese film has
+    # country='NL' and original_language='ja', and the two must never be derived
+    # from one another.
+    #
+    # Not accepted on push because TMDB owns it: a client that could set it would
+    # be asserting a fact about the film rather than about its own copy, and the
+    # next metadata refresh would silently overwrite the assertion anyway.
+    "original_language",
     "runtime_minutes",
     # Published as well as accepted. A field the server takes on push and never
     # sends back is write-only: a client can set it and never confirm it, and
@@ -13070,6 +13125,7 @@ def movie_entity(conn, movie_id: UUID) -> dict[str, Any] | None:
         row["genres"] = movie_genre_keys(conn, movie_id)
         # Also reaches the delta: a sync change stores this entity verbatim as
         # its payload, so anything missing here is missing from the delta too.
+        attach_movie_origin_countries(conn, [row])
         attach_movie_technical_specs(conn, [row])
         attach_movie_seasons(conn, [row])
         attach_movie_discs(conn, [row])
@@ -21508,7 +21564,11 @@ def all_movie_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | None 
             attach_movie_discs(
                 conn,
                 attach_movie_seasons(
-                    conn, attach_movie_technical_specs(conn, attach_movie_genres(conn, rows))
+                    conn,
+                    attach_movie_technical_specs(
+                        conn,
+                        attach_movie_origin_countries(conn, attach_movie_genres(conn, rows)),
+                    ),
                 ),
             )
         )
@@ -29911,13 +29971,35 @@ def register_routes(flask_app: Flask) -> None:
         media_format = clean_text(request.args.get("format"))
         raw_media_type = clean_text(request.args.get("media_type") or request.args.get("mediaType"))
         media_type = normalize_media_type(raw_media_type)
+        # The film's origin, not the disc's release market -- `country` and
+        # `language` on the record answer that other question and are not
+        # filterable here on purpose, because a caller asking for Japanese films
+        # would otherwise silently get Japanese *pressings*.
+        raw_origin_country = clean_text(
+            request.args.get("origin_country") or request.args.get("originCountry")
+        )
+        origin_country = normalize_region_code(raw_origin_country)
+        if raw_origin_country and not origin_country:
+            raise NextApiError(
+                "origin_country (or originCountry) must be an ISO 3166-1 alpha-2 code, e.g. JP",
+                400,
+            )
+        raw_original_language = clean_text(
+            request.args.get("original_language") or request.args.get("originalLanguage")
+        )
+        original_language = normalize_language_code(raw_original_language)
+        if raw_original_language and not original_language:
+            raise NextApiError(
+                "original_language (or originalLanguage) must be a language code, e.g. ja",
+                400,
+            )
         if raw_media_type and media_type is None:
             raise NextApiError(
                 f"media_type (or mediaType) must be one of "
                 f"{MEDIA_TYPE_MOVIE}, {MEDIA_TYPE_SHOW}",
                 400,
             )
-        searching = bool(query or media_format or media_type)
+        searching = bool(query or media_format or media_type or origin_country or original_language)
         with connect() as conn:
             actor = require_any_next_permission(
                 conn,
@@ -29969,6 +30051,25 @@ def register_routes(flask_app: Flask) -> None:
             if media_type:
                 filters.append("m.media_type=%s")
                 params.append(media_type)
+            if origin_country:
+                if not table_exists(conn, "movie_origin_countries"):
+                    # An install that has not run migration 087 yet cannot answer
+                    # this. Returning everything would be worse than returning
+                    # nothing: the caller cannot tell an unfiltered list from a
+                    # filtered one, and would read it as "all these films are
+                    # from there".
+                    return response({"status": "ok", "items": [], "limit": limit, "offset": offset})
+                filters.append(
+                    """EXISTS (
+                        SELECT 1
+                        FROM movie_origin_countries moc
+                        WHERE moc.movie_id = m.id AND moc.country_code = %s
+                    )"""
+                )
+                params.append(origin_country)
+            if original_language:
+                filters.append("m.original_language=%s")
+                params.append(original_language)
             visibility_where, visibility_params = visible_movie_where_sql(conn, actor, "m")
             filters.append(visibility_where)
             params.extend(visibility_params)
@@ -29990,6 +30091,7 @@ def register_routes(flask_app: Flask) -> None:
                         m.edition,
                         m.country,
                         m.language,
+                        m.original_language,
                         m.overview,
                         m.rating,
                         m.location,
@@ -30003,7 +30105,7 @@ def register_routes(flask_app: Flask) -> None:
                     """,
                     (*params, limit, offset),
                 )
-                items = attach_movie_genres(conn, cur.fetchall())
+                items = attach_movie_origin_countries(conn, attach_movie_genres(conn, cur.fetchall()))
                 for item in items:
                     item.pop("genre_search", None)
             audit_api_interaction(

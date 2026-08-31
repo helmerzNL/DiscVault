@@ -97,6 +97,7 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "edition_type",
             "country",
             "language",
+            "original_language",
             "runtime_minutes",
             "overview",
             "notes",
@@ -116,6 +117,10 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
     TableSpec(
         "movie_identifiers",
         ("movie_id", "provider_id", "identifier", "identifier_type", "created_at"),
+    ),
+    TableSpec(
+        "movie_origin_countries",
+        ("movie_id", "country_code", "sort_order", "created_at"),
     ),
     TableSpec(
         "movie_localizations",
@@ -384,6 +389,7 @@ CONFLICT_KEYS: dict[str, tuple[str, ...]] = {
     "movies": ("id",),
     "movie_identifiers": ("movie_id", "provider_id", "identifier_type", "identifier"),
     "movie_localizations": ("movie_id", "lang"),
+    "movie_origin_countries": ("movie_id", "country_code"),
     "movie_technical_specs": ("movie_id",),
     "people": ("id",),
     "person_identifiers": ("person_id", "provider_id", "identifier_type", "identifier"),
@@ -424,6 +430,7 @@ SCOPE_TABLES: dict[str, tuple[str, ...]] = {
     SCOPE_COLLECTION: (
         "movies",
         "movie_identifiers",
+        "movie_origin_countries",
         "movie_localizations",
         "movie_technical_specs",
         "containers",
@@ -466,11 +473,30 @@ ALL_SELECTABLE_SCOPES: tuple[str, ...] = (
     SCOPE_PERSONAL_LISTS,
 )
 
+# Collection-scope tables that did not exist when the current format version was
+# set, and are therefore absent from every archive taken before them.
+#
+# OPTIONAL_BACKUP_TABLES below is *derived*: everything outside the collection
+# scope is optional, everything inside it is mandatory. That rule is right for
+# the tables the format was designed around and wrong for any added afterwards --
+# adding one to the collection scope makes it required, and every existing
+# archive then fails to restore with nothing to warn the user, because
+# BACKUP_FORMAT_VERSION has not moved and cannot: the archive is still valid, it
+# simply predates the table.
+#
+# So a collection table added after the fact is named here instead. Bumping the
+# format version would be the alternative and is worse -- it would refuse the old
+# archives outright rather than reading them as what they are.
+COLLECTION_TABLES_ADDED_AFTER_V2: tuple[str, ...] = ("movie_origin_countries",)
+
 # Tables that older (v1) backups always omitted, plus the new scope-gated tables, are
 # all optional members so any scope subset validates and restores. Only the mandatory
 # ``collection`` scope tables are strictly required.
 OPTIONAL_BACKUP_TABLES = tuple(
-    name for name in BACKUP_TABLES if name not in SCOPE_TABLES[SCOPE_COLLECTION]
+    name
+    for name in BACKUP_TABLES
+    if name not in SCOPE_TABLES[SCOPE_COLLECTION]
+    or name in COLLECTION_TABLES_ADDED_AFTER_V2
 )
 
 RESTORE_DELETE_ORDER = (
@@ -486,6 +512,7 @@ RESTORE_DELETE_ORDER = (
     "movie_credits",
     "movie_technical_specs",
     "movie_localizations",
+    "movie_origin_countries",
     "movie_identifiers",
     "person_localizations",
     "person_identifiers",
