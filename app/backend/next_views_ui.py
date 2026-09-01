@@ -209,6 +209,7 @@ def ui_preview_html(
         "api": "M7 7H5A2 2 0 0 0 3 9V17H5V13H7V17H9V9A2 2 0 0 0 7 7M7 11H5V9H7M14 7H10V17H12V13H14A2 2 0 0 0 16 11V9A2 2 0 0 0 14 7M14 11H12V9H14M20 9V15H21V17H17V15H18V9H17V7H21V9Z",
         "about": "M13 9H11V7H13V9M13 17H11V11H13V17M12 2C6.48 2 2 6.48 2 12S6.48 22 12 22 22 17.52 22 12 17.52 2 12 2Z",
         "statistics": "M22 21H2V3H4V19H6V10H10V19H12V6H16V19H18V14H22V21Z",
+        "support": "M2,21H20V19H2M20,8H18V5H20M20,3H4V13A4,4 0 0,0 8,17H14A4,4 0 0,0 18,13V10H20A2,2 0 0,0 22,8V5C22,3.89 21.1,3 20,3Z",
         "discover": "M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M16.24,7.76L14.12,14.12L7.76,16.24L9.88,9.88L16.24,7.76M12,10A2,2 0 0,0 10,12A2,2 0 0,0 12,14A2,2 0 0,0 14,12A2,2 0 0,0 12,10Z",
         "appearance": "M12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2C17.5,2 22,6 22,11A6,6 0 0,1 16,17H14.2C13.9,17 13.7,17.2 13.7,17.5C13.7,17.6 13.8,17.7 13.8,17.8C14.2,18.3 14.4,18.9 14.4,19.5C14.5,20.9 13.4,22 12,22M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C12.3,20 12.5,19.8 12.5,19.5C12.5,19.3 12.4,19.2 12.4,19.1C12,18.6 11.8,18.1 11.8,17.5C11.8,16.1 12.9,15 14.3,15H16A4,4 0 0,0 20,11C20,7.1 16.4,4 12,4M6.5,10C7.3,10 8,10.7 8,11.5C8,12.3 7.3,13 6.5,13C5.7,13 5,12.3 5,11.5C5,10.7 5.7,10 6.5,10M9.5,6C10.3,6 11,6.7 11,7.5C11,8.3 10.3,9 9.5,9C8.7,9 8,8.3 8,7.5C8,6.7 8.7,6 9.5,6M14.5,6C15.3,6 16,6.7 16,7.5C16,8.3 15.3,9 14.5,9C13.7,9 13,8.3 13,7.5C13,6.7 13.7,6 14.5,6M17.5,10C18.3,10 19,10.7 19,11.5C19,12.3 18.3,13 17.5,13C16.7,13 16,12.3 16,11.5C16,10.7 16.7,10 17.5,10Z",
         "library_preferences": "M9 3V18H12V3H9M12 5L16 18L19 17L15 4L12 5M5 5V18H8V5H5M3 19V21H21V19H3Z",
@@ -1168,6 +1169,28 @@ def ui_preview_html(
       display: block;
       fill: currentColor;
     }
+    /* Deliberately quiet: it sits in the same corner as the version block and
+       must never compete with the primary navigation above it. */
+    .sidebar-support {
+      margin-top: auto;
+      padding: 0;
+      border: 0;
+      background: none;
+      color: var(--muted);
+      font: inherit;
+      font-size: 12px;
+      text-align: left;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+    }
+    .sidebar-support:hover,
+    .sidebar-support:focus-visible {
+      color: var(--accent-bright);
+    }
+    .sidebar-support + .sidebar-footer {
+      margin-top: 10px;
+    }
     .sidebar-footer {
       margin-top: auto;
       padding: 12px;
@@ -1186,6 +1209,7 @@ def ui_preview_html(
     .preview-shell.sidebar-collapsed .brand > div:last-child,
     .preview-shell.sidebar-collapsed .nav-item-label span:last-child,
     .preview-shell.sidebar-collapsed .nav-item small,
+    .preview-shell.sidebar-collapsed .sidebar-support,
     .preview-shell.sidebar-collapsed .sidebar-footer {
       display: none;
     }
@@ -1455,6 +1479,26 @@ def ui_preview_html(
     .advanced-search-group.release .advanced-search-field:last-child {
       grid-column: 1 / -1;
     }
+    .custom-filter-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+      gap: 6px;
+      align-items: center;
+    }
+    .custom-filter-row > .custom-filter-value.hidden {
+      display: none;
+    }
+    .custom-filter-row > .custom-filter-value.hidden ~ * {
+      grid-column: 1 / -1;
+    }
+    .advanced-search-hint {
+      grid-column: 1 / -1;
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
     .advanced-search-field {
       display: grid;
       gap: 6px;
@@ -1521,6 +1565,7 @@ def ui_preview_html(
       gap: 6px;
     }
     .collection-controls .icon-button svg,
+    .toolbar-menu-trigger svg,
     .filter-toggle-row svg {
       width: 20px;
       height: 20px;
@@ -1534,8 +1579,16 @@ def ui_preview_html(
       position: relative;
       display: inline-flex;
     }
+    /* The icon sizing and centring live on `.toolbar-menu-trigger` itself, not
+       on an ancestor: the Lists sort trigger sits in `.detail-card-actions`,
+       outside `.collection-controls`, and inherited nothing there -- an inline
+       SVG with no width, height or fill, which draws as an empty button. */
     .toolbar-menu-trigger {
       position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
     }
     .toolbar-menu.open .toolbar-menu-trigger,
     .toolbar-menu-trigger[aria-expanded="true"] {
@@ -5518,6 +5571,89 @@ def ui_preview_html(
       display: flex;
       flex-wrap: wrap;
       gap: 8px;
+    }
+    .movie-rating-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .movie-rating-star {
+      width: 26px;
+      height: 26px;
+      border: 0;
+      background: none;
+      padding: 0;
+      cursor: pointer;
+      color: color-mix(in srgb, var(--text) 26%, transparent);
+      display: inline-grid;
+      place-items: center;
+    }
+    .movie-rating-star svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+      pointer-events: none;
+    }
+    .movie-rating-star.filled,
+    .movie-rating-star.half {
+      color: var(--accent);
+    }
+    .movie-rating-star:hover {
+      color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    }
+    .movie-rating-value {
+      margin-left: 8px;
+      font-variant-numeric: tabular-nums;
+      font-weight: 760;
+      color: var(--text);
+    }
+    .movie-rating-owner {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 620;
+    }
+    .movie-rating-clear-button {
+      width: 30px;
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      background: color-mix(in srgb, var(--bg-solid) 82%, transparent);
+      color: var(--muted);
+      display: inline-grid;
+      place-items: center;
+      padding: 0;
+      cursor: pointer;
+    }
+    .movie-rating-clear-button svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+    /* The tile badge. Only ever one number -- the personal or owner rating --
+       because a second number beside it would reintroduce exactly the ambiguity
+       with the external score that the detail page works to avoid. */
+    .poster-rating-badge {
+      position: absolute;
+      left: 6px;
+      bottom: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: color-mix(in srgb, #000 62%, transparent);
+      color: #fff;
+      font-size: 11px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+      pointer-events: none;
+    }
+    .poster-rating-badge svg {
+      width: 11px;
+      height: 11px;
+      fill: currentColor;
     }
     .movie-tag-add-button {
       width: 34px;
@@ -12067,6 +12203,30 @@ def ui_preview_html(
       font-size: .88rem;
       line-height: 1.5;
     }
+    .profile-about-card--support p {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+    /* The button image is served from DiscVault's own asset route rather than
+       Buy Me a Coffee's CDN: a donation invitation is not allowed to cost the
+       visitor a page view at a third party, and a self-hosted install that
+       cannot reach the internet still has to render the About page intact. */
+    .profile-about-coffee {
+      display: inline-flex;
+      align-self: start;
+      border-radius: 12px;
+    }
+    .profile-about-coffee img {
+      display: block;
+      width: auto;
+      height: 44px;
+      max-width: 100%;
+    }
+    .profile-about-coffee:focus-visible {
+      outline: 2px solid var(--accent-bright);
+      outline-offset: 3px;
+    }
     .profile-about-source-logo {
       display: block;
       width: 60px;
@@ -13148,6 +13308,78 @@ def ui_preview_html(
       font-size: .9rem;
       font-weight: 620;
     }
+    .support-prompt-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 130;
+      display: grid;
+      place-items: center;
+      padding: 18px;
+      background: rgba(0,0,0,.42);
+      backdrop-filter: blur(18px);
+    }
+    .support-prompt-panel {
+      position: relative;
+      width: min(430px, 100%);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      padding: clamp(20px, 4vw, 26px);
+      background: var(--bg-solid);
+      box-shadow: var(--shadow-strong);
+      display: grid;
+      gap: 16px;
+    }
+    .support-prompt-close {
+      position: absolute;
+      top: 12px;
+      right: 14px;
+    }
+    .support-prompt-head {
+      display: flex;
+      align-items: flex-start;
+      gap: 13px;
+      padding-right: 28px;
+    }
+    .support-prompt-head h2 {
+      margin: 0 0 4px;
+      font-size: 1.2rem;
+      overflow-wrap: anywhere;
+    }
+    .support-prompt-head p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .92rem;
+      line-height: 1.5;
+    }
+    /* Buy Me a Coffee's own yellow rather than the accent: the mark belongs to
+       the button underneath it, and an accent-coloured cup would read as a
+       DiscVault feature instead of an invitation to somewhere else. */
+    .support-prompt-mark {
+      flex: none;
+      display: grid;
+      place-items: center;
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: #FFDD00;
+      color: #12181F;
+    }
+    .support-prompt-mark svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+    .support-prompt-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 12px;
+    }
+    .support-prompt-foot {
+      margin: 0;
+      color: var(--subtle);
+      font-size: .8rem;
+    }
     .location-qr-backdrop {
       position: fixed;
       inset: 0;
@@ -13586,6 +13818,7 @@ def ui_preview_html(
         overflow-x: auto;
       }
       .sidebar-collapse-toggle { display: none; }
+      .sidebar-support { display: none; }
       .sidebar-footer { display: none; }
       .preview-layout { grid-template-columns: 1fr; }
     }
@@ -15274,6 +15507,7 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
         <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
       </nav>
+      <button type="button" class="sidebar-support" id="sidebarSupportLink" data-next-i18n="uiPreview.supportDiscVault">Support DiscVault</button>
       <div class="sidebar-footer">
         <strong data-next-i18n="profile.appVersion">App version</strong><br>
         """ + h(build.get("version") or "unknown") + """<br>
@@ -15419,6 +15653,30 @@ def ui_preview_html(
                 </label>
               </div>
             </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="origin">
+              <summary>
+                <span data-next-i18n="collection.originFilter">Origin</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.originCountryFilter">Country of origin</span>
+                  <select id="advancedOriginCountry"></select>
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.originalLanguageFilter">Original language</span>
+                  <select id="advancedOriginLanguage"></select>
+                </label>
+                <p class="advanced-search-hint hidden" id="advancedOriginHint"></p>
+              </div>
+            </details>
+            <details class="library-adaptive-group advanced-search-group hidden" data-library-adaptive-group data-library-advanced-group="custom" id="advancedCustomFilterGroup">
+              <summary>
+                <span data-next-i18n="appAdmin.tabCustomFields">Custom fields</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body" id="advancedCustomFilters"></div>
+            </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="media">
               <summary>
                 <span data-next-i18n="collection.mediaAssets">Media assets</span>
@@ -15471,6 +15729,8 @@ def ui_preview_html(
                     <option value="watched" data-next-i18n="lists.watched">Watched</option>
                     <option value="onloan" data-next-i18n="collection.personalOnLoan">On loan</option>
                     <option value="tagged" data-next-i18n="collection.personalTagged">Tagged</option>
+                    <option value="rated" data-next-i18n="collection.personalRated">Rated by me</option>
+                    <option value="unrated" data-next-i18n="collection.personalUnrated">Not rated by me</option>
                     <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
                   </select>
                 </label>
@@ -15706,6 +15966,25 @@ def ui_preview_html(
                 <button type="button" class="lists-seg" data-lists-tab="wishlist" data-next-i18n-aria="lists.wishlist" aria-label="Wishlist"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.1,18.55L12,18.65L11.89,18.55C7.14,14.24 4,11.39 4,8.5C4,6.5 5.5,5 7.5,5C9.04,5 10.54,6 11.07,7.36H12.93C13.46,6 14.96,5 16.5,5C18.5,5 20,6.5 20,8.5C20,11.39 16.86,14.24 12.1,18.55M16.5,3C14.76,3 13.09,3.81 12,5.08C10.91,3.81 9.24,3 7.5,3C4.42,3 2,5.41 2,8.5C2,12.27 5.4,15.36 10.55,20.03L12,21.35L13.45,20.03C18.6,15.36 22,12.27 22,8.5C22,5.41 19.58,3 16.5,3Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.wishlist">Wishlist</span></button>
                 <button type="button" class="lists-seg" data-lists-tab="tags" data-next-i18n-aria="lists.tags" aria-label="Tags"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21.41,11.58L12.41,2.58C12.04,2.21 11.53,2 11,2H4A2,2 0 0,0 2,4V11C2,11.53 2.21,12.04 2.59,12.42L11.59,21.42C11.96,21.79 12.47,22 13,22C13.53,22 14.04,21.79 14.41,21.41L21.41,14.41C21.79,14.04 22,13.53 22,13C22,12.47 21.79,11.96 21.41,11.58M6.5,5A1.5,1.5 0 0,1 8,6.5A1.5,1.5 0 0,1 6.5,8A1.5,1.5 0 0,1 5,6.5A1.5,1.5 0 0,1 6.5,5Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.tags">Tags</span></button>
                 <button type="button" class="lists-seg" data-lists-tab="loans" data-next-i18n-aria="lists.loans" aria-label="On loan"><svg class="lists-seg-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16,17V19H2V17S2,13 9,13 16,17 16,17M12.5,7.5A3.5,3.5 0 1,0 9,11A3.5,3.5 0 0,0 12.5,7.5M15.94,13A5.32,5.32 0 0,1 18,17V19H22V17S22,13.37 15.94,13M15,4A3.39,3.39 0 0,0 13.07,4.59A5,5 0 0,1 13.07,10.41A3.39,3.39 0 0,0 15,11A3.5,3.5 0 0,0 15,4Z"/></svg><span class="lists-seg-label" data-next-i18n="lists.loans">On loan</span></button>
+              </div>
+              <div class="toolbar-menu" id="listsSortMenu">
+                <button type="button" class="icon-button toolbar-menu-trigger" id="listsSortTrigger" aria-haspopup="true" aria-expanded="false" aria-label="Sort list" data-next-i18n-aria="collection.sort" title="Sort" data-next-i18n-title="collection.sort">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9,3L5,6.99H8V14H10V6.99H13M16,17.01V10H14V17.01H11L15,21L19,17.01H16Z"/></svg>
+                </button>
+                <!-- `data-lists-sort-option`, deliberately not the Library's
+                     `data-sort-option`. That binding is a global
+                     querySelectorAll and writes collectionSortMode, which is
+                     right for the location detail page (it shows the library)
+                     and wrong here: reusing the attribute would make a click
+                     on this menu silently re-sort the Library instead. -->
+                <div class="toolbar-menu-panel hidden" id="listsSortPanel" role="menu" aria-label="Sort options" data-next-i18n-aria="collection.sort">
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="date_desc" id="listsSortDateDesc">Newest first</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="date_asc" id="listsSortDateAsc">Oldest first</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="title_asc" data-next-i18n="collection.sortNameAsc">Name (A-Z)</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="title_desc" data-next-i18n="collection.sortNameDesc">Name (Z-A)</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="year_desc" data-next-i18n="collection.sortYearNewest">Release Year (newest)</button>
+                  <button type="button" class="toolbar-menu-option" role="menuitemradio" data-lists-sort-option="year_asc" data-next-i18n="collection.sortYearOldest">Release Year (oldest)</button>
+                </div>
               </div>
               <div class="view-mode-control" id="listsViewModeControl" role="group" aria-label="View mode" data-next-i18n-aria="collection.viewMode">
                 <button type="button" class="icon-button view-mode-button" data-lists-view-mode="list" aria-label="List view" data-next-i18n-aria="collection.viewList" title="List" data-next-i18n-title="collection.viewList">
@@ -16756,6 +17035,7 @@ def ui_preview_html(
                       <textarea id="movieEditNotes" name="notes" maxlength="5000"></textarea>
                     </label>
                   </div>
+                  <div class="movie-edit-grid hidden" id="movieEditCustomFields"></div>
                 </div>
               </div>
               <div class="movie-edit-actions">
@@ -16839,6 +17119,16 @@ def ui_preview_html(
                       </button>
                     </div>
                     <div class="movie-tags-chips" id="movieTagsChips"></div>
+                  </div>
+                  <div class="movie-rating-section" id="movieRatingSection">
+                    <div class="detail-card-head compact">
+                      <h4 data-next-i18n="lists.myRatingTitle">My rating</h4>
+                      <button type="button" class="movie-rating-clear-button hidden" id="movieRatingClearButton" aria-label="Clear rating" title="Clear rating" data-next-i18n-aria="lists.clearRating" data-next-i18n-title="lists.clearRating">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19,6.41L17.59,5L12,10.59L6.41,5L5,6.41L10.59,12L5,17.59L6.41,19L12,13.41L17.59,19L19,17.59L13.41,12L19,6.41Z"></path></svg>
+                      </button>
+                    </div>
+                    <div class="movie-rating-picker" id="movieRatingPicker"></div>
+                    <div class="movie-rating-owner" id="movieRatingOwner"></div>
                   </div>
                   <div class="movie-loan-section" id="movieLoanSection">
                     <div class="detail-card-head compact">
@@ -18330,6 +18620,18 @@ def ui_preview_html(
                       </div>
                     </div>
                   </section>
+                  <section class="profile-dashboard-card profile-about-card profile-about-card--support">
+                    <div class="profile-dashboard-card-title">
+                      <span class="profile-dashboard-card-icon">""" + nav_icon("support") + """</span>
+                      <div class="profile-about-card-copy">
+                        <span data-next-i18n="profile.supportDevelopment">Support development</span>
+                        <p data-next-i18n="profile.supportDevelopmentHelp">DiscVault is built and maintained in my own time. If it is useful to you, a coffee helps keep the development going.</p>
+                      </div>
+                    </div>
+                    <a class="profile-about-coffee" id="profileBuyMeACoffee" href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">
+                      <img src="/api/next/assets/buymeacoffee-button.png" width="545" height="153" alt="Buy me a coffee">
+                    </a>
+                  </section>
 """ + attribution_cards + """
                   <section class="profile-dashboard-card profile-about-card profile-about-card--debug">
                     <div class="profile-dashboard-card-head">
@@ -18381,6 +18683,7 @@ def ui_preview_html(
             """ + admin_tab("plugins", "appAdmin.tabPlugins", "Plugins", "structure") + """
             """ + admin_tab("digital", "appAdmin.tabDigital", "Digital", "devices") + """
             """ + admin_tab("metadata", "appAdmin.tabMetadata", "Metadata", "library_preferences") + """
+            """ + admin_tab("custom_fields", "appAdmin.tabCustomFields", "Custom fields", "edit_notes") + """
             """ + admin_tab("backup", "appAdmin.tabBackup", "Backup", "import") + """
             """ + admin_tab("audit", "appAdmin.tabAudit", "Audit", "lists") + """
           </nav>
@@ -19088,6 +19391,24 @@ def ui_preview_html(
                   <strong id="appAdminMetadataArtworkTotal">-</strong>
                 </article>
               </div>
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.originBackfill">Country of origin</h3>
+                <p data-next-i18n="appAdmin.originBackfillHelp">Films added before this feature have no country of origin or original language, so they stay out of those filters. This asks TMDB for the bare record and writes those two fields, which takes minutes rather than the hours a full metadata refresh needs.</p>
+                <div class="app-admin-summary-grid">
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillPending">Films still missing it</span>
+                    <strong id="appAdminOriginBackfillPending">-</strong>
+                  </article>
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillUnresolvable">Not matched to TMDB</span>
+                    <strong id="appAdminOriginBackfillUnresolvable">-</strong>
+                  </article>
+                </div>
+                <p class="import-source-meta" data-next-i18n="appAdmin.originBackfillUnresolvableHelp">Films with no TMDB match cannot be filled in this way, so that number is counted separately and does not reach zero.</p>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminOriginBackfillButton" data-next-i18n="appAdmin.originBackfillRun">Fill in origin data</button>
+                </div>
+              </div>
             </div>
             <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelArtwork" role="tabpanel" aria-labelledby="appAdminMetadataTabArtwork" aria-hidden="true" data-app-admin-metadata-panel="artwork">
               <div class="detail-card profile-card full">
@@ -19281,7 +19602,54 @@ def ui_preview_html(
             </div>
           </section>
         </section>
-        <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
+        <section class="app-admin-panel" id="appAdminPanelCustomFields" role="tabpanel" aria-labelledby="appAdminTabCustomFields" aria-hidden="true" tabindex="0" data-app-admin-panel="custom_fields">
+          <section class="profile-grid">
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("edit_notes") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.tabCustomFields">Custom fields</h3>
+                    <p data-next-i18n="appAdmin.customFieldsHelp">Fields you define yourself. They appear on every film, sync to the apps, and can be filtered and exported.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="login-message" id="appAdminCustomFieldsMessage"></div>
+            </section>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.customFieldsAdd">Add a field</h3>
+              <form class="profile-form" id="appAdminCustomFieldForm">
+                <label class="profile-field">
+                  <span data-next-i18n="appAdmin.customFieldName">Name</span>
+                  <input id="appAdminCustomFieldName" type="text" maxlength="80" required data-next-i18n-placeholder="appAdmin.customFieldNamePlaceholder" placeholder="Rip status">
+                </label>
+                <label class="profile-field">
+                  <span data-next-i18n="appAdmin.customFieldType">Type</span>
+                  <select id="appAdminCustomFieldType">
+                    <option value="text" data-next-i18n="appAdmin.customFieldTypeText">Text</option>
+                    <option value="number" data-next-i18n="appAdmin.customFieldTypeNumber">Number</option>
+                    <option value="date" data-next-i18n="appAdmin.customFieldTypeDate">Date</option>
+                    <option value="boolean" data-next-i18n="appAdmin.customFieldTypeBoolean">Yes / no</option>
+                    <option value="select" data-next-i18n="appAdmin.customFieldTypeSelect">Choice list</option>
+                  </select>
+                </label>
+                <label class="profile-field hidden" id="appAdminCustomFieldOptionsRow">
+                  <span data-next-i18n="appAdmin.customFieldOptions">Choices</span>
+                  <textarea id="appAdminCustomFieldOptions" rows="4" data-next-i18n-placeholder="appAdmin.customFieldOptionsPlaceholder" placeholder="One per line"></textarea>
+                </label>
+                <p class="import-source-meta" data-next-i18n="appAdmin.customFieldTypeFixedHelp">The type cannot be changed later: it decides how the value is stored, sorted and filtered.</p>
+                <div class="button-row">
+                  <button type="submit" class="primary-button" data-next-i18n="appAdmin.customFieldsAdd">Add a field</button>
+                </div>
+              </form>
+            </div>
+            <div class="detail-card profile-card full">
+              <h3 data-next-i18n="appAdmin.customFieldsExisting">Your fields</h3>
+              <div id="appAdminCustomFieldsList"></div>
+            </div>
+          </section>
+        </section>
+                <section class="app-admin-panel" id="appAdminPanelAudit" role="tabpanel" aria-labelledby="appAdminTabAudit" aria-hidden="true" tabindex="0" data-app-admin-panel="audit">
           <section class="profile-grid">
             <section class="profile-dashboard-card primary full">
               <div class="profile-dashboard-card-head">
@@ -19357,6 +19725,25 @@ def ui_preview_html(
       <div class="command-list" id="commandPaletteList"></div>
     </div>
   </section>
+  <section class="support-prompt-backdrop hidden" id="supportPromptBackdrop" aria-modal="true" role="dialog" aria-labelledby="supportPromptTitle">
+    <div class="support-prompt-panel">
+      <button type="button" class="icon-button support-prompt-close" id="supportPromptCloseButton" aria-label="Close" data-next-i18n-aria="common.close">×</button>
+      <div class="support-prompt-head">
+        <span class="support-prompt-mark" aria-hidden="true">""" + nav_icon("support") + """</span>
+        <div>
+          <h2 id="supportPromptTitle" data-next-i18n="support.promptTitle">Enjoying DiscVault?</h2>
+          <p data-next-i18n="support.promptBody">DiscVault is built and maintained in my own time. If it earns a place on your shelf, a coffee helps keep the development going.</p>
+        </div>
+      </div>
+      <div class="support-prompt-actions">
+        <a class="profile-about-coffee" id="supportPromptCoffeeLink" href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">
+          <img src="/api/next/assets/buymeacoffee-button.png" width="545" height="153" alt="Buy me a coffee">
+        </a>
+        <button type="button" class="secondary-button" id="supportPromptLaterButton" data-next-i18n="support.promptLater">Maybe later</button>
+      </div>
+      <p class="support-prompt-foot" data-next-i18n="support.promptFoot">You can find this again under Profile → About.</p>
+    </div>
+  </section>
   <section class="location-qr-backdrop hidden" id="locationQrBackdrop" aria-modal="true" role="dialog" aria-labelledby="locationQrTitle">
     <div class="location-qr-panel">
       <div class="preferences-head location-qr-head">
@@ -19414,6 +19801,11 @@ def ui_preview_html(
     // library-paging.js pages into that array from outside the SPA and has no
     // other way to learn the array it was fetching against was thrown away.
     let librarySnapshotEpoch = 0;
+    // Movie ids this session deleted, so a hydration page fetched before the
+    // delete can never re-append them (#719). Consulted only by appendMovies:
+    // loadAppSnapshot() stays authoritative and replaces the array without
+    // looking here, so the server always wins on what actually exists.
+    const libraryDeletedMovieIds = new Set();
     let libraryMovieTotal = Number(state.moviesTotal ?? (state.movies || []).length) || 0;
     let libraryMoviePageSize = Number(state.moviesPageSize) || 200;
     let libraryMoviesHasMore = state.moviesHasMore === true;
@@ -19434,6 +19826,11 @@ def ui_preview_html(
     let priceDisplay = state.priceDisplay || {};
     let preferences = Object.assign({}, """ + html_lib.escape(json_lib.dumps(json_ready(preferences), separators=(",", ":")), quote=False) + """, state.preferences || {});
     let collectionSortMode = localStorage.getItem("dv_next_collection_sort") || "title_asc";
+    // Defaults to the order the server already returns, so nobody's Watchlist
+    // silently rearranges itself on upgrade. Its own key and its own variable:
+    // sharing collectionSortMode would tie the Library's order to the Lists
+    // module, which are different questions about different data (#719).
+    let listsSortMode = localStorage.getItem("dv_next_lists_sort") || "date_desc";
     let collectionFormatFilter = localStorage.getItem("dv_next_collection_format") || "all";
     function readStoredFormatFilters() {
       try {
@@ -19483,6 +19880,10 @@ def ui_preview_html(
     let activeLocationRouteId = "";
     let activeLocationRouteMissing = false;
     let peopleState = {loaded: false, loading: false, items: [], query: "", role: "all"};
+    // Mirrors PERSONAL_LIST_MAX_PAGE_SIZE in next_app.py. Kept as one number so
+    // the page cannot ask for more than the server will ever serve, nor settle
+    // for less than it would.
+    const LISTS_MAX_PAGE_SIZE = 5000;
     let listsState = {active: "watchlist", loaded: false, watchlist: [], watched: [], wishlist: [], tags: [], loans: [], loanRequests: {incoming: [], outgoing: []}, loanRequestsTab: "incoming", loanRequestsLoaded: false, counts: {}, wishlistSearch: {query: "", loading: false, error: "", candidates: []}};
     let discoverState = {
       loaded: false,
@@ -19747,6 +20148,37 @@ def ui_preview_html(
       const raw = String(code || "").trim();
       const label = languageLabel(raw);
       return label && label !== raw ? `${label} (${raw})` : raw;
+    }
+    // Country names, on the same terms as language names above: 250 regions
+    // across 29 locales is not a translation task, the browser knows the answer
+    // for the locale the user picked, and the stored value stays the code.
+    //
+    // Memoized per locale like languageLabel. ratingCountryLabel used to build a
+    // fresh Intl.DisplayNames on every call, which is fine for the two dozen
+    // certificate countries and not for a filter list built by walking a few
+    // thousand movies.
+    let regionDisplayNames = null;
+    let regionDisplayLocale = null;
+    function regionLabel(code) {
+      const raw = String(code || "").trim().toUpperCase();
+      if (!raw) return "";
+      if (regionDisplayLocale !== localeState.locale) {
+        regionDisplayLocale = localeState.locale;
+        try {
+          regionDisplayNames = new Intl.DisplayNames([localeState.locale], {type: "region"});
+        } catch (error) {
+          regionDisplayNames = null;
+        }
+      }
+      if (!regionDisplayNames) return raw;
+      try {
+        // Intl echoes the input back for a subtag it does not know, which is a
+        // code rather than a blank -- the same fallback the feed is lenient
+        // about for languages.
+        return regionDisplayNames.of(raw) || raw;
+      } catch (error) {
+        return raw;
+      }
     }
     function enumLabel(prefix, value, fallback) {
       const raw = String(value || "").trim();
@@ -20025,21 +20457,38 @@ def ui_preview_html(
         .replace(/[_-]+/g, " ")
         .replace(/\\b\\w/g, (char) => char.toUpperCase());
     }
+    // Flag files are named by ISO 3166-1 alpha-2 COUNTRY code, never by
+    // language code. Denmark and Sweden used to sit on disk as da.svg/sv.svg,
+    // so every caller -- which passes a country, "DK" or "SE" -- asked for a
+    // file that was not there (#749). Nothing reports that: the route answers
+    // 404 and the browser draws its broken-image glyph beside an age label that
+    // rendered fine, so it reads as a styling glitch.
+    // FLAG_FILE_CODES mirrors the directory, and resolving to a code outside it
+    // returns "" so the caller draws no icon instead of a broken one. Keep it in
+    // step with app/frontend/flags/ -- tests/test_next_flag_icons.py compares the
+    // two, and ties RATING_COUNTRIES_ORDER to it as well.
+    const FLAG_FILE_CODES = ["au", "bg", "br", "ca", "cn", "cz", "de", "dk", "ee", "es", "fi", "fr", "gb", "gr", "hr", "hu", "in", "it", "jp", "kr", "lt", "lv", "my", "nl", "no", "nz", "ph", "pl", "pt", "ro", "se", "si", "sk", "tr", "tw", "ua", "us"];
     function flagCodeForLocale(value) {
       const raw = String(value || "").replace("_", "-").toLowerCase();
       const base = raw.split("-")[0];
       const region = raw.split("-")[1] || "";
-      const map = {en: "us", nb: "no", no: "no", da: "da", sv: "sv", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", pl: "pl", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", el: "gr", uk: "ua", hr: "hr", sl: "si", et: "ee", lv: "lv", lt: "lt", tr: "tr", ja: "jp", zh: "cn", ko: "kr"};
-      if (["us", "gb", "ca", "nl", "de", "fr", "es", "pt", "it", "da", "sv", "fi", "no", "pl", "cz", "sk", "hu", "ro", "bg", "gr", "ua", "hr", "si", "ee", "lv", "lt", "tr", "jp", "cn", "tw", "kr"].includes(region)) return region;
-      return map[base] || base || "us";
+      // Language code -> country whose flag stands in for it.
+      const map = {en: "us", nb: "no", nn: "no", no: "no", da: "dk", sv: "se", fi: "fi", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", pl: "pl", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", el: "gr", uk: "ua", hr: "hr", sl: "si", et: "ee", lv: "lv", lt: "lt", tr: "tr", ja: "jp", zh: "cn", ko: "kr", hi: "in", ms: "my", fil: "ph", tl: "ph"};
+      if (FLAG_FILE_CODES.includes(region)) return region;
+      const code = map[base] || base;
+      return FLAG_FILE_CODES.includes(code) ? code : "";
     }
     function flagCodeForCountry(value) {
       const raw = String(value || "").trim().toLowerCase();
-      const map = {uk: "gb", gb: "gb", us: "us", ca: "ca", nl: "nl", de: "de", fr: "fr", es: "es", pt: "pt", it: "it", da: "da", sv: "sv", fi: "fi", nb: "no", no: "no", pl: "pl", cz: "cz", cs: "cz", sk: "sk", hu: "hu", ro: "ro", bg: "bg", gr: "gr", el: "gr", ua: "ua", hr: "hr", si: "si", sl: "si", ee: "ee", et: "ee", lv: "lv", lt: "lt", tr: "tr", jp: "jp", ja: "jp", cn: "cn", zh: "cn", tw: "tw", kr: "kr", ko: "kr"};
+      // Country aliases only -- "uk" is the United Kingdom here, where in a
+      // locale the same two letters are the Ukrainian language.
+      const map = {uk: "gb", el: "gr", cs: "cz", nb: "no", ja: "jp", zh: "cn", ko: "kr", sl: "si", et: "ee", da: "dk", sv: "se"};
+      if (FLAG_FILE_CODES.includes(raw)) return raw;
       return map[raw] || flagCodeForLocale(raw);
     }
     function flagIconHtml(value, label = "") {
       const code = flagCodeForCountry(value);
+      if (!code) return "";
       return `<img class="flag-icon" src="/api/next/flags/${escapeHtml(code)}.svg" alt="${escapeHtml(label || code.toUpperCase())}">`;
     }
     function debugIdHtml(id, label = "ID") {
@@ -20718,6 +21167,10 @@ def ui_preview_html(
         plugins: ["metadata.manage_plugins", "metadata.manage_plugin_order", "metadata.manage_plugin_settings", "metadata.manage_receivers", "metadata.view_plugin_health", "plugins.delete", "digital_sources.connect", "digital_sources.manage", "collection.import"],
         digital: ["digital_sources.view", "digital_sources.connect", "digital_sources.sync", "digital_sources.manage"],
         metadata: ["metadata.refresh_one", "metadata.refresh_bulk", "metadata.manage_artwork_trash", "admin.view_jobs"],
+        // Defining a field changes the shape of every record in the collection,
+        // so it sits with editing the collection rather than with the
+        // administrative surfaces beside it. Same key the routes require.
+        custom_fields: ["collection.edit_all"],
         backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
         audit: ["admin.view_audit"]
       },
@@ -20838,6 +21291,177 @@ def ui_preview_html(
       if (!plugins.length) return true;
       return plugins.find((plugin) => plugin.id === "tmdb")?.enabled === true;
     }
+    // ---- Custom fields (admin) --------------------------------------------
+    // Definitions are instance-wide, so this screen is the whole of their
+    // management. Field *labels* are typed by the owner and never translated --
+    // only the chrome around them has i18n keys.
+    let appAdminCustomFields = [];
+
+    function setAppAdminCustomFieldsMessage(text, tone) {
+      const node = document.getElementById("appAdminCustomFieldsMessage");
+      if (!node) return;
+      node.textContent = text || "";
+      node.className = "login-message" + (tone ? " " + tone : "");
+    }
+    function customFieldTypeLabel(fieldType) {
+      const labels = {
+        text: tNext("appAdmin.customFieldTypeText", "Text"),
+        number: tNext("appAdmin.customFieldTypeNumber", "Number"),
+        date: tNext("appAdmin.customFieldTypeDate", "Date"),
+        boolean: tNext("appAdmin.customFieldTypeBoolean", "Yes / no"),
+        select: tNext("appAdmin.customFieldTypeSelect", "Choice list")
+      };
+      // An unknown type is shown as itself rather than blanked: this screen may
+      // outlive a server that knows a type it does not (contract 4e.4).
+      return labels[fieldType] || fieldType;
+    }
+    function parseCustomFieldOptions(text) {
+      return String(text || "")
+        .split("\\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((label) => ({key: "", label}));
+    }
+    async function loadAppAdminCustomFields() {
+      if (!hasPermission("collection.edit_all")) return;
+      try {
+        const payload = await authApiJson("/api/next/custom-fields");
+        appAdminCustomFields = Array.isArray(payload.fields) ? payload.fields : [];
+        renderAppAdminCustomFields();
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    function renderAppAdminCustomFields() {
+      const list = document.getElementById("appAdminCustomFieldsList");
+      if (!list) return;
+      if (!appAdminCustomFields.length) {
+        list.innerHTML = `<p class="import-source-meta">${escapeHtml(tNext("appAdmin.customFieldsEmpty", "No fields defined yet."))}</p>`;
+        return;
+      }
+      list.innerHTML = appAdminCustomFields.map((field, index) => {
+        const archived = Boolean(field.archivedAt);
+        const options = Array.isArray(field.options) ? field.options : [];
+        return `
+          <div class="bulk-target${archived ? " danger" : ""}" data-custom-field-row="${escapeHtml(field.id)}">
+            <div class="detail-card-head compact">
+              <h4>${escapeHtml(field.name || field.key)}</h4>
+              <span class="tag">${escapeHtml(customFieldTypeLabel(field.fieldType))}</span>
+              ${archived ? `<span class="tag" data-next-i18n="appAdmin.customFieldArchived">Archived</span>` : ""}
+            </div>
+            <p class="import-source-meta"><code>${escapeHtml(field.key)}</code>${options.length ? " &middot; " + escapeHtml(options.map((option) => option.label).join(", ")) : ""}</p>
+            <div class="button-row compact">
+              <button type="button" class="secondary-button" data-custom-field-rename="${escapeHtml(field.id)}" data-next-i18n="appAdmin.customFieldRename">Rename</button>
+              <button type="button" class="secondary-button" data-custom-field-move="${escapeHtml(field.id)}" data-direction="up"${index === 0 ? " disabled" : ""} aria-label="${escapeHtml(tNext("appAdmin.customFieldMoveUp", "Move up"))}">&uarr;</button>
+              <button type="button" class="secondary-button" data-custom-field-move="${escapeHtml(field.id)}" data-direction="down"${index === appAdminCustomFields.length - 1 ? " disabled" : ""} aria-label="${escapeHtml(tNext("appAdmin.customFieldMoveDown", "Move down"))}">&darr;</button>
+              <button type="button" class="secondary-button${archived ? "" : " danger"}" data-custom-field-archive="${escapeHtml(field.id)}" data-archived="${archived ? "true" : "false"}">${escapeHtml(archived ? tNext("appAdmin.customFieldRestore", "Restore") : tNext("appAdmin.customFieldArchive", "Archive"))}</button>
+            </div>
+          </div>`;
+      }).join("");
+    }
+    async function patchAppAdminCustomField(fieldId, body, successKey, successFallback) {
+      try {
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        await loadAppAdminCustomFields();
+        setAppAdminCustomFieldsMessage(tNext(successKey, successFallback), "good");
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    async function createAppAdminCustomField(event) {
+      event.preventDefault();
+      const name = document.getElementById("appAdminCustomFieldName")?.value || "";
+      const fieldType = document.getElementById("appAdminCustomFieldType")?.value || "text";
+      const body = {name, fieldType};
+      if (fieldType === "select") {
+        body.options = parseCustomFieldOptions(document.getElementById("appAdminCustomFieldOptions")?.value);
+      }
+      try {
+        const payload = await authApiJson("/api/next/admin/custom-fields", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify(body)
+        });
+        document.getElementById("appAdminCustomFieldForm")?.reset();
+        syncAppAdminCustomFieldOptionsRow();
+        await loadAppAdminCustomFields();
+        // Creating a field whose key already exists returns the existing one
+        // rather than an error, so the message has to say which happened --
+        // otherwise a typo silently looks like a successful create.
+        setAppAdminCustomFieldsMessage(
+          payload.created === false
+            ? tNext("appAdmin.customFieldExists", "That field already exists.")
+            : tNext("appAdmin.customFieldCreated", "Field added."),
+          payload.created === false ? "" : "good"
+        );
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    async function archiveAppAdminCustomField(fieldId, archived) {
+      if (!archived) {
+        // Show how much data is behind the field before hiding its input. The
+        // values survive archiving, and saying so is what stops this reading as
+        // a delete.
+        let usage = 0;
+        try {
+          const payload = await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(fieldId)}/usage`);
+          usage = Number(payload.movies || 0);
+        } catch (error) {
+          usage = 0;
+        }
+        const question = usage
+          ? tNext("appAdmin.customFieldArchiveConfirmUsed", "{count} films have a value for this field. Archiving hides the input; the values stay.").replace("{count}", String(usage))
+          : tNext("appAdmin.customFieldArchiveConfirm", "Archive this field? The input disappears; anything already filled in stays.");
+        if (!window.confirm(question)) return;
+      }
+      await patchAppAdminCustomField(
+        fieldId,
+        {archived: !archived},
+        archived ? "appAdmin.customFieldRestored" : "appAdmin.customFieldArchivedDone",
+        archived ? "Field restored." : "Field archived."
+      );
+    }
+    async function renameAppAdminCustomField(fieldId) {
+      const field = appAdminCustomFields.find((item) => String(item.id) === String(fieldId));
+      if (!field) return;
+      const name = window.prompt(tNext("appAdmin.customFieldRenamePrompt", "New name for this field"), field.name || "");
+      if (name === null) return;
+      if (!String(name).trim()) return;
+      // Only the label moves. The key is what stored values and saved filters
+      // name, so it stays put -- which is the whole reason the two are separate.
+      await patchAppAdminCustomField(fieldId, {name}, "appAdmin.customFieldRenamed", "Field renamed.");
+    }
+    async function moveAppAdminCustomField(fieldId, direction) {
+      const index = appAdminCustomFields.findIndex((item) => String(item.id) === String(fieldId));
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (index < 0 || target < 0 || target >= appAdminCustomFields.length) return;
+      const moving = appAdminCustomFields[index];
+      const other = appAdminCustomFields[target];
+      try {
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(moving.id)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({sortOrder: other.sortOrder})
+        });
+        await authApiJson(`/api/next/admin/custom-fields/${encodeURIComponent(other.id)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({sortOrder: moving.sortOrder})
+        });
+        await loadAppAdminCustomFields();
+      } catch (error) {
+        setAppAdminCustomFieldsMessage(error.message || String(error), "bad");
+      }
+    }
+    function syncAppAdminCustomFieldOptionsRow() {
+      const type = document.getElementById("appAdminCustomFieldType")?.value || "text";
+      document.getElementById("appAdminCustomFieldOptionsRow")?.classList.toggle("hidden", type !== "select");
+    }
     function canManageLoansSystem() {
       return hasActualPermission("security.manage_loans_system");
     }
@@ -20880,7 +21504,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "backup", "audit"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "custom_fields", "backup", "audit"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -21134,6 +21758,7 @@ def ui_preview_html(
       if (appAdmin.activeTab === "digital") setAppAdminDigitalTab(appAdmin.activeDigitalTab);
       if (appAdmin.activeTab === "metadata") setAppAdminMetadataTab(appAdmin.activeMetadataTab);
       if (appAdmin.activeTab === "backup") setAppAdminBackupTab(appAdmin.activeBackupTab);
+      if (appAdmin.activeTab === "custom_fields") loadAppAdminCustomFields();
       if (appAdmin.activeTab === "audit") setAppAdminAuditTab(appAdmin.activeAuditTab);
     }
     function handleAppAdminTabKeydown(button, event) {
@@ -24984,6 +25609,7 @@ def ui_preview_html(
         appAdmin.metadataArtworkTrash = trashPayload || {items: [], settings: {}, purge: {}};
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
+        await refreshAppAdminOriginBackfill();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
@@ -25021,6 +25647,51 @@ def ui_preview_html(
         await refreshAppAdminMetadataJobs();
         if (activeDetailPayload || activeContainerPayload) await refreshCurrentDetail();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.artworkRestored", "Artwork restored."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    function renderAppAdminOriginBackfill(counts) {
+      const pending = document.getElementById("appAdminOriginBackfillPending");
+      const unresolvable = document.getElementById("appAdminOriginBackfillUnresolvable");
+      if (pending) pending.textContent = String(counts?.pending ?? "-");
+      if (unresolvable) unresolvable.textContent = String(counts?.unresolvable ?? "-");
+      const button = document.getElementById("appAdminOriginBackfillButton");
+      // Nothing left to fill is a disabled button, not a hidden card: the two
+      // counters are the answer to "why is my origin filter empty", and they
+      // have to stay readable once they reach zero.
+      if (button) button.disabled = !(Number(counts?.pending) > 0);
+    }
+    async function refreshAppAdminOriginBackfill() {
+      if (!canUseAdminTab("metadata")) return;
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/origin-backfill");
+        appAdmin.originBackfill = payload;
+        renderAppAdminOriginBackfill(payload);
+      } catch (error) {
+        // Silent on read: this rides along with the metadata panel load, and a
+        // failure here must not overwrite the message that load just set.
+        renderAppAdminOriginBackfill(null);
+      }
+    }
+    async function queueAppAdminOriginBackfill() {
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.originBackfillQueueing", "Queueing origin backfill..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/origin-backfill", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({batchSize: 100})
+        });
+        renderAppAdminOriginBackfill(payload);
+        const queued = Number(payload.queued || 0);
+        setAppAdminMessage(
+          "appAdminMetadataMessage",
+          queued
+            ? tNext("appAdmin.originBackfillQueued", "{count} origin backfill jobs queued.").replace("{count}", String(queued))
+            : tNext("appAdmin.originBackfillNothing", "Every film that can be filled already has its origin data."),
+          queued ? "good" : ""
+        );
+        await refreshAppAdminMetadataJobs();
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }
@@ -26375,7 +27046,11 @@ def ui_preview_html(
       {menu: "collectionSortMenu", trigger: "collectionSortTrigger", panel: "collectionSortPanel"},
       {menu: "collectionFilterMenu", trigger: "collectionFilterTrigger", panel: "collectionFilterPanel"},
       {menu: "locationDetailSortMenu", trigger: "locationDetailSortTrigger", panel: "locationDetailSortPanel"},
-      {menu: "locationDetailFilterMenu", trigger: "locationDetailFilterTrigger", panel: "locationDetailFilterPanel"}
+      {menu: "locationDetailFilterMenu", trigger: "locationDetailFilterTrigger", panel: "locationDetailFilterPanel"},
+      // The Lists menu rides the same machinery -- open/close, outside-click,
+      // Escape and viewport positioning are all registry-driven -- while
+      // keeping its own option attribute so it drives its own state.
+      {menu: "listsSortMenu", trigger: "listsSortTrigger", panel: "listsSortPanel"}
     ];
     let collectionMenusBound = false;
     function closeCollectionMenu(menuId) {
@@ -26453,6 +27128,37 @@ def ui_preview_html(
         });
       }
     }
+    // The stored form of an original-language filter value: primary subtag lower
+    // case, any script/region subtags left as given ("cmn-Hans"), mirroring
+    // next_origin.normalize_language_code on the server. Anything else is "any"
+    // rather than an error -- a filter is not a place to refuse input.
+    function normalizeOriginLanguageValue(value) {
+      const raw = String(value || "").trim();
+      if (!raw || raw === "any") return "any";
+      const parts = raw.split("-");
+      parts[0] = parts[0].toLowerCase();
+      const candidate = parts.join("-");
+      return /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(candidate) ? candidate : "any";
+    }
+    // A custom-field constraint is {fieldKey: {op, value}}. `op` is closed;
+    // `value` is kept as the user gave it, because what is valid depends on the
+    // field's type and that is decided when matching, not when storing.
+    const CUSTOM_FILTER_OPS = ["is", "contains", "gte", "lte", "set", "unset"];
+    function normalizeCustomFilters(value) {
+      if (!value || typeof value !== "object") return {};
+      const result = {};
+      Object.entries(value).forEach(([key, entry]) => {
+        if (!/^[a-z][a-z0-9_]{0,47}$/.test(String(key))) return;
+        const source = entry && typeof entry === "object" ? entry : {op: "is", value: entry};
+        const op = CUSTOM_FILTER_OPS.includes(source.op) ? source.op : "is";
+        const raw = source.value;
+        // `set` and `unset` carry no value; everything else needs one, and an
+        // empty one means the row was left blank rather than constrained.
+        if (op !== "set" && op !== "unset" && (raw === null || raw === undefined || String(raw).trim() === "")) return;
+        result[key] = op === "set" || op === "unset" ? {op} : {op, value: raw};
+      });
+      return result;
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
@@ -26462,7 +27168,13 @@ def ui_preview_html(
         artwork: "any",
         personal: "any",
         itemType: "any",
-        location: "any"
+        location: "any",
+        originCountry: "any",
+        originalLanguage: "any",
+        // One entry per constrained custom field, keyed by field key. An empty
+        // object is "no custom constraint" and is what every filter saved before
+        // custom fields existed normalizes to.
+        custom: {}
       };
     }
     function normalizeAdvancedSearch(value) {
@@ -26474,9 +27186,27 @@ def ui_preview_html(
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
-        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged"].includes(source.personal) ? source.personal : "any",
+        personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(source.personal) ? source.personal : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
-        location: String(source.location || "any").trim() || "any"
+        location: String(source.location || "any").trim() || "any",
+        // Validated on SHAPE, deliberately not against the movies that happen to
+        // be loaded. The genre filter self-heals a stored value that matches no
+        // loaded row (applyGenreOptions), and gets away with it only because a
+        // genre filter cannot be saved. These two can: they live inside every
+        // saved smart filter, and hydration is progressive -- a filter naming
+        // Japan applied while page 1 of 6 is in would silently reset itself to
+        // "any" and show the user their whole library as if it matched.
+        originCountry: /^[A-Za-z]{2}$/.test(String(source.originCountry || "").trim())
+          ? String(source.originCountry).trim().toUpperCase()
+          : "any",
+        originalLanguage: normalizeOriginLanguageValue(source.originalLanguage),
+        // Same rule as the two above, and it matters more here: a custom field
+        // can be archived while a saved smart filter still names it. Dropping
+        // the clause would turn that filter into "any" and show the whole
+        // library as though everything matched. The values are kept as given and
+        // resolved at match time, so an archived field keeps filtering and a
+        // field that never existed simply matches nothing.
+        custom: normalizeCustomFilters(source.custom)
       };
     }
     function effectiveAdvancedSearchFilters(options = {}) {
@@ -26498,6 +27228,11 @@ def ui_preview_html(
       if (normalized.personal !== "any") count += 1;
       if (normalized.itemType !== "any") count += 1;
       if (normalized.location !== "any") count += 1;
+      if (normalized.originCountry !== "any") count += 1;
+      if (normalized.originalLanguage !== "any") count += 1;
+      // Each constrained field counts once, so the badge matches what the user
+      // actually set rather than counting "custom fields" as one thing.
+      count += Object.keys(normalized.custom || {}).length;
       return count;
     }
     function setAdvancedControlValue(id, value) {
@@ -26513,13 +27248,143 @@ def ui_preview_html(
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
         itemType: document.getElementById("advancedContainerType")?.value || "any",
-        location: document.getElementById("advancedLocationFilter")?.value || "any"
+        location: document.getElementById("advancedLocationFilter")?.value || "any",
+        originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
+        originalLanguage: document.getElementById("advancedOriginLanguage")?.value || "any",
+        custom: readCustomFilterControls()
       });
+    }
+    // The rows are generated from the definitions, so this is a DOM scan rather
+    // than a list of literal ids like every filter above it.
+    function readCustomFilterControls() {
+      const custom = {};
+      document.querySelectorAll("[data-custom-filter-op]").forEach((opNode) => {
+        const key = opNode.dataset.customFilterOp;
+        const op = opNode.value || "any";
+        if (op === "any") return;
+        if (op === "set" || op === "unset") { custom[key] = {op}; return; }
+        const valueNode = document.querySelector(`[data-custom-filter-value="${key}"]`);
+        const raw = valueNode ? String(valueNode.value ?? "").trim() : "";
+        if (!raw) return;
+        custom[key] = {op, value: raw};
+      });
+      return custom;
     }
     function persistAdvancedSearch() {
       localStorage.setItem("dv_next_advanced_search", JSON.stringify(normalizeAdvancedSearch(advancedSearch)));
       localStorage.setItem("dv_next_smart_filters", JSON.stringify(Array.isArray(smartFilters) ? smartFilters : []));
       localStorage.setItem("dv_next_active_smart_filter", activeSmartFilterId || "");
+    }
+    // Options are derived from the movies actually loaded, like the genre and
+    // location lists. Because hydration is progressive the list grows as pages
+    // arrive -- which is why populateOriginFilterSelect keeps a stored value
+    // that matches nothing yet instead of dropping it.
+    function collectionOriginCountryOptionValues() {
+      const values = new Set();
+      movies.forEach((movie) => movieOriginCountryValues(movie).forEach((code) => values.add(code)));
+      return [...values].sort((a, b) => regionLabel(a).localeCompare(regionLabel(b), localeState.locale));
+    }
+    function collectionOriginLanguageOptionValues() {
+      const values = new Set();
+      movies.forEach((movie) => {
+        const code = movieOriginLanguageValue(movie);
+        if (code !== "any") values.add(code);
+      });
+      return [...values].sort((a, b) => languageLabel(a).localeCompare(languageLabel(b), localeState.locale));
+    }
+    // How many loaded films have no origin at all. Shown as a hint so an empty
+    // filter list reads as "the data is not in yet" rather than "this is
+    // broken" -- the answer is the admin backfill, not a bug report.
+    function originDataMissingCount() {
+      return movies.reduce(
+        (total, movie) =>
+          total + (movieOriginCountryValues(movie).length || movieOriginLanguageValue(movie) !== "any" ? 0 : 1),
+        0
+      );
+    }
+    function populateOriginFilterSelect(id, values, current, labelFor, anyLabel) {
+      const node = document.getElementById(id);
+      if (!node) return;
+      const options = [...values];
+      // A stored value the loaded pages do not cover yet is appended rather than
+      // discarded. Dropping it would silently widen a saved smart filter to the
+      // whole library mid-hydration.
+      if (current && current !== "any" && !options.includes(current)) options.push(current);
+      node.innerHTML = [
+        `<option value="any">${escapeHtml(anyLabel)}</option>`,
+        ...options.map((value) => `<option value="${escapeHtml(value)}">${escapeHtml(labelFor(value) || value)}</option>`)
+      ].join("");
+      node.value = current && current !== "any" ? current : "any";
+    }
+    // One row per live field. Archived fields get no row -- but a stored
+    // constraint naming one still filters, because normalizeAdvancedSearch keeps
+    // it and the predicate resolves against the values, not against this list.
+    // That is the difference between a filter the user can no longer edit and a
+    // filter that silently stopped meaning anything.
+    function customFilterOperatorsFor(fieldType) {
+      const presence = [
+        {op: "set", label: tNext("collection.customFilterSet", "Has a value")},
+        {op: "unset", label: tNext("collection.customFilterUnset", "Has no value")}
+      ];
+      if (fieldType === "number" || fieldType === "date") {
+        return [
+          {op: "is", label: tNext("collection.customFilterIs", "is")},
+          {op: "gte", label: tNext("collection.customFilterGte", "is at least")},
+          {op: "lte", label: tNext("collection.customFilterLte", "is at most")},
+          ...presence
+        ];
+      }
+      if (fieldType === "boolean" || fieldType === "select") {
+        return [{op: "is", label: tNext("collection.customFilterIs", "is")}, ...presence];
+      }
+      return [
+        {op: "contains", label: tNext("collection.customFilterContains", "contains")},
+        {op: "is", label: tNext("collection.customFilterIs", "is")},
+        ...presence
+      ];
+    }
+    function customFilterValueInputHtml(field, value) {
+      const key = escapeHtml(field.key);
+      if (field.fieldType === "boolean") {
+        return `<select data-custom-filter-value="${key}">
+          <option value="true"${String(value) === "true" ? " selected" : ""}>${escapeHtml(tNext("common.yes", "Yes"))}</option>
+          <option value="false"${String(value) === "false" ? " selected" : ""}>${escapeHtml(tNext("common.no", "No"))}</option>
+        </select>`;
+      }
+      if (field.fieldType === "select") {
+        const options = Array.isArray(field.options) ? field.options : [];
+        const known = options.some((option) => String(option.key) === String(value));
+        const extra = !known && value ? `<option value="${escapeHtml(String(value))}" selected>${escapeHtml(String(value))}</option>` : "";
+        return `<select data-custom-filter-value="${key}">${extra}${options.map((option) => `<option value="${escapeHtml(option.key)}"${String(option.key) === String(value) ? " selected" : ""}>${escapeHtml(option.label || option.key)}</option>`).join("")}</select>`;
+      }
+      const inputType = field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "search";
+      const step = field.fieldType === "number" ? ' step="any"' : "";
+      return `<input type="${inputType}"${step} data-custom-filter-value="${key}" value="${escapeHtml(value === undefined ? "" : String(value))}">`;
+    }
+    function renderCustomFilterControls() {
+      const container = document.getElementById("advancedCustomFilters");
+      const group = document.getElementById("advancedCustomFilterGroup");
+      if (!container) return;
+      const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      if (group) group.classList.toggle("hidden", !definitions.length);
+      if (!definitions.length) { container.innerHTML = ""; return; }
+      const stored = normalizeAdvancedSearch(advancedSearch).custom || {};
+      container.innerHTML = definitions.map((field) => {
+        const constraint = stored[field.key] || {};
+        const operators = customFilterOperatorsFor(field.fieldType);
+        const activeOp = operators.some((item) => item.op === constraint.op) ? constraint.op : "any";
+        const valueHidden = activeOp === "any" || activeOp === "set" || activeOp === "unset";
+        return `<label class="advanced-search-field">
+          <span>${escapeHtml(field.name || field.key)}</span>
+          <div class="custom-filter-row">
+            <select data-custom-filter-op="${escapeHtml(field.key)}">
+              <option value="any"${activeOp === "any" ? " selected" : ""}>${escapeHtml(tNext("common.any", "Any"))}</option>
+              ${operators.map((item) => `<option value="${item.op}"${activeOp === item.op ? " selected" : ""}>${escapeHtml(item.label)}</option>`).join("")}
+            </select>
+            <span class="custom-filter-value${valueHidden ? " hidden" : ""}" data-custom-filter-value-wrap="${escapeHtml(field.key)}">${customFilterValueInputHtml(field, constraint.value)}</span>
+          </div>
+        </label>`;
+      }).join("");
     }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
@@ -26547,6 +27412,29 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
+      renderCustomFilterControls();
+      populateOriginFilterSelect(
+        "advancedOriginCountry",
+        collectionOriginCountryOptionValues(),
+        advancedSearch.originCountry,
+        regionLabel,
+        tNext("collection.originCountryAny", "Any country")
+      );
+      populateOriginFilterSelect(
+        "advancedOriginLanguage",
+        collectionOriginLanguageOptionValues(),
+        advancedSearch.originalLanguage,
+        languageLabel,
+        tNext("collection.originalLanguageAny", "Any language")
+      );
+      const originHint = document.getElementById("advancedOriginHint");
+      if (originHint) {
+        const missing = originDataMissingCount();
+        originHint.textContent = missing
+          ? tNext("collection.originDataMissing", "{count} films have no origin data yet").replace("{count}", String(missing))
+          : "";
+        originHint.classList.toggle("hidden", missing === 0);
+      }
       const locationFilter = document.getElementById("advancedLocationFilter");
       if (locationFilter) {
         const anyLabel = tNext("collection.locationFilterAny", "Any location");
@@ -27123,6 +28011,66 @@ def ui_preview_html(
       if (hideWatched && movieIsWatched(movie)) return false;
       return true;
     }
+    // The FILM's origin, from movie_origin_countries / movies.original_language.
+    // Not movie.country / movie.language -- those are the release country and
+    // language of the disc, so a Dutch pressing of a Japanese film reads NL
+    // there and JP here, and filtering the wrong one answers a different
+    // question than the user asked.
+    function movieOriginCountryValues(movie) {
+      const values = movie?.origin_countries;
+      return Array.isArray(values) ? values.filter(Boolean).map((code) => String(code).toUpperCase()) : [];
+    }
+    function movieOriginLanguageValue(movie) {
+      return normalizeOriginLanguageValue(movie?.original_language);
+    }
+    function movieCustomValueMap(movie) {
+      const values = new Map();
+      (movie?.custom_values || []).forEach((item) => values.set(String(item.key), item));
+      return values;
+    }
+    // One comparison per operator, typed by what the value actually is. A number
+    // field compares numerically and a date lexically -- ISO dates sort
+    // correctly as strings, which is why they are stored and compared that way
+    // rather than parsed into a Date on every row of a few thousand.
+    function customValueMatches(entry, constraint) {
+      const op = constraint.op;
+      if (op === "set") return entry !== undefined;
+      if (op === "unset") return entry === undefined;
+      if (entry === undefined) return false;
+      const actual = entry.value;
+      if (actual === null || actual === undefined) return false;
+      const wanted = constraint.value;
+      if (op === "contains") {
+        return String(actual).toLowerCase().includes(String(wanted).toLowerCase());
+      }
+      if (op === "gte" || op === "lte") {
+        if (entry.type === "number") {
+          const left = Number(actual);
+          const right = Number(wanted);
+          if (!Number.isFinite(left) || !Number.isFinite(right)) return false;
+          return op === "gte" ? left >= right : left <= right;
+        }
+        const left = String(actual);
+        const right = String(wanted);
+        return op === "gte" ? left >= right : left <= right;
+      }
+      // "is": exact, but tolerant about how the wire spelled a boolean.
+      if (entry.type === "boolean") {
+        const wantedBool = wanted === true || String(wanted).toLowerCase() === "true";
+        return actual === wantedBool;
+      }
+      if (entry.type === "number") return Number(actual) === Number(wanted);
+      return String(actual) === String(wanted);
+    }
+    function movieMatchesCustomFilters(movie, custom) {
+      const constraints = Object.entries(custom || {});
+      if (!constraints.length) return true;
+      const values = movieCustomValueMap(movie);
+      // Every constraint must hold. A film that has no value at all for a
+      // constrained field fails, except under `unset`, which is what asks for
+      // exactly those films.
+      return constraints.every(([key, constraint]) => customValueMatches(values.get(key), constraint));
+    }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
@@ -27142,6 +28090,13 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      // The viewer's OWN score, not the owner's: "films I have rated" must not
+      // be answered with films somebody else rated.
+      if (filters.personal === "rated" && !movie?.personal_rating) return false;
+      if (filters.personal === "unrated" && movie?.personal_rating) return false;
+      if (filters.originCountry !== "any" && !movieOriginCountryValues(movie).includes(filters.originCountry)) return false;
+      if (filters.originalLanguage !== "any" && movieOriginLanguageValue(movie) !== filters.originalLanguage) return false;
+      if (!movieMatchesCustomFilters(movie, filters.custom)) return false;
       if (filters.location !== "any") {
         const movieLoc = String((movie && (movie.location_id || (movie.location && movie.location.id))) || "");
         if (!movieLoc || !locationSubtreeIds(filters.location).has(movieLoc)) return false;
@@ -27257,7 +28212,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged"].includes(filters.personal)) {
+      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -27681,7 +28636,23 @@ def ui_preview_html(
     function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
       const allowed = compact
         ? new Set(["title", "format", "behavior"])
-        : new Set(["title", "director", "actors", "studios", "rating", "tags", "behavior"]);
+        // "rating" here is the age certificate, which is why the personal score
+        // is "personalRating": reusing the key would silently repurpose the
+        // content-rating column. Wide set only -- the column is desktop-only, and
+        // a key allowed in the compact set renders a header whose click resets
+        // the sort to title with nothing failing.
+        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "tags", "behavior"]);
+      // A custom field is sortable on the wide layout too, but it cannot be in a
+      // literal set: the keys only exist at runtime. Shape check plus a lookup
+      // against the live definitions, so a sort naming a field that no longer
+      // exists falls back to title rather than silently sorting on nothing.
+      const raw = value?.key;
+      if (!compact && typeof raw === "string" && raw.startsWith("custom:")) {
+        const fieldKey = raw.slice(7);
+        if (customFieldDefinitions().some((field) => field.key === fieldKey)) {
+          return {key: raw, direction: value?.direction === "desc" ? "desc" : "asc"};
+        }
+      }
       const key = allowed.has(value?.key) ? value.key : "title";
       return {
         key,
@@ -27855,7 +28826,36 @@ def ui_preview_html(
         contentRating: itemRatingValues(item).join(", "),
         tags: itemTagValues(item).map((tag) => tag.name).join(", "),
         watchActivity: libraryExportWatchActivityText(item),
+        originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
+        originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
+        personalRating: formatRatingScore(itemPersonalRatingValue(item)),
+        ...customExportCells(movie),
       };
+    }
+    // Custom cells are keyed `custom:<fieldKey>`, matching the catalogue. The
+    // displayed value, not the stored one -- a select exports its label and a
+    // boolean exports Yes/No, because an export is for the reader.
+    function customExportCells(movie) {
+      const cells = {};
+      customFieldDefinitions().forEach((field) => {
+        cells[`custom:${field.key}`] = customValueDisplay(field, movieCustomValueMap(movie).get(field.key));
+      });
+      return cells;
+    }
+    function customValueDisplay(field, entry) {
+      if (!entry || entry.value === null || entry.value === undefined || entry.value === "") return "";
+      if (field.fieldType === "boolean") {
+        return entry.value === true || String(entry.value) === "true"
+          ? tNext("common.yes", "Yes")
+          : tNext("common.no", "No");
+      }
+      if (field.fieldType === "select") {
+        const option = (field.options || []).find((item) => String(item.key) === String(entry.value));
+        // An option that was removed still shows its stored key rather than a
+        // blank: the value is real even if the choice list moved on.
+        return option ? (option.label || option.key) : String(entry.value);
+      }
+      return String(entry.value);
     }
     function libraryListSortValue(item, key) {
       if (key === "format") return itemFormatValues(item).map((format) => format.label).join(" ").toLowerCase();
@@ -27874,9 +28874,73 @@ def ui_preview_html(
         || (left.watchlistTime - right.watchlistTime)
         || (Number(left.onWatchlist) - Number(right.onWatchlist));
     }
+    function libraryListPersonalRatingHtml(item) {
+      const score = itemPersonalRatingValue(item);
+      if (score === null) return "";
+      const movie = item?.movie || item;
+      // A borrowed number is labelled as one. Without the title an owner's 9
+      // reads as the viewer's own, and there is nothing on the row to correct it.
+      const ownName = movie?.personal_rating ? "" : String(movie?.owner_rating_by || "");
+      const title = ownName
+        ? tNext("lists.ownerRating", "{name} rated this {score}")
+            .replace("{name}", ownName)
+            .replace("{score}", formatRatingScore(score))
+        : tNext("lists.myRating", "My rating");
+      return `<span class="library-list-rating-value" title="${escapeHtml(title)}">${escapeHtml(formatRatingScore(score))}${ownName ? ` <span class="library-list-rating-owner">${escapeHtml(ownName)}</span>` : ""}</span>`;
+    }
+    function itemPersonalRatingValue(item) {
+      const movie = item?.movie || item;
+      const score = Number(movie?.personal_rating ?? movie?.owner_rating);
+      return Number.isFinite(score) && score > 0 ? score : null;
+    }
+    // Unrated sorts last in BOTH directions, which is why the direction is
+    // applied here instead of by the caller flipping the sign. Somebody sorting
+    // by rating wants their best films or their worst; either way they do not
+    // want 1,800 blanks first.
+    // Empty sorts last in BOTH directions, like the personal rating: somebody
+    // sorting on a shelf number wants the shelved films, not the blanks. Numbers
+    // compare numerically; everything else compares as a string, which is right
+    // for ISO dates too.
+    function compareCustomFieldValue(a, b, fieldKey, direction) {
+      const left = movieCustomValueMap(a?.movie || a).get(fieldKey);
+      const right = movieCustomValueMap(b?.movie || b).get(fieldKey);
+      const leftHas = left !== undefined && left.value !== null && left.value !== "";
+      const rightHas = right !== undefined && right.value !== null && right.value !== "";
+      if (!leftHas && !rightHas) return 0;
+      if (!leftHas) return 1;
+      if (!rightHas) return -1;
+      let diff;
+      if (left.type === "number") {
+        diff = Number(left.value) - Number(right.value);
+      } else if (left.type === "boolean") {
+        diff = (left.value === true ? 1 : 0) - (right.value === true ? 1 : 0);
+      } else {
+        diff = String(left.value).localeCompare(String(right.value), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+      }
+      return direction === "desc" ? -diff : diff;
+    }
+    function comparePersonalRating(a, b, direction) {
+      const left = itemPersonalRatingValue(a);
+      const right = itemPersonalRatingValue(b);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const diff = left - right;
+      return direction === "desc" ? -diff : diff;
+    }
     function sortLibraryListItems(items, sortState = libraryDetailSort) {
       const state = normalizeLibraryDetailSort(sortState);
       return [...(items || [])].sort((a, b) => {
+        if (typeof state.key === "string" && state.key.startsWith("custom:")) {
+          const diff = compareCustomFieldValue(a, b, state.key.slice(7), state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
+        if (state.key === "personalRating") {
+          const diff = comparePersonalRating(a, b, state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
         const diff = state.key === "behavior"
           ? compareLibraryBehavior(a, b)
           : String(libraryListSortValue(a, state.key)).localeCompare(
@@ -27949,6 +29013,7 @@ def ui_preview_html(
                 ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
               </tr>
@@ -27982,6 +29047,7 @@ def ui_preview_html(
                     <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
                     <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
                     <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
+                    <td class="library-list-personal-rating-column library-list-desktop-column">${libraryListPersonalRatingHtml(item)}</td>
                     <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
                     <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
                   </tr>
@@ -28164,12 +29230,7 @@ def ui_preview_html(
     }
     const RATING_COUNTRIES_ORDER = ["NL", "DE", "FR", "ES", "PT", "IT", "US", "GB", "CA", "AU", "BR", "DK", "FI", "NO", "SE", "NZ", "IN", "PH", "MY", "PL", "HU", "BG", "LT"];
     function ratingCountryLabel(code) {
-      try {
-        const displayNames = new Intl.DisplayNames([localeState.locale || "en-US"], {type: "region"});
-        return displayNames.of(code) || code;
-      } catch (error) {
-        return code;
-      }
+      return regionLabel(code) || code;
     }
     function normalizedRatingCountryCode(value) {
       const raw = String(value || "").trim().replace("_", "-");
@@ -28330,9 +29391,17 @@ def ui_preview_html(
         </article>
       `;
     }
+    // The EXTERNAL aggregate score -- TMDB's vote average or OMDb's IMDb rating,
+    // written only by a metadata plugin and settable by nobody. Labelled to name
+    // that, because a personal rating now sits on the same 0-10 axis and "Rating
+    // 7.4" beside "8.5" gives a reader nothing to tell them apart.
+    //
+    // The stronger distinction is not the wording: this pill is inert, and the
+    // personal one is a button you press to change it. One you can act on, one
+    // you cannot -- which reads correctly with no colour and in every locale.
     function movieScoreLabel(movie) {
       const value = valueText(movie?.rating || movie?.metadata?.rating || "");
-      return value ? `${tNext("movieDetail.rating", "Rating")} ${value}` : "";
+      return value ? `${tNext("movieDetail.externalScore", "Score")} ${value}` : "";
     }
     function localeCandidates() {
       const locale = String(localeState.locale || "en-US").replace("_", "-").toLowerCase();
@@ -28369,6 +29438,17 @@ def ui_preview_html(
       const parts = String(format || "").split(",").map((item) => item.trim()).filter(Boolean);
       return parts.length === 1 ? parts[0] : "";
     }
+    // One number on a tile, never two. The external score is deliberately not
+    // here: the tile already carries a digital badge and a format badge, and a
+    // second number beside this one would recreate exactly the ambiguity the
+    // detail page works to avoid. With only one possible, a star on a tile
+    // unambiguously means somebody rated this.
+    function posterRatingBadgeHtml(movie) {
+      if (preferences.show_rating_badge_on_tiles === false) return "";
+      const score = Number(movie?.personal_rating ?? movie?.owner_rating);
+      if (!Number.isFinite(score) || score <= 0) return "";
+      return `<span class="poster-rating-badge"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="${RATING_STAR_PATH}"></path></svg>${escapeHtml(formatRatingScore(score))}</span>`;
+    }
     function posterCardHtml(movie, index) {
       const poster = usableImage(movie.poster_url);
       const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="" loading="lazy" decoding="async">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
@@ -28376,7 +29456,7 @@ def ui_preview_html(
       const selected = index === 0 ? " selected" : "";
       return `
         <button type="button" class="preview-poster${selected}" data-preview-movie="${escapeHtml(movie.id)}">
-          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
+          <span class="preview-poster-art">${posterHtml}${digitalSourceBadgeHtml(movie)}${posterRatingBadgeHtml(movie)}${physicalFormatBadgeHtml(movie.format || movie.edition_type || movie.metadata?.format)}</span>
           <span class="preview-poster-title">${escapeHtml(movie.title || tNext("common.untitled", "Untitled"))}</span>
           <span class="preview-poster-meta">${escapeHtml(meta)}</span>
           ${debugIdHtml(movie.id, "Movie ID")}
@@ -30826,6 +31906,74 @@ def ui_preview_html(
       return Array.from(seasons.querySelectorAll("input[type=checkbox]:checked")).map((input) => input.value);
     }
 
+    // Definitions arrive on the dashboard snapshot, like locations, so the edit
+    // form can render a field the owner added without a deploy -- which is the
+    // point of the feature, and also why none of these labels are translated:
+    // the owner typed them.
+    function customFieldDefinitions() {
+      return Array.isArray(state?.customFields) ? state.customFields : [];
+    }
+    function renderMovieEditCustomFields(detail) {
+      const container = document.getElementById("movieEditCustomFields");
+      if (!container) return;
+      const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      const values = new Map(
+        (detail?.customValues || []).map((item) => [String(item.key), item.value])
+      );
+      container.classList.toggle("hidden", !definitions.length);
+      container.innerHTML = definitions.map((field) => {
+        const value = values.has(field.key) ? values.get(field.key) : "";
+        const id = `movieEditCustom_${field.key}`;
+        const label = `<span>${escapeHtml(field.name || field.key)}</span>`;
+        if (field.fieldType === "boolean") {
+          return `<label for="${id}" class="wide">${label}
+            <select id="${id}" data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="boolean">
+              <option value=""${value === null || value === "" ? " selected" : ""}>${escapeHtml(tNext("common.notSet", "Not set"))}</option>
+              <option value="true"${value === true ? " selected" : ""}>${escapeHtml(tNext("common.yes", "Yes"))}</option>
+              <option value="false"${value === false ? " selected" : ""}>${escapeHtml(tNext("common.no", "No"))}</option>
+            </select></label>`;
+        }
+        if (field.fieldType === "select") {
+          const options = Array.isArray(field.options) ? field.options : [];
+          // A stored value whose option was removed is injected back, so an
+          // unrelated save cannot silently rewrite it -- the trackSelectHtml
+          // rule, one feature over.
+          const known = options.some((option) => String(option.key) === String(value));
+          const extra = !known && value ? `<option value="${escapeHtml(String(value))}" selected>${escapeHtml(String(value))}</option>` : "";
+          return `<label for="${id}" class="wide">${label}
+            <select id="${id}" data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="select">
+              <option value="">${escapeHtml(tNext("common.notSet", "Not set"))}</option>
+              ${extra}
+              ${options.map((option) => `<option value="${escapeHtml(option.key)}"${String(option.key) === String(value) ? " selected" : ""}>${escapeHtml(option.label || option.key)}</option>`).join("")}
+            </select></label>`;
+        }
+        const inputType = field.fieldType === "number" ? "number" : field.fieldType === "date" ? "date" : "text";
+        const step = field.fieldType === "number" ? ' step="any"' : "";
+        return `<label for="${id}" class="wide">${label}
+          <input id="${id}" type="${inputType}"${step} data-custom-field-input="${escapeHtml(field.key)}" data-custom-field-type="${escapeHtml(field.fieldType)}" value="${escapeHtml(value === null || value === undefined ? "" : String(value))}"></label>`;
+      }).join("");
+    }
+    function collectMovieEditCustomValues() {
+      const values = {};
+      document.querySelectorAll("[data-custom-field-input]").forEach((node) => {
+        const key = node.dataset.customFieldInput;
+        const raw = String(node.value ?? "").trim();
+        // An emptied input clears the value: the server deletes the row rather
+        // than storing something that claims to exist and says nothing.
+        if (!raw) { values[key] = null; return; }
+        values[key] = node.dataset.customFieldType === "boolean" ? raw === "true" : raw;
+      });
+      return values;
+    }
+    async function saveMovieCustomValues() {
+      const values = collectMovieEditCustomValues();
+      if (!Object.keys(values).length) return;
+      await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/custom-values`, {
+        method: "PUT",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({values})
+      });
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const seriesDetail = detail.series || null;
@@ -30839,6 +31987,7 @@ def ui_preview_html(
         seriesDetail ? seriesDetail.id : "",
         (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
       ).then(() => renderMovieEditDiscs(collectMovieEditDiscs())).catch(() => {});
+      renderMovieEditCustomFields(detail);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -31239,6 +32388,7 @@ def ui_preview_html(
           : `<span class="import-source-meta">${escapeHtml(tNext("lists.noWatchHistoryForMovie", "No watched dates for this film yet."))}</span>`;
       }
       renderMovieTags(state);
+      renderMovieRating(state);
       renderMovieLoan(state);
     }
     function renderMovieTags(state) {
@@ -31253,6 +32403,92 @@ def ui_preview_html(
             </span>
           `).join("")
         : `<span class="import-source-meta">${escapeHtml(tNext("lists.tagsEmpty", "No tags on this film yet."))}</span>`;
+    }
+    // Twenty half steps, 0.5 to 10, drawn as ten stars. A fixed picker rather
+    // than a number field because the stored set is fixed: the API refuses a
+    // value between the steps instead of rounding it, so an input that could
+    // produce one would only ever produce an error.
+    const RATING_STAR_COUNT = 10;
+    const RATING_STAR_PATH = "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
+    const RATING_HALF_STAR_PATH = "M12,15.4V6.1L13.71,10.13L18.09,10.5L14.77,13.39L15.76,17.67M22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27L18.18,21L16.55,13.97L22,9.24Z";
+    function ratingStarHtml(index, score) {
+      // index is 1..10; each star covers a whole point, its half covers x.5.
+      const filled = score >= index;
+      const half = !filled && score >= index - 0.5;
+      const cls = filled ? "movie-rating-star filled" : half ? "movie-rating-star half" : "movie-rating-star";
+      const path = half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH;
+      // Two hit targets per star so a half step is reachable by pointer, and the
+      // aria-label carries the value because a star is not self-describing.
+      return `
+        <button type="button" class="${cls}" data-set-rating="${index - 0.5}" aria-label="${escapeHtml(String(index - 0.5))}" style="margin-right:-13px;width:13px;clip-path:inset(0 50% 0 0)">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>
+        </button>
+        <button type="button" class="${cls}" data-set-rating="${index}" aria-label="${escapeHtml(String(index))}" style="width:13px;clip-path:inset(0 0 0 50%)">
+          <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-13px"><path d="${path}"></path></svg>
+        </button>`;
+    }
+    function renderMovieRating(state) {
+      const section = document.getElementById("movieRatingSection");
+      const picker = document.getElementById("movieRatingPicker");
+      const owner = document.getElementById("movieRatingOwner");
+      const clearButton = document.getElementById("movieRatingClearButton");
+      if (!section || !picker) return;
+      const score = Number(state?.rating);
+      const hasScore = Number.isFinite(score) && score > 0;
+      const stars = [];
+      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
+        stars.push(ratingStarHtml(index, hasScore ? score : 0));
+      }
+      picker.innerHTML = stars.join("") + (hasScore
+        ? `<span class="movie-rating-value">${escapeHtml(formatRatingScore(score))}</span>`
+        : `<span class="import-source-meta">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`);
+      if (clearButton) clearButton.classList.toggle("hidden", !hasScore);
+      if (owner) {
+        // ownerRating is set by the server only when the movie has an owner who
+        // is somebody else -- never derived here from owner_id, which reads as
+        // "everyone is the owner" when it is NULL.
+        const ownerScore = Number(state?.ownerRating);
+        const ownerName = String(state?.ownerRatingBy || "");
+        owner.textContent = Number.isFinite(ownerScore) && ownerScore > 0
+          ? tNext("lists.ownerRating", "{name} rated this {score}")
+              .replace("{name}", ownerName || tNext("lists.theOwner", "The owner"))
+              .replace("{score}", formatRatingScore(ownerScore))
+          : "";
+        owner.classList.toggle("hidden", !owner.textContent);
+      }
+    }
+    function formatRatingScore(score) {
+      const value = Number(score);
+      if (!Number.isFinite(value)) return "";
+      // Half steps keep one decimal, whole numbers drop it: "8" reads better
+      // than "8.0" and there is no precision to lose.
+      return Number.isInteger(value) ? String(value) : value.toFixed(1);
+    }
+    async function setActiveMovieRating(score) {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({score: Number(score)})
+        });
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.ratingSaved", "Rating saved."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    async function clearActiveMovieRating() {
+      if (!activeDetailMovieId || !hasPermission("watchlist.manage")) return;
+      try {
+        const payload = await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}/rating`, {method: "DELETE"});
+        activeDetailPayload.userState = payload.userState || {};
+        renderMovieListState(activeDetailPayload);
+        setMovieDetailMessage(tNext("lists.ratingCleared", "Rating cleared."), "good");
+      } catch (error) {
+        setMovieDetailMessage(error.message || String(error), "bad");
+      }
     }
     function renderMovieLoan(state) {
       const statusNode = document.getElementById("movieLoanStatus");
@@ -32453,6 +33689,18 @@ def ui_preview_html(
         [tNext("movieDetail.releaseDate", "Release date"), movie.release_date],
         [tNext("movieDetail.releaseCountry", "Release country"), movie.country],
         [tNext("movieDetail.language", "Language"), movie.language],
+        // Directly under the two rows above, deliberately. Those describe the
+        // disc -- which market this pressing was made for -- and these describe
+        // the film. Seeing "Release country: NL" and "Country of origin: JP" on
+        // one screen is what stops a reader treating either as the other.
+        [
+          tNext("movieDetail.originCountry", "Country of origin"),
+          movieOriginCountryValues(movie).map(regionLabel).join(", ")
+        ],
+        [
+          tNext("movieDetail.originalLanguage", "Original language"),
+          movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : ""
+        ],
         [tNext("movieDetail.director", "Director"), metadata.director],
         [tNext("movieDetail.genre", "Genre"), movieGenreValues(movie).map(genreLabel).join(", ")],
         [tNext("movieDetail.studios", "Studios"), metadata.studios],
@@ -39673,9 +40921,41 @@ def ui_preview_html(
     function unavailableMovieLabelHtml(entry) {
       return "";
     }
+    // One place where a personal-list entry becomes a poster. The four card
+    // renderers below wrote the same expression four times, and none of them
+    // said what to do when the address does not load -- which is the whole
+    // failure mode of an entry that outlived its movie (#719). An <img> whose
+    // fetch fails with alt="" paints nothing, so the poster frame's own
+    // gradient shows through and reads as a deliberate black poster.
+    //
+    // The server now freezes a durable address into the surviving snapshot, so
+    // this is the second line: any address that dies later -- a provider
+    // dropping an image, a snapshot older than that rule -- degrades to the
+    // same "No poster" placeholder an entry without artwork already gets. The
+    // swap is done by one capture-phase listener rather than an inline
+    // handler; see bindListsPosterFallback.
+    function listsPosterHtml(entry) {
+      const poster = usableImage(entry?.poster_url);
+      const placeholder = `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      return poster ? `<img src="${escapeHtml(poster)}" alt="" data-list-poster>` : placeholder;
+    }
+    function bindListsPosterFallback() {
+      const view = document.getElementById("listsView");
+      if (!view || view.dataset.posterFallbackBound === "true") return;
+      view.dataset.posterFallbackBound = "true";
+      // `error` does not bubble, so the listener has to capture. Registered
+      // once on the view, not per render: the cards are replaced wholesale on
+      // every render and per-node listeners would be re-added each time.
+      view.addEventListener("error", (event) => {
+        const img = event.target;
+        if (!img || img.tagName !== "IMG" || !img.hasAttribute("data-list-poster")) return;
+        const replacement = document.createElement("span");
+        replacement.textContent = tNext("collection.noPoster", "No poster");
+        img.replaceWith(replacement);
+      }, true);
+    }
     function listMovieCardHtml(movie) {
-      const poster = usableImage(movie.poster_url);
-      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const posterHtml = listsPosterHtml(movie);
       const meta = movie.year || "";
       const movieId = personalListMovieId(movie);
       const exists = personalListMovieExists(movie);
@@ -39716,8 +40996,7 @@ def ui_preview_html(
       return [...groups.entries()].map(([date, rows]) => ({date, rows}));
     }
     function watchedPosterCardHtml(entry) {
-      const poster = usableImage(entry.poster_url);
-      const posterHtml = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
+      const posterHtml = listsPosterHtml(entry);
       const movieId = personalListMovieId(entry);
       const exists = personalListMovieExists(entry);
       return `
@@ -39730,12 +41009,11 @@ def ui_preview_html(
       `;
     }
     function watchedListItemHtml(entry) {
-      const poster = usableImage(entry.poster_url);
       const movieId = personalListMovieId(entry);
       const exists = personalListMovieExists(entry);
       return `
         <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
+          <span class="mode-list-poster">${listsPosterHtml(entry)}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <span class="watched-column-label">${escapeHtml(tNext("collection.titleColumn", "Title"))}</span>
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
@@ -39750,12 +41028,11 @@ def ui_preview_html(
       `;
     }
     function watchlistListItemHtml(entry) {
-      const poster = usableImage(entry.poster_url);
       const movieId = personalListMovieId(entry);
       const exists = personalListMovieExists(entry);
       return `
         <article class="mode-list-card watched-list-card" data-list-movie="${escapeHtml(movieId)}" ${exists ? 'tabindex="0"' : 'aria-disabled="true"'}>
-          <span class="mode-list-poster">${poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`}${personalListVersionBadgesHtml(entry)}</span>
+          <span class="mode-list-poster">${listsPosterHtml(entry)}${personalListVersionBadgesHtml(entry)}</span>
           <span class="mode-list-body">
             <strong>${escapeHtml(entry.title || tNext("common.untitled", "Untitled"))}</strong>
             ${personalListEpisodeLabelHtml(entry)}
@@ -39815,16 +41092,29 @@ def ui_preview_html(
     }
     function watchedGroupsHtml(entries) {
       const mode = normalizeViewMode(listsViewMode);
-      return watchedGroups(entries).map((group) => {
+      // Grouping by day is a statement about a chronological list. Under a
+      // title or year sort the same headings would still be in date order and
+      // would cut the sorted run into arbitrary pieces, so the list goes flat
+      // and the sort is the only thing organising it (#719).
+      const sortMode = normalizeListsSortMode(listsSortMode);
+      const groups = (sortMode === "date_desc" || sortMode === "date_asc")
+        ? watchedGroups(entries)
+        : [{date: null, rows: [...(entries || [])]}];
+      return groups.map((group) => {
         const body = mode === "detail"
           ? `<div class="mode-detail-grid">${watchedDetailTableHtml(group.rows)}</div>`
           : `<div class="watched-group-grid ${escapeHtml(mode)}">${group.rows.map(mode === "list" ? watchedListItemHtml : watchedPosterCardHtml).join("")}</div>`;
-        return `
-          <section class="watched-day-section">
+        const heading = group.date === null
+          ? ""
+          : `
             <header class="watched-day-head">
               <strong>${escapeHtml(watchedDateLabel(group.date))}</strong>
               <span>${escapeHtml(group.rows.length)} ${escapeHtml(tNext(group.rows.length === 1 ? "lists.watchedEntry" : "lists.watchedEntries", group.rows.length === 1 ? "film watched" : "films watched"))}</span>
             </header>
+          `;
+        return `
+          <section class="watched-day-section">
+            ${heading}
             ${body}
           </section>
         `;
@@ -40591,6 +41881,81 @@ def ui_preview_html(
       if (loansNode) loansNode.textContent = String(loansCount || 0);
       if (navNode) navNode.textContent = String(watchlistCount || 0);
     }
+    const LISTS_SORT_MODES = ["date_desc", "date_asc", "title_asc", "title_desc", "year_desc", "year_asc"];
+    function normalizeListsSortMode(mode) {
+      return LISTS_SORT_MODES.includes(mode) ? mode : "date_desc";
+    }
+    // The list's own date: when it was put on the Watchlist, or when it was
+    // watched. One mode pair covers both so a single menu serves both tabs;
+    // only the labels differ, and those are set in renderListsSortMenu.
+    function listsEntryDateValue(entry, kind) {
+      const raw = kind === "watched"
+        ? (entry?.watched_at || entry?.last_watched)
+        : (entry?.watchlist_added_at || entry?.added_at);
+      const value = Date.parse(raw || "");
+      return Number.isNaN(value) ? 0 : value;
+    }
+    // `sort_title` decides the order while `title` is what the card shows --
+    // the same split the Library makes, so "The Thing" files under T here and
+    // under T there. itemSortTitleValue is not reusable: it unwraps the
+    // library's {kind, movie, series} item, and a personal-list entry is a
+    // flat row.
+    function listsEntrySortTitle(entry) {
+      return String(entry?.sort_title || entry?.sortTitle || entry?.title || "");
+    }
+    function listsEntryYearValue(entry) {
+      return Number.parseInt(entry?.year || "0", 10) || 0;
+    }
+    function sortPersonalListEntries(entries, kind) {
+      const mode = normalizeListsSortMode(listsSortMode);
+      const rows = [...(entries || [])];
+      return rows.sort((a, b) => {
+        if (mode === "date_desc" || mode === "date_asc") {
+          const diff = listsEntryDateValue(a, kind) - listsEntryDateValue(b, kind);
+          if (diff) return mode === "date_desc" ? -diff : diff;
+        } else if (mode === "year_desc" || mode === "year_asc") {
+          const diff = listsEntryYearValue(a) - listsEntryYearValue(b);
+          if (diff) return mode === "year_desc" ? -diff : diff;
+        }
+        // Title breaks every other tie, so two films added the same second, or
+        // sharing a year, still land in a stable, explicable order.
+        const diff = listsEntrySortTitle(a).localeCompare(listsEntrySortTitle(b), localeState.locale || undefined, {sensitivity: "base"});
+        return mode === "title_desc" ? -diff : diff;
+      });
+    }
+    function renderListsSortMenu() {
+      const menu = document.getElementById("listsSortMenu");
+      if (!menu) return;
+      const active = listsState.active;
+      const sortable = active === "watchlist" || active === "watched";
+      // Wishlist, tags and loans have their own shapes and their own ordering;
+      // offering them a Watchlist sort would be a control that does nothing.
+      menu.classList.toggle("hidden", !sortable);
+      if (!sortable) {
+        document.getElementById("listsSortPanel")?.classList.add("hidden");
+        document.getElementById("listsSortTrigger")?.setAttribute("aria-expanded", "false");
+        return;
+      }
+      listsSortMode = normalizeListsSortMode(listsSortMode);
+      const watched = active === "watched";
+      const newest = document.getElementById("listsSortDateDesc");
+      const oldest = document.getElementById("listsSortDateAsc");
+      if (newest) {
+        newest.textContent = watched
+          ? tNext("lists.sortWatchedNewest", "Date Watched (newest)")
+          : tNext("lists.sortAddedNewest", "Date Added (newest)");
+      }
+      if (oldest) {
+        oldest.textContent = watched
+          ? tNext("lists.sortWatchedOldest", "Date Watched (oldest)")
+          : tNext("lists.sortAddedOldest", "Date Added (oldest)");
+      }
+      menu.querySelectorAll("[data-lists-sort-option]").forEach((button) => {
+        const isActive = button.dataset.listsSortOption === listsSortMode;
+        button.classList.toggle("active", isActive);
+        button.setAttribute("aria-checked", isActive ? "true" : "false");
+      });
+    }
     function renderListsView() {
       const loansOn = loansSystemEnabled();
       const loansTabButton = document.querySelector('[data-lists-tab="loans"]');
@@ -40655,14 +42020,15 @@ def ui_preview_html(
       };
       configureListNode(watchlistGrid);
       configureListNode(watchedList, true);
+      renderListsSortMenu();
       if (active === "watchlist") {
-        if (watchlistGrid) watchlistGrid.innerHTML = renderRows(listsState.watchlist || []);
+        if (watchlistGrid) watchlistGrid.innerHTML = renderRows(sortPersonalListEntries(listsState.watchlist, "watchlist"));
         if (empty) {
           empty.textContent = tNext("lists.emptyWatchlist", "Your watchlist is empty.");
           empty.classList.toggle("hidden", !!(listsState.watchlist || []).length);
         }
       } else if (active === "watched") {
-        if (watchedList) watchedList.innerHTML = watchedGroupsHtml(listsState.watched || []);
+        if (watchedList) watchedList.innerHTML = watchedGroupsHtml(sortPersonalListEntries(listsState.watched, "watched"));
         if (empty) {
           empty.textContent = tNext("lists.emptyWatched", "No watched films yet.");
           empty.classList.toggle("hidden", !!(listsState.watched || []).length);
@@ -40723,6 +42089,7 @@ def ui_preview_html(
         });
       });
       bindViewModeInteractions(document.getElementById("listsView") || document);
+      bindListsPosterFallback();
     }
     async function loadListsView(force = false) {
       if (!hasPermission("watchlist.manage")) return;
@@ -40737,7 +42104,12 @@ def ui_preview_html(
       }
       try {
         const [payload, wishlistPayload, tagsPayload, loansPayload, borrowedPayload] = await Promise.all([
-          authApiJson("/api/next/lists?limit=500"),
+          // Ask for the whole list, not a round 500. The response costs what the
+          // user actually has -- a short list stays short -- and the server clamps
+          // anything above its own ceiling, so an older backend simply returns less
+          // instead of refusing. At 500 a large collection silently lost the rest
+          // while the counter still showed the true total (#729).
+          authApiJson(`/api/next/lists?limit=${LISTS_MAX_PAGE_SIZE}`),
           authApiJson("/api/next/lists/wishlist").catch(() => ({items: []})),
           authApiJson("/api/next/tags").catch(() => ({tags: []})),
           authApiJson("/api/next/loans?status=all").catch(() => ({loans: []})),
@@ -43947,6 +45319,13 @@ def ui_preview_html(
         }
       }
     }
+    function openAboutPage() {
+      // setProfileTab writes the tab into localStorage, so the panel has to be
+      // selected before the page renders: doing it the other way round opens
+      // whichever tab was last used and then swaps it out under the reader.
+      setProfileTab("about");
+      showProfilePage();
+    }
     function openAppRoute(route) {
       if (route === "admin") {
         showAdminPage();
@@ -44099,6 +45478,7 @@ def ui_preview_html(
         let identifierError = null;
         let identifiersWritten = 0;
         try {
+          await saveMovieCustomValues();
           await saveMovieIdentifiers();
           // The database ids, on the same terms and for the same reason: their
           // own tables, their own routes, and a refusal that has to name the
@@ -44358,6 +45738,23 @@ def ui_preview_html(
         setContainerDetailMessage(error.message || String(error), "bad");
       }
     }
+    // The server confirmed these ids are gone; make the client agree right now
+    // rather than waiting on the snapshot reload that follows. The reload is
+    // what re-opens the race -- it resets `movies` while pages may be in flight
+    // -- so the ids also go into libraryDeletedMovieIds, where appendMovies
+    // refuses them for the rest of the session (#719).
+    function purgeDeletedMovies(movieIds) {
+      const ids = (movieIds || []).map((id) => String(id || "")).filter(Boolean);
+      if (!ids.length) return;
+      ids.forEach((id) => libraryDeletedMovieIds.add(id));
+      const before = movies.length;
+      movies = movies.filter((movie) => !libraryDeletedMovieIds.has(String(movie?.id || "")));
+      const removed = before - movies.length;
+      if (removed > 0) {
+        libraryMovieTotal = Math.max(movies.length, libraryMovieTotal - removed);
+        libraryMoviesHasMore = libraryMoviesHasMore === true && movies.length < libraryMovieTotal;
+      }
+    }
     async function deleteActiveMovie() {
       if (!activeDetailMovieId || !canDeleteMovieItem(activeDetailPayload?.movie || null)) return;
       const title = activeDetailPayload?.movie?.title || tNext("common.untitled", "Untitled");
@@ -44368,6 +45765,7 @@ def ui_preview_html(
       setMovieDetailMessage(tNext("movieDetail.deleting", "Deleting movie..."));
       try {
         await authApiJson(`/api/next/movies/${encodeURIComponent(activeDetailMovieId)}`, {method: "DELETE"});
+        purgeDeletedMovies([activeDetailMovieId]);
         activeDetailMovieId = "";
         activeDetailPayload = null;
         await loadAppSnapshot();
@@ -45366,7 +46764,7 @@ def ui_preview_html(
         const parsed = Number(total);
         if (Number.isFinite(parsed) && parsed >= 0) libraryMovieTotal = parsed;
       },
-      appendMovies: (rows, expectedOffset) => {
+      appendMovies: (rows, expectedOffset, expectedEpoch) => {
         // `expectedOffset` is the movies.length the caller measured when it
         // issued the request. A page fetched against an older array must never
         // be appended: the SPA reloads its snapshot on its own (a save, an
@@ -45376,6 +46774,20 @@ def ui_preview_html(
         // never step back over (#715). `null` -- deliberately distinct from 0,
         // which means "every row was a duplicate" -- tells the caller the array
         // moved under it. Omitting the argument keeps the old contract.
+        //
+        // `expectedEpoch` closes the case the length cannot see: every reset
+        // restores `movies` to exactly the first-paint size, and the first page
+        // of every hydration cycle is fetched against that same size, so a page
+        // from before the reset still matches the length check -- which is how a
+        // movie deleted while its page was in flight came back as a black, dead
+        // tile in the list view (#719). The epoch moves on every wholesale
+        // replacement, so a page fetched against an older snapshot is refused no
+        // matter what the lengths happen to be. Omitting it keeps the previous
+        // contract for an older cached copy of library-paging.js.
+        if (expectedEpoch !== undefined && expectedEpoch !== null) {
+          const epoch = Number(expectedEpoch);
+          if (!Number.isFinite(epoch) || epoch !== librarySnapshotEpoch) return null;
+        }
         if (expectedOffset !== undefined && expectedOffset !== null) {
           const expected = Number(expectedOffset);
           if (!Number.isFinite(expected) || expected !== movies.length) return null;
@@ -45386,6 +46798,12 @@ def ui_preview_html(
         rows.forEach((row) => {
           const id = String(row?.id || "");
           if (!id || seen.has(id)) return;
+          // A row this session itself deleted can only be a stale page slipping
+          // through a gap the guards above do not cover; the id can never come
+          // back legitimately through this path, because a hard-deleted UUID is
+          // never re-issued. loadAppSnapshot() stays authoritative -- it replaces
+          // the array without consulting this set.
+          if (libraryDeletedMovieIds.has(id)) return;
           seen.add(id);
           added.push(row);
         });
@@ -45441,6 +46859,13 @@ def ui_preview_html(
         contentRating: tNext("movieDetail.contentRating", "Content rating"),
         tags: tNext("lists.tags", "Tags"),
         watchActivity: tNext("collection.behaviorColumn", "Viewing activity"),
+        originCountry: tNext("movieDetail.originCountry", "Country of origin"),
+        originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
+        personalRating: tNext("lists.myRating", "My rating"),
+        // The owner typed these; there is no key to look up.
+        ...Object.fromEntries(
+          customFieldDefinitions().map((field) => [`custom:${field.key}`, field.name || field.key])
+        ),
       }),
       getExportRows: () => {
         const sortState = normalizeLibraryDetailSort(libraryDetailSort);
@@ -45936,6 +47361,7 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({movieIds, containerIds, confirm: "delete-selected"})
         });
+        purgeDeletedMovies(movieIds);
         finishBulkAction(`${payload.requested || (movieIds.length + containerIds.length)} ${tNext("bulk.deletedSelected", "items deleted")}`, {
           title: tNext("bulk.deleteSelected", "Delete selected"),
           keepSelection: false
@@ -45979,6 +47405,21 @@ def ui_preview_html(
           ["show_digital_badge_on_tiles", "preferences.showDigitalBadgeOnTiles", "preferences.showDigitalBadgeOnTilesHelp"],
           ["price_monitoring_enabled", "preferences.priceMonitoringEnabled", "preferences.priceMonitoringEnabledHelp"],
           ["preferred_price_currency", "preferences.preferredPriceCurrency", "preferences.preferredPriceCurrencyHelp", "price_monitoring_enabled"]
+        ]
+      },
+      {
+        // Your own lists, on Library for the same reason the sharing card
+        // below is: the Collectors tab is hidden without container-management
+        // permission, and what happens to your watch history is not a
+        // container capability -- the Lists module itself only asks for
+        // watchlist.manage.
+        key: "personalLists",
+        titleKey: "preferences.cardPersonalLists",
+        title: "Your lists",
+        helpKey: "preferences.cardPersonalListsHelp",
+        help: "Choose what a deletion takes with it.",
+        items: [
+          ["delete_removes_watch_history", "preferences.deleteRemovesWatchHistory", "preferences.deleteRemovesWatchHistoryHelp"]
         ]
       },
       {
@@ -47326,6 +48767,52 @@ def ui_preview_html(
         setLocationMessage(error.message || String(error), "bad");
       }
     }
+    // Once per browser, never again — not once per version. Beta publishes a
+    // build most days, so a version-keyed flag would put this dialog back in
+    // front of the same reader every few days, which is nagging rather than
+    // asking. Once it closes, the invitation lives on the About page only.
+    const SUPPORT_PROMPT_STORAGE_KEY = "dv_next_support_prompt_seen";
+    function supportPromptAlreadySeen() {
+      try {
+        return localStorage.getItem(SUPPORT_PROMPT_STORAGE_KEY) === "1";
+      } catch (error) {
+        // Storage is blocked, so nothing can be remembered. Reading that as
+        // "already seen" is the safe end of the trade: the alternative is the
+        // dialog on every single visit, with no way for the reader to stop it.
+        return true;
+      }
+    }
+    function closeSupportPrompt() {
+      document.getElementById("supportPromptBackdrop")?.classList.add("hidden");
+      try {
+        localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY, "1");
+      } catch (error) {
+        // Nothing to do here: the dialog is closed either way, and the read
+        // above already keeps a browser without storage from being asked again.
+      }
+    }
+    function maybeShowSupportPrompt(route) {
+      if (!appMode) return;
+      if (supportPromptAlreadySeen()) return;
+      // Not on a deep link. Someone who opened a movie, a person or the profile
+      // directly came for that page, and a dialog over it is an interruption
+      // rather than an invitation.
+      if ((route || {}).view !== "library") return;
+      // Not while the shelf is empty. Asking for money before anyone has added
+      // a disc reads as a paywall; whoever has one has had something out of it.
+      if (libraryMovieTotal < 1) return;
+      const backdrop = document.getElementById("supportPromptBackdrop");
+      if (!backdrop) return;
+      // After the library is drawn, not during startup: a dialog over a
+      // half-rendered app reads as an error message rather than a question.
+      window.setTimeout(() => {
+        if (supportPromptAlreadySeen()) return;
+        const library = document.getElementById("libraryView");
+        if (!library || library.classList.contains("hidden")) return;
+        backdrop.classList.remove("hidden");
+        document.getElementById("supportPromptLaterButton")?.focus();
+      }, 1500);
+    }
     function closeLocationQr() {
       document.getElementById("locationQrBackdrop")?.classList.add("hidden");
       document.body.classList.remove("location-qr-print-open");
@@ -48194,7 +49681,12 @@ def ui_preview_html(
       "mcp.tool.list_all_movies": "List every film",
       "mcp.tool.get_watchlist": "Read the watchlist",
       "mcp.tool.get_watch_history": "Read the watch history",
-      "mcp.tool.get_groups": "Read groups"
+      "mcp.tool.get_groups": "Read groups",
+      "mcp.tool.get_collection_stats_detailed": "Read detailed statistics",
+      "mcp.tool.get_top_formats": "Read the format breakdown",
+      "mcp.tool.get_top_genres": "Read the genre breakdown",
+      "mcp.tool.get_top_directors": "Read the top directors",
+      "mcp.tool.get_top_actors": "Read the top actors"
     };
     function profileApiPermissionLabel(permission, mcpToolLabels) {
       const value = String(permission || "");
@@ -48911,6 +50403,7 @@ def ui_preview_html(
       else if (route.view === "notifications") showNotificationsPage(false);
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
+      maybeShowSupportPrompt(route);
     }
     function movieMeta(movie) {
       return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);
@@ -49023,6 +50516,17 @@ def ui_preview_html(
         localStorage.setItem("dv_next_advanced_search_open", advancedSearchOpen ? "true" : "false");
         syncAdvancedSearchControls();
       });
+      // Delegated against the static container: the rows are re-rendered from
+      // the definitions on every sync, so a listener per row would stack.
+      document.getElementById("advancedCustomFilters")?.addEventListener("change", (event) => {
+        const opNode = event.target.closest("[data-custom-filter-op]");
+        if (!opNode) return;
+        // "Has a value" and "has no value" take no value, so the input goes away
+        // rather than sitting there implying it still counts.
+        const wrap = document.querySelector(`[data-custom-filter-value-wrap="${opNode.dataset.customFilterOp}"]`);
+        const op = opNode.value;
+        wrap?.classList.toggle("hidden", op === "any" || op === "set" || op === "unset");
+      });
       document.getElementById("advancedSearchApplyButton")?.addEventListener("click", applyAdvancedSearchFromControls);
       document.getElementById("advancedSearchResetButton")?.addEventListener("click", resetAdvancedSearch);
       document.getElementById("advancedSearchSaveButton")?.addEventListener("click", saveSmartFilter);
@@ -49043,6 +50547,19 @@ def ui_preview_html(
           localStorage.setItem("dv_next_collection_sort", collectionSortMode);
           closeAllCollectionMenus();
           renderCollectionSurface();
+        });
+      });
+      // Its own attribute and its own handler. The selector above is global
+      // rather than scoped to the Library -- which is deliberate, because the
+      // location detail page shows the library too -- so a Lists menu built on
+      // `data-sort-option` would re-sort the Library on every click and never
+      // report an error.
+      document.querySelectorAll("[data-lists-sort-option]").forEach((button) => {
+        button.addEventListener("click", () => {
+          listsSortMode = normalizeListsSortMode(button.dataset.listsSortOption);
+          localStorage.setItem("dv_next_lists_sort", listsSortMode);
+          closeAllCollectionMenus();
+          renderListsView();
         });
       });
       document.querySelectorAll("[data-library-view-mode]").forEach((button) => {
@@ -49186,6 +50703,7 @@ def ui_preview_html(
       document.querySelectorAll("[data-app-route]").forEach((button) => {
         button.addEventListener("click", () => openAppRoute(button.dataset.appRoute));
       });
+      document.getElementById("sidebarSupportLink")?.addEventListener("click", () => openAboutPage());
       let peopleSearchTimer = null;
       document.getElementById("peopleSearch")?.addEventListener("input", (event) => {
         peopleState.query = event.target.value || "";
@@ -49522,6 +51040,7 @@ def ui_preview_html(
       });
       document.getElementById("appAdminSaveArtworkTrashSettingsButton")?.addEventListener("click", () => saveAppAdminArtworkTrashSettings());
       document.getElementById("appAdminPurgeArtworkTrashButton")?.addEventListener("click", () => purgeAppAdminArtworkTrash());
+      document.getElementById("appAdminOriginBackfillButton")?.addEventListener("click", () => queueAppAdminOriginBackfill());
       document.getElementById("appAdminArtworkTrashList")?.addEventListener("click", (event) => {
         const restoreButton = event.target.closest("[data-app-admin-artwork-restore]");
         if (restoreButton) {
@@ -49547,6 +51066,24 @@ def ui_preview_html(
         const restoreButton = event.target.closest("[data-app-admin-backup-restore]");
         if (downloadButton) downloadStoredAppAdminBackup(downloadButton.dataset.appAdminBackupDownload);
         if (restoreButton) restoreStoredAppAdminBackup(restoreButton.dataset.appAdminBackupRestore);
+      });
+      document.getElementById("appAdminCustomFieldForm")?.addEventListener("submit", createAppAdminCustomField);
+      document.getElementById("appAdminCustomFieldType")?.addEventListener("change", syncAppAdminCustomFieldOptionsRow);
+      // Delegated against the static container: a re-render replaces the rows
+      // without orphaning a listener or stacking a second one.
+      document.getElementById("appAdminCustomFieldsList")?.addEventListener("click", (event) => {
+        const archiveButton = event.target.closest("[data-custom-field-archive]");
+        if (archiveButton) {
+          archiveAppAdminCustomField(
+            archiveButton.dataset.customFieldArchive,
+            archiveButton.dataset.archived === "true"
+          );
+          return;
+        }
+        const renameButton = event.target.closest("[data-custom-field-rename]");
+        if (renameButton) { renameAppAdminCustomField(renameButton.dataset.customFieldRename); return; }
+        const moveButton = event.target.closest("[data-custom-field-move]");
+        if (moveButton) moveAppAdminCustomField(moveButton.dataset.customFieldMove, moveButton.dataset.direction);
       });
       document.getElementById("appAdminRefreshAuditButton")?.addEventListener("click", () => refreshAppAdminAudit());
       document.getElementById("appAdminAuditCategory")?.addEventListener("change", () => refreshAppAdminAudit());
@@ -50015,6 +51552,14 @@ def ui_preview_html(
         document.body.classList.add("location-qr-print-open");
         window.print();
       });
+      document.getElementById("supportPromptLaterButton")?.addEventListener("click", () => closeSupportPrompt());
+      document.getElementById("supportPromptCloseButton")?.addEventListener("click", () => closeSupportPrompt());
+      // The link opens in a new tab, so without this the dialog would still
+      // be standing over the library when the reader comes back to it.
+      document.getElementById("supportPromptCoffeeLink")?.addEventListener("click", () => closeSupportPrompt());
+      document.getElementById("supportPromptBackdrop")?.addEventListener("click", (event) => {
+        if (event.target.id === "supportPromptBackdrop") closeSupportPrompt();
+      });
       document.getElementById("locationQrBackdrop")?.addEventListener("click", (event) => {
         if (event.target.id === "locationQrBackdrop") closeLocationQr();
       });
@@ -50239,6 +51784,11 @@ def ui_preview_html(
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
       });
+      document.getElementById("movieRatingPicker")?.addEventListener("click", (event) => {
+        const star = event.target.closest("[data-set-rating]");
+        if (star) setActiveMovieRating(star.dataset.setRating);
+      });
+      document.getElementById("movieRatingClearButton")?.addEventListener("click", () => clearActiveMovieRating());
       document.getElementById("movieLoanAddForm")?.addEventListener("submit", (event) => {
         event.preventDefault();
         lendActiveMovie(
@@ -50492,6 +52042,11 @@ def ui_preview_html(
             runCommandPaletteCommand();
             return;
           }
+        }
+        if (event.key === "Escape" && !document.getElementById("supportPromptBackdrop")?.classList.contains("hidden")) {
+          event.preventDefault();
+          closeSupportPrompt();
+          return;
         }
         if (event.key === "Escape" && !document.getElementById("locationQrBackdrop")?.classList.contains("hidden")) {
           event.preventDefault();

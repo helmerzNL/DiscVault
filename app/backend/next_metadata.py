@@ -39,6 +39,7 @@ try:
     from .next_import import clean_text
     from .next_genres import genre_keys_from_tmdb_ids
     from .next_genres import normalize_genre_keys
+    from .next_origin import normalize_film_origin
     from .next_common import table_exists as _shared_table_exists
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
@@ -58,6 +59,7 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_import import clean_text
     from next_genres import genre_keys_from_tmdb_ids
     from next_genres import normalize_genre_keys
+    from next_origin import normalize_film_origin
     from next_common import table_exists as _shared_table_exists
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
@@ -171,6 +173,15 @@ MOVIE_METADATA_LOCKS_KEY = "field_locks"
 # `genre` is intentionally absent: genres are read-only, sourced only from
 # TMDB, and stored as relational movie_genres associations rather than a
 # manually editable metadata field, so they cannot be locked.
+#
+# `original_language` and `origin_country` are absent for the same reason, and
+# the contrast with the two entries below them is the point. `country` and
+# `language` ARE lockable, because they describe the disc -- which market this
+# pressing was made for -- and a collector legitimately corrects them by hand.
+# The origin of the film is not a matter of opinion, has no input in the edit
+# form for a padlock to sit beside, and is an always-replace-on-hit association
+# rather than a value flowing through the merge. A lock only arbitrates a merge;
+# there is nothing here for one to arbitrate.
 MOVIE_LOCKABLE_FIELDS = {
     "title",
     "sort_title",
@@ -861,6 +872,210 @@ def movie_identifiers(conn, movie_id: UUID) -> dict[str, str]:
     return values
 
 
+def movie_film_origin(conn, movie_id: UUID) -> dict[str, Any]:
+    """Return a movie's stored origin: original language and origin countries.
+
+    Countries come back in TMDB's own order (lead producer first), which is why
+    the table carries sort_order and this query honours it.
+    """
+    origin: dict[str, Any] = {"originalLanguage": "", "originCountries": []}
+    with conn.cursor() as cur:
+        cur.execute("SELECT original_language FROM movies WHERE id=%s", (movie_id,))
+        row = cur.fetchone()
+    if row:
+        origin["originalLanguage"] = str(row.get("original_language") or "")
+    if table_exists(conn, "movie_origin_countries"):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT country_code
+                FROM movie_origin_countries
+                WHERE movie_id=%s
+                ORDER BY sort_order, country_code
+                """,
+                (movie_id,),
+            )
+            origin["originCountries"] = [str(row["country_code"]) for row in cur.fetchall()]
+    return origin
+
+
+MOVIE_ORIGIN_BACKFILL_JOB_TYPE = "metadata.backfill_origin"
+
+
+def movies_missing_film_origin(conn, *, limit: int = 100) -> list[dict[str, Any]]:
+    """Films that have a TMDB id and no origin yet, oldest first.
+
+    Only films carrying a `tmdb` identifier can be answered at all; the rest
+    cannot be backfilled and must not be counted as pending forever.
+    """
+    if not table_exists(conn, "movie_identifiers") or not table_exists(conn, "movie_origin_countries"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT m.id, mi.identifier AS tmdb_id
+            FROM movies m
+            JOIN movie_identifiers mi
+              ON mi.movie_id = m.id
+             AND mi.provider_id='tmdb'
+             AND mi.identifier_type='movie_id'
+            WHERE m.deleted_at IS NULL
+              AND m.original_language IS NULL
+              AND NOT EXISTS (
+                SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
+              )
+            ORDER BY m.created_at, m.id
+            LIMIT %s
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def count_movies_missing_film_origin(conn) -> dict[str, int]:
+    """How many films still need origin, and how many can never get it here."""
+    counts = {"pending": 0, "unresolvable": 0}
+    if not table_exists(conn, "movies") or not table_exists(conn, "movie_origin_countries"):
+        return counts
+    has_identifiers = table_exists(conn, "movie_identifiers")
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                COUNT(*) FILTER (WHERE {'has_tmdb' if has_identifiers else 'FALSE'})::int AS pending,
+                COUNT(*) FILTER (WHERE NOT {'has_tmdb' if has_identifiers else 'TRUE'})::int AS unresolvable
+            FROM (
+                SELECT
+                    m.id,
+                    {'EXISTS (SELECT 1 FROM movie_identifiers mi WHERE mi.movie_id=m.id AND mi.provider_id=%s AND mi.identifier_type=%s)' if has_identifiers else 'FALSE'} AS has_tmdb
+                FROM movies m
+                WHERE m.deleted_at IS NULL
+                  AND m.original_language IS NULL
+                  AND NOT EXISTS (
+                    SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
+                  )
+            ) AS missing
+            """,
+            ("tmdb", "movie_id") if has_identifiers else (),
+        )
+        row = cur.fetchone()
+    if row:
+        counts["pending"] = int(row.get("pending") or 0)
+        counts["unresolvable"] = int(row.get("unresolvable") or 0)
+    return counts
+
+
+def backfill_movie_origins(conn, movie_ids: list[Any] | None = None, *, limit: int = 100) -> dict[str, Any]:
+    """Fill origin for films that have none, and touch nothing else.
+
+    Deliberately not `refresh_movie_metadata`. That one asks TMDB with
+    append_to_response=credits,videos,images,release_dates,translations and walks
+    the whole merge pipeline: for a 2,500-film library it runs for hours, rewrites
+    posters, credits, provenance and localizations across the entire catalogue,
+    and emits 2,500 global sync_changes that every connected client then
+    downloads. All of that to fill two fields nobody had before.
+
+    This asks for the bare record, writes only `movies.original_language` and
+    `movie_origin_countries`, and emits no global sync change: origin travels on
+    the next ordinary movie payload. A film that already has origin is skipped
+    unless `force`.
+    """
+    summary = {"requested": 0, "updated": 0, "skipped": 0, "failed": 0, "unresolved": 0}
+    if movie_ids:
+        rows = []
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT m.id, mi.identifier AS tmdb_id
+                FROM movies m
+                LEFT JOIN movie_identifiers mi
+                  ON mi.movie_id = m.id
+                 AND mi.provider_id='tmdb'
+                 AND mi.identifier_type='movie_id'
+                WHERE m.id = ANY(%s) AND m.deleted_at IS NULL
+                """,
+                (list(movie_ids),),
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+    else:
+        rows = movies_missing_film_origin(conn, limit=limit)
+    summary["requested"] = len(rows)
+    if not rows:
+        return summary
+    plugin, _source = discovered_plugin(TMDB_PLUGIN_ID)
+    if not plugin:
+        summary["failed"] = len(rows)
+        return summary
+    config = plugin_config_from_db(conn, TMDB_PLUGIN_ID)
+    context = plugin_execution_context(conn, plugin, config)
+    for row in rows:
+        tmdb_id = clean_text(row.get("tmdb_id"))
+        if not tmdb_id:
+            summary["unresolved"] += 1
+            continue
+        # Every write below reopens the transaction, so the release belongs
+        # inside the loop rather than once before it: holding one open across a
+        # TMDB round trip -- times the whole library -- is what this job would
+        # otherwise do for minutes at a stretch.
+        release_read_transaction(conn)
+        try:
+            execution = run_plugin_entrypoint(
+                TMDB_PLUGIN_ID,
+                "movie_details",
+                {"tmdbId": tmdb_id, "id": tmdb_id},
+                context,
+            )
+        except Exception:
+            logger.warning("origin backfill failed for movie %s", row.get("id"), exc_info=True)
+            summary["failed"] += 1
+            continue
+        if not isinstance(execution, dict) or execution.get("status") != "ok":
+            summary["failed"] += 1
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        origin = normalize_film_origin(result.get("filmOrigin"))
+        if origin is None:
+            # TMDB answered but said nothing about origin. Not a failure, and not
+            # something to write -- leaving the film pending means a later run
+            # picks it up if TMDB learns the answer.
+            summary["skipped"] += 1
+            continue
+        replace_movie_film_origin(conn, row["id"], origin)
+        summary["updated"] += 1
+    return summary
+
+
+def replace_movie_film_origin(conn, movie_id: UUID, origin: Any) -> dict[str, Any]:
+    """Transactionally replace a movie's origin.
+
+    TMDB is the sole owner of this relation, exactly as it is for genres: an
+    empty answer is a legitimate, authoritative "no origin known" and clears
+    what is stored. The caller distinguishes that from "nobody answered", which
+    never reaches this function.
+    """
+    normalized = normalize_film_origin(origin) or {"originalLanguage": "", "originCountries": []}
+    language = normalized["originalLanguage"]
+    countries = normalized["originCountries"]
+    with conn.cursor() as cur:
+        cur.execute(
+            "UPDATE movies SET original_language=%s WHERE id=%s",
+            (language or None, movie_id),
+        )
+    if table_exists(conn, "movie_origin_countries"):
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM movie_origin_countries WHERE movie_id=%s", (movie_id,))
+            if countries:
+                cur.executemany(
+                    """
+                    INSERT INTO movie_origin_countries (movie_id, country_code, sort_order)
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (movie_id, country_code) DO NOTHING
+                    """,
+                    [(movie_id, code, index) for index, code in enumerate(countries)],
+                )
+    return {"originalLanguage": language, "originCountries": list(countries)}
+
+
 def movie_genre_keys(conn, movie_id: UUID) -> list[str]:
     """Return a movie's canonical genre keys, sorted by catalog order."""
     if not table_exists(conn, "movie_genres"):
@@ -1344,6 +1559,7 @@ def metadata_source_policy_result(result: dict[str, Any]) -> dict[str, Any]:
     # Genres are TMDB-only; any other plugin's genre answer is dropped here
     # regardless of what canonicalize_plugin_result produced.
     constrained["genreKeys"] = None
+    constrained["filmOrigin"] = None
     if is_movievault_identity_source(plugin_id):
         constrained["candidates"] = [
             sanitized
@@ -2730,6 +2946,15 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
     if plugin_id == TMDB_PLUGIN_ID and "genreIds" in result:
         genre_keys = genre_keys_from_tmdb_ids(result.get("genreIds"))
 
+    # Same ownership rule as genres, one relation over: only TMDB may answer,
+    # and only when it actually sent the key. `None` here means "not answered"
+    # and leaves the stored origin alone; a dict -- including an empty one --
+    # means "answered", and an empty answer clears. Without that distinction a
+    # provider that knows nothing about origin would wipe it on every refresh.
+    film_origin: dict[str, Any] | None = None
+    if plugin_id == TMDB_PLUGIN_ID and "filmOrigin" in result:
+        film_origin = normalize_film_origin(result.get("filmOrigin"))
+
     return {
         "pluginId": plugin_id,
         "entrypoint": entrypoint,
@@ -2748,6 +2973,7 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "credits": credit_updates,
         "localizations": localization_updates,
         "genreKeys": genre_keys,
+        "filmOrigin": film_origin,
         "candidates": candidates,
         "boxSetEvidence": box_set_evidence,
         "boxSetProposal": box_set_proposal,
@@ -3019,12 +3245,20 @@ def merge_metadata_results(
     skipped: list[dict[str, Any]] = []
     genre_keys: list[str] | None = None
     genre_keys_selected = False
+    film_origin: dict[str, Any] | None = None
+    film_origin_selected = False
     field_decisions_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     selected_field_keys: set[tuple[str, str]] = set()
     working_movie = dict(current)
     working_metadata = dict(current.get("metadata") or {})
     working_technical = dict(technical_current)
     current_genre_keys = normalize_genre_keys(current.get("genres"))
+    current_film_origin = normalize_film_origin(
+        {
+            "originalLanguage": current.get("original_language"),
+            "originCountries": current.get("origin_countries"),
+        }
+    ) or {"originalLanguage": "", "originCountries": []}
     locked_fields = movie_locked_fields(working_metadata)
 
     def decision_for(target: str, field: str) -> dict[str, Any]:
@@ -3202,6 +3436,53 @@ def merge_metadata_results(
                             "sourceLabel": result.get("sourceLabel") or result["pluginId"],
                         }
                     )
+
+        # Origin follows the genre decision shape exactly: first authoritative
+        # answer wins, an unchanged answer is recorded but writes nothing, and a
+        # later answer is skipped rather than allowed to overwrite.
+        result_film_origin_value = result.get("filmOrigin")
+        if result_film_origin_value is not None:
+            result_film_origin = normalize_film_origin(result_film_origin_value) or {
+                "originalLanguage": "",
+                "originCountries": [],
+            }
+            accepted_origin = not film_origin_selected
+            origin_changed = (
+                result_film_origin["originalLanguage"] != current_film_origin["originalLanguage"]
+                or result_film_origin["originCountries"] != current_film_origin["originCountries"]
+            )
+            origin_decision_value = result_film_origin if origin_changed else current_film_origin
+            if accepted_origin:
+                origin_reason = (
+                    "TMDB origin answer selected"
+                    if origin_changed
+                    else "TMDB origin answer matches existing origin"
+                )
+            else:
+                origin_reason = "origin already selected from an earlier TMDB answer"
+            add_decision_candidate(
+                target="origin",
+                field="origin",
+                result=result,
+                value=origin_decision_value,
+                accepted=accepted_origin,
+                reason=origin_reason,
+            )
+            if accepted_origin:
+                film_origin_selected = True
+                if origin_changed:
+                    film_origin = dict(result_film_origin)
+                    provenance.append(
+                        {
+                            "field": "origin",
+                            "target": "origin",
+                            "pluginId": result["pluginId"],
+                            "entrypoint": result["entrypoint"],
+                            "reason": origin_reason,
+                            "sourceRef": result.get("sourceRef") or "",
+                            "sourceLabel": result.get("sourceLabel") or result["pluginId"],
+                        }
+                    )
         for kind, media_update in (result.get("mediaUpdates") or {}).items():
             source_url = clean_text(media_update.get("sourceUrl") if isinstance(media_update, dict) else "")
             if kind not in {"poster", "backdrop"} or not source_url:
@@ -3334,6 +3615,7 @@ def merge_metadata_results(
         "credits": credits,
         "localizations": localizations,
         "genreKeys": genre_keys,
+        "filmOrigin": film_origin,
         "provenance": provenance,
         "skipped": skipped,
         "fieldDecisions": field_decisions,
@@ -3347,6 +3629,8 @@ def count_update_fields(proposal: dict[str, Any]) -> int:
     )
     field_count += len(proposal.get("credits") or []) + len(proposal.get("localizations") or [])
     if proposal.get("genreKeys") is not None:
+        field_count += 1
+    if proposal.get("filmOrigin") is not None:
         field_count += 1
     return field_count
 
@@ -5638,6 +5922,23 @@ def apply_metadata_proposal(
     if genre_keys_provided:
         current_genre_keys = movie_genre_keys(conn, movie_uuid)
         genre_changed = sorted(normalized_genre_keys) != sorted(current_genre_keys)
+
+    # Origin, on the same provided-vs-absent rule: None leaves the stored origin
+    # alone, a dict replaces it -- an empty dict being the authoritative "TMDB
+    # does not know where this film is from".
+    film_origin_proposal = proposal.get("filmOrigin")
+    film_origin_provided = film_origin_proposal is not None
+    normalized_film_origin = (
+        normalize_film_origin(film_origin_proposal) or {"originalLanguage": "", "originCountries": []}
+    ) if film_origin_provided else {"originalLanguage": "", "originCountries": []}
+    current_film_origin: dict[str, Any] = {"originalLanguage": "", "originCountries": []}
+    film_origin_changed = False
+    if film_origin_provided:
+        current_film_origin = movie_film_origin(conn, movie_uuid)
+        film_origin_changed = (
+            normalized_film_origin["originalLanguage"] != current_film_origin["originalLanguage"]
+            or normalized_film_origin["originCountries"] != current_film_origin["originCountries"]
+        )
     explicit_locked_fields = movie_field_locks_from_db(conn, movie_uuid)
     # Kinds whose primary artwork must not be overwritten by a plugin/sync.
     # Two lock sources: the explicit field lock, and a user-selected (locked)
@@ -5910,6 +6211,14 @@ def apply_metadata_proposal(
             else current_genre_keys
         )
 
+    applied_film_origin: dict[str, Any] | None = None
+    if film_origin_provided:
+        applied_film_origin = (
+            replace_movie_film_origin(conn, movie_uuid, normalized_film_origin)
+            if film_origin_changed
+            else current_film_origin
+        )
+
     # After the movie updates, because the link is only permitted once the type
     # is SHOW, and it is those updates that may have made it one.
     applied_series = apply_movie_series_link(conn, movie_uuid, proposal.get("series"))
@@ -5930,6 +6239,7 @@ def apply_metadata_proposal(
             "credits": credit_updates,
             "localizations": localization_updates,
             "genres": normalized_genre_keys if genre_keys_provided else None,
+            "filmOrigin": normalized_film_origin if film_origin_provided else None,
             "fieldDecisions": proposal.get("fieldDecisions") or [],
         },
     )
@@ -5946,6 +6256,7 @@ def apply_metadata_proposal(
         "credits": applied_credit_updates,
         "localizations": applied_localizations,
         "genres": applied_genre_keys,
+        "filmOrigin": applied_film_origin,
         "provenance": len(provenance),
     }
     return {

@@ -75,6 +75,16 @@ jobs:
       - name: Check every backend module for names that cannot resolve
         run: python scripts/check_undefined_names.py .
 
+      # The gate's own tests, both directions. A checker with no test is the
+      # thing it exists to prevent: it reports nothing, and nothing reads the
+      # same as clean. Its first version built "defined" from every symbol a
+      # module mentions, so a module-level read of an undefined name vouched
+      # for the function-level read of the same name and the finding was
+      # suppressed. The false-positive half matters just as much -- a gate
+      # that refuses working modules gets switched off.
+      - name: Test the unresolvable-name gate itself
+        run: python -m unittest tests.test_check_undefined_names
+
       - name: Validate pinned identity-ladder fixture coverage
         run: python scripts/validate_identity_ladder_fixture.py
 
@@ -123,6 +133,23 @@ jobs:
           tests.test_next_api_token
           tests.test_next_api_tokens
 
+      # The MCP server offers one list of tools; the backend catalogue decides
+      # which of them a call may use, and every call is checked against it.
+      # Nothing forces the two together, so #654 shipped five statistics tools
+      # that `tools/list` advertised and every call refused, for every role,
+      # with no permission that could grant them. Source-level agreement is the
+      # only place this is checkable: both sides are internally consistent.
+      - name: Test that the MCP tool catalogue agrees with the MCP server
+        run: python -m unittest tests.test_next_mcp_tool_catalog
+
+      # /mcp on the API port is a proxy, and its target was hardcoded to
+      # loopback: right for the all-in-one image, and the API's own loopback in
+      # every split deployment, where it refused every call however healthy the
+      # MCP server was. Nothing failed in CI because both halves were fine on
+      # their own -- only the compose file that wires them was wrong.
+      - name: Test where the MCP proxy forwards to
+        run: python -m unittest tests.test_next_mcp_proxy_target
+
       # A token's scope is only a limit if both halves have to agree, and only
       # honestly a limit if the gates that consult no permission at all -- role
       # management, user deletion, the auth toggle, ownership transfer -- refuse
@@ -161,6 +188,14 @@ jobs:
       # anything failing to say so.
       - name: Test query-argument parsing
         run: python -m unittest tests.test_next_query_argument_parsing
+
+      # The Discover feed, and above all its paging. This workflow lists rather
+      # than discovers, and this module had never been listed -- so the route
+      # that served every page of Discover as page 1, repeating the same twenty
+      # films forever (#736), had tests beside it that no job ever ran. A test
+      # no job names does not exist.
+      - name: Test the Discover feed and its paging
+        run: python -m unittest tests.test_next_discover
 
       # Reading the plugin list must not make the reader a writer. Losing the
       # memo would silently restore the coupling that let one slow provider call
@@ -404,6 +439,69 @@ jobs:
       - name: Replay library hydration against the real module
         run: python -m unittest tests.test_next_library_hydration_replay
 
+      # The other half of #719: deleting a movie must take it off every
+      # watchlist while watched history keeps its snapshot entries. Needs the
+      # real PostgreSQL because every claim is about what the database does --
+      # which rows a delete removes, what the LEFT JOIN's tombstone filter
+      # hides, and what the relink writes back.
+      - name: Test the watchlist deletion policy
+        run: python -m unittest tests.test_next_watchlist_deletion
+
+      # Its sibling: watch history keeps its entries when the movie goes, so
+      # the address of its poster has to survive too. The one it froze was
+      # `/api/next/media/assets/<id>`, which 404s the moment the movie's
+      # artwork links are deleted with it -- an <img> that paints nothing and
+      # reads as a deliberate black poster. Real PostgreSQL again: the whole
+      # claim is about what a delete leaves behind in a jsonb snapshot.
+      - name: Test that a surviving watched entry keeps a loadable poster
+        run: python -m unittest tests.test_next_watch_history_poster
+
+      # The third half of the same report: whether history survives a delete at
+      # all is the user's call, not the app's. Most of what this covers is the
+      # boundary of that choice -- it is read per user rather than per actor,
+      # because a delete is performed by one person and lands on everybody's
+      # lists, and only the owner of a history may decide whether it is
+      # history. Real PostgreSQL: two users, two settings, one delete.
+      - name: Test the watch-history deletion preference
+        run: python -m unittest tests.test_next_watch_history_deletion_preference
+
+      # Sorting the personal lists. Half of this module reads the source and
+      # half of it runs the comparator under node, and the split is deliberate:
+      # the source half pins the wiring a copy-paste from the Library gets
+      # wrong -- the Library binds [data-sort-option] globally, so a Lists menu
+      # reusing that attribute would silently re-sort the Library -- while the
+      # node half catches what a string cannot, the way #715 got past every
+      # source-text assertion in test_next_library_paging.
+      - name: Test personal-list sorting
+        run: python -m unittest tests.test_next_lists_sorting
+
+      # The sort button that came out of that work drew nothing: the icon
+      # sizing rule was scoped to `.collection-controls`, and the Lists
+      # toolbar is not inside one. Markup identical to the Library's, blank on
+      # screen -- the difference lives three levels up, where a diff cannot
+      # show it. This pins the rule to the trigger's own class so a new
+      # trigger works wherever it is dropped.
+      - name: Test that toolbar menu triggers draw their icon
+        run: python -m unittest tests.test_next_toolbar_menu_trigger_icon
+
+      # The last of the #719 follow-ups: recording a watch takes its subject
+      # off the watchlist. The half worth guarding is the scope -- the plugin
+      # sync imports a watchlist and then a watch history in the same run, so
+      # applying the rule there would make one operation delete what it had
+      # just written. A source assertion holds that exclusion in place; the
+      # rest needs real PostgreSQL, including that an actor with no id clears
+      # nothing rather than everything.
+      - name: Test that recording a watch clears the watchlist
+        run: python -m unittest tests.test_next_watch_clears_watchlist
+
+      # The same collection that could not delete a movie cleanly also could not
+      # see past the 500th entry of its own lists. The ceiling sat in four places
+      # at once -- both entity builders, the routes and the page -- so the test
+      # asserts on all four and then proves, against the real database, that more
+      # than 500 rows actually come back.
+      - name: Test the personal-list ceiling
+        run: python -m unittest tests.test_next_personal_list_paging
+
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
@@ -512,6 +610,83 @@ jobs:
       # reads the inline script's source and wants no database at all.
       - name: Test the library list and its sort order
         run: python -m unittest tests.test_next_library_list_ui
+
+      # The library page is one function with two SQL branches, and only the one
+      # that finds entity_media/media_assets is ever exercised. A column added to
+      # that branch alone is absent on the fallback, where the feature reading it
+      # then does nothing at all -- no error, no empty state, just a field that is
+      # never there. This is the same class of gap the two steps above closed by
+      # naming their modules; it needs no database, only the source.
+      - name: Test that both library preview branches select the same columns
+        run: python -m unittest tests.test_next_library_preview_branch_parity
+
+      # The film's country of origin and original language -- distinct from
+      # movies.country/movies.language, which describe the disc. The PostgreSQL
+      # half is the one that matters: there is no catalogue table and no foreign
+      # key behind these columns, deliberately, so the CHECK constraints in
+      # migration 087 are the only thing standing between the filter and a
+      # country code it cannot display. A stub can assert the SQL was written
+      # and learns nothing about whether the database refuses 'jp'.
+      - name: Test film origin capture and storage
+        run: >-
+          python -m unittest
+          tests.test_next_origin
+          tests.test_next_origin_postgres
+          tests.test_next_origin_ui
+
+      # The personal rating. Two of its claims fail silently rather than loudly,
+      # so both are asserted against a real database: that an unrated film reads
+      # as absent rather than as a zero somebody chose, and that the "is this the
+      # owner" test is made server-side -- a client comparing owner_id to its own
+      # id reads a NULL owner_id as "I am the owner", which is the bug shape
+      # renderMovieLoan already carries a comment about.
+      - name: Test the personal rating
+        run: >-
+          python -m unittest
+          tests.test_next_movie_ratings
+          tests.test_next_movie_rating_ui
+
+      # The flags beside the content-rating age label. This whole failure is
+      # silent from both ends: a flag is an <img> at /api/next/flags/<code>.svg,
+      # a name with no file behind it answers 404, and the browser draws its
+      # broken-image glyph while the age label keeps rendering -- so it reads as
+      # a styling glitch. Eight of the twenty-three countries the picker offers
+      # had no flag (#749), two of them because Denmark's and Sweden's files
+      # were named by language code. Nothing but this ties the picker's list and
+      # the flag directory together.
+      - name: Test the content-rating flag icons
+        run: python -m unittest tests.test_next_flag_icons
+
+      # Instance-defined custom fields. The claim that needs a real database is
+      # that a value lands in the column matching its declared type: that pairing
+      # needs a join, so it cannot be a CHECK, and nothing but this stands behind
+      # it. A number written into value_text would sort as a string and nobody
+      # would see why "10" came before "9". The RESTRICT that makes "archive,
+      # never delete" more than a convention is equally untestable in a stub.
+      - name: Test instance-defined custom fields
+        run: >-
+          python -m unittest
+          tests.test_next_custom_fields
+          tests.test_next_custom_fields_routes
+          tests.test_next_custom_fields_ui
+          tests.test_next_custom_field_filters
+
+      # The export catalogue and everything that has to stay in step with it: the
+      # client-side row builder, the column label map, and the i18n key for every
+      # column in all 29 locales. Adding one column touches four files plus the
+      # catalogues, and tests.test_next_export is the only thing that notices when
+      # one of them is missed -- it has never been named by a workflow, so it has
+      # never run on a pull request. Same argument as test_next_library_paging
+      # above, and the same fix.
+      #
+      # tests.test_next_genres rides along: it is the closest thing to a contract
+      # test for a relational, TMDB-owned movie dimension, and it was equally
+      # unrun. Neither needs a database.
+      - name: Test the export catalogue and the genre dimension
+        run: >-
+          python -m unittest
+          tests.test_next_export
+          tests.test_next_genres
 
       # The series detail page. The PostgreSQL half is the one that matters: it
       # pins that series artwork really is stored with entity_type='series', a

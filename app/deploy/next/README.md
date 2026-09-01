@@ -602,7 +602,15 @@ it.
 - `next-api` exposes the Next API on `${DISCVAULT_NEXT_API_PORT:-6180}`.
 - `next-mcp` publishes the MCP server on `${DISCVAULT_NEXT_MCP_PORT:-6090}`. Change
   `DISCVAULT_NEXT_MCP_PORT` in `.env` if `6090` is already used by another stack to
-  avoid a `port is already allocated` error.
+  avoid a `port is already allocated` error. That republishes the **host** port
+  only; inside the network the server stays on `6090`.
+- `next-api` serves `/mcp` by proxying to `DISCVAULT_MCP_URL`, `http://next-mcp:6090`
+  here. It has to be set in this stack: the code default is `127.0.0.1:6090`, which
+  suits the all-in-one image and is `next-api`'s own loopback here, so `/mcp` answers
+  `MCP server is not reachable` with the address it tried in `target`. Only change it
+  if you rename `next-mcp` or move it off container port `6090` — not when you change
+  `DISCVAULT_NEXT_MCP_PORT`. `GET /mcp-health` on the API port separates a broken
+  proxy from a broken MCP server.
 - The Docker network name is `${DISCVAULT_NEXT_NETWORK_NAME:-discvault-next}`. Change
   `DISCVAULT_NEXT_NETWORK_NAME` in `.env` to run multiple stacks side by side without
   network name collisions. This is the actual Docker network name; no Compose project

@@ -258,6 +258,32 @@ def _artwork_urls(data, key, fallback_path):
     return [url for url in urls if url]
 
 
+def _film_origin(data):
+    """The film's own origin, kept apart from the disc's release country.
+
+    origin_country wins over production_countries when both are present: they
+    answer different questions. origin_country is where the film is from,
+    production_countries is everyone who financed it, so a US-financed Japanese
+    film lists both and only the first is the origin. TMDB does not fill
+    origin_country on every record, hence the fallback.
+
+    Values are returned close to the wire and validated backend-side by
+    next_origin.normalize_film_origin, the same division of labour genreIds
+    uses: the plugin knows TMDB's shape, the backend owns what may be stored.
+    """
+    countries = [code for code in data.get("origin_country") or [] if code]
+    if not countries:
+        countries = [
+            item.get("iso_3166_1")
+            for item in data.get("production_countries") or []
+            if isinstance(item, dict) and item.get("iso_3166_1")
+        ]
+    return {
+        "originalLanguage": data.get("original_language") or "",
+        "originCountries": countries,
+    }
+
+
 def _normalize_details(data):
     # TMDB genre ids are the source of truth for the canonical genre catalog
     # (see next_genres.py). Returning ids here -- instead of localized names
@@ -312,6 +338,17 @@ def _normalize_details(data):
         # flow through the generic free-text metadata merge policy, while
         # genres are a relational, always-replace-on-hit association.
         "genreIds": genre_ids,
+        # The film's country of origin and original language. Outside `movie`
+        # for the same reason genreIds is: `movie` keys flow through the generic
+        # free-text merge policy, while this is a relational,
+        # always-replace-on-hit association. It is also why neither field is
+        # lockable -- there is no merge for a lock to arbitrate.
+        #
+        # Always present on a /movie/{id} response, so its presence signals an
+        # authoritative answer that replaces what is stored; an empty answer
+        # clears, and no answer (a plugin that does not send the key) leaves the
+        # stored origin alone.
+        "filmOrigin": _film_origin(data),
         "tmdbId": data.get("id"),
         "imdbId": imdb_id,
     }

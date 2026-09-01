@@ -14,10 +14,21 @@ reported scenario through the real file:
     clean            hydration with nothing interfering
     race-fixed       the SPA reloads its snapshot while a page is in flight
     race-unguarded   the same, against a bridge that ignores the offset guard
+    delete-mid-first-chunk               a movie is deleted while the FIRST chunk is in
+                                         flight, so the reset restores the array to
+                                         exactly the length the chunk was fetched against
+    delete-mid-first-chunk-length-only   the same, against the pre-#719 bridge that
+                                         checks only the length
 
 `race-fixed` is #715. Against the pre-fix module it reports 700 of 2,509 loaded and
 the "Only part of the library could be loaded." warning -- the reporter's screenshot,
 reproduced in about a second.
+
+`delete-mid-first-chunk` is #719, from the same install. The length guard cannot see
+a reset that lands while the first chunk is in the air: the reset restores the array
+to exactly the first-paint size, which is exactly the length the chunk was fetched
+against. Only the snapshot epoch tells those two arrays apart -- so a movie deleted
+in that window was appended back and rendered as a black, unclickable tile.
 
 Skipped when node is unavailable. That is a real gap on a machine without it, and
 the alternative -- a JavaScript engine vendored into a Python test suite -- costs
@@ -103,6 +114,26 @@ class LibraryHydrationReplayTests(unittest.TestCase):
         # test above is passing because of the guard and not around it.
         state = self.replay("race-unguarded")
         self.assertLess(state["loaded"], TOTAL)
+
+    def test_a_movie_deleted_mid_first_chunk_never_reappears(self):
+        # #719. The deletion lands while the first chunk is in flight, so the reset
+        # restores the array to exactly the length the chunk was fetched against --
+        # the one case the length guard is blind to by construction. The epoch guard
+        # must drop the stale chunk, and the library must settle on the post-delete
+        # collection with nothing missing and no warning.
+        state = self.replay("delete-mid-first-chunk")
+        self.assertFalse(state["ghost"], f"deleted movie {state['deletedId']} came back")
+        self.assertEqual(state["loaded"], TOTAL - 1)
+        self.assertEqual(state["warning"], "")
+
+    def test_the_epoch_comparison_is_what_stops_the_ghost(self):
+        # The negative control for the test above: the same run against the pre-#719
+        # bridge, which enforces the length guard but not the epoch. The lengths
+        # collide (200 == 200), the stale chunk is appended, and the deleted movie
+        # comes back -- so the test above passes because of the epoch comparison,
+        # not because the scenario happens to dodge the race.
+        state = self.replay("delete-mid-first-chunk-length-only")
+        self.assertTrue(state["ghost"], "the length-only bridge no longer reproduces #719")
 
 
 if __name__ == "__main__":  # pragma: no cover

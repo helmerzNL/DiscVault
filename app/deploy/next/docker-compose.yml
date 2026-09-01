@@ -59,6 +59,12 @@ services:
       DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED: ${DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED:-false}
       DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS: ${DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS:-10000}
       DISCVAULT_NEXT_API_LOCK_TIMEOUT_MS: ${DISCVAULT_NEXT_API_LOCK_TIMEOUT_MS:-5000}
+      # /mcp on the API port is a proxy to the MCP server. Here that server is
+      # its own container, so the code default (127.0.0.1:6090, right for the
+      # all-in-one image) is the API's own loopback and always refuses. This is
+      # the container address: DISCVAULT_NEXT_MCP_PORT republishes the host
+      # port and leaves 6090 inside.
+      DISCVAULT_MCP_URL: ${DISCVAULT_MCP_URL:-http://next-mcp:6090}
     volumes:
       - ${DISCVAULT_DATA_DIR}:/data
     ports:

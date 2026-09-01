@@ -13,12 +13,14 @@ if repo_root not in sys.path:
 try:
     from app.backend import next_app
     from app.backend import next_profile
+    from app.backend import next_push
     from app.backend import next_views_ui
 except ModuleNotFoundError as exc:  # Local minimal test environments may omit optional backend deps.
     if exc.name not in {"flask", "psycopg"}:
         raise
     next_app = None
     next_profile = None
+    next_push = None
     next_views_ui = None
 
 
@@ -543,6 +545,159 @@ class NextProfileUiTests(unittest.TestCase):
         self.assertIn(".profile-about-grid {", self.html)
         self.assertIn(".profile-about-version {", self.html)
 
+    def test_about_dashboard_invites_support_through_a_locally_served_button(self):
+        """The donation card, and the sidebar link that reaches it.
+
+        Two things are asserted rather than assumed. The button image resolves
+        to DiscVault's own asset route: linking Buy Me a Coffee's CDN would
+        report every visit to the About page to a third party and would leave
+        the card broken on an install with no route to the internet. And the
+        link opens in a new tab with ``rel="noopener noreferrer"``, because the
+        opener reference is what an external page would otherwise be handed.
+        """
+        self.assertIn(
+            'class="profile-dashboard-card profile-about-card profile-about-card--support"',
+            self.html,
+        )
+        self.assertIn('data-next-i18n="profile.supportDevelopment"', self.html)
+        self.assertIn('data-next-i18n="profile.supportDevelopmentHelp"', self.html)
+        self.assertIn('src="/api/next/assets/buymeacoffee-button.png"', self.html)
+        self.assertNotIn("cdn.buymeacoffee.com", self.html)
+        self.assertIn(
+            '<a class="profile-about-coffee" id="profileBuyMeACoffee" '
+            'href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">',
+            self.html,
+        )
+        self.assertEqual(self.html.count('id="profileBuyMeACoffee"'), 1)
+        self.assertIn(".profile-about-coffee {", self.html)
+
+    def test_buy_me_a_coffee_button_is_whitelisted_and_present_on_disk(self):
+        """The two halves of a served asset, checked together.
+
+        The route only answers for names in ``PWA_ICON_ASSETS`` and only when
+        the file is there, and it answers a miss with a 404 rather than an
+        error. So a card that references the button while either half is
+        missing renders a broken image and nothing anywhere reports why.
+        """
+        self.assertIn("buymeacoffee-button.png", next_push.PWA_ICON_ASSETS)
+        asset = next_app.next_frontend_dir() / "buymeacoffee-button.png"
+        self.assertTrue(asset.is_file(), asset)
+
+    def test_support_prompt_is_hidden_until_something_decides_to_show_it(self):
+        """The one-time donation dialog ships in the document, closed."""
+        self.assertIn(
+            '<section class="support-prompt-backdrop hidden" id="supportPromptBackdrop" '
+            'aria-modal="true" role="dialog" aria-labelledby="supportPromptTitle">',
+            self.html,
+        )
+        for key in (
+            "support.promptTitle",
+            "support.promptBody",
+            "support.promptLater",
+            "support.promptFoot",
+        ):
+            self.assertIn(f'data-next-i18n="{key}"', self.html)
+        self.assertIn(
+            '<a class="profile-about-coffee" id="supportPromptCoffeeLink" '
+            'href="https://buymeacoffee.com/flux76" target="_blank" rel="noopener noreferrer">',
+            self.html,
+        )
+        # Same locally served button as the About card, for the same reasons.
+        self.assertEqual(self.html.count('src="/api/next/assets/buymeacoffee-button.png"'), 2)
+        self.assertIn(".support-prompt-backdrop {", self.html)
+
+    def test_support_prompt_asks_once_per_browser_and_never_by_version(self):
+        """Beta ships a build most days, so the flag must not carry a version.
+
+        A version-keyed flag would put this dialog back in front of the same
+        reader every few days. The stored value is a bare marker, and nothing
+        in the code clears it.
+        """
+        self.assertIn(
+            'const SUPPORT_PROMPT_STORAGE_KEY = "dv_next_support_prompt_seen";',
+            self.html,
+        )
+        self.assertIn("localStorage.getItem(SUPPORT_PROMPT_STORAGE_KEY) === \"1\"", self.html)
+        self.assertIn('localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY, "1")', self.html)
+        self.assertNotIn("removeItem(SUPPORT_PROMPT_STORAGE_KEY", self.html)
+        # A browser that cannot store the answer is treated as having answered:
+        # the alternative is the dialog on every visit with no way to stop it.
+        seen = self.html.split("function supportPromptAlreadySeen()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn("catch (error) {", seen)
+        self.assertIn("return true;", seen)
+
+    def test_support_prompt_skips_deep_links_and_empty_collections(self):
+        body = self.html.split("function maybeShowSupportPrompt(route)", 1)[1].split("\n    }\n", 1)[0]
+        self.assertIn("if (!appMode) return;", body)
+        self.assertIn("if (supportPromptAlreadySeen()) return;", body)
+        self.assertIn('if ((route || {}).view !== "library") return;', body)
+        self.assertIn("if (libraryMovieTotal < 1) return;", body)
+        # Fired once the library has been routed to, not during startup.
+        self.assertIn(
+            '      else showLibraryPage(false);\n      maybeShowSupportPrompt(route);',
+            self.html,
+        )
+
+    def test_every_way_out_of_the_support_prompt_counts_as_asked(self):
+        """Later, the ×, the backdrop, Escape and the link itself all close it.
+
+        A route that closed the dialog without recording it would ask the same
+        reader again on the next visit, which is the one outcome the single-ask
+        rule exists to prevent.
+        """
+        for element_id in (
+            "supportPromptLaterButton",
+            "supportPromptCloseButton",
+            "supportPromptCoffeeLink",
+        ):
+            self.assertIn(
+                f'document.getElementById("{element_id}")?.addEventListener("click", () => closeSupportPrompt());',
+                self.html,
+            )
+        self.assertIn(
+            'if (event.target.id === "supportPromptBackdrop") closeSupportPrompt();',
+            self.html,
+        )
+        self.assertIn(
+            'if (event.key === "Escape" && !document.getElementById("supportPromptBackdrop")?'
+            '.classList.contains("hidden")) {',
+            self.html,
+        )
+        close_body = self.html.split("function closeSupportPrompt()", 1)[1].split("\n    }", 1)[0]
+        self.assertIn('classList.add("hidden")', close_body)
+        self.assertIn("localStorage.setItem(SUPPORT_PROMPT_STORAGE_KEY", close_body)
+
+    def test_sidebar_support_link_reaches_the_about_panel_on_desktop_only(self):
+        """A quiet text link in the sidebar, hidden wherever the version block is.
+
+        It shares the collapsed-rail and narrow-viewport rules with
+        ``.sidebar-footer`` deliberately: those are the two states where the
+        sidebar has no room for supporting text, and a link that survived them
+        would either overflow the rail or crowd the mobile top bar.
+        """
+        self.assertIn(
+            '<button type="button" class="sidebar-support" id="sidebarSupportLink" '
+            'data-next-i18n="uiPreview.supportDiscVault">Support DiscVault</button>',
+            self.html,
+        )
+        self.assertIn(".preview-shell.sidebar-collapsed .sidebar-support,", self.html)
+        self.assertIn("      .sidebar-support { display: none; }", self.html)
+        self.assertIn(
+            'document.getElementById("sidebarSupportLink")?.addEventListener("click", () => openAboutPage());',
+            self.html,
+        )
+        # The tab is selected before the page renders, so the About panel is
+        # what opens rather than whichever tab the reader last used.
+        self.assertIn(
+            'function openAboutPage() {',
+            self.html,
+        )
+        about_page = self.html.split("function openAboutPage() {", 1)[1].split("}", 1)[0]
+        self.assertLess(
+            about_page.index('setProfileTab("about")'),
+            about_page.index("showProfilePage()"),
+        )
+
     def test_admin_access_dashboard_preserves_invite_and_passkey_management(self):
         self.assertIn(
             'id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess"',
@@ -589,12 +744,16 @@ class NextProfileUiTests(unittest.TestCase):
             "Plugins",
             "Digital",
             "Metadata",
+            "CustomFields",
             "Backup",
             "Audit",
         ):
             self.assertIn(f'id="appAdminTab{tab}" role="tab"', self.html)
-        self.assertEqual(self.html.count('class="app-admin-tab-icon"'), 9)
-        self.assertEqual(self.html.count('class="app-admin-tab-label"'), 9)
+        # 10 since custom fields joined. Every tab carries both an icon and a
+        # label so the submenu can collapse to icons on a narrow screen; a tab
+        # added with only one of the two would break that silently.
+        self.assertEqual(self.html.count('class="app-admin-tab-icon"'), 10)
+        self.assertEqual(self.html.count('class="app-admin-tab-label"'), 10)
         self.assertIn(
             'html[data-profile-menu-style="icon_only"] .app-admin-workspace {',
             self.html,
@@ -1081,7 +1240,11 @@ class NextProfileUiTests(unittest.TestCase):
             self.assertIn(f'disabled data-bulk-action="{action}"', self.html, action)
 
     def test_library_action_groups_adapt_at_mobile_breakpoint(self):
-        self.assertEqual(self.html.count("data-library-adaptive-group "), 10)
+        # 12 since the advanced search gained an Origin group and a Custom
+        # fields group. The collapse wiring is attribute-driven, so a new group
+        # inherits it -- this count is here to notice a group added by hand
+        # somewhere the attribute is not.
+        self.assertEqual(self.html.count("data-library-adaptive-group "), 12)
         self.assertIn("function syncLibraryAdaptiveGroups()", self.html)
         self.assertIn('window.matchMedia("(max-width: 760px)").matches', self.html)
         self.assertIn("groups.forEach((group) => { group.open = !mobile; });", self.html)

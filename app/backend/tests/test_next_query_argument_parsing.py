@@ -104,6 +104,11 @@ class NothingParsesItsOwnTests(unittest.TestCase):
         "next_common.py",
     )
 
+    # Every module that calls the parser, so the "name, not value" rule below is
+    # checked where the mistake is actually made rather than only where the
+    # hand-rolled parsing used to live.
+    CALLER_MODULES = MODULES + ("next_discover.py", "next_audit.py", "next_mcp_activity.py")
+
     def test_no_module_parses_a_query_argument_by_hand(self):
         pattern = re.compile(r"^(?!\s*#).*\bint\(\s*request\.args", re.M)
         for name in self.MODULES:
@@ -120,6 +125,41 @@ class NothingParsesItsOwnTests(unittest.TestCase):
                 f"{name} parses a query argument by hand; use parse_int_arg so a "
                 "malformed value is a 400 rather than a 500",
             )
+
+    def test_the_parser_is_given_an_argument_name_and_never_a_read_value(self):
+        """`parse_int_arg("page", 1)` -- never `parse_int_arg(request.args.get("page"), 1)`.
+
+        The parser reads the request itself, so its first argument is the
+        *name* of the query argument. Handing it the already-read value type
+        checks, runs, and silently answers a different question: it looks up an
+        argument named after whatever the caller happened to send ("2"), finds
+        nothing, and returns the default. Nothing raises and nothing logs.
+
+        `/api/next/discover` was written that way, so every page of the Discover
+        feed was served as page 1 and the grid repeated its first twenty films
+        forever (#736). The symptom appears far from the call -- in a scroll that
+        never advances -- so this is pinned at the call site instead, where it is
+        decidable by reading one line.
+        """
+        pattern = re.compile(r"(?<!def )parse_int_arg\(\s*(?![\"'])", re.M)
+        offenders = []
+        for name in self.CALLER_MODULES:
+            source = (BACKEND / name).read_text(encoding="utf-8")
+            source = re.sub(r'""".*?"""', "", source, flags=re.S)
+            for match in pattern.finditer(source):
+                line = source[match.start() : source.index("\n", match.start())].strip()
+                # A call broken across lines puts the name on the next one.
+                if line.endswith("parse_int_arg("):
+                    rest = source[source.index("\n", match.start()) + 1 :].lstrip()
+                    if rest[:1] in {'"', "'"}:
+                        continue
+                offenders.append(f"{name}: {line}")
+        self.assertEqual(
+            offenders,
+            [],
+            "parse_int_arg takes the NAME of a query argument and reads the "
+            "request itself; passing a read value silently yields the default",
+        )
 
     def test_the_people_route_states_the_ceiling_it_enforces(self):
         # It clamped to 500 inside people_list_entities and echoed back whatever

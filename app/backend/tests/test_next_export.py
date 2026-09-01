@@ -65,6 +65,31 @@ class ExportColumnCatalogueTests(unittest.TestCase):
                 "contentRating",
                 "tags",
                 "watchActivity",
+                "originCountry",
+                "originalLanguage",
+                "personalRating",
+            ],
+        )
+
+    def test_the_default_selection_is_still_the_original_ten(self):
+        # The export column set is a contract shared by the PWA, iOS and Android
+        # (App-Guidance library-export-columns.md 1). A column that does not
+        # exist on every implementation ships default-off, so an export taken
+        # with the default selection is the same file on all three. Appending a
+        # column must never change what somebody gets without asking.
+        self.assertEqual(
+            list(next_export_columns.DEFAULT_EXPORT_COLUMN_KEYS),
+            [
+                "title",
+                "year",
+                "barcode",
+                "format",
+                "director",
+                "actors",
+                "studio",
+                "contentRating",
+                "tags",
+                "watchActivity",
             ],
         )
 
@@ -359,6 +384,9 @@ class ExportRequestParsingTests(unittest.TestCase):
         next_export._next_app = lambda: SimpleNamespace(
             next_auth_effective_enabled=lambda conn, table_exists: False,
             next_auth_current_user=lambda conn: None,
+            # The export routes read the instance's custom-field definitions to
+            # decide which `custom:` column keys are legal.
+            all_custom_field_entities=lambda conn: [],
         )
         flask_app = Flask(__name__)
         next_export.register_next_export_routes(flask_app, connect=connect)

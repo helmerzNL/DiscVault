@@ -494,24 +494,38 @@ def record_collection_value_snapshot(
     container_where: str,
     container_params: list[Any],
     captured_on: date | None = None,
+    summary: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     """Capture today's value for every scope. Idempotent within a calendar day.
 
     Callers treat this as best effort: a snapshot that cannot be written must
     never fail the edit that triggered it.
+
+    `summary` lets a caller that has *just* computed the valuation hand it over
+    instead of paying for it twice. The statistics endpoint did exactly that:
+    it computed the whole collection's value for its response and then called
+    this, which recomputed the identical figure - the same scan of every movie,
+    container and price, and a second rate lookup - before writing a row. It is
+    only reused when its base currency matches what a snapshot is stored in;
+    anything else is recomputed rather than converted.
     """
     if not user_id or not table_exists(conn, "collection_value_snapshots"):
         return None
-    rates = price_display_exchange_rates()
-    summary = compute_collection_value(
-        conn,
-        movie_where=movie_where,
-        movie_params=movie_params,
-        container_where=container_where,
-        container_params=container_params,
-        base_currency=SNAPSHOT_BASE_CURRENCY,
-        exchange_rates=dict(rates.get("exchangeRates") or {}),
-    )
+    if not (
+        isinstance(summary, dict)
+        and summary.get("baseCurrency") == SNAPSHOT_BASE_CURRENCY
+        and "scopes" in summary
+    ):
+        rates = price_display_exchange_rates()
+        summary = compute_collection_value(
+            conn,
+            movie_where=movie_where,
+            movie_params=movie_params,
+            container_where=container_where,
+            container_params=container_params,
+            base_currency=SNAPSHOT_BASE_CURRENCY,
+            exchange_rates=dict(rates.get("exchangeRates") or {}),
+        )
     day = captured_on or date.today()
     _upsert_snapshot(
         conn,
@@ -525,8 +539,9 @@ def record_collection_value_snapshot(
         priced_count=summary["pricedCount"],
         unpriced_count=summary["unpricedCount"],
     )
+    scopes = summary.get("scopes") or {}
     for scope_type, key in (("vault", "vaults"), ("collection", "collections")):
-        for scope in summary["scopes"][key]:
+        for scope in scopes.get(key) or ():
             _upsert_snapshot(
                 conn,
                 user_id=user_id,

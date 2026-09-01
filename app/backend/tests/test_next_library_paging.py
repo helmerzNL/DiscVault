@@ -406,9 +406,45 @@ class LibraryStalePageTests(unittest.TestCase):
 
     def test_a_page_fetched_against_a_stale_movie_array_is_never_appended(self):
         body = self._append_movies_body()
-        self.assertIn("appendMovies: (rows, expectedOffset)", self.ui_source)
+        self.assertIn("appendMovies: (rows, expectedOffset, expectedEpoch)", self.ui_source)
         self.assertIn("!== movies.length", body)
         self.assertIn("return null", body)
+
+    def test_a_page_fetched_against_a_stale_snapshot_epoch_is_never_appended(self):
+        # The length guard alone collides by construction on the first page of every
+        # cycle: a reset restores the array to exactly the first-paint size, which is
+        # exactly the length that page was fetched against. A movie deleted in that
+        # window came back as a black, dead tile (#719). The epoch tells the two
+        # arrays apart when the lengths cannot.
+        body = self._append_movies_body()
+        self.assertIn("!== librarySnapshotEpoch", body)
+        code = self._code_only(body)
+        self.assertLess(
+            code.index("librarySnapshotEpoch"),
+            code.index("movies.length"),
+            "the epoch comparison must run before the length comparison it backstops",
+        )
+
+    def test_the_epoch_guard_is_optional_so_an_older_caller_still_works(self):
+        # Same compatibility story as the offset guard below: a service worker can
+        # serve a previous build's library-paging.js, whose two-argument call must
+        # behave exactly as it did before #719.
+        self.assertIn("expectedEpoch !== undefined", self._append_movies_body())
+
+    def test_a_row_this_session_deleted_is_never_re_appended(self):
+        # Belt and braces under the epoch guard: the ids the session itself deleted
+        # are refused by appendMovies outright, while loadAppSnapshot() deliberately
+        # stays authoritative and never consults the set.
+        body = self._append_movies_body()
+        self.assertIn("libraryDeletedMovieIds.has(id)", body)
+        self.assertIn("const libraryDeletedMovieIds = new Set();", self.ui_source)
+        purge_start = self.ui_source.index("function purgeDeletedMovies(")
+        purge = self.ui_source[purge_start:self.ui_source.index("\n    }", purge_start)]
+        self.assertIn("libraryDeletedMovieIds.add(id)", purge)
+        self.assertIn("movies = movies.filter(", purge)
+        # Both delete flows feed it: the detail page's single delete and the bulk bar.
+        self.assertIn("purgeDeletedMovies([activeDetailMovieId]);", self.ui_source)
+        self.assertIn("purgeDeletedMovies(movieIds);", self.ui_source)
 
     def test_the_stale_page_signal_is_distinct_from_an_empty_page(self):
         # `0` already means "every row was a duplicate", which is survivable. Collapsing
@@ -433,8 +469,12 @@ class LibraryStalePageTests(unittest.TestCase):
         head = self.js_source[start:end]
         self.assertIn("var expectedLoaded = current.getLoadedCount();", head)
         self.assertLess(head.index("var expectedLoaded"), head.index("fetchPage("))
+        # The epoch is measured in the same breath: both describe the array the
+        # request is about to be fetched against, and both travel with it (#719).
+        self.assertIn("var expectedEpoch = snapshotEpoch(current);", head)
+        self.assertLess(head.index("var expectedEpoch"), head.index("fetchPage("))
         self.assertIn("fetchPage(current, offset)", self.js_source)
-        self.assertIn("appendMovies(items, expectedLoaded)", self.js_source)
+        self.assertIn("appendMovies(items, expectedLoaded, expectedEpoch)", self.js_source)
         self.assertNotIn("fetchPage(current, current.getLoadedCount())", self.js_source)
 
     def test_a_stale_page_restarts_the_cycle_instead_of_truncating(self):

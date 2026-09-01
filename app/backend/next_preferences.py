@@ -34,7 +34,13 @@ APP_PREFERENCE_DEFAULTS: dict[str, Any] = {
     "show_container_format_badges": True,
     "show_container_member_badges": True,
     "show_digital_badge_on_tiles": True,
+    "show_rating_badge_on_tiles": True,
     "delete_container_members_with_container": False,
+    # Off, so the shipped behaviour is unchanged: deleting a disc does not
+    # un-watch the film, and watch history records something that happened.
+    # On, for the reader who means "gone" literally -- see
+    # personal-lists-on-deletion.md 2b (#719).
+    "delete_removes_watch_history": False,
     "show_metadata_jobs": True,
     "price_monitoring_enabled": True,
     "preferred_price_currency": "",
@@ -69,7 +75,9 @@ APP_BOOLEAN_PREFERENCES = {
     "show_container_format_badges",
     "show_container_member_badges",
     "show_digital_badge_on_tiles",
+    "show_rating_badge_on_tiles",
     "delete_container_members_with_container",
+    "delete_removes_watch_history",
     "show_metadata_jobs",
     "price_monitoring_enabled",
     "share_release_selections",
@@ -92,10 +100,16 @@ APP_PREFERENCE_SECTIONS: dict[str, tuple[str, ...]] = {
         "show_local_title",
         "show_extended_people_pages",
         "show_digital_badge_on_tiles",
+        "show_rating_badge_on_tiles",
         "price_monitoring_enabled",
         "preferred_price_currency",
         "rating_country",
         "default_media_group_id",
+        # On Library rather than Collectors for the same reason the sharing
+        # preferences are: the Collectors tab is hidden unless the user holds
+        # container-management permissions, and what happens to your own watch
+        # history is not a container capability.
+        "delete_removes_watch_history",
     ),
     "collectors": (
         "collectors_mode",
@@ -126,6 +140,21 @@ PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
     "JPY": 173.0,
 }
 _PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
+
+# How long a single rate lookup may hold up the request that triggered it. The
+# call happens inside a request, with a database transaction open, so this is
+# time a caller waits on an outbound HTTP request to a third party that a
+# self-hosted deployment may not be able to reach at all.
+PRICE_DISPLAY_RATE_TIMEOUT_SECONDS = 4
+
+# How long a *failed* lookup is remembered. Without this the failure was not
+# cached at all, so a deployment with no route to the rates provider paid the
+# full timeout again on every single request - twice on the statistics
+# endpoint, which asks for rates once itself and once more through the snapshot
+# it captures. Two ten-second waits is a fifteen-second client timeout, which is
+# exactly how `get_top_actors` and `get_top_directors` ended in
+# `HTTPConnectionPool(host='next-api', port=5000): Read timed out`.
+PRICE_DISPLAY_RATE_RETRY_AFTER = timedelta(minutes=5)
 
 
 def _next_app():
@@ -216,7 +245,7 @@ def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
     try:
         response = requests.get(
             f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
-            timeout=10,
+            timeout=PRICE_DISPLAY_RATE_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         payload = response.json() or {}
@@ -240,14 +269,19 @@ def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
         _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
         return result
     except Exception:
-        if cached:
-            return cached
-        return {
+        # Hold the answer for a cool-down rather than retrying on the very next
+        # request. The previous rates stay preferred over the built-in fallback
+        # when there are any; either way the next caller is served from memory
+        # instead of waiting out the timeout again.
+        result = cached or {
             "base": "EUR",
             "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
             "updatedAt": None,
             "source": "fallback",
         }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + PRICE_DISPLAY_RATE_RETRY_AFTER
+        return result
 
 
 def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -277,6 +311,19 @@ def actor_delete_container_members_enabled(conn, actor: dict[str, Any] | None) -
     if not actor_id:
         return bool(APP_PREFERENCE_DEFAULTS["delete_container_members_with_container"])
     return bool(app_effective_preferences(conn, actor_id).get("delete_container_members_with_container"))
+
+
+def user_delete_removes_watch_history(conn, user_id: Any) -> bool:
+    """Whether this user's watch history goes when a movie is deleted.
+
+    Read per *user*, not per actor, and that distinction is the whole point:
+    one person's delete reaches every user's lists, but only the owner of a
+    history may decide whether it is history. An admin who wants deletes to be
+    absolute gets that for their own entries; someone else's stay.
+    """
+    if not user_id:
+        return bool(APP_PREFERENCE_DEFAULTS["delete_removes_watch_history"])
+    return bool(app_effective_preferences(conn, user_id).get("delete_removes_watch_history"))
 
 
 def set_app_user_preferences(conn, user_id: UUID | str, updates: dict[str, Any]) -> dict[str, Any]:

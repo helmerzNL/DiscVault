@@ -33,6 +33,12 @@
  *     (appendMovies' expectedOffset), and the cursor may only advance by what the server
  *     says it served (payload.offset + items.length), never by the de-duplicated loaded
  *     count. A snapshot reset is normal, so it restarts the cycle rather than ending it.
+ *   - The length alone cannot ask "is this still the array I fetched against": a reset
+ *     restores the array to exactly the first-paint size, and the first page of every
+ *     cycle is fetched against that same size, so the two collide by construction. A
+ *     movie deleted while that page was in flight came back as a black, dead tile
+ *     (#719). The snapshot epoch is therefore measured alongside the length and travels
+ *     with the request; the bridge refuses the append when either has moved.
  */
 (function () {
   "use strict";
@@ -311,6 +317,12 @@
       // "is this still the array I fetched against", which is a question about the
       // array's length - measured here, immediately before the request goes out.
       var expectedLoaded = current.getLoadedCount();
+      // The length is not enough on its own: a snapshot reset restores the array to
+      // exactly the first-paint size, and this cycle's first page is fetched against
+      // that same size, so a page from before the reset still matches it (#719 - a
+      // movie deleted while the page was in flight was appended back). The epoch is
+      // measured with the length and the bridge refuses when either has moved.
+      var expectedEpoch = snapshotEpoch(current);
       fetchPage(current, offset)
         .then(function (payload) {
           var live = bridge();
@@ -319,9 +331,8 @@
             return;
           }
           state.attempt = 0;
-          if (payload && typeof payload.total === "number") live.setMovieTotal(payload.total);
           var items = payload && Array.isArray(payload.items) ? payload.items : [];
-          var added = live.appendMovies(items, expectedLoaded);
+          var added = live.appendMovies(items, expectedLoaded, expectedEpoch);
           if (added === null) {
             // The SPA reset its snapshot while this page was in flight. Appending it is
             // exactly what used to open the hole; drop it and restart the cycle from
@@ -344,6 +355,11 @@
             step();
             return;
           }
+          // A dropped page's totals are dropped with it, which is why this sits after
+          // the guard: a stale page carries the total of the snapshot it was fetched
+          // against, and writing that over the fresh snapshot's count made the counter
+          // briefly claim a movie the server had already deleted.
+          if (payload && typeof payload.total === "number") live.setMovieTotal(payload.total);
           // Advance on what the server says it served, never on the de-duplicated
           // loaded count: a page overlapping rows already held would otherwise leave
           // the cursor short and be requested again for as long as the overlap lasts.

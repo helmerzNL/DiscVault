@@ -12,22 +12,37 @@
 // change here, or this file is testing a bridge that no longer exists.
 //
 // Usage: node library-hydration-replay.mjs <path-to-library-paging.js> <scenario>
-//   clean            no snapshot reload; the baseline
-//   race-fixed       a reload lands mid-flight, bridge enforces the offset guard
-//   race-unguarded   the same reload against a bridge that ignores the guard
+//   clean                          no snapshot reload; the baseline
+//   race-fixed                     a reload lands mid-flight, bridge enforces the offset guard
+//   race-unguarded                 the same reload against a bridge that ignores the guard
+//   delete-mid-first-chunk         a movie is deleted (on another device -- no local purge)
+//                                  while the FIRST chunk is in flight; the reset restores the
+//                                  array to exactly the first-paint size, so the length guard
+//                                  alone cannot see the reset (#719)
+//   delete-mid-first-chunk-length-only  the same, against the pre-#719 bridge that checks only
+//                                  the length -- the deleted movie must come back, proving the
+//                                  epoch comparison is what does the work
 import fs from "node:fs";
 
 const PAGING_JS = process.argv[2];
 const SNAPSHOT = 200, CHUNK = 500, TOTAL = 2509;
+// Inside the first chunk's range (200..700), so the stale page carries it.
+const DELETED_INDEX = 450;
 
-function makeWorld({ resetAfterPages, guardSupported }) {
-  const server = Array.from({ length: TOTAL }, (_, i) => ({ id: "m" + i }));
+function makeWorld({ resetAfterPages, guardSupported, epochGuardSupported = guardSupported, deleteOnReset = false }) {
+  let server = Array.from({ length: TOTAL }, (_, i) => ({ id: "m" + i }));
   let movies = server.slice(0, SNAPSHOT);
   let libraryMovieTotal = TOTAL;
   let libraryMoviesHasMore = true;
   let epoch = 0;
   let pagesServed = 0;
   let warning = "";
+  let deletedId = "";
+
+  // Mirrors the session-local purge set in next_views_ui.py. Deliberately left
+  // empty here: the delete scenarios model a deletion made on another device,
+  // which is exactly the path where only the epoch guard can stop the ghost.
+  const libraryDeletedMovieIds = new Set();
 
   const bridge = {
     t: (k, f) => f,
@@ -35,7 +50,11 @@ function makeWorld({ resetAfterPages, guardSupported }) {
     getLoadedCount: () => movies.length,
     getSnapshotEpoch: guardSupported ? () => epoch : undefined,
     setMovieTotal: (t) => { const n = Number(t); if (Number.isFinite(n) && n >= 0) libraryMovieTotal = n; },
-    appendMovies: (rows, expectedOffset) => {
+    appendMovies: (rows, expectedOffset, expectedEpoch) => {
+      if (epochGuardSupported && expectedEpoch !== undefined && expectedEpoch !== null) {
+        const expected = Number(expectedEpoch);
+        if (!Number.isFinite(expected) || expected !== epoch) return null;
+      }
       if (guardSupported && expectedOffset !== undefined && expectedOffset !== null) {
         const expected = Number(expectedOffset);
         if (!Number.isFinite(expected) || expected !== movies.length) return null;
@@ -46,6 +65,7 @@ function makeWorld({ resetAfterPages, guardSupported }) {
       for (const row of rows) {
         const id = String(row?.id || "");
         if (!id || seen.has(id)) continue;
+        if (libraryDeletedMovieIds.has(id)) continue;
         seen.add(id); added.push(row);
       }
       if (added.length) movies = movies.concat(added);
@@ -65,9 +85,16 @@ function makeWorld({ resetAfterPages, guardSupported }) {
   };
 
   // The SPA reloading its own snapshot: movies snap back to the first-paint page.
+  // With deleteOnReset the reload also carries a deletion made elsewhere: the
+  // server loses one movie first, and the fresh snapshot reflects that -- while
+  // the page already in flight was built from the pre-delete server.
   const reloadSnapshot = () => {
+    if (deleteOnReset && !deletedId) {
+      deletedId = server[DELETED_INDEX].id;
+      server = server.filter((m) => m.id !== deletedId);
+    }
     movies = server.slice(0, SNAPSHOT);
-    libraryMovieTotal = TOTAL;
+    libraryMovieTotal = server.length;
     libraryMoviesHasMore = true;
     warning = "";
     epoch += 1;
@@ -84,8 +111,10 @@ function makeWorld({ resetAfterPages, guardSupported }) {
       pagesServed += 1;
       const offset = Number(new URL(url, "http://x").searchParams.get("offset"));
       const limit = Number(new URL(url, "http://x").searchParams.get("limit"));
+      // Body first, reset after: the response is generated from the server as it
+      // stood when the request arrived, and the deletion lands while it is in flight.
       const items = server.slice(offset, offset + limit);
-      const body = { items, total: TOTAL, limit, offset, hasMore: offset + items.length < TOTAL };
+      const body = { items, total: server.length, limit, offset, hasMore: offset + items.length < server.length };
       // Land the snapshot reset while this page is in flight.
       if (resetAfterPages && pagesServed === resetAfterPages) reloadSnapshot();
       return Promise.resolve({ ok: true, json: () => Promise.resolve(body) });
@@ -97,7 +126,14 @@ function makeWorld({ resetAfterPages, guardSupported }) {
     querySelector: () => null,
     visibilityState: "visible",
   };
-  return { g, doc, bridge, state: () => ({ loaded: movies.length, total: libraryMovieTotal, warning, pagesServed }) };
+  return { g, doc, bridge, state: () => ({
+    loaded: movies.length,
+    total: libraryMovieTotal,
+    warning,
+    pagesServed,
+    deletedId,
+    ghost: !!deletedId && movies.some((m) => String(m?.id || "") === deletedId),
+  }) };
 }
 
 async function run(opts) {
@@ -114,5 +150,9 @@ const scenario = process.argv[3];
 const opts =
   scenario === "clean" ? { resetAfterPages: 0, guardSupported: true }
   : scenario === "race-fixed" ? { resetAfterPages: 2, guardSupported: true }
+  : scenario === "delete-mid-first-chunk"
+    ? { resetAfterPages: 1, guardSupported: true, deleteOnReset: true }
+  : scenario === "delete-mid-first-chunk-length-only"
+    ? { resetAfterPages: 1, guardSupported: true, epochGuardSupported: false, deleteOnReset: true }
   : { resetAfterPages: 2, guardSupported: false };
 run(opts).then((s) => console.log(JSON.stringify({ scenario, ...s })));
