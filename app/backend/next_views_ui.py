@@ -7938,7 +7938,12 @@ def ui_preview_html(
         linear-gradient(0deg, rgba(0,0,0,.72), rgba(0,0,0,.08) 62%);
       z-index: 1;
     }
-    .movie-detail-hero img {
+    /* The backdrop only: a direct child. Written as a descendant selector this
+       rule reached every <img> in the hero -- the poster, a person's portrait,
+       and the flag inside the content-rating pill, which then filled the pill
+       under the age instead of standing beside it. The poster and portrait
+       carry their own resets; the pill must not need one. */
+    .movie-detail-hero > img {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -8661,6 +8666,11 @@ def ui_preview_html(
       object-fit: cover;
       box-shadow: 0 0 0 1px var(--line);
       flex: 0 0 auto;
+    }
+    /* Inside a 28px hero pill the full-size flag crowds the age beside it. */
+    .pill .flag-icon {
+      width: 20px;
+      height: 14px;
     }
     .debug-localization-card strong,
     .debug-localization-card p {
