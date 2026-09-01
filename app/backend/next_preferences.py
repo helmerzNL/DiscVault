@@ -141,6 +141,21 @@ PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
 }
 _PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
 
+# How long a single rate lookup may hold up the request that triggered it. The
+# call happens inside a request, with a database transaction open, so this is
+# time a caller waits on an outbound HTTP request to a third party that a
+# self-hosted deployment may not be able to reach at all.
+PRICE_DISPLAY_RATE_TIMEOUT_SECONDS = 4
+
+# How long a *failed* lookup is remembered. Without this the failure was not
+# cached at all, so a deployment with no route to the rates provider paid the
+# full timeout again on every single request - twice on the statistics
+# endpoint, which asks for rates once itself and once more through the snapshot
+# it captures. Two ten-second waits is a fifteen-second client timeout, which is
+# exactly how `get_top_actors` and `get_top_directors` ended in
+# `HTTPConnectionPool(host='next-api', port=5000): Read timed out`.
+PRICE_DISPLAY_RATE_RETRY_AFTER = timedelta(minutes=5)
+
 
 def _next_app():
     try:  # pragma: no cover - import shape depends on runtime layout
@@ -230,7 +245,7 @@ def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
     try:
         response = requests.get(
             f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
-            timeout=10,
+            timeout=PRICE_DISPLAY_RATE_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         payload = response.json() or {}
@@ -254,14 +269,19 @@ def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
         _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
         return result
     except Exception:
-        if cached:
-            return cached
-        return {
+        # Hold the answer for a cool-down rather than retrying on the very next
+        # request. The previous rates stay preferred over the built-in fallback
+        # when there are any; either way the next caller is served from memory
+        # instead of waiting out the timeout again.
+        result = cached or {
             "base": "EUR",
             "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
             "updatedAt": None,
             "source": "fallback",
         }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + PRICE_DISPLAY_RATE_RETRY_AFTER
+        return result
 
 
 def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
