@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "個人リスト",
   "lists.ratingCleared": "評価を消去しました。",
   "lists.ratingSaved": "評価を保存しました。",
+  "lists.ratingStarLabel": "10点中{score}点を付ける",
   "lists.removeWatchedEntry": "視聴記録を削除",
   "lists.removedWatched": "視聴日を削除しました。",
   "lists.removedWatchlist": "ウォッチリストから削除しました。",

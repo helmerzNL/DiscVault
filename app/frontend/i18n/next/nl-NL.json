@@ -1553,6 +1553,7 @@
   "lists.personalTitle": "Persoonlijke lijsten",
   "lists.ratingCleared": "Waardering gewist.",
   "lists.ratingSaved": "Waardering opgeslagen.",
+  "lists.ratingStarLabel": "Beoordeel met {score} van de 10",
   "lists.removeWatchedEntry": "Bekekenmoment verwijderen",
   "lists.removedWatched": "Bekekenmoment verwijderd.",
   "lists.removedWatchlist": "Uit Watchlist verwijderd.",

@@ -5578,29 +5578,80 @@ def ui_preview_html(
       gap: 4px;
       align-items: center;
     }
+    /* The ten stars are one unbreakable row. They used to be twenty separate
+       flex items in the picker itself, which put the picker's 4px gap *inside*
+       every star and let a narrow viewport wrap between a star's two halves. */
+    .movie-rating-stars {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 2px;
+      align-items: center;
+      touch-action: pan-y;
+    }
     .movie-rating-star {
+      position: relative;
       width: 26px;
       height: 26px;
-      border: 0;
-      background: none;
-      padding: 0;
-      cursor: pointer;
-      color: color-mix(in srgb, var(--text) 26%, transparent);
       display: inline-grid;
       place-items: center;
     }
     .movie-rating-star svg {
       width: 22px;
       height: 22px;
-      fill: currentColor;
       pointer-events: none;
     }
-    .movie-rating-star.filled,
-    .movie-rating-star.half {
-      color: var(--accent);
+    /* Every star is a grey star with an accent star drawn over it -- full for a
+       whole point, half for the half step. One visual language for all three
+       states: the unfilled part of a half star is the same grey as an empty
+       one, instead of an accent outline that reads as a different kind of mark. */
+    .movie-rating-star-base {
+      fill: color-mix(in srgb, var(--text) 26%, transparent);
     }
-    .movie-rating-star:hover {
-      color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    .movie-rating-star-fill {
+      fill: var(--accent);
+    }
+    .movie-rating-star:not(.filled):not(.half) .movie-rating-star-fill {
+      display: none;
+    }
+    /* The two hit targets sit on top of the drawing rather than clipping it.
+       Clipping was the bug: a 50% inset on a half-width button around a centred
+       22px glyph exposes a middle band of the star, not its left or right half. */
+    .movie-rating-hit {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      border: 0;
+      background: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .movie-rating-hit.low {
+      left: 0;
+    }
+    .movie-rating-hit.high {
+      right: 0;
+    }
+    /* :focus-visible, not :focus -- a pointer drag focuses each button it
+       crosses, and a ring flashing along the row reads as a fault. */
+    .movie-rating-hit:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+      border-radius: 4px;
+    }
+    @media (max-width: 420px) {
+      .movie-rating-star {
+        width: 22px;
+        height: 22px;
+      }
+      .movie-rating-star svg {
+        width: 19px;
+        height: 19px;
+      }
+      .movie-rating-stars {
+        gap: 1px;
+      }
     }
     .movie-rating-value {
       margin-left: 8px;
@@ -32408,24 +32459,84 @@ def ui_preview_html(
     // than a number field because the stored set is fixed: the API refuses a
     // value between the steps instead of rounding it, so an input that could
     // produce one would only ever produce an error.
+    //
+    // Each star is drawn ONCE, whole, and the two hit targets are transparent
+    // overlays on top of it. The half used to be made by clipping the drawing --
+    // two 13px buttons around a centred 22px glyph, each `clip-path: inset(...
+    // 50% ...)`, rejoined with a negative margin. That never produced a half:
+    // a 50% inset on a 13px box exposes a middle band of a glyph that spans
+    // -4.5px to 17.5px, the picker's flex `gap` landed between the two halves
+    // and invalidated the negative margin, and `flex-wrap` could break a line
+    // between them. The row rendered as slivers instead of stars.
     const RATING_STAR_COUNT = 10;
     const RATING_STAR_PATH = "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
     const RATING_HALF_STAR_PATH = "M12,15.4V6.1L13.71,10.13L18.09,10.5L14.77,13.39L15.76,17.67M22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27L18.18,21L16.55,13.97L22,9.24Z";
+    let movieRatingScore = 0;
+    let movieRatingPreviewScore = null;
+    let movieRatingPointerId = null;
+    function ratingStarLabel(score) {
+      // A bare "7.5" told a screen reader nothing about what pressing it does.
+      return tNext("lists.ratingStarLabel", "Rate {score} out of 10").replace("{score}", formatRatingScore(score));
+    }
     function ratingStarHtml(index, score) {
       // index is 1..10; each star covers a whole point, its half covers x.5.
       const filled = score >= index;
       const half = !filled && score >= index - 0.5;
       const cls = filled ? "movie-rating-star filled" : half ? "movie-rating-star half" : "movie-rating-star";
       const path = half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH;
-      // Two hit targets per star so a half step is reachable by pointer, and the
-      // aria-label carries the value because a star is not self-describing.
       return `
-        <button type="button" class="${cls}" data-set-rating="${index - 0.5}" aria-label="${escapeHtml(String(index - 0.5))}" style="margin-right:-13px;width:13px;clip-path:inset(0 50% 0 0)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>
-        </button>
-        <button type="button" class="${cls}" data-set-rating="${index}" aria-label="${escapeHtml(String(index))}" style="width:13px;clip-path:inset(0 0 0 50%)">
-          <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-13px"><path d="${path}"></path></svg>
-        </button>`;
+        <span class="${cls}" data-rating-star="${index}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="movie-rating-star-base" d="${RATING_STAR_PATH}"></path><path class="movie-rating-star-fill" d="${path}"></path></svg>
+          <button type="button" class="movie-rating-hit low" data-set-rating="${index - 0.5}" aria-pressed="${score === index - 0.5}" aria-label="${escapeHtml(ratingStarLabel(index - 0.5))}"></button>
+          <button type="button" class="movie-rating-hit high" data-set-rating="${index}" aria-pressed="${score === index}" aria-label="${escapeHtml(ratingStarLabel(index))}"></button>
+        </span>`;
+    }
+    function movieRatingPickerHtml(score) {
+      const stars = [];
+      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
+        stars.push(ratingStarHtml(index, score));
+      }
+      // Both readouts always exist, one hidden, so a preview can rewrite the
+      // number without rebuilding the row the pointer is captured on.
+      return `<div class="movie-rating-stars" id="movieRatingStars">${stars.join("")}</div>`
+        + `<span class="movie-rating-value${score > 0 ? "" : " hidden"}" id="movieRatingValue">${escapeHtml(formatRatingScore(score))}</span>`
+        + `<span class="import-source-meta${score > 0 ? " hidden" : ""}" id="movieRatingEmpty">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`;
+    }
+    function applyMovieRatingPreview(score) {
+      // Toggles classes on the existing nodes and never touches innerHTML:
+      // rebuilding the row mid-drag would destroy the node holding the capture.
+      const row = document.getElementById("movieRatingStars");
+      if (!row) return;
+      const shown = Number.isFinite(score) && score > 0 ? score : 0;
+      row.querySelectorAll("[data-rating-star]").forEach((star) => {
+        const index = Number(star.dataset.ratingStar);
+        const filled = shown >= index;
+        const half = !filled && shown >= index - 0.5;
+        star.classList.toggle("filled", filled);
+        star.classList.toggle("half", half);
+        star.querySelector(".movie-rating-star-fill")?.setAttribute("d", half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH);
+      });
+      const value = document.getElementById("movieRatingValue");
+      const empty = document.getElementById("movieRatingEmpty");
+      if (value) {
+        value.textContent = formatRatingScore(shown);
+        value.classList.toggle("hidden", shown <= 0);
+      }
+      if (empty) empty.classList.toggle("hidden", shown > 0);
+    }
+    function movieRatingScoreFromPointer(clientX) {
+      // Measured off the star boxes rather than the row width, so the picker's
+      // gaps and the narrow-viewport size change cannot skew the mapping, and a
+      // drag lands on exactly the value a click on the same spot would.
+      const stars = Array.from(document.querySelectorAll("#movieRatingStars [data-rating-star]"));
+      if (!stars.length) return null;
+      for (const star of stars) {
+        const rect = star.getBoundingClientRect();
+        const index = Number(star.dataset.ratingStar);
+        if (clientX < rect.left) return index === 1 ? 0.5 : index - 1;
+        if (clientX <= rect.right) return clientX < rect.left + rect.width / 2 ? index - 0.5 : index;
+      }
+      return RATING_STAR_COUNT;
     }
     function renderMovieRating(state) {
       const section = document.getElementById("movieRatingSection");
@@ -32435,13 +32546,9 @@ def ui_preview_html(
       if (!section || !picker) return;
       const score = Number(state?.rating);
       const hasScore = Number.isFinite(score) && score > 0;
-      const stars = [];
-      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
-        stars.push(ratingStarHtml(index, hasScore ? score : 0));
-      }
-      picker.innerHTML = stars.join("") + (hasScore
-        ? `<span class="movie-rating-value">${escapeHtml(formatRatingScore(score))}</span>`
-        : `<span class="import-source-meta">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`);
+      movieRatingScore = hasScore ? score : 0;
+      movieRatingPreviewScore = null;
+      picker.innerHTML = movieRatingPickerHtml(movieRatingScore);
       if (clearButton) clearButton.classList.toggle("hidden", !hasScore);
       if (owner) {
         // ownerRating is set by the server only when the movie has an owner who
@@ -51784,7 +51891,62 @@ def ui_preview_html(
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
       });
-      document.getElementById("movieRatingPicker")?.addEventListener("click", (event) => {
+      // Drag along the row sets the score by swipe; the twenty overlay buttons
+      // stay for keyboard and screen readers. Bound on #movieRatingPicker, which
+      // is static markup -- a re-render replaces its children, so capture taken
+      // on a child would be lost the moment a preview redrew it.
+      const movieRatingPickerNode = document.getElementById("movieRatingPicker");
+      movieRatingPickerNode?.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        if (!event.target.closest("#movieRatingStars")) return;
+        const score = movieRatingScoreFromPointer(event.clientX);
+        if (score === null) return;
+        movieRatingPointerId = event.pointerId;
+        movieRatingPreviewScore = score;
+        try { movieRatingPickerNode.setPointerCapture(event.pointerId); } catch (error) { /* capture is optional */ }
+        applyMovieRatingPreview(score);
+      });
+      movieRatingPickerNode?.addEventListener("pointermove", (event) => {
+        if (movieRatingPointerId === null) {
+          // Hover preview: mouse only, and only over the stars themselves.
+          if (event.pointerType !== "mouse") return;
+          if (!event.target.closest("#movieRatingStars")) return;
+          const hover = movieRatingScoreFromPointer(event.clientX);
+          if (hover !== null) applyMovieRatingPreview(hover);
+          return;
+        }
+        if (event.pointerId !== movieRatingPointerId) return;
+        const score = movieRatingScoreFromPointer(event.clientX);
+        if (score === null || score === movieRatingPreviewScore) return;
+        movieRatingPreviewScore = score;
+        applyMovieRatingPreview(score);
+      });
+      movieRatingPickerNode?.addEventListener("pointerup", (event) => {
+        if (movieRatingPointerId === null || event.pointerId !== movieRatingPointerId) return;
+        const score = movieRatingPreviewScore;
+        try { movieRatingPickerNode.releasePointerCapture(event.pointerId); } catch (error) { /* already released */ }
+        movieRatingPointerId = null;
+        // Every pointer interaction commits here, a tap as much as a drag: while
+        // the picker holds the capture the browser retargets `click` to it
+        // rather than to the button under the finger, so a tap left to the click
+        // handler would find no [data-set-rating] and quietly write nothing.
+        if (score !== null) setActiveMovieRating(score);
+      });
+      movieRatingPickerNode?.addEventListener("pointercancel", () => {
+        movieRatingPointerId = null;
+        movieRatingPreviewScore = null;
+        applyMovieRatingPreview(movieRatingScore);
+      });
+      movieRatingPickerNode?.addEventListener("pointerleave", () => {
+        if (movieRatingPointerId !== null) return;
+        movieRatingPreviewScore = null;
+        applyMovieRatingPreview(movieRatingScore);
+      });
+      // Keyboard only. Enter and Space on a focused half star synthesise a click
+      // with detail 0; a pointer click reports 1 or more and is already spent on
+      // pointerup, so ignoring it is what keeps one gesture from writing twice.
+      movieRatingPickerNode?.addEventListener("click", (event) => {
+        if (event.detail !== 0) return;
         const star = event.target.closest("[data-set-rating]");
         if (star) setActiveMovieRating(star.dataset.setRating);
       });

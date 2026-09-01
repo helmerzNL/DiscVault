@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Personlige lister",
   "lists.ratingCleared": "Vurdering fjernet.",
   "lists.ratingSaved": "Vurdering lagret.",
+  "lists.ratingStarLabel": "Vurder {score} av 10",
   "lists.removeWatchedEntry": "Fjern oppf?ring",
   "lists.removedWatched": "Oppf?ring fjernet.",
   "lists.removedWatchlist": "Fjernet fra Watchlist.",

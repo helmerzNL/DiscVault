@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Omat listat",
   "lists.ratingCleared": "Arvio poistettu.",
   "lists.ratingSaved": "Arvio tallennettu.",
+  "lists.ratingStarLabel": "Arvioi {score}/10",
   "lists.removeWatchedEntry": "Poista merkint?",
   "lists.removedWatched": "Merkint? poistettu.",
   "lists.removedWatchlist": "Poistettu katselulistalta.",

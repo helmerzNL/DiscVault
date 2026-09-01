@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "個人清單",
   "lists.ratingCleared": "評分已清除。",
   "lists.ratingSaved": "評分已儲存。",
+  "lists.ratingStarLabel": "評分 {score} 分（滿分 10 分）",
   "lists.removeWatchedEntry": "移除觀看記錄",
   "lists.removedWatched": "觀看日期已移除。",
   "lists.removedWatchlist": "已從待看清單移除。",

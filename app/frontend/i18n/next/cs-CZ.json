@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Osobní seznamy",
   "lists.ratingCleared": "Hodnocení vymazáno.",
   "lists.ratingSaved": "Hodnocení uloženo.",
+  "lists.ratingStarLabel": "Ohodnotit {score} z 10",
   "lists.removeWatchedEntry": "Odebrat záznam zhlédnutí",
   "lists.removedWatched": "Datum zhlédnutí odebráno.",
   "lists.removedWatchlist": "Odebráno ze seznamu ke zhlédnutí.",

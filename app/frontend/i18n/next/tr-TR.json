@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Kişisel listeler",
   "lists.ratingCleared": "Puan temizlendi.",
   "lists.ratingSaved": "Puan kaydedildi.",
+  "lists.ratingStarLabel": "10 üzerinden {score} ver",
   "lists.removeWatchedEntry": "İzleme kaydını kaldır",
   "lists.removedWatched": "İzlenme tarihi kaldırıldı.",
   "lists.removedWatchlist": "İzleme listesinden kaldırıldı.",

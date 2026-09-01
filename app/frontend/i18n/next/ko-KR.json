@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "개인 목록",
   "lists.ratingCleared": "평점을 지웠습니다.",
   "lists.ratingSaved": "평점을 저장했습니다.",
+  "lists.ratingStarLabel": "10점 만점에 {score}점 주기",
   "lists.removeWatchedEntry": "시청 기록 제거",
   "lists.removedWatched": "시청 날짜가 제거되었습니다.",
   "lists.removedWatchlist": "시청 목록에서 제거되었습니다.",

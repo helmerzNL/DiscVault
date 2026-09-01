@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Personlige lister",
   "lists.ratingCleared": "Bedømmelse ryddet.",
   "lists.ratingSaved": "Bedømmelse gemt.",
+  "lists.ratingStarLabel": "Bedøm {score} ud af 10",
   "lists.removeWatchedEntry": "Fjern post",
   "lists.removedWatched": "Post fjernet.",
   "lists.removedWatchlist": "Fjernet fra Watchlist.",
