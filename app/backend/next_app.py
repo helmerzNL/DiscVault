@@ -29,6 +29,7 @@ import time
 import uuid
 import unicodedata
 import zipfile
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -949,6 +950,21 @@ PRICE_DISPLAY_FALLBACK_RATES: dict[str, float] = {
 }
 _PRICE_DISPLAY_RATE_CACHE: dict[str, Any] = {"expires_at": None, "payload": None}
 
+# How long a single rate lookup may hold up the request that triggered it. The
+# call happens inside a request, with a database transaction open, so this is
+# time a caller waits on an outbound HTTP request to a third party that a
+# self-hosted deployment may not be able to reach at all.
+PRICE_DISPLAY_RATE_TIMEOUT_SECONDS = 4
+
+# How long a *failed* lookup is remembered. Without this the failure was not
+# cached at all, so a deployment with no route to the rates provider paid the
+# full timeout again on every single request - twice on the statistics
+# endpoint, which asks for rates once itself and once more through the snapshot
+# it captures. Two ten-second waits is a fifteen-second client timeout, which is
+# exactly how `get_top_actors` and `get_top_directors` ended in
+# `HTTPConnectionPool(host='next-api', port=5000): Read timed out`.
+PRICE_DISPLAY_RATE_RETRY_AFTER = timedelta(minutes=5)
+
 
 def create_app() -> Flask:
     validate_runtime_secrets()
@@ -1104,6 +1120,107 @@ STATS_TOP_CREDIT_FILTERS: dict[str, str] = {
     "director": "(lower(mc.job) = 'director' OR lower(mc.credit_type) = 'director')",
     "actor": "(lower(mc.credit_type) IN ('actor', 'cast'))",
 }
+
+# How many people each of the two credit charts shows.
+STATS_TOP_CREDIT_LIMIT = 10
+
+# The label a credit gets when the person behind it has no usable name. Folding
+# those rows into one bucket keeps the count honest without inventing a name;
+# see `stats_top_credit_entries`.
+STATS_UNKNOWN_LABEL = "Unknown"
+
+
+def stats_query_choice(
+    raw: Any, allowed: dict[str, Any], default: str, field: str
+) -> str:
+    """Normalise a statistics query argument that selects one of a fixed set.
+
+    `clean_text` returns **None** for an argument that was not sent at all, and
+    for one sent empty - so `clean_text(request.args.get("period")).lower()`
+    raised `'NoneType' object has no attribute 'lower'` for every caller that
+    omitted the argument. Flask turned that into a 500.
+
+    The browser always sends both arguments, which is why the page looked fine;
+    the MCP server sends neither, so `get_top_actors` and `get_top_directors`
+    could never reach the query at all. The default has to be applied *before*
+    the case fold, not after it.
+    """
+
+    value = (clean_text(raw) or "").lower() or default
+    if value not in allowed:
+        raise NextApiError(
+            f"{field} must be one of: {', '.join(sorted(allowed))}",
+            400,
+        )
+    return value
+
+
+def stats_ordered_genres(
+    entries: list[dict[str, Any]], unknown_count: int = 0
+) -> list[dict[str, Any]]:
+    """Order the genre chart: alphabetical, with "Unknown" pinned last.
+
+    "Unknown" is not a genre, and sorting it in among them reads as one. It goes
+    at the end, and only when there is something to put there.
+
+    The version this replaces appended the "Unknown" entry, re-sorted
+    `by_genre[:-1]` to drop it again, and appended it a second time. That works
+    only when the entry it is slicing off actually exists: on a collection where
+    every film has a genre, `unknown_count` is zero, nothing was appended, and
+    the slice removed the last *real* genre instead. The chart quietly showed
+    fourteen of fifteen genres, with no way to tell which one was missing.
+
+    The sort key is built from a string rather than `item["label"].lower()`,
+    for the same reason as everywhere else on this endpoint: a label that is
+    None must not turn a chart into a 500.
+    """
+
+    real_genres = [
+        entry
+        for entry in entries or ()
+        if isinstance(entry, Mapping) and entry.get("label") != "Unknown"
+    ]
+    ordered = sorted(real_genres, key=lambda item: str(item.get("label") or "").lower())
+    if unknown_count:
+        ordered.append({"label": "Unknown", "count": int(unknown_count)})
+    return ordered
+
+
+def stats_top_credit_entries(
+    rows: Any, limit: int = STATS_TOP_CREDIT_LIMIT
+) -> list[dict[str, Any]]:
+    """Fold credit rows into the chart's `{label, count}` entries.
+
+    The SQL already groups on a normalised name, so in practice this only
+    re-checks its own query's output. It is written to survive anything anyway,
+    because the two shapes it has to tolerate both exist in real collections:
+    a `people` row whose `name` is NULL (a credit imported before the person was
+    resolved) and one whose name is whitespace. Neither may crash the endpoint,
+    and neither may be dropped silently - a nameless director still directed the
+    film, so the count belongs under `Unknown` rather than nowhere.
+
+    Sorting is the other half of the fix. `sorted(..., key=lambda r: r["name"].lower())`
+    is the same `NoneType` crash one layer down, so the key is built from a
+    string that is guaranteed to be one.
+    """
+
+    counts: dict[str, int] = {}
+    for row in rows or ():
+        if not isinstance(row, Mapping):
+            continue
+        label = clean_text(row.get("name")) or STATS_UNKNOWN_LABEL
+        raw_count = row.get("count")
+        try:
+            count = int(raw_count or 0)
+        except (TypeError, ValueError):
+            # A count that is not a number is a broken row, not a zero: keeping
+            # it would put a person on the chart with a made-up total.
+            continue
+        if count <= 0:
+            continue
+        counts[label] = counts.get(label, 0) + count
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0].lower()))
+    return [{"label": label, "count": count} for label, count in ordered[: max(limit, 0)]]
 
 
 def _update_version_tuple(value: Any) -> tuple[int, ...]:
@@ -9759,7 +9876,7 @@ def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
     try:
         response = http_requests.get(
             f"https://api.frankfurter.app/latest?from=EUR&to={symbols}",
-            timeout=10,
+            timeout=PRICE_DISPLAY_RATE_TIMEOUT_SECONDS,
         )
         response.raise_for_status()
         payload = response.json() or {}
@@ -9783,14 +9900,19 @@ def price_display_exchange_rates(now: datetime | None = None) -> dict[str, Any]:
         _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + timedelta(hours=12)
         return result
     except Exception:
-        if cached:
-            return cached
-        return {
+        # Hold the answer for a cool-down rather than retrying on the very next
+        # request. The previous rates stay preferred over the built-in fallback
+        # when there are any; either way the next caller is served from memory
+        # instead of waiting out the timeout again.
+        result = cached or {
             "base": "EUR",
             "exchangeRates": dict(PRICE_DISPLAY_FALLBACK_RATES),
             "updatedAt": None,
             "source": "fallback",
         }
+        _PRICE_DISPLAY_RATE_CACHE["payload"] = result
+        _PRICE_DISPLAY_RATE_CACHE["expires_at"] = now + PRICE_DISPLAY_RATE_RETRY_AFTER
+        return result
 
 
 def price_display_context(preferences: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -12119,11 +12241,16 @@ def guard_movie_estimated_value_lock(conn, movie_id: UUID, body: dict[str, Any])
     return None
 
 
-def capture_collection_value_snapshot(conn, actor: dict[str, Any] | None) -> None:
+def capture_collection_value_snapshot(
+    conn, actor: dict[str, Any] | None, summary: dict[str, Any] | None = None
+) -> None:
     """Best-effort: record today's collection value after a price-affecting write.
 
     Never allowed to fail the edit that triggered it - a missing snapshot costs a
     point on a chart, a raised exception costs the user their change.
+
+    Pass `summary` when the caller has already computed the valuation, so the
+    snapshot writes what is in hand instead of computing the same figure again.
     """
     if not actor or not actor.get("id"):
         return
@@ -12137,6 +12264,7 @@ def capture_collection_value_snapshot(conn, actor: dict[str, Any] | None) -> Non
             movie_params=movie_params,
             container_where=container_where,
             container_params=container_params,
+            summary=summary,
         )
     except Exception:  # pragma: no cover - defensive, snapshots are not critical
         try:
@@ -35198,24 +35326,18 @@ def register_routes(flask_app: Flask) -> None:
         # valuation is a state and not an event - "the value of what I bought
         # last month" is a different question from "what my shelf is worth",
         # and the card sits directly above a chart that answers the latter.
-        period = clean_text(request.args.get("period")).lower() or STATS_PERIOD_ALL
-        if period not in STATS_PERIOD_WINDOW_DAYS:
-            raise NextApiError(
-                f"period must be one of: {', '.join(sorted(STATS_PERIOD_WINDOW_DAYS))}",
-                400,
-            )
+        period = stats_query_choice(
+            request.args.get("period"), STATS_PERIOD_WINDOW_DAYS, STATS_PERIOD_ALL, "period"
+        )
         window_days = STATS_PERIOD_WINDOW_DAYS[period]
         period_start = (
             datetime.now(timezone.utc) - timedelta(days=window_days)
             if window_days is not None
             else None
         )
-        media_type = clean_text(request.args.get("mediaType")).lower() or STATS_MEDIA_ALL
-        if media_type not in STATS_MEDIA_TYPES:
-            raise NextApiError(
-                f"mediaType must be one of: {', '.join(sorted(STATS_MEDIA_TYPES))}",
-                400,
-            )
+        media_type = stats_query_choice(
+            request.args.get("mediaType"), STATS_MEDIA_TYPES, STATS_MEDIA_ALL, "mediaType"
+        )
         with connect() as conn:
             # The five MCP statistics tools read this endpoint and nothing
             # else, so a token scoped to them alone must pass here too.
@@ -35295,7 +35417,7 @@ def register_routes(flask_app: Flask) -> None:
             by_format = [
                 {"label": label, "count": count}
                 for label, count in sorted(
-                    format_counts.items(), key=lambda item: (-item[1], item[0].lower())
+                    format_counts.items(), key=lambda item: (-item[1], str(item[0] or "").lower())
                 )
             ]
 
@@ -35367,12 +35489,7 @@ def register_routes(flask_app: Flask) -> None:
                 ],
                 key=lambda item: (-item["count"], item["label"]),
             )[:15]
-            if unknown_count:
-                by_genre.append({"label": "Unknown", "count": unknown_count})
-            # Sort genres by label (alphabetically) after limiting to top genres
-            by_genre = sorted(by_genre[:-1], key=lambda item: item["label"].lower())
-            if unknown_count and len(by_genre) < 16:
-                by_genre.append({"label": "Unknown", "count": unknown_count})
+            by_genre = stats_ordered_genres(by_genre, unknown_count)
 
             watch = {"total": 0, "thisYear": 0, "distinctMovies": 0, "topMovies": []}
             if table_exists(conn, "watch_history"):
@@ -35536,7 +35653,9 @@ def register_routes(flask_app: Flask) -> None:
                 container_params=container_params,
                 exchange_rates=dict(price_display_exchange_rates().get("exchangeRates") or {}),
             )
-            capture_collection_value_snapshot(conn, actor)
+            # Hand over what was just computed: recomputing it here scanned every
+            # movie, container and price a second time inside the same request.
+            capture_collection_value_snapshot(conn, actor, summary=collection_value)
 
             # Matching only `job = 'director'` found nothing on either storage
             # shape - see STATS_TOP_CREDIT_FILTERS: refreshed rows differ by
@@ -35547,24 +35666,28 @@ def register_routes(flask_app: Flask) -> None:
             if table_exists(conn, "movie_credits"):
                 for credit_key, credit_filter in STATS_TOP_CREDIT_FILTERS.items():
                     with conn.cursor() as cur:
+                        # Grouped on the *normalised* name rather than the raw
+                        # column, so the LIMIT counts the buckets the chart will
+                        # actually show. Grouping on `p.name` put a NULL name and
+                        # a blank one in two separate rows, both of which then
+                        # fold to "Unknown" in Python - and folding after a
+                        # LIMIT 10 returns nine people from a shelf that has ten.
                         cur.execute(
                             f"""
-                            SELECT p.name, {works} AS count
+                            SELECT COALESCE(NULLIF(TRIM(p.name), ''), 'Unknown') AS name,
+                                   {works} AS count
                             FROM movies m
                             JOIN movie_credits mc ON mc.movie_id = m.id
                             JOIN people p ON p.id = mc.person_id
                             {work_join}
                             WHERE {where} AND {credit_filter}
-                            GROUP BY p.name
-                            ORDER BY count DESC, p.name
-                            LIMIT 10
+                            GROUP BY 1
+                            ORDER BY count DESC, name
+                            LIMIT {int(STATS_TOP_CREDIT_LIMIT)}
                             """,
                             params,
                         )
-                        top_credits[credit_key] = [
-                            {"label": row.get("name") or "Unknown", "count": int(row.get("count") or 0)}
-                            for row in cur.fetchall()
-                        ]
+                        top_credits[credit_key] = stats_top_credit_entries(cur.fetchall())
             top_directors = top_credits["director"]
             top_actors = top_credits["actor"]
 

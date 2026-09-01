@@ -93,6 +93,29 @@ def _headers(user_bearer: str | None = None) -> dict[str, str]:
     return headers
 
 
+def _credit_entries(raw: Any) -> list[dict]:
+    """Normalise the credit entries of /api/next/stats/personal for display.
+
+    `entry.get("label", "Unknown")` returns **None** for `{"label": null}` - the
+    default only applies when the key is absent, and the endpoint sends the key.
+    So a nameless person printed as "None: 4 films" rather than being labelled,
+    and any later `.lower()` on that value raised. Anything that is not a usable
+    entry is dropped here instead of being rendered as a line about nothing.
+    """
+
+    entries: list[dict] = []
+    for item in raw or ():
+        if not isinstance(item, dict):
+            continue
+        label = str(item.get("label") or "").strip() or "Unknown"
+        try:
+            count = int(item.get("count") or 0)
+        except (TypeError, ValueError):
+            continue
+        entries.append({"label": label, "count": count})
+    return entries
+
+
 def api_get(path: str, params: dict | None = None, bearer: str | None = None) -> Any:
     response = http_requests.get(
         f"{API_BASE}{path}",
@@ -440,16 +463,16 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
             directors = data.get("topDirectors", [])
             if directors:
                 lines.append("Top Directors:")
-                for director in directors[:10]:
-                    lines.append(f"  - {director.get('label')}: {director.get('count')} films")
+                for director in _credit_entries(directors)[:10]:
+                    lines.append(f"  - {director['label']}: {director['count']} films")
                 lines.append("")
 
             # Actors
             actors = data.get("topActors", [])
             if actors:
                 lines.append("Top Actors:")
-                for actor in actors[:10]:
-                    lines.append(f"  - {actor.get('label')}: {actor.get('count')} films")
+                for actor in _credit_entries(actors)[:10]:
+                    lines.append(f"  - {actor['label']}: {actor['count']} films")
                 lines.append("")
 
             # Watch statistics
@@ -492,10 +515,8 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
             if not directors:
                 return "No director data available."
             lines = ["Top 10 Directors in Collection:\n"]
-            for i, director in enumerate(directors, 1):
-                name_val = director.get("label", "Unknown")
-                count = director.get("count", 0)
-                lines.append(f"{i}. {name_val}: {count} films")
+            for i, director in enumerate(_credit_entries(directors), 1):
+                lines.append(f"{i}. {director['label']}: {director['count']} films")
             return "\n".join(lines)
 
         if name == "get_top_actors":
@@ -504,10 +525,8 @@ def _execute_tool_inner(name: str, args: dict, bearer: str | None = None) -> str
             if not actors:
                 return "No actor data available."
             lines = ["Top 10 Actors in Collection:\n"]
-            for i, actor in enumerate(actors, 1):
-                name_val = actor.get("label", "Unknown")
-                count = actor.get("count", 0)
-                lines.append(f"{i}. {name_val}: {count} films")
+            for i, actor in enumerate(_credit_entries(actors), 1):
+                lines.append(f"{i}. {actor['label']}: {actor['count']} films")
             return "\n".join(lines)
 
         return f"Unknown tool: {name}"
