@@ -12919,6 +12919,10 @@ def ui_preview_html(
     .app-simulation-banner.hidden {
       display: none;
     }
+    .app-offline-banner {
+      border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+      background: color-mix(in srgb, var(--warn) 12%, var(--bg-solid));
+    }
     .app-simulation-banner .secondary-button {
       min-height: 34px;
       white-space: nowrap;
@@ -15574,6 +15578,10 @@ def ui_preview_html(
       <div class="app-simulation-banner hidden" id="appRoleSimulationBanner">
         <span id="appRoleSimulationBannerText"></span>
         <button type="button" class="secondary-button" id="appRoleSimulationStopButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
+      </div>
+      <div class="app-simulation-banner app-offline-banner hidden" id="appOfflineBanner" role="status" aria-live="polite">
+        <span id="appOfflineBannerText"></span>
+        <button type="button" class="secondary-button" id="appOfflineBannerRetryButton" data-next-i18n="errors.databaseOfflineRetry">Try again</button>
       </div>
       <section class="library-view" id="libraryView">
       <section class="collection-toolbar" id="collectionToolbar" aria-label="Collection controls">
@@ -21043,6 +21051,60 @@ def ui_preview_html(
         return "";
       }
     }
+    // Whether the last API call actually reached the backend. The service worker
+    // answers a read from its cache when the network fails, and a cached read is
+    // the same bytes the backend gave when it was still answering -- so an
+    // outage renders as a complete, healthy-looking library and the first thing
+    // that reveals it is a write. The worker marks a substitute response with
+    // `X-DiscVault-Offline` (`cache` for a replayed read, `1` for a stub); this
+    // reads that header so the shell can say so before a write fails.
+    let dvBackendReachable = true;
+    function renderBackendReachability() {
+      const banner = document.getElementById("appOfflineBanner");
+      if (!banner) return;
+      banner.classList.toggle("hidden", dvBackendReachable);
+      const text = document.getElementById("appOfflineBannerText");
+      if (text && !dvBackendReachable) {
+        text.textContent = tNext(
+          "errors.backendUnreachableBanner",
+          "No connection to the DiscVault backend. You are seeing cached data and no change can be saved."
+        );
+      }
+    }
+    function noteBackendReachability(reachable) {
+      const next = Boolean(reachable);
+      if (next === dvBackendReachable) return;
+      dvBackendReachable = next;
+      renderBackendReachability();
+    }
+    /**
+     * The sentence shown when a write never reached the network.
+     *
+     * `fetch` rejecting means no HTTP response came back at all, and the service
+     * worker turns that into this payload. The browser's own reason for the
+     * rejection travels as `detail` and used to be dropped on the floor, leaving
+     * "Backend connection unavailable" as the entire account of the failure --
+     * on a delete, on a login, on everything, with no way to tell a device with
+     * no network from a backend that is down.
+     */
+    function backendUnreachableMessage(payload) {
+      const browserOffline = payload.errorCode === "browser_offline";
+      const parts = [
+        browserOffline
+          ? tNext("errors.browserOffline", "This device is offline, so the change was not sent.")
+          : tNext("errors.backendUnreachable", "DiscVault's backend did not answer, so nothing was changed.")
+      ];
+      if (!browserOffline) {
+        parts.push(tNext(
+          "errors.backendUnreachableHint",
+          "What is on screen can be cached data, so the collection still looks complete. Check that DiscVault is running and reachable from this device."
+        ));
+      }
+      if (payload.detail) {
+        parts.push(tNext("errors.backendUnreachableDetail", "Reason: {detail}").replace("{detail}", String(payload.detail)));
+      }
+      return parts.join(" ");
+    }
     async function apiJson(url, options) {
       const incoming = Object.assign({}, options || {});
       const timeoutMs = Number(incoming.timeoutMs || 0);
@@ -21058,9 +21120,13 @@ def ui_preview_html(
       } finally {
         if (timeout) window.clearTimeout(timeout);
       }
+      noteBackendReachability(!response.headers.get("X-DiscVault-Offline"));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const error = new Error(payload.error || `HTTP ${response.status}`);
+        const unreachable = payload.errorCode === "backend_unreachable" || payload.errorCode === "browser_offline";
+        const error = new Error(
+          unreachable ? backendUnreachableMessage(payload) : (payload.error || `HTTP ${response.status}`)
+        );
         error.payload = payload;
         error.status = response.status;
         throw error;
@@ -26685,6 +26751,9 @@ def ui_preview_html(
         node.setAttribute("title", tNext(node.dataset.nextI18nTitle, node.getAttribute("title") || ""));
       });
       renderAppRegistrationMode();
+      // The banner writes its own text rather than carrying data-next-i18n,
+      // because it is only ever shown for a reason the code decides.
+      renderBackendReachability();
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
       renderStatsSegmented();
@@ -51092,6 +51161,12 @@ def ui_preview_html(
       document.getElementById("appAdminStartSimulationButton")?.addEventListener("click", () => setAppAdminRoleSimulation(true));
       document.getElementById("appAdminStopSimulationButton")?.addEventListener("click", () => setAppAdminRoleSimulation(false));
       document.getElementById("appRoleSimulationStopButton")?.addEventListener("click", () => setAppAdminRoleSimulation(false));
+      // One real read over the network. It either reaches the backend, which
+      // clears the banner through the same header check every call goes
+      // through, or it does not and the banner stays.
+      document.getElementById("appOfflineBannerRetryButton")?.addEventListener("click", () => {
+        loadAppSnapshot().catch(() => {});
+      });
       document.getElementById("appAdminRolesList")?.addEventListener("click", (event) => {
         const selectButton = event.target.closest("[data-app-admin-role-select]");
         const deleteButton = event.target.closest("[data-app-admin-role-delete]");
