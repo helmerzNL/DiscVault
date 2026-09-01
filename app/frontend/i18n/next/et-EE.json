@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Isiklikud loendid",
   "lists.ratingCleared": "Hinnang eemaldatud.",
   "lists.ratingSaved": "Hinnang salvestatud.",
+  "lists.ratingStarLabel": "Hinda {score} punktiga 10-st",
   "lists.removeWatchedEntry": "Eemalda vaatamise kirje",
   "lists.removedWatched": "Vaatamiskuupäev eemaldatud.",
   "lists.removedWatchlist": "Eemaldatud vaatamisloendist.",

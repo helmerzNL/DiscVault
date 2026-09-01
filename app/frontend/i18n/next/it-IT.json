@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Liste personali",
   "lists.ratingCleared": "Voto cancellato.",
   "lists.ratingSaved": "Voto salvato.",
+  "lists.ratingStarLabel": "Vota {score} su 10",
   "lists.removeWatchedEntry": "Rimuovi voce",
   "lists.removedWatched": "Voce rimossa.",
   "lists.removedWatchlist": "Rimosso dalla Watchlist.",

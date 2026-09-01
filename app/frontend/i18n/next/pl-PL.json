@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Listy osobiste",
   "lists.ratingCleared": "Ocena usunięta.",
   "lists.ratingSaved": "Ocena zapisana.",
+  "lists.ratingStarLabel": "Oceń na {score} z 10",
   "lists.removeWatchedEntry": "Usuń wpis obejrzenia",
   "lists.removedWatched": "Usunięto datę obejrzenia.",
   "lists.removedWatchlist": "Usunięto z listy do obejrzenia.",

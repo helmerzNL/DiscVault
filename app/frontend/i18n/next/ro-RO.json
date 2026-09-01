@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Liste personale",
   "lists.ratingCleared": "Evaluare ștearsă.",
   "lists.ratingSaved": "Evaluare salvată.",
+  "lists.ratingStarLabel": "Evaluează {score} din 10",
   "lists.removeWatchedEntry": "Elimină intrarea de vizionare",
   "lists.removedWatched": "Data vizionării a fost eliminată.",
   "lists.removedWatchlist": "Eliminat din lista de vizionare.",

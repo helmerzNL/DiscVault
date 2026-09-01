@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Personīgie saraksti",
   "lists.ratingCleared": "Vērtējums notīrīts.",
   "lists.ratingSaved": "Vērtējums saglabāts.",
+  "lists.ratingStarLabel": "Novērtēt ar {score} no 10",
   "lists.removeWatchedEntry": "Noņemt skatīšanās ierakstu",
   "lists.removedWatched": "Skatīšanās datums noņemts.",
   "lists.removedWatchlist": "Noņemts no skatāmā saraksta.",

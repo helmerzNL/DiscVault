@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Osobni popisi",
   "lists.ratingCleared": "Ocjena očišćena.",
   "lists.ratingSaved": "Ocjena spremljena.",
+  "lists.ratingStarLabel": "Ocijeni {score} od 10",
   "lists.removeWatchedEntry": "Ukloni zapis gledanja",
   "lists.removedWatched": "Datum gledanja uklonjen.",
   "lists.removedWatchlist": "Uklonjeno s popisa za gledanje.",

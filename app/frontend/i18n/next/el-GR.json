@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Προσωπικές λίστες",
   "lists.ratingCleared": "Η βαθμολογία διαγράφηκε.",
   "lists.ratingSaved": "Η βαθμολογία αποθηκεύτηκε.",
+  "lists.ratingStarLabel": "Βαθμολογήστε {score} στα 10",
   "lists.removeWatchedEntry": "Αφαίρεση εγγραφής προβολής",
   "lists.removedWatched": "Η ημερομηνία προβολής αφαιρέθηκε.",
   "lists.removedWatchlist": "Αφαιρέθηκε από τη λίστα παρακολούθησης.",

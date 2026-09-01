@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Osebni seznami",
   "lists.ratingCleared": "Ocena počiščena.",
   "lists.ratingSaved": "Ocena shranjena.",
+  "lists.ratingStarLabel": "Oceni {score} od 10",
   "lists.removeWatchedEntry": "Odstrani zapis ogleda",
   "lists.removedWatched": "Datum ogleda odstranjen.",
   "lists.removedWatchlist": "Odstranjeno s seznama za ogled.",

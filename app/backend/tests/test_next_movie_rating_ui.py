@@ -201,5 +201,100 @@ class FilterAndExportTests(unittest.TestCase):
         self.assertFalse(by_key["personalRating"]["default"])
 
 
+class StarGeometryTests(unittest.TestCase):
+    """The row has to *look* like stars, which is the one thing nothing checked.
+
+    The picker shipped drawing each star as two 13px buttons, each clipped to
+    half its own box with `clip-path`, rejoined with a negative margin. None of
+    that produces a half star: a 50% inset on a 13px box exposes a middle band
+    of a glyph that spans -4.5px to 17.5px, the picker's flex `gap` landed
+    between the two halves and cancelled the negative margin, and `flex-wrap`
+    could break the line between them. Every existing test stayed green while
+    the row rendered as slivers, because a source-text assertion is the only
+    thing here that can see geometry at all.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = _source()
+        start = cls.source.index("function ratingStarHtml")
+        cls.star = cls.source[start : cls.source.index("function movieRatingPickerHtml")]
+
+    def test_the_drawing_is_never_clipped(self):
+        # The regression itself. The fill state is drawn; only the hit target is
+        # divided, and it is divided by layout, not by cutting up the glyph.
+        self.assertNotIn("clip-path", self.star)
+        self.assertNotIn("margin-right:-13px", self.star)
+        self.assertNotIn("margin-left:-13px", self.star)
+
+    def test_one_star_is_one_svg_and_one_flex_item(self):
+        self.assertEqual(self.star.count("<svg"), 1)
+        self.assertIn('<span class="${cls}" data-rating-star=', self.star)
+
+    def test_both_half_steps_stay_reachable(self):
+        self.assertEqual(self.star.count("<button type="), 2)
+        self.assertIn('data-set-rating="${index - 0.5}"', self.star)
+        self.assertIn('data-set-rating="${index}"', self.star)
+
+    def test_the_hit_targets_are_overlays_over_the_star(self):
+        start = self.source.index(".movie-rating-hit {")
+        block = self.source[start : start + 300]
+        self.assertIn("position: absolute;", block)
+        self.assertIn("width: 50%;", block)
+
+    def test_the_star_row_cannot_wrap_through_a_star(self):
+        # Twenty flex items in the picker let a narrow viewport put a line break
+        # between a star's two halves. Ten stars in a nowrap row cannot.
+        start = self.source.index(".movie-rating-stars {")
+        block = self.source[start : start + 300]
+        self.assertIn("flex-wrap: nowrap;", block)
+
+    def test_a_label_says_what_pressing_the_star_does(self):
+        # "7.5" alone announced a number with no verb and no scale.
+        self.assertIn('tNext("lists.ratingStarLabel", "Rate {score} out of 10")', self.source)
+
+
+class DragToRateTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.source = _source()
+
+    def test_every_pointer_gesture_commits_on_pointerup(self):
+        # A tap has to commit here too, not through the click handler. While the
+        # picker holds the pointer capture the browser retargets `click` to the
+        # picker instead of the button under the finger, so `closest(
+        # "[data-set-rating]")` finds nothing and a tap writes no score at all.
+        start = self.source.index('movieRatingPickerNode?.addEventListener("pointerup"')
+        block = _without_comments(self.source[start : start + 900])
+        self.assertIn("setActiveMovieRating(score)", block)
+        self.assertNotIn("dragged", block)
+
+    def test_the_click_handler_serves_the_keyboard_only(self):
+        # Enter and Space report detail 0; a pointer click reports 1 or more and
+        # was already spent on pointerup. Without the guard one mouse press
+        # writes the score twice.
+        start = self.source.index('movieRatingPickerNode?.addEventListener("click"')
+        block = self.source[start : start + 400]
+        self.assertIn("if (event.detail !== 0) return;", block)
+        self.assertIn("setActiveMovieRating(star.dataset.setRating)", block)
+
+    def test_a_preview_never_rebuilds_the_row_it_is_dragging_on(self):
+        # innerHTML here would destroy the node holding the pointer capture, and
+        # the drag would stop dead halfway along the row.
+        start = self.source.index("function applyMovieRatingPreview")
+        block = _without_comments(
+            self.source[start : self.source.index("function movieRatingScoreFromPointer")]
+        )
+        self.assertNotIn("innerHTML", block)
+        self.assertIn('classList.toggle("filled"', block)
+
+    def test_capture_is_taken_on_the_static_node(self):
+        # #movieRatingPicker is markup; its children are replaced on every
+        # render. Capture on a child would not survive the first preview.
+        start = self.source.index('movieRatingPickerNode?.addEventListener("pointerdown"')
+        block = self.source[start : start + 900]
+        self.assertIn("movieRatingPickerNode.setPointerCapture(event.pointerId)", block)
+
+
 if __name__ == "__main__":
     unittest.main()

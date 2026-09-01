@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Лични списъци",
   "lists.ratingCleared": "Оценката е изчистена.",
   "lists.ratingSaved": "Оценката е запазена.",
+  "lists.ratingStarLabel": "Оценете {score} от 10",
   "lists.removeWatchedEntry": "Премахни запис за гледане",
   "lists.removedWatched": "Датата на гледане е премахната.",
   "lists.removedWatchlist": "Премахнато от списъка за гледане.",

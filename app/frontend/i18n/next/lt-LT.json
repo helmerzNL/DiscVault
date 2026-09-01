@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Asmeniniai sąrašai",
   "lists.ratingCleared": "Įvertinimas išvalytas.",
   "lists.ratingSaved": "Įvertinimas išsaugotas.",
+  "lists.ratingStarLabel": "Įvertinti {score} iš 10",
   "lists.removeWatchedEntry": "Pašalinti žiūrėjimo įrašą",
   "lists.removedWatched": "Žiūrėjimo data pašalinta.",
   "lists.removedWatchlist": "Pašalinta iš žiūrėjimo sąrašo.",

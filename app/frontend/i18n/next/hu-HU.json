@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Személyes listák",
   "lists.ratingCleared": "Értékelés törölve.",
   "lists.ratingSaved": "Értékelés mentve.",
+  "lists.ratingStarLabel": "Értékelés: {score} a 10-ből",
   "lists.removeWatchedEntry": "Megtekintési bejegyzés eltávolítása",
   "lists.removedWatched": "Megtekintési dátum eltávolítva.",
   "lists.removedWatchlist": "Eltávolítva a néznivalólistáról.",

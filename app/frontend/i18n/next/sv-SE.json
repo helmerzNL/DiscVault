@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Personliga listor",
   "lists.ratingCleared": "Betyg rensat.",
   "lists.ratingSaved": "Betyg sparat.",
+  "lists.ratingStarLabel": "Betygsätt {score} av 10",
   "lists.removeWatchedEntry": "Ta bort post",
   "lists.removedWatched": "Post borttagen.",
   "lists.removedWatchlist": "Borttagen fr?n Watchlist.",

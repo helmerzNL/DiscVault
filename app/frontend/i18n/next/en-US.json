@@ -1555,6 +1555,7 @@
   "lists.personalTitle": "Personal lists",
   "lists.ratingCleared": "Rating cleared.",
   "lists.ratingSaved": "Rating saved.",
+  "lists.ratingStarLabel": "Rate {score} out of 10",
   "lists.removeWatchedEntry": "Remove watched entry",
   "lists.removedWatched": "Watched date removed.",
   "lists.removedWatchlist": "Removed from Watchlist.",
