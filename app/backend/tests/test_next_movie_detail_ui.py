@@ -258,6 +258,16 @@ class NextMovieDetailUiTests(unittest.TestCase):
             pill_source,
         )
 
+    def test_hero_backdrop_rule_leaves_the_pill_flag_in_flow(self):
+        """The backdrop rule targets the hero's direct child image only.
+
+        As a descendant selector it also caught the flag inside the
+        content-rating pill: pulled out of flow and stretched to the pill's
+        edges, the flag painted under the age instead of beside it.
+        """
+        self.assertIn(".movie-detail-hero > img {", self.source)
+        self.assertNotIn(".movie-detail-hero img {", self.source)
+
     def test_personal_lists_card_opens_collapsed(self):
         """Personal lists reopens collapsed on every film.
 

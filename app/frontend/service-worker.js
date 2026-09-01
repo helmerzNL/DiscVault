@@ -107,6 +107,31 @@ function jsonResponse(obj, status = 200) {
   });
 }
 
+/**
+ * Hand back a cached API read *labelled as one*.
+ *
+ * A cached response is byte-for-byte the response the backend gave when it was
+ * still answering: same status, same body, same headers. Returned verbatim it
+ * is indistinguishable from a live read, which is what let a backend outage
+ * render as a perfectly healthy library -- the collection is on screen, the
+ * counts are right, nothing says anything is wrong. The first thing that
+ * reveals the outage is a write, and a write fails with a message about the
+ * write, so a total outage reads as "deleting a film is broken".
+ *
+ * The body must not change -- it is the payload the app parses -- so the
+ * signal goes in the same `X-DiscVault-Offline` header every other substitute
+ * response already carries, with `cache` to say where this one came from.
+ */
+function staleCacheResponse(cached) {
+  const headers = new Headers(cached.headers);
+  headers.set("X-DiscVault-Offline", "cache");
+  return new Response(cached.body, {
+    status: cached.status,
+    statusText: cached.statusText,
+    headers
+  });
+}
+
 function imageFallbackResponse() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="480" viewBox="0 0 320 480"><rect width="320" height="480" rx="32" fill="#111827"/><path d="M88 208h144v64H88z" fill="#374151"/><circle cx="132" cy="188" r="24" fill="#6b7280"/><path d="M88 304l52-56 36 38 22-24 34 42z" fill="#6b7280"/><text x="160" y="370" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="18" fill="#d1d5db">Offline</text></svg>`;
   return new Response(svg, {
@@ -519,6 +544,42 @@ function apiFallbackFor(request, url) {
   return apiFallback(url);
 }
 
+/**
+ * The answer to a write that never reached the network.
+ *
+ * `fetch` rejecting means no HTTP response came back at all -- not a 4xx, not
+ * a 5xx, nothing. Two very different situations produce it, and the old single
+ * sentence about the backend connection being unavailable covered both while
+ * naming neither: a device with no network at all, and a device whose network
+ * is fine but that cannot reach DiscVault. It also closed with the one
+ * instruction that cannot help either of them -- a refresh is served from the
+ * cache the app shell already sits in, so it comes back looking healthy and
+ * the next write fails exactly the same way.
+ *
+ * The browser's own reason for the rejection was captured as `detail` and then
+ * never shown anywhere, so the only account of the failure was thrown away.
+ */
+function writeFailureResponse(request, url, error) {
+  // A worker's navigator exposes onLine; treat anything else as "online",
+  // because claiming the device is offline when it is not sends the reader
+  // looking at the wrong thing entirely.
+  const browserOffline = Boolean(self.navigator) && self.navigator.onLine === false;
+  return jsonResponse({
+    status: "error",
+    offline: browserOffline,
+    browser_offline: browserOffline,
+    backend_unreachable: !browserOffline,
+    queueable: false,
+    errorCode: browserOffline ? "browser_offline" : "backend_unreachable",
+    error: browserOffline
+      ? "This device is offline, so the change was not sent. Nothing was changed."
+      : "DiscVault's backend did not answer, so nothing was changed. Anything already on screen may be cached data.",
+    detail: error && error.message ? error.message : "",
+    method: request.method,
+    path: url.pathname
+  }, 503);
+}
+
 async function handleApi(request, event) {
   const url = new URL(request.url);
   const isGet = request.method === "GET";
@@ -528,15 +589,7 @@ async function handleApi(request, event) {
     try {
       return await fetch(request.clone());
     } catch (error) {
-      return jsonResponse({
-        status: "error",
-        offline: true,
-        backend_unreachable: true,
-        queueable: false,
-        error: "Backend connection unavailable. Refresh DiscVault and try again.",
-        detail: error && error.message ? error.message : "",
-        path: url.pathname
-      }, 503);
+      return writeFailureResponse(request, url, error);
     }
   }
 
@@ -566,7 +619,7 @@ async function handleApi(request, event) {
     networkResp = await fetch(request);
   } catch {
     const cached = (await cacheMatch(request, API_CACHE)) || (await cacheMatch(request));
-    if (cached) return cached;
+    if (cached) return staleCacheResponse(cached);
     const detail = await detailFromSnapshot(url);
     if (detail) return detail;
     return apiFallbackFor(request, url);

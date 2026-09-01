@@ -5578,29 +5578,80 @@ def ui_preview_html(
       gap: 4px;
       align-items: center;
     }
+    /* The ten stars are one unbreakable row. They used to be twenty separate
+       flex items in the picker itself, which put the picker's 4px gap *inside*
+       every star and let a narrow viewport wrap between a star's two halves. */
+    .movie-rating-stars {
+      display: flex;
+      flex-wrap: nowrap;
+      gap: 2px;
+      align-items: center;
+      touch-action: pan-y;
+    }
     .movie-rating-star {
+      position: relative;
       width: 26px;
       height: 26px;
-      border: 0;
-      background: none;
-      padding: 0;
-      cursor: pointer;
-      color: color-mix(in srgb, var(--text) 26%, transparent);
       display: inline-grid;
       place-items: center;
     }
     .movie-rating-star svg {
       width: 22px;
       height: 22px;
-      fill: currentColor;
       pointer-events: none;
     }
-    .movie-rating-star.filled,
-    .movie-rating-star.half {
-      color: var(--accent);
+    /* Every star is a grey star with an accent star drawn over it -- full for a
+       whole point, half for the half step. One visual language for all three
+       states: the unfilled part of a half star is the same grey as an empty
+       one, instead of an accent outline that reads as a different kind of mark. */
+    .movie-rating-star-base {
+      fill: color-mix(in srgb, var(--text) 26%, transparent);
     }
-    .movie-rating-star:hover {
-      color: color-mix(in srgb, var(--accent) 70%, var(--text));
+    .movie-rating-star-fill {
+      fill: var(--accent);
+    }
+    .movie-rating-star:not(.filled):not(.half) .movie-rating-star-fill {
+      display: none;
+    }
+    /* The two hit targets sit on top of the drawing rather than clipping it.
+       Clipping was the bug: a 50% inset on a half-width button around a centred
+       22px glyph exposes a middle band of the star, not its left or right half. */
+    .movie-rating-hit {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      width: 50%;
+      border: 0;
+      background: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+    }
+    .movie-rating-hit.low {
+      left: 0;
+    }
+    .movie-rating-hit.high {
+      right: 0;
+    }
+    /* :focus-visible, not :focus -- a pointer drag focuses each button it
+       crosses, and a ring flashing along the row reads as a fault. */
+    .movie-rating-hit:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+      border-radius: 4px;
+    }
+    @media (max-width: 420px) {
+      .movie-rating-star {
+        width: 22px;
+        height: 22px;
+      }
+      .movie-rating-star svg {
+        width: 19px;
+        height: 19px;
+      }
+      .movie-rating-stars {
+        gap: 1px;
+      }
     }
     .movie-rating-value {
       margin-left: 8px;
@@ -7887,7 +7938,12 @@ def ui_preview_html(
         linear-gradient(0deg, rgba(0,0,0,.72), rgba(0,0,0,.08) 62%);
       z-index: 1;
     }
-    .movie-detail-hero img {
+    /* The backdrop only: a direct child. Written as a descendant selector this
+       rule reached every <img> in the hero -- the poster, a person's portrait,
+       and the flag inside the content-rating pill, which then filled the pill
+       under the age instead of standing beside it. The poster and portrait
+       carry their own resets; the pill must not need one. */
+    .movie-detail-hero > img {
       position: absolute;
       inset: 0;
       width: 100%;
@@ -8610,6 +8666,11 @@ def ui_preview_html(
       object-fit: cover;
       box-shadow: 0 0 0 1px var(--line);
       flex: 0 0 auto;
+    }
+    /* Inside a 28px hero pill the full-size flag crowds the age beside it. */
+    .pill .flag-icon {
+      width: 20px;
+      height: 14px;
     }
     .debug-localization-card strong,
     .debug-localization-card p {
@@ -12868,6 +12929,10 @@ def ui_preview_html(
     .app-simulation-banner.hidden {
       display: none;
     }
+    .app-offline-banner {
+      border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+      background: color-mix(in srgb, var(--warn) 12%, var(--bg-solid));
+    }
     .app-simulation-banner .secondary-button {
       min-height: 34px;
       white-space: nowrap;
@@ -15523,6 +15588,10 @@ def ui_preview_html(
       <div class="app-simulation-banner hidden" id="appRoleSimulationBanner">
         <span id="appRoleSimulationBannerText"></span>
         <button type="button" class="secondary-button" id="appRoleSimulationStopButton" data-next-i18n="appAdmin.stopRoleSimulation">Stop simulation</button>
+      </div>
+      <div class="app-simulation-banner app-offline-banner hidden" id="appOfflineBanner" role="status" aria-live="polite">
+        <span id="appOfflineBannerText"></span>
+        <button type="button" class="secondary-button" id="appOfflineBannerRetryButton" data-next-i18n="errors.databaseOfflineRetry">Try again</button>
       </div>
       <section class="library-view" id="libraryView">
       <section class="collection-toolbar" id="collectionToolbar" aria-label="Collection controls">
@@ -20992,6 +21061,60 @@ def ui_preview_html(
         return "";
       }
     }
+    // Whether the last API call actually reached the backend. The service worker
+    // answers a read from its cache when the network fails, and a cached read is
+    // the same bytes the backend gave when it was still answering -- so an
+    // outage renders as a complete, healthy-looking library and the first thing
+    // that reveals it is a write. The worker marks a substitute response with
+    // `X-DiscVault-Offline` (`cache` for a replayed read, `1` for a stub); this
+    // reads that header so the shell can say so before a write fails.
+    let dvBackendReachable = true;
+    function renderBackendReachability() {
+      const banner = document.getElementById("appOfflineBanner");
+      if (!banner) return;
+      banner.classList.toggle("hidden", dvBackendReachable);
+      const text = document.getElementById("appOfflineBannerText");
+      if (text && !dvBackendReachable) {
+        text.textContent = tNext(
+          "errors.backendUnreachableBanner",
+          "No connection to the DiscVault backend. You are seeing cached data and no change can be saved."
+        );
+      }
+    }
+    function noteBackendReachability(reachable) {
+      const next = Boolean(reachable);
+      if (next === dvBackendReachable) return;
+      dvBackendReachable = next;
+      renderBackendReachability();
+    }
+    /**
+     * The sentence shown when a write never reached the network.
+     *
+     * `fetch` rejecting means no HTTP response came back at all, and the service
+     * worker turns that into this payload. The browser's own reason for the
+     * rejection travels as `detail` and used to be dropped on the floor, leaving
+     * "Backend connection unavailable" as the entire account of the failure --
+     * on a delete, on a login, on everything, with no way to tell a device with
+     * no network from a backend that is down.
+     */
+    function backendUnreachableMessage(payload) {
+      const browserOffline = payload.errorCode === "browser_offline";
+      const parts = [
+        browserOffline
+          ? tNext("errors.browserOffline", "This device is offline, so the change was not sent.")
+          : tNext("errors.backendUnreachable", "DiscVault's backend did not answer, so nothing was changed.")
+      ];
+      if (!browserOffline) {
+        parts.push(tNext(
+          "errors.backendUnreachableHint",
+          "What is on screen can be cached data, so the collection still looks complete. Check that DiscVault is running and reachable from this device."
+        ));
+      }
+      if (payload.detail) {
+        parts.push(tNext("errors.backendUnreachableDetail", "Reason: {detail}").replace("{detail}", String(payload.detail)));
+      }
+      return parts.join(" ");
+    }
     async function apiJson(url, options) {
       const incoming = Object.assign({}, options || {});
       const timeoutMs = Number(incoming.timeoutMs || 0);
@@ -21007,9 +21130,13 @@ def ui_preview_html(
       } finally {
         if (timeout) window.clearTimeout(timeout);
       }
+      noteBackendReachability(!response.headers.get("X-DiscVault-Offline"));
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        const error = new Error(payload.error || `HTTP ${response.status}`);
+        const unreachable = payload.errorCode === "backend_unreachable" || payload.errorCode === "browser_offline";
+        const error = new Error(
+          unreachable ? backendUnreachableMessage(payload) : (payload.error || `HTTP ${response.status}`)
+        );
         error.payload = payload;
         error.status = response.status;
         throw error;
@@ -26634,6 +26761,9 @@ def ui_preview_html(
         node.setAttribute("title", tNext(node.dataset.nextI18nTitle, node.getAttribute("title") || ""));
       });
       renderAppRegistrationMode();
+      // The banner writes its own text rather than carrying data-next-i18n,
+      // because it is only ever shown for a reason the code decides.
+      renderBackendReachability();
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
       renderStatsSegmented();
@@ -32408,24 +32538,84 @@ def ui_preview_html(
     // than a number field because the stored set is fixed: the API refuses a
     // value between the steps instead of rounding it, so an input that could
     // produce one would only ever produce an error.
+    //
+    // Each star is drawn ONCE, whole, and the two hit targets are transparent
+    // overlays on top of it. The half used to be made by clipping the drawing --
+    // two 13px buttons around a centred 22px glyph, each `clip-path: inset(...
+    // 50% ...)`, rejoined with a negative margin. That never produced a half:
+    // a 50% inset on a 13px box exposes a middle band of a glyph that spans
+    // -4.5px to 17.5px, the picker's flex `gap` landed between the two halves
+    // and invalidated the negative margin, and `flex-wrap` could break a line
+    // between them. The row rendered as slivers instead of stars.
     const RATING_STAR_COUNT = 10;
     const RATING_STAR_PATH = "M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z";
     const RATING_HALF_STAR_PATH = "M12,15.4V6.1L13.71,10.13L18.09,10.5L14.77,13.39L15.76,17.67M22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27L18.18,21L16.55,13.97L22,9.24Z";
+    let movieRatingScore = 0;
+    let movieRatingPreviewScore = null;
+    let movieRatingPointerId = null;
+    function ratingStarLabel(score) {
+      // A bare "7.5" told a screen reader nothing about what pressing it does.
+      return tNext("lists.ratingStarLabel", "Rate {score} out of 10").replace("{score}", formatRatingScore(score));
+    }
     function ratingStarHtml(index, score) {
       // index is 1..10; each star covers a whole point, its half covers x.5.
       const filled = score >= index;
       const half = !filled && score >= index - 0.5;
       const cls = filled ? "movie-rating-star filled" : half ? "movie-rating-star half" : "movie-rating-star";
       const path = half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH;
-      // Two hit targets per star so a half step is reachable by pointer, and the
-      // aria-label carries the value because a star is not self-describing.
       return `
-        <button type="button" class="${cls}" data-set-rating="${index - 0.5}" aria-label="${escapeHtml(String(index - 0.5))}" style="margin-right:-13px;width:13px;clip-path:inset(0 50% 0 0)">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>
-        </button>
-        <button type="button" class="${cls}" data-set-rating="${index}" aria-label="${escapeHtml(String(index))}" style="width:13px;clip-path:inset(0 0 0 50%)">
-          <svg viewBox="0 0 24 24" aria-hidden="true" style="margin-left:-13px"><path d="${path}"></path></svg>
-        </button>`;
+        <span class="${cls}" data-rating-star="${index}">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path class="movie-rating-star-base" d="${RATING_STAR_PATH}"></path><path class="movie-rating-star-fill" d="${path}"></path></svg>
+          <button type="button" class="movie-rating-hit low" data-set-rating="${index - 0.5}" aria-pressed="${score === index - 0.5}" aria-label="${escapeHtml(ratingStarLabel(index - 0.5))}"></button>
+          <button type="button" class="movie-rating-hit high" data-set-rating="${index}" aria-pressed="${score === index}" aria-label="${escapeHtml(ratingStarLabel(index))}"></button>
+        </span>`;
+    }
+    function movieRatingPickerHtml(score) {
+      const stars = [];
+      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
+        stars.push(ratingStarHtml(index, score));
+      }
+      // Both readouts always exist, one hidden, so a preview can rewrite the
+      // number without rebuilding the row the pointer is captured on.
+      return `<div class="movie-rating-stars" id="movieRatingStars">${stars.join("")}</div>`
+        + `<span class="movie-rating-value${score > 0 ? "" : " hidden"}" id="movieRatingValue">${escapeHtml(formatRatingScore(score))}</span>`
+        + `<span class="import-source-meta${score > 0 ? " hidden" : ""}" id="movieRatingEmpty">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`;
+    }
+    function applyMovieRatingPreview(score) {
+      // Toggles classes on the existing nodes and never touches innerHTML:
+      // rebuilding the row mid-drag would destroy the node holding the capture.
+      const row = document.getElementById("movieRatingStars");
+      if (!row) return;
+      const shown = Number.isFinite(score) && score > 0 ? score : 0;
+      row.querySelectorAll("[data-rating-star]").forEach((star) => {
+        const index = Number(star.dataset.ratingStar);
+        const filled = shown >= index;
+        const half = !filled && shown >= index - 0.5;
+        star.classList.toggle("filled", filled);
+        star.classList.toggle("half", half);
+        star.querySelector(".movie-rating-star-fill")?.setAttribute("d", half ? RATING_HALF_STAR_PATH : RATING_STAR_PATH);
+      });
+      const value = document.getElementById("movieRatingValue");
+      const empty = document.getElementById("movieRatingEmpty");
+      if (value) {
+        value.textContent = formatRatingScore(shown);
+        value.classList.toggle("hidden", shown <= 0);
+      }
+      if (empty) empty.classList.toggle("hidden", shown > 0);
+    }
+    function movieRatingScoreFromPointer(clientX) {
+      // Measured off the star boxes rather than the row width, so the picker's
+      // gaps and the narrow-viewport size change cannot skew the mapping, and a
+      // drag lands on exactly the value a click on the same spot would.
+      const stars = Array.from(document.querySelectorAll("#movieRatingStars [data-rating-star]"));
+      if (!stars.length) return null;
+      for (const star of stars) {
+        const rect = star.getBoundingClientRect();
+        const index = Number(star.dataset.ratingStar);
+        if (clientX < rect.left) return index === 1 ? 0.5 : index - 1;
+        if (clientX <= rect.right) return clientX < rect.left + rect.width / 2 ? index - 0.5 : index;
+      }
+      return RATING_STAR_COUNT;
     }
     function renderMovieRating(state) {
       const section = document.getElementById("movieRatingSection");
@@ -32435,13 +32625,9 @@ def ui_preview_html(
       if (!section || !picker) return;
       const score = Number(state?.rating);
       const hasScore = Number.isFinite(score) && score > 0;
-      const stars = [];
-      for (let index = 1; index <= RATING_STAR_COUNT; index += 1) {
-        stars.push(ratingStarHtml(index, hasScore ? score : 0));
-      }
-      picker.innerHTML = stars.join("") + (hasScore
-        ? `<span class="movie-rating-value">${escapeHtml(formatRatingScore(score))}</span>`
-        : `<span class="import-source-meta">${escapeHtml(tNext("lists.notRated", "Not rated yet."))}</span>`);
+      movieRatingScore = hasScore ? score : 0;
+      movieRatingPreviewScore = null;
+      picker.innerHTML = movieRatingPickerHtml(movieRatingScore);
       if (clearButton) clearButton.classList.toggle("hidden", !hasScore);
       if (owner) {
         // ownerRating is set by the server only when the movie has an owner who
@@ -50985,6 +51171,12 @@ def ui_preview_html(
       document.getElementById("appAdminStartSimulationButton")?.addEventListener("click", () => setAppAdminRoleSimulation(true));
       document.getElementById("appAdminStopSimulationButton")?.addEventListener("click", () => setAppAdminRoleSimulation(false));
       document.getElementById("appRoleSimulationStopButton")?.addEventListener("click", () => setAppAdminRoleSimulation(false));
+      // One real read over the network. It either reaches the backend, which
+      // clears the banner through the same header check every call goes
+      // through, or it does not and the banner stays.
+      document.getElementById("appOfflineBannerRetryButton")?.addEventListener("click", () => {
+        loadAppSnapshot().catch(() => {});
+      });
       document.getElementById("appAdminRolesList")?.addEventListener("click", (event) => {
         const selectButton = event.target.closest("[data-app-admin-role-select]");
         const deleteButton = event.target.closest("[data-app-admin-role-delete]");
@@ -51784,7 +51976,62 @@ def ui_preview_html(
         const removeButton = event.target.closest("[data-detach-tag]");
         if (removeButton) detachActiveMovieTag(removeButton.dataset.detachTag);
       });
-      document.getElementById("movieRatingPicker")?.addEventListener("click", (event) => {
+      // Drag along the row sets the score by swipe; the twenty overlay buttons
+      // stay for keyboard and screen readers. Bound on #movieRatingPicker, which
+      // is static markup -- a re-render replaces its children, so capture taken
+      // on a child would be lost the moment a preview redrew it.
+      const movieRatingPickerNode = document.getElementById("movieRatingPicker");
+      movieRatingPickerNode?.addEventListener("pointerdown", (event) => {
+        if (event.pointerType === "mouse" && event.button !== 0) return;
+        if (!event.target.closest("#movieRatingStars")) return;
+        const score = movieRatingScoreFromPointer(event.clientX);
+        if (score === null) return;
+        movieRatingPointerId = event.pointerId;
+        movieRatingPreviewScore = score;
+        try { movieRatingPickerNode.setPointerCapture(event.pointerId); } catch (error) { /* capture is optional */ }
+        applyMovieRatingPreview(score);
+      });
+      movieRatingPickerNode?.addEventListener("pointermove", (event) => {
+        if (movieRatingPointerId === null) {
+          // Hover preview: mouse only, and only over the stars themselves.
+          if (event.pointerType !== "mouse") return;
+          if (!event.target.closest("#movieRatingStars")) return;
+          const hover = movieRatingScoreFromPointer(event.clientX);
+          if (hover !== null) applyMovieRatingPreview(hover);
+          return;
+        }
+        if (event.pointerId !== movieRatingPointerId) return;
+        const score = movieRatingScoreFromPointer(event.clientX);
+        if (score === null || score === movieRatingPreviewScore) return;
+        movieRatingPreviewScore = score;
+        applyMovieRatingPreview(score);
+      });
+      movieRatingPickerNode?.addEventListener("pointerup", (event) => {
+        if (movieRatingPointerId === null || event.pointerId !== movieRatingPointerId) return;
+        const score = movieRatingPreviewScore;
+        try { movieRatingPickerNode.releasePointerCapture(event.pointerId); } catch (error) { /* already released */ }
+        movieRatingPointerId = null;
+        // Every pointer interaction commits here, a tap as much as a drag: while
+        // the picker holds the capture the browser retargets `click` to it
+        // rather than to the button under the finger, so a tap left to the click
+        // handler would find no [data-set-rating] and quietly write nothing.
+        if (score !== null) setActiveMovieRating(score);
+      });
+      movieRatingPickerNode?.addEventListener("pointercancel", () => {
+        movieRatingPointerId = null;
+        movieRatingPreviewScore = null;
+        applyMovieRatingPreview(movieRatingScore);
+      });
+      movieRatingPickerNode?.addEventListener("pointerleave", () => {
+        if (movieRatingPointerId !== null) return;
+        movieRatingPreviewScore = null;
+        applyMovieRatingPreview(movieRatingScore);
+      });
+      // Keyboard only. Enter and Space on a focused half star synthesise a click
+      // with detail 0; a pointer click reports 1 or more and is already spent on
+      // pointerup, so ignoring it is what keeps one gesture from writing twice.
+      movieRatingPickerNode?.addEventListener("click", (event) => {
+        if (event.detail !== 0) return;
         const star = event.target.closest("[data-set-rating]");
         if (star) setActiveMovieRating(star.dataset.setRating);
       });
