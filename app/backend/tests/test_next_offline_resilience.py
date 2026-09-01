@@ -229,5 +229,82 @@ class AppUpdatePollTests(unittest.TestCase):
         self.assertIn('window.addEventListener("focus", checkForAppUpdate)', body)
 
 
+class BackendUnreachableIsVisibleTests(unittest.TestCase):
+    """An outage must not be able to present itself as one broken button.
+
+    The worker answers a failed read from Cache Storage, and a cached read is
+    byte-for-byte what the backend gave while it was still answering. Returned
+    verbatim it is indistinguishable from a live one, so with the backend
+    completely unreachable the library still rendered in full -- right counts,
+    right posters, no warning anywhere. The only thing that failed was a write,
+    and a write failed with a message about the write, so a total outage was
+    reported as "deleting a film is broken". Logging in failed the same way.
+
+    Nor could the failure be looked into: the browser's own reason for the
+    rejected fetch was captured as `detail` and then never rendered, leaving
+    "Backend connection unavailable. Refresh DiscVault and try again." as the
+    whole account -- the same sentence for a device with no network as for a
+    backend that is down, ending in the one instruction that helps neither
+    (a refresh is served out of the cache the shell already sits in).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.worker = SERVICE_WORKER_PATH.read_text(encoding="utf-8")
+        cls.ui = (Path(BACKEND_DIR) / "next_views_ui.py").read_text(encoding="utf-8")
+
+    def test_a_replayed_read_is_labelled_as_coming_from_the_cache(self):
+        start = self.worker.index("async function handleApi(")
+        end = self.worker.index("async function cacheFirst(", start)
+        body = self.worker[start:end]
+        self.assertIn("return staleCacheResponse(cached);", body)
+        # The bare `return cached` is what made an outage invisible.
+        self.assertNotIn("if (cached) return cached;", body)
+
+    def test_the_label_rides_on_the_header_and_leaves_the_body_alone(self):
+        start = self.worker.index("function staleCacheResponse(cached)")
+        end = self.worker.index("function imageFallbackResponse(", start)
+        body = self.worker[start:end]
+        self.assertIn('headers.set("X-DiscVault-Offline", "cache")', body)
+        # The payload is what the app parses; rewriting it would break the read
+        # this function exists to keep serving.
+        self.assertIn("cached.body", body)
+        self.assertIn("status: cached.status", body)
+
+    def test_a_failed_write_separates_no_network_from_no_backend(self):
+        start = self.worker.index("function writeFailureResponse(")
+        end = self.worker.index("async function handleApi(", start)
+        body = self.worker[start:end]
+        self.assertIn("self.navigator.onLine === false", body)
+        self.assertIn('"browser_offline"', body)
+        self.assertIn('"backend_unreachable"', body)
+        # Both the browser's reason and the request that failed have to travel,
+        # or there is nothing to diagnose from.
+        self.assertIn("detail: error && error.message", body)
+        self.assertIn("method: request.method", body)
+        # The instruction that cannot help either case is gone.
+        self.assertNotIn("Refresh DiscVault and try again", self.worker)
+
+    def test_the_client_reads_the_header_on_every_api_call(self):
+        start = self.ui.index("async function apiJson(url, options)")
+        end = self.ui.index("async function authApiJson(", start)
+        body = self.ui[start:end]
+        self.assertIn('noteBackendReachability(!response.headers.get("X-DiscVault-Offline"))', body)
+        self.assertIn("backendUnreachableMessage(payload)", body)
+
+    def test_the_shell_says_so_before_a_write_fails(self):
+        self.assertIn('id="appOfflineBanner"', self.ui)
+        self.assertIn("function renderBackendReachability()", self.ui)
+        self.assertIn('errors.backendUnreachableBanner', self.ui)
+
+    def test_the_reason_for_the_failure_reaches_the_message(self):
+        start = self.ui.index("function backendUnreachableMessage(payload)")
+        end = self.ui.index("async function apiJson(url, options)", start)
+        body = self.ui[start:end]
+        self.assertIn("payload.detail", body)
+        self.assertIn('tNext("errors.browserOffline"', body)
+        self.assertIn('tNext("errors.backendUnreachable"', body)
+
+
 if __name__ == "__main__":
     unittest.main()
