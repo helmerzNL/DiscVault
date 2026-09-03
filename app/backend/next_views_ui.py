@@ -32127,8 +32127,14 @@ def ui_preview_html(
       const container = document.getElementById("movieEditCustomFields");
       if (!container) return;
       const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      // `detail.movie.custom_values`, which is where `movie_detail_entity`
+      // attaches them. This read `detail.customValues`, a key only sync
+      // mutation results and the PUT response ever carry -- so every input
+      // rendered empty, `collectMovieEditCustomValues` turned each empty input
+      // into a null, and saving a film for any unrelated reason deleted every
+      // custom value it had. Silent on both sides.
       const values = new Map(
-        (detail?.customValues || []).map((item) => [String(item.key), item.value])
+        (detail?.movie?.custom_values || []).map((item) => [String(item.key), item.value])
       );
       container.classList.toggle("hidden", !definitions.length);
       container.innerHTML = definitions.map((field) => {
