@@ -782,6 +782,16 @@ jobs:
       - name: Test the sync clears vocabulary and disc-entry presence
         run: python -m unittest tests.test_next_sync_clears
 
+      # That an upsert never leaves its own write in a tombstoned row. Below the
+      # migrations because the assertion is what the row looks like afterwards,
+      # which is the one thing a fake cursor cannot answer -- the SQL issued
+      # looked correct throughout the bug this covers. The write half needs real
+      # rows for the same reason: the mapping route that caused it resolves
+      # through `client_entity_mapping` against the database, not through the
+      # ladder.
+      - name: Test tombstone resurrection on a sync upsert
+        run: python -m unittest tests.test_next_sync_tombstone_resurrection_postgres
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge
