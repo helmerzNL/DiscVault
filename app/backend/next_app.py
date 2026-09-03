@@ -22778,15 +22778,32 @@ def parse_client_timestamp(value: Any) -> datetime | None:
     return parsed
 
 
+# The shortest real retail article number is an EAN-8. Anything shorter is not a
+# scanned barcode: synthetic import placeholders (`IMPORT-<title>-BOX-01`) collapse
+# to a digits-only key of "01" and would otherwise let one tombstone match every
+# unrelated box-set member ever imported. `find_movie_by_barcode_match` is shielded
+# from that by the media-type veto and the batch-claim guard; the tombstone lookup
+# had neither.
+_MIN_BARCODE_MATCH_DIGITS = 8
+
+
 def find_tombstoned_movie_by_identity(
     conn,
     *,
     persistent_client_id: str | None,
     barcode: str | None,
+    incoming_media_type: Any = None,
 ) -> dict[str, Any] | None:
     """Return a *tombstoned* movie matching the incoming record's clientId
     (preferred) or barcode, plus how it matched, so an old client replaying a
-    create cannot resurrect a record deleted elsewhere (onderzoek H4)."""
+    create cannot resurrect a record deleted elsewhere (onderzoek H4).
+
+    The barcode tier carries the same media-type veto as trede 2
+    (``find_movie_by_barcode_match``): a film and a series sharing a box EAN are
+    two different works, and that stays true when one of them is deleted. Without
+    the veto a tombstoned series could answer for an incoming film and hand back
+    "this is deleted" for a record that was never deleted at all.
+    """
     if persistent_client_id:
         with conn.cursor() as cur:
             cur.execute(
@@ -22804,22 +22821,25 @@ def find_tombstoned_movie_by_identity(
             row["matched_by"] = "clientId"
             return row
     normalized = normalize_barcode(barcode)
-    if normalized:
+    if normalized and len(normalized) >= _MIN_BARCODE_MATCH_DIGITS:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, deleted_at, client_id
+                SELECT id, deleted_at, client_id, media_type
                 FROM movies
                 WHERE deleted_at IS NOT NULL
                   AND barcode IS NOT NULL
                   AND regexp_replace(barcode, '\\D', '', 'g') = %s
                 ORDER BY deleted_at DESC
-                LIMIT 1
                 """,
                 (normalized,),
             )
-            row = cur.fetchone()
-        if row:
+            rows = cur.fetchall()
+        for row in rows:
+            # Veto, not filter: a conflicting candidate blocks nothing but itself,
+            # so a legitimate match behind it is still found. Mirrors trede 2.
+            if media_type_conflicts(incoming_media_type, row.get("media_type")):
+                continue
             row["matched_by"] = "barcode"
             return row
     return None
@@ -23215,6 +23235,7 @@ def apply_movie_upsert(
                 conn,
                 persistent_client_id=persistent_client_id,
                 barcode=fields["barcode"],
+                incoming_media_type=fields["media_type"],
             )
             if tomb is not None:
                 matched_by = tomb["matched_by"]
@@ -23487,14 +23508,45 @@ def apply_movie_upsert(
                 (entity_id, str(tmdb_id)),
             )
 
-    # Resurrect a tombstoned record only when the client's edit post-dates the
-    # deletion (decided above); otherwise the delete-wins path returned earlier.
-    if resurrect_tombstone:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE movies SET deleted_at=NULL, updated_at=now() WHERE id=%s",
-                (entity_id,),
-            )
+    # Reaching this line means the upsert *wrote* to `entity_id`. Every path that
+    # decides a deletion outranks the incoming record returns
+    # `tombstoned_movie_upsert_result` above, so delete-wins is the only way a
+    # tombstone survives an upsert -- and therefore clearing `deleted_at` here is
+    # unconditional rather than gated on `resurrect_tombstone`.
+    #
+    # It used to be gated, and that left a write landing in an invisible row.
+    # `resurrect_tombstone` is set on exactly one route (ladder miss -> tombstone
+    # found by identity -> client edit post-dates the deletion), but three other
+    # routes reach this line with `entity_id` pointing at a tombstoned row: a
+    # `clientEntityId` mapping stored by an earlier delete-wins response, the
+    # barcode-owner lookup in `resolve_new_movie_identity`, and a re-push that
+    # replays either of those. The server answered `status: applied`, the client
+    # showed the record, and the row stayed `deleted_at IS NOT NULL` -- so it was
+    # gone again on the next delta, on every device, with nothing reporting it.
+    # The mapping route is the worst of the three: once stored it skips the
+    # ladder, so the record could never come back on that client.
+    #
+    # The `AND deleted_at IS NOT NULL` predicate keeps this a no-op for the
+    # ordinary live-row update, which is the overwhelming majority of upserts.
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE movies
+            SET deleted_at=NULL, updated_at=now()
+            WHERE id=%s AND deleted_at IS NOT NULL
+            """,
+            (entity_id,),
+        )
+        resurrected = int(cur.rowcount or 0) > 0
+    if resurrected and not resurrect_tombstone:
+        # Not an error: it is the case the gate used to drop. Logged so a
+        # resurrection that nobody decided on stays visible in the server log.
+        logger.info(
+            "sync upsert resurrected tombstoned movie %s outside the "
+            "identity-ladder route (client=%s)",
+            entity_id,
+            client_id,
+        )
 
     # Record this create for batch-local dedup so a repeated clientId within the
     # same batch collapses onto this row (created=false on the second item).

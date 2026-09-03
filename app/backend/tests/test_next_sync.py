@@ -1165,6 +1165,12 @@ class NextContainerReconcileLadderTests(unittest.TestCase):
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
     class _RecordingCursor:
+        #: DB-API's "no statement has been executed" sentinel. A real cursor
+        #: always carries this attribute, so the fake has to as well -- the
+        #: tombstone-resurrection update reads it to tell an actual resurrection
+        #: from the no-op the ordinary live-row update performs.
+        rowcount = -1
+
         def __init__(self, calls):
             self._calls = calls
 
@@ -1373,6 +1379,12 @@ class NextMovieUpsertBarcodeConflictTests(unittest.TestCase):
 @unittest.skipIf(next_app is None, "Flask/psycopg dependencies are not installed")
 class NextContainerUpsertBarcodeDedupTests(unittest.TestCase):
     class _RecordingCursor:
+        #: DB-API's "no statement has been executed" sentinel. A real cursor
+        #: always carries this attribute, so the fake has to as well -- the
+        #: tombstone-resurrection update reads it to tell an actual resurrection
+        #: from the no-op the ordinary live-row update performs.
+        rowcount = -1
+
         def __init__(self, calls):
             self._calls = calls
 
