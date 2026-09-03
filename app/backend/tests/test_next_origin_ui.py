@@ -224,5 +224,77 @@ class BackfillIsReachableTests(unittest.TestCase):
         self.assertIn("appAdminOriginBackfillUnresolvable", block)
 
 
+class BackfillReportsWhatItDidTests(unittest.TestCase):
+    """Pressing the button has to change something the operator can see.
+
+    It did not. The confirmation was written into `appAdminMetadataMessage` and
+    then overwritten milliseconds later by `refreshAppAdminMetadataJobs`, which
+    writes "Metadata jobs loaded." into the same node; the job list on that same
+    panel filters on the refresh job type, so the queued origin jobs never
+    appeared there either; and the counters came from the POST, which reads them
+    before it queues anything. Three separate silences, and together they are
+    the whole of "I pressed Fill in origin data and nothing seems to happen"
+    (#719).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = _source()
+
+    def test_the_confirmation_is_set_after_the_refresh_that_would_overwrite_it(self):
+        start = self.source.index("async function queueAppAdminOriginBackfill")
+        block = self.source[start : start + 2200]
+        refresh = block.index("await refreshAppAdminMetadataJobs();")
+        confirmation = block.index('tNext("appAdmin.originBackfillQueued"')
+        self.assertLess(
+            refresh,
+            confirmation,
+            "the queue confirmation is set before the refresh that overwrites it",
+        )
+
+    def test_the_card_names_the_outstanding_jobs(self):
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn("appAdminOriginBackfillJobs", block)
+        self.assertIn('tNext("appAdmin.originBackfillRunning"', block)
+
+    def test_the_card_reports_the_last_run_rather_than_a_single_done(self):
+        # A run that asked TMDB about 100 films and wrote none of them is the
+        # outcome worth seeing, and only the split says it.
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn('tNext("appAdmin.originBackfillLastRun"', block)
+        self.assertIn("{updated}", block)
+        self.assertIn("{skipped}", block)
+        self.assertIn('tNext("appAdmin.originBackfillLastRunFailed"', block)
+
+    def test_a_tmdb_plugin_too_old_for_origin_is_named_on_the_card(self):
+        # Below 1.8.0 the plugin never returns `filmOrigin`, so the job succeeds
+        # and writes nothing. Nothing else in the app can say so.
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn("originCapable === false", block)
+        self.assertIn('tNext("appAdmin.originBackfillPluginTooOld"', block)
+
+    def test_the_button_is_disabled_while_a_run_is_still_outstanding(self):
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn('button.disabled = !(Number(counts?.pending) > 0) || outstanding > 0', block)
+
+    def test_the_poll_stops_when_the_queue_empties_or_the_tab_is_left(self):
+        """A timer that outlives its panel is a request every five seconds, forever."""
+        start = self.source.index("function scheduleAppAdminOriginBackfillPoll")
+        block = self.source[start : start + 1200]
+        self.assertIn('appAdmin.activeTab !== "metadata"', block)
+        self.assertIn('document.getElementById("appAdminOriginBackfillButton")', block)
+        self.assertIn("stopAppAdminOriginBackfillPoll();", block)
+        self.assertIn("jobs?.outstanding", block)
+
+    def test_reopening_the_panel_picks_a_running_backfill_back_up(self):
+        start = self.source.index("async function refreshAppAdminMetadataJobs")
+        block = self.source[start : start + 2000]
+        self.assertIn("scheduleAppAdminOriginBackfillPoll();", block)
+
+
 if __name__ == "__main__":
     unittest.main()

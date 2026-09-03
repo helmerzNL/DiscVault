@@ -69,6 +69,8 @@ try:
     from .next_plugin_runtime import write_plugin_auto_update_marker
     from .next_plugin_runtime import upgrade_seeded_default_plugins
     from .next_plugin_runtime import plugin_update_state
+    from .next_plugin_runtime import installed_plugin_version
+    from .next_plugin_runtime import _parse_plugin_version
     from .next_plugin_runtime import unconfigured_integration_plugins
     from .next_plugin_runtime import AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS
     from .next_plugin_runtime import _plugin_has_required_settings
@@ -85,6 +87,7 @@ try:
     from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import TMDB_PLUGIN_ID
     from .next_metadata import count_movies_missing_film_origin
     from .next_metadata import movies_missing_film_origin
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
@@ -373,6 +376,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_plugin_runtime import write_plugin_auto_update_marker
     from next_plugin_runtime import upgrade_seeded_default_plugins
     from next_plugin_runtime import plugin_update_state
+    from next_plugin_runtime import installed_plugin_version
+    from next_plugin_runtime import _parse_plugin_version
     from next_plugin_runtime import unconfigured_integration_plugins
     from next_plugin_runtime import AUTO_ENABLE_ON_CONFIG_PLUGIN_IDS
     from next_plugin_runtime import _plugin_has_required_settings
@@ -389,6 +394,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import TMDB_PLUGIN_ID
     from next_metadata import count_movies_missing_film_origin
     from next_metadata import movies_missing_film_origin
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
@@ -25441,6 +25447,91 @@ def metadata_refresh_job_counts(conn, *, movie_id: UUID | None = None) -> dict[s
     return {"total": sum(by_status.values()), "byStatus": by_status}
 
 
+# The TMDb plugin version that first emitted `filmOrigin`. Below it the backfill
+# runs, asks TMDB for every film, gets an answer with no origin in it and writes
+# nothing -- a job that reports success over a plugin that never returned the
+# field. Plugins run from the writable install directory and are replaced only
+# by a strictly newer bundled copy, so an instance can sit below this
+# indefinitely with nothing saying so.
+ORIGIN_CAPABLE_TMDB_PLUGIN_VERSION = "1.8.0"
+
+
+def origin_backfill_job_state(conn) -> dict[str, Any]:
+    """Queue state and the last run's own summary, for the admin card.
+
+    The two counters alone cannot distinguish "not started" from "ran fifteen
+    times and wrote nothing", and that is the whole of what #719 reported: the
+    origin jobs are excluded from the Metadata job list by job type, so pressing
+    the button produced no visible change anywhere on the screen that owns it.
+    """
+    state: dict[str, Any] = {
+        "counts": {"pending": 0, "running": 0, "completed": 0, "failed": 0},
+        "outstanding": 0,
+        "lastRun": None,
+    }
+    if not table_exists(conn, "background_jobs"):
+        return state
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT status, COUNT(*)::int AS count
+            FROM background_jobs
+            WHERE job_type = %s
+            GROUP BY status
+            """,
+            (MOVIE_ORIGIN_BACKFILL_JOB_TYPE,),
+        )
+        for row in cur.fetchall():
+            state["counts"][str(row.get("status") or "unknown")] = int(row.get("count") or 0)
+        cur.execute(
+            """
+            SELECT status, result, error, finished_at
+            FROM background_jobs
+            WHERE job_type = %s AND finished_at IS NOT NULL
+            ORDER BY finished_at DESC
+            LIMIT 1
+            """,
+            (MOVIE_ORIGIN_BACKFILL_JOB_TYPE,),
+        )
+        row = cur.fetchone()
+    state["outstanding"] = int(state["counts"].get("pending", 0)) + int(state["counts"].get("running", 0))
+    if row:
+        result = row.get("result") if isinstance(row.get("result"), dict) else {}
+        summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+        state["lastRun"] = {
+            "status": row.get("status"),
+            "finishedAt": row.get("finished_at"),
+            # The error text is the reason a run wrote nothing -- an unconfigured
+            # API key, a disabled plugin -- and it is useless in a log nobody
+            # opens, so it travels to the screen that offered the button.
+            "error": row.get("error"),
+            "requested": int(summary.get("requested") or 0),
+            "updated": int(summary.get("updated") or 0),
+            "skipped": int(summary.get("skipped") or 0),
+            "failed": int(summary.get("failed") or 0),
+            "unresolved": int(summary.get("unresolved") or 0),
+        }
+    return state
+
+
+def origin_backfill_tmdb_plugin_state() -> dict[str, Any]:
+    installed = (installed_plugin_version(TMDB_PLUGIN_ID) or "").strip()
+    return {
+        "installedVersion": installed,
+        "requiredVersion": ORIGIN_CAPABLE_TMDB_PLUGIN_VERSION,
+        "originCapable": _parse_plugin_version(installed)
+        >= _parse_plugin_version(ORIGIN_CAPABLE_TMDB_PLUGIN_VERSION),
+    }
+
+
+def origin_backfill_payload(conn) -> dict[str, Any]:
+    return {
+        **count_movies_missing_film_origin(conn),
+        "jobs": origin_backfill_job_state(conn),
+        "tmdbPlugin": origin_backfill_tmdb_plugin_state(),
+    }
+
+
 ADMIN_OPERATIONS_PERMISSIONS = (
     "admin.view_settings",
     "admin.view_audit",
@@ -38666,8 +38757,8 @@ def register_routes(flask_app: Flask) -> None:
         """
         with connect() as conn:
             require_next_permission(conn, "metadata.refresh_bulk")
-            counts = count_movies_missing_film_origin(conn)
-        return response({"status": "ok", **counts})
+            payload = origin_backfill_payload(conn)
+        return response({"status": "ok", **payload})
 
     @flask_app.post("/api/next/admin/metadata/origin-backfill")
     def queue_movie_origin_backfill():
@@ -38693,22 +38784,30 @@ def register_routes(flask_app: Flask) -> None:
             actor = require_next_permission(conn, "metadata.refresh_bulk")
             if not table_exists(conn, "movie_origin_countries"):
                 raise NextApiError("Origin storage is not available", 503)
-            counts = count_movies_missing_film_origin(conn)
-            pending = counts.get("pending", 0)
-            if not pending:
-                return response({"status": "ok", "queued": 0, **counts})
+            # The ids, not just how many. A job carrying only `{"limit": 100}`
+            # re-runs the same "next 100 that still need it" query, so a film
+            # TMDB cannot answer stays at the head of that ordering and is
+            # retried by every job in the batch -- with an unfillable first
+            # hundred, the other 1,388 are never touched at all. Pinning the
+            # slice at queue time makes each job own a disjoint set.
+            outstanding = movies_missing_film_origin(conn, limit=None)
+            if not outstanding:
+                return response({"status": "ok", "queued": 0, **origin_backfill_payload(conn)})
             jobs = []
             with conn.transaction():
-                remaining = pending
-                while remaining > 0:
+                for start in range(0, len(outstanding), batch_size):
+                    slice_ids = [str(row["id"]) for row in outstanding[start : start + batch_size]]
                     jobs.append(
                         create_background_job(
                             conn,
                             job_type=MOVIE_ORIGIN_BACKFILL_JOB_TYPE,
-                            payload={"limit": batch_size, "requestedBy": actor_job_payload(actor)},
+                            payload={
+                                "movieIds": slice_ids,
+                                "limit": batch_size,
+                                "requestedBy": actor_job_payload(actor),
+                            },
                         )
                     )
-                    remaining -= batch_size
                 # One audit event for the batch, not one per film. A 25-job run
                 # that wrote 25 audit rows would say the same thing 25 times.
                 audit_event(
@@ -38718,9 +38817,18 @@ def register_routes(flask_app: Flask) -> None:
                     actor=actor,
                     target_type="collection",
                     summary="Queued country-of-origin backfill",
-                    metadata={"pending": pending, "jobs": len(jobs), "batchSize": batch_size},
+                    metadata={
+                        "pending": len(outstanding),
+                        "jobs": len(jobs),
+                        "batchSize": batch_size,
+                    },
                 )
-        return response({"status": "ok", "queued": len(jobs), "jobs": jobs, **counts})
+            # Read after queueing, so the card is answered with the queue that
+            # now exists rather than the one that did before the press. The
+            # pre-queue counts made the panel look frozen even when the run had
+            # started.
+            payload = origin_backfill_payload(conn)
+        return response({"status": "ok", "queued": len(jobs), "jobs": jobs, **payload})
 
     @flask_app.post("/api/next/metadata/jobs")
     def queue_metadata_refresh_jobs():
@@ -39180,6 +39288,11 @@ def register_routes(flask_app: Flask) -> None:
                     allowed_types.append(PLUGIN_EXECUTION_JOB_TYPE)
                 if permissions.intersection({"metadata.refresh_one", "metadata.refresh_bulk"}):
                     allowed_types.append(METADATA_REFRESH_JOB_TYPE)
+                if "metadata.refresh_bulk" in permissions:
+                    # The same permission that queues the origin backfill reads
+                    # it back. Leaving it out made the jobs it creates readable
+                    # by the owner alone.
+                    allowed_types.append(MOVIE_ORIGIN_BACKFILL_JOB_TYPE)
                 if permissions.intersection({"collection.import", "admin.restore_functional"}):
                     allowed_types.append(MIGRATION_JOB_TYPE)
                 if job_type and job_type not in allowed_types:

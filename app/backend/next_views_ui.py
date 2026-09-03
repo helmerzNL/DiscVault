@@ -19474,6 +19474,9 @@ def ui_preview_html(
                   </article>
                 </div>
                 <p class="import-source-meta" data-next-i18n="appAdmin.originBackfillUnresolvableHelp">Films with no TMDB match cannot be filled in this way, so that number is counted separately and does not reach zero.</p>
+                <p class="login-message" id="appAdminOriginBackfillJobs"></p>
+                <p class="login-message" id="appAdminOriginBackfillLastRun"></p>
+                <p class="login-message bad" id="appAdminOriginBackfillPluginWarning"></p>
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="appAdminOriginBackfillButton" data-next-i18n="appAdmin.originBackfillRun">Fill in origin data</button>
                 </div>
@@ -20129,6 +20132,7 @@ def ui_preview_html(
     let libraryMetadataJobs = [];
     let libraryMetadataJobVisible = false;
     let libraryMetadataJobPollTimer = null;
+    let appAdminOriginBackfillTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -25737,6 +25741,10 @@ def ui_preview_html(
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
         await refreshAppAdminOriginBackfill();
+        // Reopening the tab while a backfill is running has to pick the poll
+        // back up; otherwise the counters freeze at whatever they were when
+        // the panel drew and the run looks stalled.
+        if (Number(appAdmin.originBackfill?.jobs?.outstanding || 0)) scheduleAppAdminOriginBackfillPoll();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
@@ -25783,11 +25791,56 @@ def ui_preview_html(
       const unresolvable = document.getElementById("appAdminOriginBackfillUnresolvable");
       if (pending) pending.textContent = String(counts?.pending ?? "-");
       if (unresolvable) unresolvable.textContent = String(counts?.unresolvable ?? "-");
+      const jobs = counts?.jobs || null;
+      const outstanding = Number(jobs?.outstanding || 0);
+      // The queue, in words. Without it the only thing the press changed was a
+      // row in a table this screen does not list, so the honest reading of the
+      // card was "nothing happened" -- which is how it was reported.
+      setAppAdminMessage(
+        "appAdminOriginBackfillJobs",
+        outstanding
+          ? tNext("appAdmin.originBackfillRunning", "{count} jobs still to run.").replace("{count}", String(outstanding))
+          : "",
+        outstanding ? "good" : ""
+      );
+      const lastRun = counts?.lastRun || null;
+      let lastRunText = "";
+      let lastRunTone = "";
+      if (lastRun && lastRun.status === "failed") {
+        lastRunText = tNext("appAdmin.originBackfillLastRunFailed", "The last run failed: {error}")
+          .replace("{error}", String(lastRun.error || ""));
+        lastRunTone = "bad";
+      } else if (lastRun) {
+        // Updated *and* skipped, never a single "done". A run that asked TMDB
+        // about 100 films and wrote none of them is the outcome this card
+        // exists to make visible, and one number cannot say it.
+        lastRunText = tNext("appAdmin.originBackfillLastRun", "Last run: {updated} filled in, {skipped} without an answer, {failed} failed.")
+          .replace("{updated}", String(lastRun.updated || 0))
+          .replace("{skipped}", String(lastRun.skipped || 0))
+          .replace("{failed}", String(lastRun.failed || 0));
+        lastRunTone = Number(lastRun.failed || 0) > 0 ? "bad" : "";
+      }
+      setAppAdminMessage("appAdminOriginBackfillLastRun", lastRunText, lastRunTone);
+      const plugin = counts?.tmdbPlugin || null;
+      // A plugin below 1.8.0 answers every request without `filmOrigin`, so the
+      // job succeeds and writes nothing. Nothing else in the app can tell the
+      // operator that, and the counter it leaves behind looks identical to a
+      // backfill that has not started.
+      setAppAdminMessage(
+        "appAdminOriginBackfillPluginWarning",
+        plugin && plugin.originCapable === false
+          ? tNext("appAdmin.originBackfillPluginTooOld", "The TMDb plugin is version {installed}; {required} or newer is needed for origin data. Update it under Admin → Plugins, or this fills nothing in.")
+              .replace("{installed}", String(plugin.installedVersion || "?"))
+              .replace("{required}", String(plugin.requiredVersion || "1.8.0"))
+          : "",
+        "bad"
+      );
       const button = document.getElementById("appAdminOriginBackfillButton");
       // Nothing left to fill is a disabled button, not a hidden card: the two
       // counters are the answer to "why is my origin filter empty", and they
-      // have to stay readable once they reach zero.
-      if (button) button.disabled = !(Number(counts?.pending) > 0);
+      // have to stay readable once they reach zero. A run already in flight
+      // disables it too, so a second press cannot queue the same films twice.
+      if (button) button.disabled = !(Number(counts?.pending) > 0) || outstanding > 0;
     }
     async function refreshAppAdminOriginBackfill() {
       if (!canUseAdminTab("metadata")) return;
@@ -25801,6 +25854,26 @@ def ui_preview_html(
         renderAppAdminOriginBackfill(null);
       }
     }
+    // A queued backfill is minutes of work with no other way to see it finish.
+    // The poll stops on its own: when the queue empties, when the Metadata tab
+    // is left, and when the card is no longer in the document -- so it cannot
+    // outlive the screen that started it.
+    function scheduleAppAdminOriginBackfillPoll() {
+      if (appAdminOriginBackfillTimer) return;
+      appAdminOriginBackfillTimer = window.setInterval(async () => {
+        if (appAdmin.activeTab !== "metadata" || !document.getElementById("appAdminOriginBackfillButton")) {
+          stopAppAdminOriginBackfillPoll();
+          return;
+        }
+        await refreshAppAdminOriginBackfill();
+        if (!Number(appAdmin.originBackfill?.jobs?.outstanding || 0)) stopAppAdminOriginBackfillPoll();
+      }, 5000);
+    }
+    function stopAppAdminOriginBackfillPoll() {
+      if (!appAdminOriginBackfillTimer) return;
+      window.clearInterval(appAdminOriginBackfillTimer);
+      appAdminOriginBackfillTimer = null;
+    }
     async function queueAppAdminOriginBackfill() {
       setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.originBackfillQueueing", "Queueing origin backfill..."));
       try {
@@ -25809,6 +25882,13 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({batchSize: 100})
         });
+        appAdmin.originBackfill = payload;
+        // The refresh first, the confirmation last. The other way round --
+        // which is how this shipped -- had `refreshAppAdminMetadataJobs`
+        // overwrite "{count} jobs queued" with "Metadata jobs loaded." in the
+        // same element milliseconds later, so the button reported nothing at
+        // all. Both siblings on this panel already order it this way.
+        await refreshAppAdminMetadataJobs();
         renderAppAdminOriginBackfill(payload);
         const queued = Number(payload.queued || 0);
         setAppAdminMessage(
@@ -25818,7 +25898,7 @@ def ui_preview_html(
             : tNext("appAdmin.originBackfillNothing", "Every film that can be filled already has its origin data."),
           queued ? "good" : ""
         );
-        await refreshAppAdminMetadataJobs();
+        if (queued) scheduleAppAdminOriginBackfillPoll();
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }

@@ -902,32 +902,64 @@ def movie_film_origin(conn, movie_id: UUID) -> dict[str, Any]:
 MOVIE_ORIGIN_BACKFILL_JOB_TYPE = "metadata.backfill_origin"
 
 
-def movies_missing_film_origin(conn, *, limit: int = 100) -> list[dict[str, Any]]:
+# One TMDB id per film, resolved the way every other TMDB read in the codebase
+# resolves it. A plain JOIN returns a film twice when it carries two `tmdb`
+# rows -- reachable, because a re-match INSERTs `ON CONFLICT DO NOTHING` without
+# superseding the old row -- so a batch of 100 covered fewer than 100 films and
+# asked TMDB about one of them twice. `lower(...)` and the blank guard are what
+# make this selector agree with the counter beside it: without them a film
+# stored as `TMDB`, or with an empty identifier, is counted as pending and then
+# never filled, and the counter stalls above zero with nothing to explain why.
+MISSING_ORIGIN_TMDB_JOIN = """
+LEFT JOIN LATERAL (
+    SELECT mi.identifier
+    FROM movie_identifiers mi
+    WHERE mi.movie_id = m.id
+      AND lower(mi.provider_id) = 'tmdb'
+      AND lower(mi.identifier_type) = 'movie_id'
+      AND NULLIF(TRIM(mi.identifier), '') IS NOT NULL
+    ORDER BY mi.identifier
+    LIMIT 1
+) origin_tmdb ON TRUE
+"""
+
+# A film needs origin when it has neither half. Deliberately AND, not OR: an
+# answer that carried only a language is a complete answer for a film TMDB has
+# no country for, and re-asking for it every run would never terminate.
+MISSING_ORIGIN_PREDICATE = """
+m.deleted_at IS NULL
+  AND m.original_language IS NULL
+  AND NOT EXISTS (
+    SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
+  )
+"""
+
+
+def movies_missing_film_origin(conn, *, limit: int | None = 100) -> list[dict[str, Any]]:
     """Films that have a TMDB id and no origin yet, oldest first.
 
     Only films carrying a `tmdb` identifier can be answered at all; the rest
     cannot be backfilled and must not be counted as pending forever.
+
+    `limit=None` returns every one of them, which is what the queueing route
+    needs: it hands each job the ids it owns rather than a bare batch size, so
+    a film TMDB cannot answer stays at the head of the ordering for its own job
+    only instead of for all of them.
     """
     if not table_exists(conn, "movie_identifiers") or not table_exists(conn, "movie_origin_countries"):
         return []
     with conn.cursor() as cur:
         cur.execute(
-            """
-            SELECT m.id, mi.identifier AS tmdb_id
+            f"""
+            SELECT m.id, origin_tmdb.identifier AS tmdb_id
             FROM movies m
-            JOIN movie_identifiers mi
-              ON mi.movie_id = m.id
-             AND mi.provider_id='tmdb'
-             AND mi.identifier_type='movie_id'
-            WHERE m.deleted_at IS NULL
-              AND m.original_language IS NULL
-              AND NOT EXISTS (
-                SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
-              )
+            {MISSING_ORIGIN_TMDB_JOIN}
+            WHERE {MISSING_ORIGIN_PREDICATE}
+              AND origin_tmdb.identifier IS NOT NULL
             ORDER BY m.created_at, m.id
-            LIMIT %s
+            {"LIMIT %s" if limit is not None else ""}
             """,
-            (limit,),
+            (limit,) if limit is not None else (),
         )
         return [dict(row) for row in cur.fetchall()]
 
@@ -938,25 +970,25 @@ def count_movies_missing_film_origin(conn) -> dict[str, int]:
     if not table_exists(conn, "movies") or not table_exists(conn, "movie_origin_countries"):
         return counts
     has_identifiers = table_exists(conn, "movie_identifiers")
+    # Without the identifiers table nothing can be filled, so every film missing
+    # origin is unresolvable. The earlier `NOT FALSE`/`NOT TRUE` pair read both
+    # counters as zero here, which said "nothing to do" about a library that
+    # could do nothing.
     with conn.cursor() as cur:
         cur.execute(
             f"""
             SELECT
-                COUNT(*) FILTER (WHERE {'has_tmdb' if has_identifiers else 'FALSE'})::int AS pending,
-                COUNT(*) FILTER (WHERE NOT {'has_tmdb' if has_identifiers else 'TRUE'})::int AS unresolvable
+                COUNT(*) FILTER (WHERE has_tmdb)::int AS pending,
+                COUNT(*) FILTER (WHERE NOT has_tmdb)::int AS unresolvable
             FROM (
                 SELECT
                     m.id,
-                    {'EXISTS (SELECT 1 FROM movie_identifiers mi WHERE mi.movie_id=m.id AND mi.provider_id=%s AND mi.identifier_type=%s)' if has_identifiers else 'FALSE'} AS has_tmdb
+                    {'origin_tmdb.identifier IS NOT NULL' if has_identifiers else 'FALSE'} AS has_tmdb
                 FROM movies m
-                WHERE m.deleted_at IS NULL
-                  AND m.original_language IS NULL
-                  AND NOT EXISTS (
-                    SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
-                  )
+                {MISSING_ORIGIN_TMDB_JOIN if has_identifiers else ''}
+                WHERE {MISSING_ORIGIN_PREDICATE}
             ) AS missing
-            """,
-            ("tmdb", "movie_id") if has_identifiers else (),
+            """
         )
         row = cur.fetchone()
     if row:
@@ -984,14 +1016,16 @@ def backfill_movie_origins(conn, movie_ids: list[Any] | None = None, *, limit: i
     if movie_ids:
         rows = []
         with conn.cursor() as cur:
+            # The same LATERAL pick the selector uses, for the same two reasons:
+            # a film carrying two `tmdb` rows must not be asked about twice, and
+            # a provider id stored as `TMDB` must resolve here as well. A job is
+            # queued from the selector, so a mismatch between the two would hand
+            # a job ids it then records as unresolved.
             cur.execute(
-                """
-                SELECT m.id, mi.identifier AS tmdb_id
+                f"""
+                SELECT m.id, origin_tmdb.identifier AS tmdb_id
                 FROM movies m
-                LEFT JOIN movie_identifiers mi
-                  ON mi.movie_id = m.id
-                 AND mi.provider_id='tmdb'
-                 AND mi.identifier_type='movie_id'
+                {MISSING_ORIGIN_TMDB_JOIN}
                 WHERE m.id = ANY(%s) AND m.deleted_at IS NULL
                 """,
                 (list(movie_ids),),
@@ -1002,11 +1036,31 @@ def backfill_movie_origins(conn, movie_ids: list[Any] | None = None, *, limit: i
     summary["requested"] = len(rows)
     if not rows:
         return summary
-    plugin, _source = discovered_plugin(TMDB_PLUGIN_ID)
+    # The plugin *record* from the registry, not the `PluginDiscovery` dataclass
+    # `discovered_plugin` returns. `plugin_execution_context` reads its argument
+    # with `.get`, so the dataclass raised AttributeError before the first TMDB
+    # request and every queued job failed -- silently, because the counter is
+    # the only thing anyone watches and a counter that does not move looks
+    # exactly like a job that has not run yet (#719). Every other caller in this
+    # module takes the plugin from `metadata_source_plugins`; this was the one
+    # place that mixed the two shapes.
+    plugin = next(
+        (item for item in metadata_source_plugins(conn) if str(item.get("id") or "") == TMDB_PLUGIN_ID),
+        None,
+    )
+    # Raise rather than counting N failures. A summary of "100 failed" rides in
+    # a job whose status says it succeeded, so the reason never reaches a
+    # screen; an exception lands in `background_jobs.error`, which the admin
+    # card reads back.
     if not plugin:
-        summary["failed"] = len(rows)
-        return summary
+        raise RuntimeError(
+            "The TMDb plugin is not installed and enabled, so origin data cannot be filled in."
+        )
     config = plugin_config_from_db(conn, TMDB_PLUGIN_ID)
+    if plugin_requires_config(plugin, config, "movie_details"):
+        raise RuntimeError(
+            "The TMDb plugin has no API key configured, so origin data cannot be filled in."
+        )
     context = plugin_execution_context(conn, plugin, config)
     for row in rows:
         tmdb_id = clean_text(row.get("tmdb_id"))

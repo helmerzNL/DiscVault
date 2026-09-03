@@ -633,6 +633,8 @@ jobs:
           tests.test_next_origin
           tests.test_next_origin_postgres
           tests.test_next_origin_ui
+          tests.test_next_origin_backfill
+          tests.test_next_origin_backfill_routes
 
       # The personal rating. Two of its claims fail silently rather than loudly,
       # so both are asserted against a real database: that an unrated film reads

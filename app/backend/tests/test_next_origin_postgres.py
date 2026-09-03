@@ -174,5 +174,114 @@ class MovieOriginStorageTests(unittest.TestCase):
         self.assertEqual(row["original_language"], "ja")
 
 
+@unittest.skipUnless(
+    DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
+)
+class MissingOriginCounterAndSelectorAgreeTests(unittest.TestCase):
+    """The number on the card and the films the job takes are one question.
+
+    They were two: the counter asked `EXISTS(... provider_id='tmdb' ...)` and the
+    selector `JOIN`ed the same table. Where they disagree the admin screen states
+    a number the job cannot act on -- a film counted as pending and never filled
+    leaves the counter stuck above zero with nothing on any screen to explain it,
+    which is the shape of the bug this whole card exists to answer (#719).
+
+    All three divergences need a database: a duplicate row, a case-differing
+    provider id, and a blank identifier are things PostgreSQL decides, not
+    things a stub can be asked about.
+    """
+
+    def setUp(self):
+        self.conn = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+        self.movie_ids = []
+
+    def tearDown(self):
+        try:
+            with self.conn.cursor() as cur:
+                for movie_id in self.movie_ids:
+                    cur.execute("DELETE FROM movies WHERE id=%s", (movie_id,))
+            self.conn.commit()
+        finally:
+            self.conn.close()
+
+    def _movie(self, *identifiers):
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO movies (public_id, title) VALUES (%s, %s) RETURNING id",
+                (f"origin-count-{uuid.uuid4().hex[:10]}", "Counter probe"),
+            )
+            movie_id = cur.fetchone()["id"]
+            for provider, identifier_type, identifier in identifiers:
+                cur.execute(
+                    """
+                    INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)
+                    VALUES (%s, %s, %s, %s)
+                    """,
+                    (movie_id, provider, identifier_type, identifier),
+                )
+        self.conn.commit()
+        self.movie_ids.append(movie_id)
+        return movie_id
+
+    def _selected(self):
+        rows = next_metadata.movies_missing_film_origin(self.conn, limit=None)
+        return [row["id"] for row in rows if row["id"] in self.movie_ids]
+
+    def _counts(self):
+        counts = next_metadata.count_movies_missing_film_origin(self.conn)
+        return counts
+
+    def test_a_film_with_two_tmdb_ids_is_selected_once(self):
+        # Re-matching a film inserts a second `tmdb` row without superseding the
+        # first, so a JOIN returned it twice: a batch of 100 covered fewer than
+        # 100 films and asked TMDB about one of them twice over.
+        movie_id = self._movie(("tmdb", "movie_id", "603"), ("tmdb", "movie_id", "604"))
+        self.assertEqual(self._selected().count(movie_id), 1)
+
+    def test_a_case_differing_provider_id_is_pending_and_selected(self):
+        # Every other TMDB read in the codebase lowercases. Counted as
+        # unresolvable here and skipped by the job, the film was invisible to
+        # both halves of the feature.
+        movie_id = self._movie(("TMDB", "Movie_Id", "605"))
+        self.assertIn(movie_id, self._selected())
+
+    def test_a_blank_identifier_is_unresolvable_rather_than_pending(self):
+        # It counted as pending and could never be filled, so the counter had a
+        # floor it could not reach past.
+        movie_id = self._movie(("tmdb", "movie_id", "   "))
+        self.assertNotIn(movie_id, self._selected())
+
+    def test_every_pending_film_is_one_the_job_would_take(self):
+        for identifiers in (
+            (("tmdb", "movie_id", "701"),),
+            (("tmdb", "movie_id", "702"), ("tmdb", "movie_id", "703")),
+            (("TMDB", "movie_id", "704"),),
+            (("tmdb", "movie_id", ""),),
+            (("imdb", "movie_id", "tt0000005"),),
+            (),
+        ):
+            self._movie(*identifiers)
+        before = self._counts()
+        selected = next_metadata.movies_missing_film_origin(self.conn, limit=None)
+        self.assertEqual(before["pending"], len(selected))
+        self.assertEqual(len({row["id"] for row in selected}), len(selected))
+
+    def test_a_filled_film_leaves_both_numbers(self):
+        movie_id = self._movie(("tmdb", "movie_id", "801"))
+        before = self._counts()["pending"]
+        next_metadata.replace_movie_film_origin(
+            self.conn, movie_id, {"originalLanguage": "ja", "originCountries": ["JP"]}
+        )
+        self.conn.commit()
+        self.assertEqual(self._counts()["pending"], before - 1)
+        self.assertNotIn(movie_id, self._selected())
+
+    def test_limit_none_returns_the_whole_backlog_so_a_queue_can_be_partitioned(self):
+        for index in range(3):
+            self._movie(("tmdb", "movie_id", f"90{index}"))
+        self.assertGreaterEqual(len(self._selected()), 3)
+        self.assertEqual(len(next_metadata.movies_missing_film_origin(self.conn, limit=1)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
