@@ -191,6 +191,32 @@ class CustomFieldRouteTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(response.get_json()["customValues"], [])
 
+    def test_a_stored_value_comes_back_on_the_detail_payload_the_edit_form_reads(self):
+        """The round trip, not just the write.
+
+        The write always worked. What did not was reading it back: the edit form
+        looked for `detail.customValues`, and the detail payload attaches
+        `detail.movie.custom_values`. Every input rendered empty, an empty input
+        is sent as a null, and a null deletes the row -- so saving a film for
+        any unrelated reason erased its custom values.
+
+        Asserting the payload key here and the accessor in
+        `test_next_custom_fields_ui.py` is deliberate: a rename on either side
+        alone would restore exactly the same silence.
+        """
+        field = self._field()
+        movie_id = self._movie()
+        self.client.put(
+            f"/api/next/movies/{movie_id}/custom-values",
+            json={"values": {field["key"]: "Shelf B"}},
+        )
+        response = self.client.get(f"/api/next/movies/{movie_id}")
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        detail = response.get_json()["detail"]
+        self.assertNotIn("customValues", detail)
+        values = {row["key"]: row["value"] for row in detail["movie"]["custom_values"]}
+        self.assertEqual(values.get(field["key"]), "Shelf B")
+
     def test_a_value_on_a_missing_movie_is_a_404(self):
         field = self._field()
         response = self.client.put(

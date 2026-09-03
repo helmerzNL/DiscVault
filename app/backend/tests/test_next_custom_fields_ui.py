@@ -143,6 +143,50 @@ class EditFormTests(unittest.TestCase):
         self.assertIn("state?.customFields", block)
 
 
+class TheEditFormReadsTheKeyTheServerSendsTests(unittest.TestCase):
+    """The stored values have to arrive from the payload that carries them.
+
+    `renderMovieEditCustomFields` read `detail.customValues`. `movie_detail_entity`
+    attaches them as `detail.movie.custom_values`; `customValues` exists only on
+    sync-mutation results and on the PUT response, and nothing ever assigns it
+    on a detail payload. So every input rendered empty on every load.
+
+    That is not merely a display fault. `collectMovieEditCustomValues` turns an
+    empty input into `null`, `replace_movie_custom_values` deletes the row for a
+    `null`, and `saveMovieCustomValues` sends the whole collected map on every
+    save -- so opening a film, changing its title and pressing save silently
+    erased every custom value on that film. Nothing errored and nothing logged;
+    the values were simply gone the next time anyone looked.
+
+    Both halves are asserted, because a rename on either side reintroduces the
+    same silence: the accessor here, and the key the server actually attaches.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = _source()
+
+    def test_the_renderer_reads_the_detail_payloads_own_key(self):
+        start = self.source.index("function renderMovieEditCustomFields")
+        block = self.source[start : start + 3200]
+        self.assertIn("detail?.movie?.custom_values", block)
+
+    def test_the_renderer_does_not_read_a_key_no_detail_payload_carries(self):
+        start = self.source.index("function renderMovieEditCustomFields")
+        block = self.source[start : start + 3200]
+        self.assertNotIn("detail?.customValues", block)
+
+    def test_the_server_attaches_the_values_the_renderer_reads(self):
+        with open(os.path.join(BACKEND_DIR, "next_app.py"), encoding="utf-8") as handle:
+            source = handle.read()
+        start = source.index("def movie_detail_entity")
+        block = source[start : start + 900]
+        self.assertIn("attach_movie_custom_values(conn, [movie])", block)
+        start = source.index("def attach_movie_custom_values")
+        block = source[start : start + 2500]
+        self.assertIn('"custom_values"', block)
+
+
 class SnapshotPublishesDefinitionsTests(unittest.TestCase):
     def test_the_dashboard_snapshot_carries_them_in_both_shapes(self):
         with open(os.path.join(BACKEND_DIR, "next_app.py"), encoding="utf-8") as handle:
