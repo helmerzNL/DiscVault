@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Acteurs",
   "movieDetail.aggregateArtwork": "Visuel des membres",
   "movieDetail.applied": "Changements appliques.",
+  "movieDetail.customFields": "Champs personnalisés",
   "movieDetail.externalScore": "Note",
   "movieDetail.formatBlockedFields": "{count} champ(s) n'ont pas été appliqués parce que la source décrit un format différent de ce disque. Corrigez le format, ou choisissez le bon pressage, puis actualisez à nouveau.",
   "movieDetail.formatCorrectedRefreshAgain": "Le format de ce disque a été corrigé en {format}. Actualisez encore une fois pour récupérer les {count} champ(s) que l'ancien format bloquait.",

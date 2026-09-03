@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Παράγοντες",
   "movieDetail.aggregateArtwork": "Καλλιτεχνικό έργο μέλους",
   "movieDetail.applied": "Τα μεταδεδομένα ανανεώθηκαν.",
+  "movieDetail.customFields": "Προσαρμοσμένα πεδία",
   "movieDetail.externalScore": "Βαθμολογία",
   "movieDetail.formatBlockedFields": "{count} πεδίο/α δεν εφαρμόστηκαν επειδή η πηγή περιγράφει διαφορετική μορφή από αυτόν τον δίσκο. Διορθώστε τη μορφή ή επιλέξτε τη σωστή έκδοση και ανανεώστε ξανά.",
   "movieDetail.formatCorrectedRefreshAgain": "Η μορφή αυτού του δίσκου διορθώθηκε σε {format}. Ανανεώστε άλλη μία φορά για να έρθουν τα {count} πεδίο/α που εμπόδιζε η παλιά μορφή.",

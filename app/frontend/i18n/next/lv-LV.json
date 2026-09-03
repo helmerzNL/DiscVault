@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Aktieri",
   "movieDetail.aggregateArtwork": "Dalībnieku attēli",
   "movieDetail.applied": "Metadati atsvaidzināti.",
+  "movieDetail.customFields": "Pielāgotie lauki",
   "movieDetail.externalScore": "Vērtējums",
   "movieDetail.formatBlockedFields": "{count} lauks(i) netika lietoti, jo avots apraksta citu formātu nekā šis disks. Izlabo formātu vai izvēlies pareizo izdevumu un atsvaidzini vēlreiz.",
   "movieDetail.formatCorrectedRefreshAgain": "Šī diska formāts tika izlabots uz {format}. Atsvaidzini vēlreiz, lai iegūtu {count} lauku(s), ko bloķēja vecais formāts.",

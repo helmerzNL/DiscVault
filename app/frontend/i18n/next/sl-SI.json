@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Igralci",
   "movieDetail.aggregateArtwork": "Umetniško delo člana",
   "movieDetail.applied": "Metapodatki so osveženi.",
+  "movieDetail.customFields": "Polja po meri",
   "movieDetail.externalScore": "Ocena",
   "movieDetail.formatBlockedFields": "{count} polj ni bilo uporabljenih, ker vir opisuje drugačen format kot ta disk. Popravite format ali izberite pravo izdajo in znova osvežite.",
   "movieDetail.formatCorrectedRefreshAgain": "Format tega diska je bil popravljen v {format}. Osvežite še enkrat, da pridobite {count} polj, ki jih je stari format blokiral.",

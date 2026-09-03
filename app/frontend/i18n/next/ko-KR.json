@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "배우",
   "movieDetail.aggregateArtwork": "멤버 아트워크",
   "movieDetail.applied": "메타데이터가 새로 고쳐졌습니다.",
+  "movieDetail.customFields": "사용자 지정 필드",
   "movieDetail.externalScore": "점수",
   "movieDetail.formatBlockedFields": "소스가 이 디스크와 다른 포맷을 설명하므로 {count}개 필드가 적용되지 않았습니다. 포맷을 수정하거나 올바른 프레싱을 선택한 뒤 다시 새로 고치세요.",
   "movieDetail.formatCorrectedRefreshAgain": "이 디스크의 포맷을 {format}(으)로 수정했습니다. 이전 포맷 때문에 보류된 {count}개 필드를 가져오려면 한 번 더 새로 고치세요.",

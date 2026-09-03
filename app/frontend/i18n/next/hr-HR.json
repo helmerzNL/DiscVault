@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Sudionici",
   "movieDetail.aggregateArtwork": "Umjetničko djelo člana",
   "movieDetail.applied": "Metapodaci su osvježeni.",
+  "movieDetail.customFields": "Prilagođena polja",
   "movieDetail.externalScore": "Ocjena",
   "movieDetail.formatBlockedFields": "{count} polja nisu primijenjena jer izvor opisuje drugačiji format od ovog diska. Ispravite format ili odaberite ispravno izdanje pa ponovno osvježite.",
   "movieDetail.formatCorrectedRefreshAgain": "Format ovog diska ispravljen je u {format}. Osvježite još jednom da dohvatite {count} polja koja je stari format blokirao.",

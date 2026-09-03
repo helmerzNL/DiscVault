@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "színész",
   "movieDetail.aggregateArtwork": "Tagi műalkotások",
   "movieDetail.applied": "Metaadatok frissítve.",
+  "movieDetail.customFields": "Egyéni mezők",
   "movieDetail.externalScore": "Pontszám",
   "movieDetail.formatBlockedFields": "{count} mező nem került alkalmazásra, mert a forrás más formátumot ír le, mint ez a lemez. Javítsd a formátumot, vagy válaszd ki a megfelelő kiadást, és frissíts újra.",
   "movieDetail.formatCorrectedRefreshAgain": "A lemez formátuma {format} értékre javult. Frissíts még egyszer, hogy megérkezzen az a {count} mező, amelyet a régi formátum visszatartott.",

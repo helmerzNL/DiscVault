@@ -17154,6 +17154,7 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
             <div class="detail-fields" id="movieDetailCollectors"></div>
+            <div id="movieDetailCustomFields"></div>
             <div class="movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>
           </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
@@ -32123,6 +32124,35 @@ def ui_preview_html(
     function customFieldDefinitions() {
       return Array.isArray(state?.customFields) ? state.customFields : [];
     }
+    // Beside the other owner-managed facts -- location, storage location,
+    // edition -- rather than in a panel of its own: a custom field is one of
+    // those, and it is read for the same reason.
+    //
+    // Deliberately not the edit form's list. That one filters archived
+    // definitions out, because archiving means "no new input"; a value already
+    // stored on an archived field keeps matching filters and keeps exporting
+    // (contract 4e.5), so refusing to show it here would hide data the rest of
+    // the app still acts on. A film with no value renders no row, and an
+    // instance with no fields renders no section: detailFieldSubsection returns
+    // "" when it produces no rows.
+    function renderMovieDetailCustomFields(detail) {
+      const container = document.getElementById("movieDetailCustomFields");
+      if (!container) return;
+      const values = movieCustomValueMap(detail?.movie);
+      const entries = customFieldDefinitions()
+        .filter((field) => values.has(String(field.key)))
+        // The owner's own order from Admin -> Custom fields, which is the order
+        // the server returns and the order they see everywhere else.
+        .map((field) => [
+          // Never translated: the owner typed the name.
+          field.name || field.key,
+          customValueDisplay(field, values.get(String(field.key)))
+        ]);
+      container.innerHTML = detailFieldSubsection(
+        tNext("movieDetail.customFields", "Custom fields"),
+        entries
+      );
+    }
     function renderMovieEditCustomFields(detail) {
       const container = document.getElementById("movieEditCustomFields");
       if (!container) return;
@@ -34063,6 +34093,7 @@ def ui_preview_html(
       }
       renderMovieDetailDiscs(detail.discs);
       document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
+      renderMovieDetailCustomFields(detail);
       bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
       // The change history is a diagnostic surface, like the debug cards below
@@ -34211,6 +34242,8 @@ def ui_preview_html(
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
       document.getElementById("movieDetailCollectors").innerHTML = "";
+      const customFieldsBlock = document.getElementById("movieDetailCustomFields");
+      if (customFieldsBlock) customFieldsBlock.innerHTML = "";
       document.getElementById("movieMetadataComparePanel").innerHTML = "";
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";

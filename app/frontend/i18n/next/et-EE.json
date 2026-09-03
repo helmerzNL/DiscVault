@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Näitlejad",
   "movieDetail.aggregateArtwork": "Liikmete kujundus",
   "movieDetail.applied": "Metaandmed värskendatud.",
+  "movieDetail.customFields": "Kohandatud väljad",
   "movieDetail.externalScore": "Hinne",
   "movieDetail.formatBlockedFields": "{count} välja ei rakendatud, sest allikas kirjeldab sellest plaadist erinevat vormingut. Paranda vorming või vali õige väljalase ja värskenda uuesti.",
   "movieDetail.formatCorrectedRefreshAgain": "Selle plaadi vorming parandati väärtuseks {format}. Värskenda veel korra, et tuua {count} välja, mida vana vorming blokeeris.",

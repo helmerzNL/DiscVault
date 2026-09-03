@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Aktérov",
   "movieDetail.aggregateArtwork": "Umelecké dielo člena",
   "movieDetail.applied": "Metaúdaje boli obnovené.",
+  "movieDetail.customFields": "Vlastné polia",
   "movieDetail.externalScore": "Hodnotenie",
   "movieDetail.formatBlockedFields": "{count} polí sa nepoužilo, pretože zdroj popisuje iný formát než tento disk. Opravte formát alebo vyberte správny lis a obnovte znova.",
   "movieDetail.formatCorrectedRefreshAgain": "Formát tohto disku bol opravený na {format}. Obnovte ešte raz, aby sa načítalo {count} polí, ktoré starý formát blokoval.",

@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Actores",
   "movieDetail.aggregateArtwork": "Arte de miembros",
   "movieDetail.applied": "Cambios aplicados.",
+  "movieDetail.customFields": "Campos personalizados",
   "movieDetail.externalScore": "Puntuación",
   "movieDetail.formatBlockedFields": "{count} campo(s) no se aplicaron porque la fuente describe un formato distinto al de este disco. Corrige el formato, o elige la prensada correcta, y actualiza de nuevo.",
   "movieDetail.formatCorrectedRefreshAgain": "El formato de este disco se corrigió a {format}. Actualiza una vez más para traer los {count} campo(s) que el formato anterior bloqueaba.",

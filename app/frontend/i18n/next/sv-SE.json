@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Skadespelare",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Andringar tillampade.",
+  "movieDetail.customFields": "Egna fält",
   "movieDetail.externalScore": "Betyg",
   "movieDetail.formatBlockedFields": "{count} fält tillämpades inte eftersom källan beskriver ett annat format än den här skivan. Rätta formatet, eller välj rätt pressning, och uppdatera igen.",
   "movieDetail.formatCorrectedRefreshAgain": "Formatet på den här skivan rättades till {format}. Uppdatera en gång till för att hämta de {count} fält som det gamla formatet blockerade.",
