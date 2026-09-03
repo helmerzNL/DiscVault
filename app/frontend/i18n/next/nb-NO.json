@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Skuespillere",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Endringer brukt.",
+  "movieDetail.customFields": "Egne felt",
   "movieDetail.externalScore": "Poeng",
   "movieDetail.formatBlockedFields": "{count} felt ble ikke brukt fordi kilden beskriver et annet format enn denne platen. Rett formatet, eller velg riktig pressing, og oppdater på nytt.",
   "movieDetail.formatCorrectedRefreshAgain": "Formatet på denne platen ble rettet til {format}. Oppdater én gang til for å hente de {count} feltene som det gamle formatet blokkerte.",

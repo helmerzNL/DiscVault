@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Skuespillere",
   "movieDetail.aggregateArtwork": "Medlemsartwork",
   "movieDetail.applied": "Aendringer anvendt.",
+  "movieDetail.customFields": "Egne felter",
   "movieDetail.externalScore": "Score",
   "movieDetail.formatBlockedFields": "{count} felt(er) blev ikke anvendt, fordi kilden beskriver et andet format end denne disc. Ret formatet, eller vælg den rigtige presning, og opdatér igen.",
   "movieDetail.formatCorrectedRefreshAgain": "Formatet på denne disc blev rettet til {format}. Opdatér én gang til for at hente de {count} felt(er), som det gamle format blokerede.",

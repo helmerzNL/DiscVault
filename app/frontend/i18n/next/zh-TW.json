@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "演員",
   "movieDetail.aggregateArtwork": "成員圖片",
   "movieDetail.applied": "中繼資料已重新整理。",
+  "movieDetail.customFields": "自訂欄位",
   "movieDetail.externalScore": "評分",
   "movieDetail.formatBlockedFields": "由於來源描述的格式與本片不同，{count} 個欄位未被套用。請更正格式或選擇正確的壓片版本後再次重新整理。",
   "movieDetail.formatCorrectedRefreshAgain": "本片的格式已更正為 {format}。請再重新整理一次，以取得先前被舊格式擋下的 {count} 個欄位。",

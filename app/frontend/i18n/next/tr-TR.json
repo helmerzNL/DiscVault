@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Oyuncular",
   "movieDetail.aggregateArtwork": "Üye görselleri",
   "movieDetail.applied": "Meta veriler yenilendi.",
+  "movieDetail.customFields": "Özel alanlar",
   "movieDetail.externalScore": "Puan",
   "movieDetail.formatBlockedFields": "Kaynak bu diskten farklı bir format tanımladığı için {count} alan uygulanmadı. Formatı düzeltin ya da doğru baskıyı seçin ve yeniden yenileyin.",
   "movieDetail.formatCorrectedRefreshAgain": "Bu diskin formatı {format} olarak düzeltildi. Eski formatın engellediği {count} alanı getirmek için bir kez daha yenileyin.",

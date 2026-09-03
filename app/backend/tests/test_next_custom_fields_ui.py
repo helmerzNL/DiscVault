@@ -187,6 +187,74 @@ class TheEditFormReadsTheKeyTheServerSendsTests(unittest.TestCase):
         self.assertIn('"custom_values"', block)
 
 
+class DetailPageTests(unittest.TestCase):
+    """Reading a value must not require opening a writing surface.
+
+    Custom fields shipped filterable, sortable and exportable, and unreadable on
+    the one screen dedicated to a single film: seeing what a film's field held
+    meant opening the edit form and then deciding how to close it (#762).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = _source()
+        start = cls.source.index("function renderMovieDetailCustomFields")
+        # Bounded at the next function, so an assertion about what this one does
+        # not do cannot be answered by its neighbour -- which renders the edit
+        # form and legitimately filters archived fields out.
+        cls.renderer = cls.source[start : cls.source.index("\n    function ", start + 40)]
+
+    def test_the_detail_page_has_a_block_and_fills_it(self):
+        self.assertIn('id="movieDetailCustomFields"', self.source)
+        self.assertIn("renderMovieDetailCustomFields(detail);", self.source)
+
+    def test_it_reads_the_values_off_the_movie_and_the_definitions_off_the_snapshot(self):
+        block = self.renderer
+        self.assertIn("movieCustomValueMap(detail?.movie)", block)
+        self.assertIn("customFieldDefinitions()", block)
+        # No second fetch: both halves are already in memory when the page draws.
+        self.assertNotIn("authApiJson", block)
+
+    def test_the_value_is_formatted_by_the_helper_the_rest_of_the_app_uses(self):
+        block = self.renderer
+        self.assertIn("customValueDisplay(field, values.get(String(field.key)))", block)
+
+    def test_an_archived_field_holding_a_value_is_still_shown(self):
+        """The opposite of the edit form, on purpose.
+
+        Archiving means "no new input", not "invisible": the value keeps
+        matching filters and keeps exporting, so hiding it here would conceal
+        data the rest of the app still acts on.
+        """
+        block = self.renderer
+        self.assertNotIn("archivedAt", block)
+        self.assertIn("values.has(String(field.key))", block)
+
+    def test_a_film_with_no_values_renders_no_section(self):
+        # detailFieldSubsection returns "" when it produces no rows, so an empty
+        # heading over nothing is impossible rather than merely unlikely.
+        self.assertIn("detailFieldSubsection(", self.renderer)
+        start = self.source.index("function detailFieldSubsection")
+        self.assertIn('if (!rows) return "";', self.source[start : start + 400])
+
+    def test_the_heading_is_translated_but_the_field_names_are_not(self):
+        block = self.renderer
+        self.assertIn('tNext("movieDetail.customFields"', block)
+        self.assertIn("field.name || field.key", block)
+
+    def test_the_heading_exists_in_every_locale(self):
+        import glob
+        import json
+
+        for path in sorted(glob.glob(os.path.join(I18N_DIR, "*.json"))):
+            with open(path, encoding="utf-8") as handle:
+                catalog = json.load(handle)
+            self.assertTrue(
+                catalog.get("movieDetail.customFields", "").strip(),
+                os.path.basename(path),
+            )
+
+
 class SnapshotPublishesDefinitionsTests(unittest.TestCase):
     def test_the_dashboard_snapshot_carries_them_in_both_shapes(self):
         with open(os.path.join(BACKEND_DIR, "next_app.py"), encoding="utf-8") as handle:

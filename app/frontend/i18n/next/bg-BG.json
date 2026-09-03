@@ -1804,6 +1804,7 @@
   "movieDetail.actors": "Актьор",
   "movieDetail.aggregateArtwork": "Произведения на изкуството за членове",
   "movieDetail.applied": "Метаданните са обновени.",
+  "movieDetail.customFields": "Собствени полета",
   "movieDetail.externalScore": "Оценка",
   "movieDetail.formatBlockedFields": "{count} поле(та) не бяха приложени, защото източникът описва различен формат от този диск. Коригирайте формата или изберете правилното издание и опреснете отново.",
   "movieDetail.formatCorrectedRefreshAgain": "Форматът на този диск беше коригиран на {format}. Опреснете още веднъж, за да получите {count} поле(та), които старият формат блокираше.",
