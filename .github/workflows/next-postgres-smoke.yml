@@ -502,6 +502,13 @@ jobs:
       - name: Test the personal-list ceiling
         run: python -m unittest tests.test_next_personal_list_paging
 
+      # Custom fields are defined at runtime, so an import mapping could not
+      # name one and a column holding them could only be dropped. The property
+      # that needs a real database is the writing: fill-only, and reporting a
+      # refused cell instead of ending a run of thousands of rows.
+      - name: Test custom fields as import mapping targets
+        run: python -m unittest tests.test_next_import_custom_fields
+
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 

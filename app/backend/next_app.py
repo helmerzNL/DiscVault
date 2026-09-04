@@ -127,6 +127,8 @@ try:
     from .next_custom_fields import FIELD_TYPES
     from .next_custom_fields import VALUE_COLUMNS
     from .next_custom_fields import field_definition_entity
+    from .next_custom_fields import import_mapping_field_key
+    from .next_custom_fields import custom_field_definition_rows
     from .next_custom_fields import normalize_field_key
     from .next_custom_fields import normalize_field_name
     from .next_custom_fields import normalize_field_type
@@ -434,6 +436,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_custom_fields import FIELD_TYPES
     from next_custom_fields import VALUE_COLUMNS
     from next_custom_fields import field_definition_entity
+    from next_custom_fields import import_mapping_field_key
+    from next_custom_fields import custom_field_definition_rows
     from next_custom_fields import normalize_field_key
     from next_custom_fields import normalize_field_name
     from next_custom_fields import normalize_field_type
@@ -3995,7 +3999,18 @@ def normalize_import_column_mapping(value: Any) -> dict[str, str]:
     for key, raw in value.items():
         field = clean_text(key)
         column = clean_text(raw)
-        if field in allowed and column:
+        if not column:
+            continue
+        if field in allowed:
+            mapping[field] = column
+            continue
+        # A custom field is named `custom:<key>`. Only the shape is checked
+        # here: this runs before a database connection is open, and whether a
+        # definition by that key still exists is a question whose answer can
+        # change between saving a mapping and running the import -- a field can
+        # be archived in between. The writer resolves it against the live
+        # definitions and reports what it skipped (fill_movie_custom_values).
+        if import_mapping_field_key(field):
             mapping[field] = column
     return mapping
 
@@ -8496,21 +8511,12 @@ def emit_container_change(conn, container_id, *, operation: str, entity: dict[st
 
 
 def custom_field_rows(conn, *, include_archived: bool = True) -> list[dict[str, Any]]:
-    """Every custom-field definition, in the owner's chosen order."""
-    if not table_exists(conn, "custom_field_definitions"):
-        return []
-    where = "" if include_archived else "WHERE archived_at IS NULL"
-    with conn.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT id, key, name, field_type, options, sort_order,
-                   archived_at, created_at, updated_at
-            FROM custom_field_definitions
-            {where}
-            ORDER BY sort_order, key
-            """
-        )
-        return [dict(row) for row in cur.fetchall()]
+    """Every custom-field definition, in the owner's chosen order.
+
+    The query itself lives in `next_custom_fields` so the import worker can read
+    the same rows without importing this module, which builds a Flask app.
+    """
+    return custom_field_definition_rows(conn, include_archived=include_archived)
 
 
 def custom_field_row(conn, field_id) -> dict[str, Any] | None:
