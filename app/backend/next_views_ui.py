@@ -6843,6 +6843,19 @@ def ui_preview_html(
       font-size: .8rem;
       font-weight: 760;
     }
+    /* A heading inside an auto-fit grid: spanning every column is what keeps it
+       a heading rather than a cell sitting beside the field it introduces. */
+    .import-mapping-grid .import-mapping-group {
+      grid-column: 1 / -1;
+      margin: 6px 0 0;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 760;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+    }
     .import-mapping-grid select,
     .import-review-action select {
       width: 100%;
@@ -37317,6 +37330,20 @@ def ui_preview_html(
       importCenter.preview = null;
       renderImportCenter();
     }
+    // The fields the owner defined, as mapping targets named `custom:<key>` --
+    // the same convention next_custom_fields.IMPORT_MAPPING_PREFIX states and
+    // the import plugin reads. Archived definitions are left out: archiving
+    // means "no new input", and an import is input.
+    //
+    // Their labels are the owner's own names and are deliberately not
+    // translated, for the reason customFieldDefinitions() gives: the owner
+    // typed them. Only the heading above them is, and it reuses an existing key
+    // rather than introducing a thirtieth translation of the same two words.
+    function importCustomFieldMappingFields() {
+      return customFieldDefinitions()
+        .filter((field) => field && field.key && !field.archivedAt)
+        .map((field) => [`custom:${field.key}`, String(field.name || field.key)]);
+    }
     function renderImportMapping() {
       const node = document.getElementById("importCenterMapping");
       const card = document.getElementById("importCenterMappingCard");
@@ -37329,18 +37356,24 @@ def ui_preview_html(
       }
       card.classList.remove("hidden");
       const effective = effectiveImportColumnMapping();
-      node.innerHTML = IMPORT_MAPPING_FIELDS.map(([field, fallback]) => {
+      const selectFor = ([field, label], translate) => {
         const current = effective[field] || "";
         return `
           <label>
-            <span>${escapeHtml(tNext(`importCenter.mapping.${field}`, fallback))}</span>
+            <span>${escapeHtml(translate ? tNext(`importCenter.mapping.${field}`, label) : label)}</span>
             <select data-import-mapping-field="${escapeHtml(field)}">
               <option value="">${escapeHtml(tNext("importCenter.mappingAuto", "Auto"))}</option>
               ${columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}
             </select>
           </label>
         `;
-      }).join("");
+      };
+      const customFields = importCustomFieldMappingFields();
+      node.innerHTML = IMPORT_MAPPING_FIELDS.map((entry) => selectFor(entry, true)).join("")
+        + (customFields.length
+          ? `<p class="import-mapping-group">${escapeHtml(tNext("movieDetail.customFields", "Custom fields"))}</p>`
+            + customFields.map((entry) => selectFor(entry, false)).join("")
+          : "");
     }
     function importReviewRows() {
       const preview = importCenter.preview || {};

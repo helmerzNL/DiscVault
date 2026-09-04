@@ -20,8 +20,10 @@ from typing import Any
 
 try:  # pragma: no cover - exercised indirectly by both layouts
     from .next_common import NextApiError
+    from .next_common import table_exists
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import NextApiError
+    from next_common import table_exists
 
 
 #: The closed input vocabulary. Closed here on purpose: this is the side we
@@ -199,6 +201,115 @@ def normalize_field_value(value: Any, *, field: dict[str, Any]) -> tuple[str, An
             f"{field.get('key')}: value is longer than {TEXT_VALUE_LIMIT} characters", 400
         )
     return column, text
+
+
+def custom_field_definition_rows(conn, *, include_archived: bool = True) -> list[dict[str, Any]]:
+    """Every custom-field definition, in the owner's chosen order.
+
+    Here rather than beside its callers because two of them cannot share a
+    module: the API reads definitions to serve and validate them, and the import
+    worker reads the same rows to resolve a mapped column -- and the worker must
+    not import the API, which builds a Flask app on import. Two copies of this
+    query would be two things that must agree and nothing making them.
+    """
+    if not table_exists(conn, "custom_field_definitions"):
+        return []
+    where = "" if include_archived else "WHERE archived_at IS NULL"
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT id, key, name, field_type, options, sort_order,
+                   archived_at, created_at, updated_at
+            FROM custom_field_definitions
+            {where}
+            ORDER BY sort_order, key
+            """
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+#: How an import column mapping names a custom field, as opposed to one of the
+#: built-in targets (`title`, `barcode`, ...). A definition key can never
+#: contain a colon -- `_KEY_RE` forbids it -- so the two namespaces cannot
+#: collide, and a built-in target can never be mistaken for a field key.
+IMPORT_MAPPING_PREFIX = "custom:"
+
+
+def import_mapping_field_key(target: Any) -> str:
+    """The custom-field key a mapping target names, or `""` for a built-in.
+
+    Shape only. Whether a field by that key exists is a question for the
+    database, and the answer changes between the moment a mapping is saved and
+    the moment an import runs -- a field can be archived in between.
+    """
+    raw = str(target or "").strip()
+    if not raw.startswith(IMPORT_MAPPING_PREFIX):
+        return ""
+    key = raw[len(IMPORT_MAPPING_PREFIX):].strip().lower()
+    return key if _KEY_RE.match(key) else ""
+
+
+def fill_movie_custom_values(
+    conn, movie_id, values: Any, *, fields: list[dict[str, Any]]
+) -> tuple[int, list[str]]:
+    """Write imported custom values onto one film. Fill-only, never overwrite.
+
+    Two deliberate differences from `replace_movie_custom_values`, which serves
+    the edit form:
+
+    **It fills rather than overwrites.** An import states what a file says, and
+    the file is not the authority on a film the user has already curated -- the
+    same rule the movie columns follow (`upsert_import_movie`'s conflict clause
+    reads existing-first). A film that already carries a value for the field
+    keeps it.
+
+    **It never raises.** The edit form has one user, one film and somewhere to
+    show an error; an import has thousands of rows and a summary. A row naming a
+    field that has since been archived, or carrying "maybe" in a boolean column,
+    must not end the run for the other 2,498 rows. Those are returned as
+    reasons, for the caller to count and report -- silence would be the actual
+    failure, because a skipped column looks exactly like an empty one.
+
+    Returns `(filled, reasons)`.
+    """
+    if not isinstance(values, dict) or not values:
+        return 0, []
+    if not table_exists(conn, "movie_custom_field_values"):
+        return 0, ["custom fields are not available on this instance"]
+    by_key = {str(row.get("key")): row for row in fields}
+    filled = 0
+    reasons: list[str] = []
+    for raw_key, raw_value in values.items():
+        key = str(raw_key)
+        field = by_key.get(key)
+        if field is None:
+            reasons.append(f"{key}: no such custom field")
+            continue
+        if field.get("archived_at"):
+            reasons.append(f"{key}: field is archived")
+            continue
+        try:
+            resolved = normalize_field_value(raw_value, field=field)
+        except NextApiError as error:
+            reasons.append(str(getattr(error, "message", None) or error))
+            continue
+        if resolved is None:
+            # An empty cell is not a value and not an error: most rows of a
+            # real file leave most columns blank.
+            continue
+        column, value = resolved
+        with conn.cursor() as cur:
+            cur.execute(
+                f"""
+                INSERT INTO movie_custom_field_values (movie_id, field_id, {column})
+                VALUES (%s, %s, %s)
+                ON CONFLICT (movie_id, field_id) DO NOTHING
+                """,
+                (movie_id, field.get("id"), value),
+            )
+            if cur.rowcount:
+                filled += 1
+    return filled, reasons
 
 
 def field_definition_entity(row: dict[str, Any]) -> dict[str, Any]:

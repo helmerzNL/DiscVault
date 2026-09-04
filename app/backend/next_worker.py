@@ -53,6 +53,8 @@ try:
     from .next_artwork_trash import purge_interval_hours
     from .next_sync_republish import SYNC_CATALOG_REPUBLISH_JOB_TYPE
     from .next_sync_republish import run_catalog_republish
+    from .next_custom_fields import custom_field_definition_rows
+    from .next_custom_fields import fill_movie_custom_values
     from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
@@ -104,6 +106,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_artwork_trash import purge_interval_hours
     from next_sync_republish import SYNC_CATALOG_REPUBLISH_JOB_TYPE
     from next_sync_republish import run_catalog_republish
+    from next_custom_fields import custom_field_definition_rows
+    from next_custom_fields import fill_movie_custom_values
     from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
@@ -2233,6 +2237,11 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             imported_movies: list[dict[str, Any]] = []
             imported_movie_ids: list[str] = []
             created_movie_ids: list[str] = []
+            # Read once for the whole run rather than per row: an import is
+            # thousands of rows and the definitions cannot change mid-transaction.
+            custom_field_defs = custom_field_definition_rows(conn)
+            custom_values_filled = 0
+            custom_value_skips: dict[str, int] = {}
             for index, item in enumerate(items[:5000], start=1):
                 if not isinstance(item, dict):
                     continue
@@ -2373,6 +2382,19 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                         continue
                     with conn.transaction():
                         movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
+                        # Fill-only, and never fatal: see fill_movie_custom_values.
+                        # A column mapped to a field that has since been archived,
+                        # or a cell the field's type refuses, is counted and
+                        # reported rather than ending the run for every other row.
+                        filled, skip_reasons = fill_movie_custom_values(
+                            conn,
+                            movie_id,
+                            item.get("customFields") or item.get("custom_fields"),
+                            fields=custom_field_defs,
+                        )
+                        custom_values_filled += filled
+                        for reason in skip_reasons:
+                            custom_value_skips[reason] = custom_value_skips.get(reason, 0) + 1
                         if table_exists(conn, "containers"):
                             for spec in import_item_container_specs(item):
                                 key = import_container_release_key(
@@ -2474,6 +2496,13 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "boxSetsDetected": len(detected_box_sets),
         "detectedBoxSets": detected_box_sets[:50],
         "rollbackMovieIds": created_movie_ids,
+        # Reported even when zero, because a mapped column that filled nothing
+        # and a column nobody mapped look identical from the outside otherwise.
+        "customFieldValuesFilled": custom_values_filled,
+        "customFieldValuesSkipped": [
+            {"reason": reason, "rows": count}
+            for reason, count in sorted(custom_value_skips.items(), key=lambda pair: -pair[1])
+        ][:20],
         "movies": imported_movies[:200],
         "review": review,
         "warnings": warnings,

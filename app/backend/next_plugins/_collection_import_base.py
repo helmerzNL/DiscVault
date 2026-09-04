@@ -115,6 +115,25 @@ def classify_scannable_identifier(value: Any) -> tuple[str, str] | None:
     return ("ean", digits)
 
 
+#: How a column mapping names an instance-defined custom field rather than one
+#: of IMPORT_FIELDS below. Duplicated from `next_custom_fields` on purpose: a
+#: plugin is loaded through three different import paths (package, flat, and
+#: sys.path injection) and may run outside the backend package entirely, so it
+#: cannot depend on importing it. `test_next_import_custom_fields` asserts the
+#: two constants and the two key patterns still agree.
+CUSTOM_FIELD_MAPPING_PREFIX = "custom:"
+CUSTOM_FIELD_KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+
+
+def custom_field_mapping_key(target: Any) -> str:
+    """The custom-field key a mapping target names, or `""` for a built-in."""
+    raw = text(target)
+    if not raw.startswith(CUSTOM_FIELD_MAPPING_PREFIX):
+        return ""
+    key = raw[len(CUSTOM_FIELD_MAPPING_PREFIX):].strip().lower()
+    return key if CUSTOM_FIELD_KEY_RE.match(key) else ""
+
+
 IMPORT_FIELDS = (
     "externalId",
     "title",
@@ -795,6 +814,24 @@ class CollectionImportPlugin:
                 "watchlisted": watchlisted,
                 "tags": [item.strip() for item in tags.replace(";", ",").split(",") if item.strip()],
             }
+        # Instance-defined fields the owner mapped a column to. Carried as the
+        # raw cell text: what "12" or "yes" means depends on the field's
+        # declared type, and only the backend holds the definitions. Typing it
+        # here would mean guessing, and guessing wrong silently.
+        #
+        # No aliases, unlike every field above: a custom field is named by the
+        # owner at runtime, so there is no vocabulary to auto-detect it from.
+        # It is mapped explicitly or not at all.
+        custom_fields = {}
+        for target, column in (column_mapping or {}).items():
+            field_key = custom_field_mapping_key(target)
+            if not field_key:
+                continue
+            value = text(mapped_value(row, (), column))
+            if value:
+                custom_fields[field_key] = value
+        if custom_fields:
+            movie["customFields"] = custom_fields
         return {key: value for key, value in movie.items() if value not in (None, "", [], {})}
 
     def load_items(
