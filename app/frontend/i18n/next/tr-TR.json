@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Afiş olarak kullan",
   "ownImages.useAsBackdrop": "Arka plan olarak kullan",
   "ownImages.promoted": "Kapak güncellendi.",
-  "appPreferences.showRatingBadgeOnTiles": "Kartlarda puanı göster"
+  "appPreferences.showRatingBadgeOnTiles": "Kartlarda puanı göster",
+  "collection.scoreFilter": "Puan",
+  "collection.scoreFrom": "Puan alt sınırı",
+  "collection.scoreTo": "Puan üst sınırı",
+  "collection.scoreFilterHelp": "Meta veri kaynağınızın filme verdiği 10 üzerinden puan.",
+  "collection.scoreDataMissing": "{count} filmin henüz puanı yok ve puan filtresi onları dışarıda bırakır"
 }

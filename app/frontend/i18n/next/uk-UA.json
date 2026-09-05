@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Використати як постер",
   "ownImages.useAsBackdrop": "Використати як тло",
   "ownImages.promoted": "Обкладинку оновлено.",
-  "appPreferences.showRatingBadgeOnTiles": "Показувати оцінку на плитках"
+  "appPreferences.showRatingBadgeOnTiles": "Показувати оцінку на плитках",
+  "collection.scoreFilter": "Оцінка",
+  "collection.scoreFrom": "Оцінка від",
+  "collection.scoreTo": "Оцінка до",
+  "collection.scoreFilterHelp": "Оцінка, яку фільму дає ваше джерело метаданих, з 10.",
+  "collection.scoreDataMissing": "{count} фільмів ще не мають оцінки, і фільтр за оцінкою їх пропускає"
 }

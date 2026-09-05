@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Utiliser comme affiche",
   "ownImages.useAsBackdrop": "Utiliser comme arrière-plan",
   "ownImages.promoted": "Jaquette mise à jour.",
-  "appPreferences.showRatingBadgeOnTiles": "Afficher la note sur les vignettes"
+  "appPreferences.showRatingBadgeOnTiles": "Afficher la note sur les vignettes",
+  "collection.scoreFilter": "Note",
+  "collection.scoreFrom": "Note à partir de",
+  "collection.scoreTo": "Note jusqu'à",
+  "collection.scoreFilterHelp": "La note que votre source de métadonnées attribue à un film, sur 10.",
+  "collection.scoreDataMissing": "{count} films n'ont pas encore de note et sont exclus par un filtre de note"
 }

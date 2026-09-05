@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Usar como póster",
   "ownImages.useAsBackdrop": "Usar como fondo",
   "ownImages.promoted": "Carátula actualizada.",
-  "appPreferences.showRatingBadgeOnTiles": "Mostrar la valoración en las fichas"
+  "appPreferences.showRatingBadgeOnTiles": "Mostrar la valoración en las fichas",
+  "collection.scoreFilter": "Puntuación",
+  "collection.scoreFrom": "Puntuación desde",
+  "collection.scoreTo": "Puntuación hasta",
+  "collection.scoreFilterHelp": "La puntuación que tu fuente de metadatos da a una película, sobre 10.",
+  "collection.scoreDataMissing": "{count} películas aún no tienen puntuación y quedan fuera del filtro de puntuación"
 }

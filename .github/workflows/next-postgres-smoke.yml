@@ -627,6 +627,15 @@ jobs:
       - name: Test that both library preview branches select the same columns
         run: python -m unittest tests.test_next_library_preview_branch_parity
 
+      # Filtering the Library on the external score (TMDB's vote average), asked
+      # for on #719. The behavioural half lifts the helpers and the predicate out
+      # of next_views_ui.py and runs them under node, so it holds the one decision
+      # nothing else can see: TMDB stores 0.0 for a film nobody has voted on, and
+      # reading that as a score would open "Score to 5" -- the search for the duds
+      # -- with every unscored film in the library. No database needed.
+      - name: Test the library score filter
+        run: python -m unittest tests.test_next_score_filter
+
       # The film's country of origin and original language -- distinct from
       # movies.country/movies.language, which describe the disc. The PostgreSQL
       # half is the one that matters: there is no catalogue table and no foreign

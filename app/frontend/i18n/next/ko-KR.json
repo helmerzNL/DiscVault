@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "포스터로 사용",
   "ownImages.useAsBackdrop": "배경으로 사용",
   "ownImages.promoted": "표지를 업데이트했습니다.",
-  "appPreferences.showRatingBadgeOnTiles": "타일에 평점 표시"
+  "appPreferences.showRatingBadgeOnTiles": "타일에 평점 표시",
+  "collection.scoreFilter": "점수",
+  "collection.scoreFrom": "점수 최저",
+  "collection.scoreTo": "점수 최고",
+  "collection.scoreFilterHelp": "메타데이터 제공처가 영화에 매긴 10점 만점 점수입니다.",
+  "collection.scoreDataMissing": "{count}편의 영화에는 아직 점수가 없어 점수 필터에서 제외됩니다"
 }

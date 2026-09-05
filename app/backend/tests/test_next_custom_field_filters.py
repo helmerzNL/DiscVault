@@ -33,6 +33,26 @@ def _source() -> str:
         return handle.read()
 
 
+# A fixed-width window after the function's name is a proxy for "inside this
+# function", and it silently stops being one as soon as the function grows: the
+# assertion then fails for a reason that has nothing to do with what it claims.
+# Adding the score filter to the same panel pushed three of these windows past
+# the function they meant. Brace matching reads the real one, so it cannot go
+# stale.
+def _function_source(source: str, name: str) -> str:
+    start = source.index("function %s(" % name)
+    depth = 0
+    for position in range(source.index("{", start), len(source)):
+        char = source[position]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : position + 1]
+    raise AssertionError("unbalanced braces reading %s" % name)
+
+
 FIELDS = [
     {"key": "shelf", "name": "Shelf", "fieldType": "text"},
     {"key": "rip", "name": "Rip status", "fieldType": "select"},
@@ -114,8 +134,7 @@ class FilterSchemaTests(unittest.TestCase):
         self.assertIn("/^[a-z][a-z0-9_]{0,47}$/.test(String(key))", block)
 
     def test_each_constrained_field_counts_towards_the_badge(self):
-        start = self.source.index("function advancedSearchActiveCount")
-        block = self.source[start : start + 1100]
+        block = _function_source(self.source, "advancedSearchActiveCount")
         self.assertIn("Object.keys(normalized.custom || {}).length", block)
 
     def test_the_controls_are_read_back_by_scanning_the_dom(self):

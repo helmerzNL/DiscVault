@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Als Poster verwenden",
   "ownImages.useAsBackdrop": "Als Hintergrund verwenden",
   "ownImages.promoted": "Cover aktualisiert.",
-  "appPreferences.showRatingBadgeOnTiles": "Bewertungs-Badge auf Kacheln zeigen"
+  "appPreferences.showRatingBadgeOnTiles": "Bewertungs-Badge auf Kacheln zeigen",
+  "collection.scoreFilter": "Wertung",
+  "collection.scoreFrom": "Wertung ab",
+  "collection.scoreTo": "Wertung bis",
+  "collection.scoreFilterHelp": "Die Wertung, die deine Metadatenquelle einem Film gibt, von 10.",
+  "collection.scoreDataMissing": "{count} Filme haben noch keine Wertung und werden von einem Wertungsfilter ausgeschlossen"
 }

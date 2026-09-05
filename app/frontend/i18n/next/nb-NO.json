@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Bruk som plakat",
   "ownImages.useAsBackdrop": "Bruk som bakgrunn",
   "ownImages.promoted": "Omslag oppdatert.",
-  "appPreferences.showRatingBadgeOnTiles": "Vis vurdering på ruter"
+  "appPreferences.showRatingBadgeOnTiles": "Vis vurdering på ruter",
+  "collection.scoreFilter": "Poeng",
+  "collection.scoreFrom": "Poeng fra",
+  "collection.scoreTo": "Poeng til",
+  "collection.scoreFilterHelp": "Poengene metadatakilden din gir en film, av 10.",
+  "collection.scoreDataMissing": "{count} filmer har ennå ingen poeng og faller utenfor et poengfilter"
 }

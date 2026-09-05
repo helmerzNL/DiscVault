@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "ポスターとして使う",
   "ownImages.useAsBackdrop": "背景として使う",
   "ownImages.promoted": "ジャケットを更新しました。",
-  "appPreferences.showRatingBadgeOnTiles": "タイルに評価を表示"
+  "appPreferences.showRatingBadgeOnTiles": "タイルに評価を表示",
+  "collection.scoreFilter": "スコア",
+  "collection.scoreFrom": "スコア下限",
+  "collection.scoreTo": "スコア上限",
+  "collection.scoreFilterHelp": "メタデータの提供元が映画に付けた10点満点のスコアです。",
+  "collection.scoreDataMissing": "{count}本の映画にはまだスコアがなく、スコアで絞り込むと除外されます"
 }

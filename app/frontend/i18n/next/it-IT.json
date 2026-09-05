@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Usa come locandina",
   "ownImages.useAsBackdrop": "Usa come sfondo",
   "ownImages.promoted": "Copertina aggiornata.",
-  "appPreferences.showRatingBadgeOnTiles": "Mostra il voto sulle anteprime"
+  "appPreferences.showRatingBadgeOnTiles": "Mostra il voto sulle anteprime",
+  "collection.scoreFilter": "Punteggio",
+  "collection.scoreFrom": "Punteggio da",
+  "collection.scoreTo": "Punteggio a",
+  "collection.scoreFilterHelp": "Il punteggio che la tua fonte di metadati assegna a un film, su 10.",
+  "collection.scoreDataMissing": "{count} film non hanno ancora un punteggio e restano fuori dal filtro punteggio"
 }

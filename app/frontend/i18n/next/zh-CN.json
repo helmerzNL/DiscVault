@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "用作海报",
   "ownImages.useAsBackdrop": "用作背景图",
   "ownImages.promoted": "封面已更新。",
-  "appPreferences.showRatingBadgeOnTiles": "在磁贴上显示评分"
+  "appPreferences.showRatingBadgeOnTiles": "在磁贴上显示评分",
+  "collection.scoreFilter": "评分",
+  "collection.scoreFrom": "评分下限",
+  "collection.scoreTo": "评分上限",
+  "collection.scoreFilterHelp": "元数据来源为影片给出的评分，满分 10 分。",
+  "collection.scoreDataMissing": "{count} 部影片尚无评分，评分筛选会将其排除"
 }

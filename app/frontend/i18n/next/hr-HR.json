@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Koristi kao plakat",
   "ownImages.useAsBackdrop": "Koristi kao pozadinu",
   "ownImages.promoted": "Omot ažuriran.",
-  "appPreferences.showRatingBadgeOnTiles": "Prikaži ocjenu na pločicama"
+  "appPreferences.showRatingBadgeOnTiles": "Prikaži ocjenu na pločicama",
+  "collection.scoreFilter": "Ocjena",
+  "collection.scoreFrom": "Ocjena od",
+  "collection.scoreTo": "Ocjena do",
+  "collection.scoreFilterHelp": "Ocjena koju filmu daje vaš izvor metapodataka, od 10.",
+  "collection.scoreDataMissing": "{count} filmova još nema ocjenu i filtar po ocjeni ih izostavlja"
 }

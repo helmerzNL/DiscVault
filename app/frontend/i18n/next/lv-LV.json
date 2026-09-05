@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Izmantot kā plakātu",
   "ownImages.useAsBackdrop": "Izmantot kā fonu",
   "ownImages.promoted": "Vāks atjaunināts.",
-  "appPreferences.showRatingBadgeOnTiles": "Rādīt vērtējumu elementos"
+  "appPreferences.showRatingBadgeOnTiles": "Rādīt vērtējumu elementos",
+  "collection.scoreFilter": "Vērtējums",
+  "collection.scoreFrom": "Vērtējums no",
+  "collection.scoreTo": "Vērtējums līdz",
+  "collection.scoreFilterHelp": "Vērtējums, ko filmai piešķir tavs metadatu avots, no 10.",
+  "collection.scoreDataMissing": "{count} filmām vēl nav vērtējuma, un vērtējuma filtrs tās izlaiž"
 }

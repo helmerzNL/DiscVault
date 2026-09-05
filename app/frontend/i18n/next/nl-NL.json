@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Gebruik als poster",
   "ownImages.useAsBackdrop": "Gebruik als achtergrond",
   "ownImages.promoted": "Hoes bijgewerkt.",
-  "appPreferences.showRatingBadgeOnTiles": "Waarderingsbadge op tegels tonen"
+  "appPreferences.showRatingBadgeOnTiles": "Waarderingsbadge op tegels tonen",
+  "collection.scoreFilter": "Score",
+  "collection.scoreFrom": "Score vanaf",
+  "collection.scoreTo": "Score tot",
+  "collection.scoreFilterHelp": "De score die je metadatabron een film geeft, op een schaal van 10.",
+  "collection.scoreDataMissing": "{count} films hebben nog geen score en vallen buiten een scorefilter"
 }

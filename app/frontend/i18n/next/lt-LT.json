@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Naudoti kaip plakatą",
   "ownImages.useAsBackdrop": "Naudoti kaip foną",
   "ownImages.promoted": "Viršelis atnaujintas.",
-  "appPreferences.showRatingBadgeOnTiles": "Rodyti įvertinimą kortelėse"
+  "appPreferences.showRatingBadgeOnTiles": "Rodyti įvertinimą kortelėse",
+  "collection.scoreFilter": "Įvertinimas",
+  "collection.scoreFrom": "Įvertinimas nuo",
+  "collection.scoreTo": "Įvertinimas iki",
+  "collection.scoreFilterHelp": "Įvertinimas, kurį filmui suteikia jūsų metaduomenų šaltinis, iš 10.",
+  "collection.scoreDataMissing": "{count} filmų dar neturi įvertinimo ir įvertinimo filtras juos praleidžia"
 }

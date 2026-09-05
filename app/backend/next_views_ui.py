@@ -15735,6 +15735,24 @@ def ui_preview_html(
                 </label>
               </div>
             </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="score">
+              <summary>
+                <span data-next-i18n="collection.scoreFilter">Score</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreFrom">Score from</span>
+                  <input id="advancedScoreFrom" type="number" min="0" max="10" step="0.1" inputmode="decimal">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreTo">Score to</span>
+                  <input id="advancedScoreTo" type="number" min="0" max="10" step="0.1" inputmode="decimal">
+                </label>
+                <p class="advanced-search-hint" id="advancedScoreExplainer" data-next-i18n="collection.scoreFilterHelp">The score your metadata source gives a film, out of 10.</p>
+                <p class="advanced-search-hint hidden" id="advancedScoreHint"></p>
+              </div>
+            </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="origin">
               <summary>
                 <span data-next-i18n="collection.originFilter">Origin</span>
@@ -27383,10 +27401,36 @@ def ui_preview_html(
       });
       return result;
     }
+    // A score bound is stored as a canonical string so that "7", "7.0" and a
+    // comma-typed "7,0" are one filter rather than three, and so a saved smart
+    // filter reads the same on any keyboard. Out of range is clamped rather
+    // than dropped: a number input can be typed past its own max, and silently
+    // discarding "12" would show the whole library as if nothing was set.
+    function normalizeScoreBound(value) {
+      const raw = String(value ?? "").trim().replace(",", ".");
+      if (!raw) return "";
+      const parsed = Number.parseFloat(raw);
+      if (!Number.isFinite(parsed)) return "";
+      return String(Math.round(Math.min(10, Math.max(0, parsed)) * 10) / 10);
+    }
+    // The same bound as a number, or null for "not set". Every reader goes
+    // through this rather than through `filters.scoreFrom !== ""`, so a filters
+    // object built before these two fields existed reads as "no bound" instead
+    // of as NaN -- which compares false against everything and would quietly
+    // turn a missing field into "must have a score".
+    function scoreBoundNumber(value) {
+      const normalized = normalizeScoreBound(value);
+      return normalized === "" ? null : Number.parseFloat(normalized);
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
         yearTo: "",
+        // The EXTERNAL score (movies.rating -- TMDB's vote average, or OMDb's
+        // IMDb rating), not the personal one under `personal`. Empty is "no
+        // bound"; "0" is a bound like any other and means "has a score at all".
+        scoreFrom: "",
+        scoreTo: "",
         crew: "",
         digital: "any",
         artwork: "any",
@@ -27407,6 +27451,8 @@ def ui_preview_html(
       return {
         yearFrom: String(source.yearFrom || "").trim(),
         yearTo: String(source.yearTo || "").trim(),
+        scoreFrom: normalizeScoreBound(source.scoreFrom),
+        scoreTo: normalizeScoreBound(source.scoreTo),
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
@@ -27446,6 +27492,11 @@ def ui_preview_html(
       let count = 0;
       if (normalized.yearFrom) count += 1;
       if (normalized.yearTo) count += 1;
+      // Compared against "" rather than tested for truth: a bound of "0" is a
+      // real constraint ("has a score"), and `if ("0")` happens to be true only
+      // because it is a string. Saying so here keeps it true if it stops being one.
+      if (normalized.scoreFrom !== "") count += 1;
+      if (normalized.scoreTo !== "") count += 1;
       if (normalized.crew) count += 1;
       if (normalized.digital !== "any") count += 1;
       if (normalized.artwork !== "any") count += 1;
@@ -27467,6 +27518,8 @@ def ui_preview_html(
       return normalizeAdvancedSearch({
         yearFrom: document.getElementById("advancedYearFrom")?.value || "",
         yearTo: document.getElementById("advancedYearTo")?.value || "",
+        scoreFrom: document.getElementById("advancedScoreFrom")?.value || "",
+        scoreTo: document.getElementById("advancedScoreTo")?.value || "",
         crew: document.getElementById("advancedCrewQuery")?.value || "",
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
@@ -27525,6 +27578,14 @@ def ui_preview_html(
           total + (movieOriginCountryValues(movie).length || movieOriginLanguageValue(movie) !== "any" ? 0 : 1),
         0
       );
+    }
+    // How many loaded films carry no external score. Shown for the same reason
+    // the origin hint is: "Score from 7" over a library nothing has scored yet
+    // returns nothing, and an empty library reads as a broken filter rather
+    // than as missing data. Counted over the loaded rows, so it grows with
+    // hydration exactly like the origin one.
+    function scoreDataMissingCount() {
+      return movies.reduce((total, movie) => total + (movieScoreNumber(movie) ? 0 : 1), 0);
     }
     function populateOriginFilterSelect(id, values, current, labelFor, anyLabel) {
       const node = document.getElementById(id);
@@ -27631,6 +27692,8 @@ def ui_preview_html(
       }
       setAdvancedControlValue("advancedYearFrom", advancedSearch.yearFrom);
       setAdvancedControlValue("advancedYearTo", advancedSearch.yearTo);
+      setAdvancedControlValue("advancedScoreFrom", advancedSearch.scoreFrom);
+      setAdvancedControlValue("advancedScoreTo", advancedSearch.scoreTo);
       setAdvancedControlValue("advancedCrewQuery", advancedSearch.crew);
       setAdvancedControlValue("advancedDigitalFilter", advancedSearch.digital);
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
@@ -27651,6 +27714,15 @@ def ui_preview_html(
         languageLabel,
         tNext("collection.originalLanguageAny", "Any language")
       );
+      const scoreHint = document.getElementById("advancedScoreHint");
+      if (scoreHint) {
+        const missing = scoreDataMissingCount();
+        scoreHint.textContent = missing
+          ? tNext("collection.scoreDataMissing", "{count} films have no score yet and are left out by a score filter")
+              .replace("{count}", String(missing))
+          : "";
+        scoreHint.classList.toggle("hidden", missing === 0);
+      }
       const originHint = document.getElementById("advancedOriginHint");
       if (originHint) {
         const missing = originDataMissingCount();
@@ -28200,6 +28272,18 @@ def ui_preview_html(
     function movieYearNumber(movie) {
       return Number.parseInt(movie?.year || movie?.release_year || movie?.metadata?.year || "0", 10) || 0;
     }
+    // The external score as a number, 0 when there is none. TMDB writes 0.0 for
+    // a film nobody has voted on, so a stored zero is "not scored" rather than
+    // "scored zero" -- reading it as a number would drop every unvoted film into
+    // the results of "Score to 5", which is the opposite of what that asks for.
+    // Same chain as movieScoreLabel: the library page carries `rating` as a
+    // column, an older payload carries it inside `metadata`.
+    function movieScoreNumber(movie) {
+      const raw = String(movie?.rating ?? movie?.metadata?.rating ?? "").trim().replace(",", ".");
+      if (!raw) return 0;
+      const value = Number.parseFloat(raw);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
     function movieDigitalSourceNames(movie) {
       const snapshot = movie?.snapshot || {};
       const rows = Array.isArray(movie?.digital_sources)
@@ -28301,6 +28385,18 @@ def ui_preview_html(
       const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
       if (yearFrom && (!year || year < yearFrom)) return false;
       if (yearTo && (!year || year > yearTo)) return false;
+      // Either bound means "has a score, inside this range". A film with no
+      // score is out -- the same call the year bounds above make, and the only
+      // one that answers "show me the good ones" honestly: an unscored film is
+      // not known to be good.
+      const scoreFrom = scoreBoundNumber(filters.scoreFrom);
+      const scoreTo = scoreBoundNumber(filters.scoreTo);
+      if (scoreFrom !== null || scoreTo !== null) {
+        const score = movieScoreNumber(movie);
+        if (!score) return false;
+        if (scoreFrom !== null && score < scoreFrom) return false;
+        if (scoreTo !== null && score > scoreTo) return false;
+      }
       if (filters.crew && !movieTextValue(movie).includes(filters.crew.toLowerCase())) return false;
       if (filters.digital === "plex" && !movieHasDigitalSource(movie, "plex")) return false;
       if (filters.digital === "jellyfin" && !movieHasDigitalSource(movie, "jellyfin")) return false;
@@ -28436,7 +28532,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
+      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
