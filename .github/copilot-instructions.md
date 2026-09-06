@@ -266,8 +266,8 @@ on purpose, or forgotten?" has no answer anywhere, and the honest reading is the
   implementation would need: which sync fields already carry the data, and any semantics the mobile
   side must copy rather than re-derive. Where two platforms could plausibly read the same stored
   value differently, say which reading is correct.
-- App-Guidance sits under a different owner, so a session working in Core cannot push there. Prepare
-  the entry, hand it over, and say plainly that it still needs to land.
+- The entry lands in App-Guidance the way every other write-up does — see the section below,
+  including that it goes in through a branch and a pull request rather than straight onto `main`.
 
 **Record decisions in the App-Guidance documentation repo**
 
@@ -284,11 +284,15 @@ do not wait to be asked.
   true after the code moves. Reference DiscVault symbols and paths so a reader can find the
   implementation, and keep an appendix mapping each rule to its source location. Carry open questions
   across as open questions instead of quietly resolving them. Write it in English.
-- **Attaching the repo:** App-Guidance sits under a different owner (`Flux76HQ`) than this repository
-  (`helmerzNL`), and a session cannot attach a repo from another owner. A session working in
-  DiscVault therefore cannot push there: prepare the document, hand it over, and say plainly that it
-  still needs to land in App-Guidance. To commit it directly, start a session with App-Guidance as
-  its initial source.
+- **Where the repositories live, and pushing to them:** every Flux76 repository sits under
+  **`Flux76HQ`** — App-Guidance, `DiscVaultApp`, `DiscVault-AndroidApp` and the rest. **This
+  repository is the exception**: DiscVault Core is `helmerzNL/DiscVault`. Differing owners do
+  **not** block anything. When the App-Guidance working copy is attached to the session, commit the
+  document there directly and follow that repository's own rules — a branch off its default branch
+  and a pull request, never a commit straight to `main`; its `CLAUDE.md` is authoritative, and
+  documentation-only edits are exempt from its `VERSION` bump. Only when the working copy is
+  genuinely not available does the fallback apply: prepare the document, hand it over, and say
+  plainly that it still needs to land. Do not claim you cannot push without having tried.
 
 **Adding or updating a plugin means updating the documentation**
 
@@ -310,8 +314,8 @@ how it loses against other sources.
 - Say in the PR body what you recorded, or that you judged the change documentation-neutral.
   An unexplained silence is not the same as "nothing to record".
 
-Note the ownership constraint above: a session working only in DiscVault cannot push to
-App-Guidance. Prepare the write-up and hand it over, saying plainly that it still needs to land.
+The same applies here: the plugin write-up lands in App-Guidance like any other, directly when its
+working copy is attached and as a hand-over only when it is not.
 
 **When the user starts a new feature (or bug/other work)**
 
