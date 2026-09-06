@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Score from",
   "collection.scoreTo": "Score to",
   "collection.scoreFilterHelp": "The score your metadata source gives a film, out of 10.",
-  "collection.scoreDataMissing": "{count} films have no score yet and are left out by a score filter"
+  "collection.scoreDataMissing": "{count} films have no score yet and are left out by a score filter",
+  "collection.scoreMinVotes": "Minimum votes",
+  "collection.voteDataMissing": "{count} films have no vote count yet and are left out by a vote floor",
+  "movieDetail.scoreVotes": "{count} votes",
+  "appAdmin.votesBackfill": "Vote counts",
+  "appAdmin.votesBackfillHelp": "A score means little without knowing how many people gave it: 10.0 from three votes outranks 8.4 from twelve thousand. Films added before this feature carry no vote count, so they stay out of the Library's vote floor. This asks TMDB for the bare record and writes that one number.",
+  "appAdmin.votesBackfillRun": "Fill in vote counts",
+  "appAdmin.votesBackfillPluginTooOld": "The TMDb plugin is version {installed}; {required} or newer is needed for vote counts. Update it under Admin → Plugins, or this fills nothing in.",
+  "appAdmin.votesBackfillQueueing": "Queueing vote count backfill...",
+  "appAdmin.votesBackfillQueued": "{count} vote count backfill jobs queued.",
+  "appAdmin.votesBackfillNothing": "Every film that can be filled already has a vote count."
 }

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Note à partir de",
   "collection.scoreTo": "Note jusqu'à",
   "collection.scoreFilterHelp": "La note que votre source de métadonnées attribue à un film, sur 10.",
-  "collection.scoreDataMissing": "{count} films n'ont pas encore de note et sont exclus par un filtre de note"
+  "collection.scoreDataMissing": "{count} films n'ont pas encore de note et sont exclus par un filtre de note",
+  "collection.scoreMinVotes": "Nombre de votes minimum",
+  "collection.voteDataMissing": "{count} films n'ont pas encore de nombre de votes et sont exclus par un seuil de votes",
+  "movieDetail.scoreVotes": "{count} votes",
+  "appAdmin.votesBackfill": "Nombre de votes",
+  "appAdmin.votesBackfillHelp": "Une note ne dit pas grand-chose sans savoir combien de personnes l'ont donnée : 10,0 sur trois votes passe devant 8,4 sur douze mille. Les films ajoutés auparavant n'ont pas de nombre de votes et restent donc hors du seuil de votes de la bibliothèque. Ceci demande à TMDB la fiche brute et n'écrit que ce seul nombre.",
+  "appAdmin.votesBackfillRun": "Remplir le nombre de votes",
+  "appAdmin.votesBackfillPluginTooOld": "L'extension TMDb est en version {installed} ; le nombre de votes nécessite la {required} ou plus récente. Mettez-la à jour dans Admin → Plugins, sinon rien ne sera rempli ici.",
+  "appAdmin.votesBackfillQueueing": "Planification de la tâche de votes...",
+  "appAdmin.votesBackfillQueued": "{count} tâches de nombre de votes planifiées.",
+  "appAdmin.votesBackfillNothing": "Tous les films pouvant être remplis ont déjà un nombre de votes."
 }

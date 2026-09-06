@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Pisteet alkaen",
   "collection.scoreTo": "Pisteet enintään",
   "collection.scoreFilterHelp": "Pisteet, jotka metatietolähteesi antaa elokuvalle, asteikolla 10.",
-  "collection.scoreDataMissing": "{count} elokuvalla ei ole vielä pisteitä, ja pistesuodatin jättää ne pois"
+  "collection.scoreDataMissing": "{count} elokuvalla ei ole vielä pisteitä, ja pistesuodatin jättää ne pois",
+  "collection.scoreMinVotes": "Vähimmäisäänimäärä",
+  "collection.voteDataMissing": "{count} elokuvalla ei ole vielä äänimäärää, ja äänikynnys jättää ne pois",
+  "movieDetail.scoreVotes": "{count} ääntä",
+  "appAdmin.votesBackfill": "Äänimäärät",
+  "appAdmin.votesBackfillHelp": "Pisteet kertovat vähän, jos ei tiedä kuinka moni ne antoi: 10,0 kolmesta äänestä voittaa 8,4 kahdestatoista tuhannesta. Aiemmin lisätyillä elokuvilla ei ole äänimäärää, joten ne jäävät kirjaston äänikynnyksen ulkopuolelle. Tämä pyytää TMDB:ltä pelkkää tietuetta ja kirjoittaa vain sen yhden luvun.",
+  "appAdmin.votesBackfillRun": "Täytä äänimäärät",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb-liitännäisen versio on {installed}; äänimääriä varten tarvitaan {required} tai uudempi. Päivitä se kohdassa Admin → Plugins, tai tähän ei täyty mitään.",
+  "appAdmin.votesBackfillQueueing": "Ajoitetaan äänimäärätehtävää...",
+  "appAdmin.votesBackfillQueued": "{count} äänimäärätehtävää ajoitettu.",
+  "appAdmin.votesBackfillNothing": "Jokaisella täytettävissä olevalla elokuvalla on jo äänimäärä."
 }

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Ocjena od",
   "collection.scoreTo": "Ocjena do",
   "collection.scoreFilterHelp": "Ocjena koju filmu daje vaš izvor metapodataka, od 10.",
-  "collection.scoreDataMissing": "{count} filmova još nema ocjenu i filtar po ocjeni ih izostavlja"
+  "collection.scoreDataMissing": "{count} filmova još nema ocjenu i filtar po ocjeni ih izostavlja",
+  "collection.scoreMinVotes": "Najmanji broj glasova",
+  "collection.voteDataMissing": "{count} filmova još nema broj glasova i prag glasova ih izostavlja",
+  "movieDetail.scoreVotes": "{count} glasova",
+  "appAdmin.votesBackfill": "Broj glasova",
+  "appAdmin.votesBackfillHelp": "Ocjena govori malo bez podatka koliko ju je ljudi dalo: 10,0 iz tri glasa nadmašuje 8,4 iz dvanaest tisuća. Filmovi dodani ranije nemaju broj glasova pa ostaju izvan praga glasova u knjižnici. Ovo traži od TMDB-a goli zapis i upisuje samo taj jedan broj.",
+  "appAdmin.votesBackfillRun": "Popuni broj glasova",
+  "appAdmin.votesBackfillPluginTooOld": "Dodatak TMDb je verzija {installed}; za broj glasova potrebna je {required} ili novija. Ažurirajte ga u Admin → Plugins, inače se ovdje neće ništa popuniti.",
+  "appAdmin.votesBackfillQueueing": "Planiranje zadatka broja glasova...",
+  "appAdmin.votesBackfillQueued": "Planirano {count} zadataka broja glasova.",
+  "appAdmin.votesBackfillNothing": "Svaki film koji se može popuniti već ima broj glasova."
 }

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Scor de la",
   "collection.scoreTo": "Scor până la",
   "collection.scoreFilterHelp": "Scorul pe care sursa ta de metadate îl dă unui film, din 10.",
-  "collection.scoreDataMissing": "{count} filme nu au încă scor și rămân în afara filtrului de scor"
+  "collection.scoreDataMissing": "{count} filme nu au încă scor și rămân în afara filtrului de scor",
+  "collection.scoreMinVotes": "Număr minim de voturi",
+  "collection.voteDataMissing": "{count} filme nu au încă numărul de voturi și rămân în afara unui prag de voturi",
+  "movieDetail.scoreVotes": "{count} voturi",
+  "appAdmin.votesBackfill": "Număr de voturi",
+  "appAdmin.votesBackfillHelp": "Un scor spune puțin fără a ști câți oameni l-au dat: 10,0 din trei voturi îl depășește pe 8,4 din douăsprezece mii. Filmele adăugate înainte nu au număr de voturi, deci rămân în afara pragului de voturi din bibliotecă. Aceasta cere de la TMDB fișa simplă și scrie doar acel număr.",
+  "appAdmin.votesBackfillRun": "Completează numărul de voturi",
+  "appAdmin.votesBackfillPluginTooOld": "Pluginul TMDb este versiunea {installed}; pentru numărul de voturi este nevoie de {required} sau mai nouă. Actualizează-l din Admin → Plugins, altfel aici nu se completează nimic.",
+  "appAdmin.votesBackfillQueueing": "Se planifică sarcina de voturi...",
+  "appAdmin.votesBackfillQueued": "{count} sarcini pentru numărul de voturi planificate.",
+  "appAdmin.votesBackfillNothing": "Fiecare film care poate fi completat are deja număr de voturi."
 }

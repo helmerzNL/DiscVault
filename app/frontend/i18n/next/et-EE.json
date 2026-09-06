@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Hinne alates",
   "collection.scoreTo": "Hinne kuni",
   "collection.scoreFilterHelp": "Hinne, mille sinu metaandmete allikas filmile annab, 10 palli skaalal.",
-  "collection.scoreDataMissing": "{count} filmil pole veel hinnet ja hindefilter jätab need välja"
+  "collection.scoreDataMissing": "{count} filmil pole veel hinnet ja hindefilter jätab need välja",
+  "collection.scoreMinVotes": "Vähim häälte arv",
+  "collection.voteDataMissing": "{count} filmil pole veel häälte arvu ja häälelävi jätab need välja",
+  "movieDetail.scoreVotes": "{count} häält",
+  "appAdmin.votesBackfill": "Häälte arv",
+  "appAdmin.votesBackfillHelp": "Hinne ütleb vähe, kui ei tea, kui paljud selle andsid: 10,0 kolmest häälest edestab 8,4 kaheteistkümnest tuhandest. Varem lisatud filmidel pole häälte arvu ja seetõttu jäävad nad kogu häälelävest välja. See küsib TMDB-lt paljast kirjet ja kirjutab ainult selle ühe arvu.",
+  "appAdmin.votesBackfillRun": "Täida häälte arv",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb pistikprogrammi versioon on {installed}; häälte arvu jaoks on vaja versiooni {required} või uuemat. Uuenda seda menüüs Admin → Plugins, muidu ei täideta siin midagi.",
+  "appAdmin.votesBackfillQueueing": "Häälte arvu töö ajastamine...",
+  "appAdmin.votesBackfillQueued": "Ajastatud {count} häälte arvu tööd.",
+  "appAdmin.votesBackfillNothing": "Igal filmil, mida saab täita, on juba häälte arv."
 }

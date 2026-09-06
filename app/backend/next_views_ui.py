@@ -15749,8 +15749,13 @@ def ui_preview_html(
                   <span data-next-i18n="collection.scoreTo">Score to</span>
                   <input id="advancedScoreTo" type="number" min="0" max="10" step="0.1" inputmode="decimal">
                 </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreMinVotes">Minimum votes</span>
+                  <input id="advancedMinVotes" type="number" min="0" step="1" inputmode="numeric">
+                </label>
                 <p class="advanced-search-hint" id="advancedScoreExplainer" data-next-i18n="collection.scoreFilterHelp">The score your metadata source gives a film, out of 10.</p>
                 <p class="advanced-search-hint hidden" id="advancedScoreHint"></p>
+                <p class="advanced-search-hint hidden" id="advancedVotesHint"></p>
               </div>
             </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="origin">
@@ -19513,6 +19518,27 @@ def ui_preview_html(
                   <button type="button" class="secondary-button" id="appAdminOriginBackfillButton" data-next-i18n="appAdmin.originBackfillRun">Fill in origin data</button>
                 </div>
               </div>
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.votesBackfill">Vote counts</h3>
+                <p data-next-i18n="appAdmin.votesBackfillHelp">A score means little without knowing how many people gave it: 10.0 from three votes outranks 8.4 from twelve thousand. Films added before this feature carry no vote count, so they stay out of the Library's vote floor. This asks TMDB for the bare record and writes that one number.</p>
+                <div class="app-admin-summary-grid">
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillPending">Films still missing it</span>
+                    <strong id="appAdminVotesBackfillPending">-</strong>
+                  </article>
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillUnresolvable">Not matched to TMDB</span>
+                    <strong id="appAdminVotesBackfillUnresolvable">-</strong>
+                  </article>
+                </div>
+                <p class="import-source-meta" data-next-i18n="appAdmin.originBackfillUnresolvableHelp">Films with no TMDB match cannot be filled in this way, so that number is counted separately and does not reach zero.</p>
+                <p class="login-message" id="appAdminVotesBackfillJobs"></p>
+                <p class="login-message" id="appAdminVotesBackfillLastRun"></p>
+                <p class="login-message bad" id="appAdminVotesBackfillPluginWarning"></p>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminVotesBackfillButton" data-next-i18n="appAdmin.votesBackfillRun">Fill in vote counts</button>
+                </div>
+              </div>
             </div>
             <div class="app-admin-metadata-panel full" id="appAdminMetadataPanelArtwork" role="tabpanel" aria-labelledby="appAdminMetadataTabArtwork" aria-hidden="true" data-app-admin-metadata-panel="artwork">
               <div class="detail-card profile-card full">
@@ -20165,6 +20191,7 @@ def ui_preview_html(
     let libraryMetadataJobVisible = false;
     let libraryMetadataJobPollTimer = null;
     let appAdminOriginBackfillTimer = null;
+    let appAdminVotesBackfillTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -25773,10 +25800,12 @@ def ui_preview_html(
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
         await refreshAppAdminOriginBackfill();
+        await refreshAppAdminVotesBackfill();
         // Reopening the tab while a backfill is running has to pick the poll
         // back up; otherwise the counters freeze at whatever they were when
         // the panel drew and the run looks stalled.
         if (Number(appAdmin.originBackfill?.jobs?.outstanding || 0)) scheduleAppAdminOriginBackfillPoll();
+        if (Number(appAdmin.votesBackfill?.jobs?.outstanding || 0)) scheduleAppAdminVotesBackfillPoll();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
@@ -25931,6 +25960,122 @@ def ui_preview_html(
           queued ? "good" : ""
         );
         if (queued) scheduleAppAdminOriginBackfillPoll();
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    // The vote-count backfill card. Deliberately the same five parts as its
+    // origin sibling above -- two counters, the queue in words, the last run's
+    // own summary, and the plugin-version warning -- because the failure they
+    // guard against is the same one: a job type the Metadata job list filters
+    // out, so a press that queues 25 jobs changes nothing visible on the screen
+    // that offered the button (#719).
+    function renderAppAdminVotesBackfill(counts) {
+      const pending = document.getElementById("appAdminVotesBackfillPending");
+      const unresolvable = document.getElementById("appAdminVotesBackfillUnresolvable");
+      if (pending) pending.textContent = String(counts?.pending ?? "-");
+      if (unresolvable) unresolvable.textContent = String(counts?.unresolvable ?? "-");
+      const jobs = counts?.jobs || null;
+      const outstanding = Number(jobs?.outstanding || 0);
+      setAppAdminMessage(
+        "appAdminVotesBackfillJobs",
+        outstanding
+          ? tNext("appAdmin.originBackfillRunning", "{count} jobs still to run.").replace("{count}", String(outstanding))
+          : "",
+        outstanding ? "good" : ""
+      );
+      const lastRun = counts?.lastRun || null;
+      let lastRunText = "";
+      let lastRunTone = "";
+      if (lastRun && lastRun.status === "failed") {
+        lastRunText = tNext("appAdmin.originBackfillLastRunFailed", "The last run failed: {error}")
+          .replace("{error}", String(lastRun.error || ""));
+        lastRunTone = "bad";
+      } else if (lastRun) {
+        // Updated *and* skipped, never a single "done". A run that asked TMDB
+        // about 100 films and wrote none of them is the outcome this card
+        // exists to make visible, and one number cannot say it.
+        lastRunText = tNext("appAdmin.originBackfillLastRun", "Last run: {updated} filled in, {skipped} without an answer, {failed} failed.")
+          .replace("{updated}", String(lastRun.updated || 0))
+          .replace("{skipped}", String(lastRun.skipped || 0))
+          .replace("{failed}", String(lastRun.failed || 0));
+        lastRunTone = Number(lastRun.failed || 0) > 0 ? "bad" : "";
+      }
+      setAppAdminMessage("appAdminVotesBackfillLastRun", lastRunText, lastRunTone);
+      const plugin = counts?.tmdbPlugin || null;
+      // A plugin below the version that first emitted `ratingVotes` answers
+      // every request without it, so the job succeeds and writes nothing. The
+      // counter it leaves behind looks identical to a backfill that has not
+      // started, and nothing else in the app can tell the operator why.
+      setAppAdminMessage(
+        "appAdminVotesBackfillPluginWarning",
+        plugin && plugin.votesCapable === false
+          ? tNext("appAdmin.votesBackfillPluginTooOld", "The TMDb plugin is version {installed}; {required} or newer is needed for vote counts. Update it under Admin → Plugins, or this fills nothing in.")
+              .replace("{installed}", String(plugin.installedVersion || "?"))
+              .replace("{required}", String(plugin.requiredVersion || "1.9.0"))
+          : "",
+        "bad"
+      );
+      const button = document.getElementById("appAdminVotesBackfillButton");
+      // Nothing left to fill is a disabled button, not a hidden card: the two
+      // counters are the answer to "why does my vote floor match nothing", and
+      // they have to stay readable once they reach zero. A run already in
+      // flight disables it too, so a second press cannot queue the same films.
+      if (button) button.disabled = !(Number(counts?.pending) > 0) || outstanding > 0;
+    }
+    async function refreshAppAdminVotesBackfill() {
+      if (!canUseAdminTab("metadata")) return;
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/rating-votes-backfill");
+        appAdmin.votesBackfill = payload;
+        renderAppAdminVotesBackfill(payload);
+      } catch (error) {
+        // Silent on read: this rides along with the metadata panel load, and a
+        // failure here must not overwrite the message that load just set.
+        renderAppAdminVotesBackfill(null);
+      }
+    }
+    function scheduleAppAdminVotesBackfillPoll() {
+      if (appAdminVotesBackfillTimer) return;
+      appAdminVotesBackfillTimer = window.setInterval(async () => {
+        if (appAdmin.activeTab !== "metadata" || !document.getElementById("appAdminVotesBackfillButton")) {
+          stopAppAdminVotesBackfillPoll();
+          return;
+        }
+        await refreshAppAdminVotesBackfill();
+        if (!Number(appAdmin.votesBackfill?.jobs?.outstanding || 0)) stopAppAdminVotesBackfillPoll();
+      }, 5000);
+    }
+    function stopAppAdminVotesBackfillPoll() {
+      if (!appAdminVotesBackfillTimer) return;
+      window.clearInterval(appAdminVotesBackfillTimer);
+      appAdminVotesBackfillTimer = null;
+    }
+    async function queueAppAdminVotesBackfill() {
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.votesBackfillQueueing", "Queueing vote count backfill..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/rating-votes-backfill", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({batchSize: 100})
+        });
+        appAdmin.votesBackfill = payload;
+        // The refresh first, the confirmation last. The other way round had
+        // `refreshAppAdminMetadataJobs` overwrite "{count} jobs queued" with
+        // "Metadata jobs loaded." in the same element milliseconds later, so
+        // the button reported nothing at all -- the bug #760 repaired on the
+        // sibling card.
+        await refreshAppAdminMetadataJobs();
+        renderAppAdminVotesBackfill(payload);
+        const queued = Number(payload.queued || 0);
+        setAppAdminMessage(
+          "appAdminMetadataMessage",
+          queued
+            ? tNext("appAdmin.votesBackfillQueued", "{count} vote count backfill jobs queued.").replace("{count}", String(queued))
+            : tNext("appAdmin.votesBackfillNothing", "Every film that can be filled already has a vote count."),
+          queued ? "good" : ""
+        );
+        if (queued) scheduleAppAdminVotesBackfillPoll();
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }
@@ -27422,6 +27567,23 @@ def ui_preview_html(
       const normalized = normalizeScoreBound(value);
       return normalized === "" ? null : Number.parseFloat(normalized);
     }
+    // A vote floor is a whole number of people, so it is canonicalised the way a
+    // score bound is but to an integer: "500", "500.0" and a group-separated
+    // "1.500" are one saved filter. Unlike the score there is no upper clamp --
+    // TMDB's most-voted titles are in the tens of thousands and the ceiling is
+    // nobody's to guess -- but a negative floor is meaningless and becomes 0,
+    // which has its own meaning ("the count is known") rather than being dropped.
+    function normalizeVoteFloor(value) {
+      const raw = String(value ?? "").trim().replace(/[\s,.\u00a0\u202f']/g, "");
+      if (!raw) return "";
+      const parsed = Number.parseInt(raw, 10);
+      if (!Number.isFinite(parsed)) return "";
+      return String(Math.max(0, parsed));
+    }
+    function voteFloorNumber(value) {
+      const normalized = normalizeVoteFloor(value);
+      return normalized === "" ? null : Number.parseInt(normalized, 10);
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
@@ -27431,6 +27593,10 @@ def ui_preview_html(
         // bound"; "0" is a bound like any other and means "has a score at all".
         scoreFrom: "",
         scoreTo: "",
+        // How many people voted for that score to mean anything. Empty is "no
+        // floor"; "0" is a floor like any other and means "the vote count is
+        // known", which is not the same as "nobody voted" -- see migration 092.
+        minVotes: "",
         crew: "",
         digital: "any",
         artwork: "any",
@@ -27453,6 +27619,7 @@ def ui_preview_html(
         yearTo: String(source.yearTo || "").trim(),
         scoreFrom: normalizeScoreBound(source.scoreFrom),
         scoreTo: normalizeScoreBound(source.scoreTo),
+        minVotes: normalizeVoteFloor(source.minVotes),
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
@@ -27497,6 +27664,7 @@ def ui_preview_html(
       // because it is a string. Saying so here keeps it true if it stops being one.
       if (normalized.scoreFrom !== "") count += 1;
       if (normalized.scoreTo !== "") count += 1;
+      if (normalized.minVotes !== "") count += 1;
       if (normalized.crew) count += 1;
       if (normalized.digital !== "any") count += 1;
       if (normalized.artwork !== "any") count += 1;
@@ -27520,6 +27688,7 @@ def ui_preview_html(
         yearTo: document.getElementById("advancedYearTo")?.value || "",
         scoreFrom: document.getElementById("advancedScoreFrom")?.value || "",
         scoreTo: document.getElementById("advancedScoreTo")?.value || "",
+        minVotes: document.getElementById("advancedMinVotes")?.value || "",
         crew: document.getElementById("advancedCrewQuery")?.value || "",
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
@@ -27586,6 +27755,14 @@ def ui_preview_html(
     // hydration exactly like the origin one.
     function scoreDataMissingCount() {
       return movies.reduce((total, movie) => total + (movieScoreNumber(movie) ? 0 : 1), 0);
+    }
+    // How many loaded films have no vote count at all. Same job as the score
+    // hint beside it, and it matters more: the column arrives empty on every
+    // existing library and fills only as films are refreshed, so a vote floor
+    // set on the day this ships legitimately matches nothing. Without the
+    // number on screen that is indistinguishable from a broken filter.
+    function voteDataMissingCount() {
+      return movies.reduce((total, movie) => total + (movieVoteCount(movie) === null ? 1 : 0), 0);
     }
     function populateOriginFilterSelect(id, values, current, labelFor, anyLabel) {
       const node = document.getElementById(id);
@@ -27694,6 +27871,7 @@ def ui_preview_html(
       setAdvancedControlValue("advancedYearTo", advancedSearch.yearTo);
       setAdvancedControlValue("advancedScoreFrom", advancedSearch.scoreFrom);
       setAdvancedControlValue("advancedScoreTo", advancedSearch.scoreTo);
+      setAdvancedControlValue("advancedMinVotes", advancedSearch.minVotes);
       setAdvancedControlValue("advancedCrewQuery", advancedSearch.crew);
       setAdvancedControlValue("advancedDigitalFilter", advancedSearch.digital);
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
@@ -27722,6 +27900,15 @@ def ui_preview_html(
               .replace("{count}", String(missing))
           : "";
         scoreHint.classList.toggle("hidden", missing === 0);
+      }
+      const votesHint = document.getElementById("advancedVotesHint");
+      if (votesHint) {
+        const missing = voteDataMissingCount();
+        votesHint.textContent = missing
+          ? tNext("collection.voteDataMissing", "{count} films have no vote count yet and are left out by a vote floor")
+              .replace("{count}", String(missing))
+          : "";
+        votesHint.classList.toggle("hidden", missing === 0);
       }
       const originHint = document.getElementById("advancedOriginHint");
       if (originHint) {
@@ -28284,6 +28471,22 @@ def ui_preview_html(
       const value = Number.parseFloat(raw);
       return Number.isFinite(value) && value > 0 ? value : 0;
     }
+    // The vote count as a number, or null when it is not known.
+    //
+    // The mirror image of movieScoreNumber above, and deliberately NOT the same
+    // rule: there, a stored 0 has to mean "not scored", because TMDB writes
+    // vote_average 0.0 for an unvoted film and the text column cannot tell that
+    // apart from an unfetched one. Here 0 is a real answer -- "we asked, nobody
+    // has voted" -- and the column is nullable precisely so it stays apart from
+    // "we never asked" (migration 092). Collapsing the two would make a vote
+    // floor unable to distinguish an unvoted film from an unfetched one, which
+    // is the whole point of the field.
+    function movieVoteCount(movie) {
+      const raw = movie?.rating_votes ?? movie?.ratingVotes ?? movie?.metadata?.rating_votes;
+      if (raw === null || raw === undefined || raw === "") return null;
+      const value = Number.parseInt(String(raw).trim().replace(/[\s,.\u00a0\u202f']/g, ""), 10);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    }
     function movieDigitalSourceNames(movie) {
       const snapshot = movie?.snapshot || {};
       const rows = Array.isArray(movie?.digital_sources)
@@ -28396,6 +28599,15 @@ def ui_preview_html(
         if (!score) return false;
         if (scoreFrom !== null && score < scoreFrom) return false;
         if (scoreTo !== null && score > scoreTo) return false;
+      }
+      // The vote floor is independent of the score bounds: "at least 500 votes"
+      // on its own is the honest way to ask which films the metadata actually
+      // knows anything about. A film whose count is unknown is out, the same
+      // call the score bounds make -- an unknown sample cannot clear a floor.
+      const minVotes = voteFloorNumber(filters.minVotes);
+      if (minVotes !== null) {
+        const votes = movieVoteCount(movie);
+        if (votes === null || votes < minVotes) return false;
       }
       if (filters.crew && !movieTextValue(movie).includes(filters.crew.toLowerCase())) return false;
       if (filters.digital === "plex" && !movieHasDigitalSource(movie, "plex")) return false;
@@ -28532,7 +28744,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
+      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -29721,7 +29933,15 @@ def ui_preview_html(
     // you cannot -- which reads correctly with no colour and in every locale.
     function movieScoreLabel(movie) {
       const value = valueText(movie?.rating || movie?.metadata?.rating || "");
-      return value ? `${tNext("movieDetail.externalScore", "Score")} ${value}` : "";
+      if (!value) return "";
+      // The sample, beside the number it produced. A 10.0 from three votes and
+      // an 8.4 from twelve thousand read identically without it, and the vote
+      // floor in the Library filter is unexplainable while the page it filters
+      // never shows the quantity being filtered on.
+      const votes = movieVoteCount(movie);
+      const score = `${tNext("movieDetail.externalScore", "Score")} ${value}`;
+      if (votes === null) return score;
+      return `${score} (${tNext("movieDetail.scoreVotes", "{count} votes").replace("{count}", votes.toLocaleString(localeState.locale || undefined))})`;
     }
     function localeCandidates() {
       const locale = String(localeState.locale || "en-US").replace("_", "-").toLowerCase();
@@ -51481,6 +51701,7 @@ def ui_preview_html(
       document.getElementById("appAdminSaveArtworkTrashSettingsButton")?.addEventListener("click", () => saveAppAdminArtworkTrashSettings());
       document.getElementById("appAdminPurgeArtworkTrashButton")?.addEventListener("click", () => purgeAppAdminArtworkTrash());
       document.getElementById("appAdminOriginBackfillButton")?.addEventListener("click", () => queueAppAdminOriginBackfill());
+      document.getElementById("appAdminVotesBackfillButton")?.addEventListener("click", () => queueAppAdminVotesBackfill());
       document.getElementById("appAdminArtworkTrashList")?.addEventListener("click", (event) => {
         const restoreButton = event.target.closest("[data-app-admin-artwork-restore]");
         if (restoreButton) {

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Hodnotenie od",
   "collection.scoreTo": "Hodnotenie do",
   "collection.scoreFilterHelp": "Hodnotenie, ktoré filmu dáva váš zdroj metadát, z 10.",
-  "collection.scoreDataMissing": "{count} filmov zatiaľ nemá hodnotenie a filter podľa hodnotenia ich vynechá"
+  "collection.scoreDataMissing": "{count} filmov zatiaľ nemá hodnotenie a filter podľa hodnotenia ich vynechá",
+  "collection.scoreMinVotes": "Minimálny počet hlasov",
+  "collection.voteDataMissing": "{count} filmov zatiaľ nemá počet hlasov a prah hlasov ich vynechá",
+  "movieDetail.scoreVotes": "{count} hlasov",
+  "appAdmin.votesBackfill": "Počty hlasov",
+  "appAdmin.votesBackfillHelp": "Hodnotenie hovorí málo, kým neviete, koľko ľudí ho dalo: 10,0 z troch hlasov predbehne 8,4 z dvanástich tisíc. Filmy pridané skôr nemajú počet hlasov, a preto zostávajú mimo prahu hlasov v knižnici. Toto si vyžiada od TMDB holý záznam a zapíše len to jedno číslo.",
+  "appAdmin.votesBackfillRun": "Doplniť počty hlasov",
+  "appAdmin.votesBackfillPluginTooOld": "Zásuvný modul TMDb má verziu {installed}; pre počty hlasov je potrebná {required} alebo novšia. Aktualizujte ho v Admin → Plugins, inak sa tu nič nedoplní.",
+  "appAdmin.votesBackfillQueueing": "Plánuje sa úloha počtu hlasov...",
+  "appAdmin.votesBackfillQueued": "Naplánovaných {count} úloh počtu hlasov.",
+  "appAdmin.votesBackfillNothing": "Každý film, ktorý sa dá doplniť, už má počet hlasov."
 }

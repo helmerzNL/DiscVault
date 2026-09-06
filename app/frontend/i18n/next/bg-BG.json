@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Оценка от",
   "collection.scoreTo": "Оценка до",
   "collection.scoreFilterHelp": "Оценката, която вашият източник на метаданни дава на филма, от 10.",
-  "collection.scoreDataMissing": "{count} филма още нямат оценка и остават извън филтъра по оценка"
+  "collection.scoreDataMissing": "{count} филма още нямат оценка и остават извън филтъра по оценка",
+  "collection.scoreMinVotes": "Минимален брой гласове",
+  "collection.voteDataMissing": "{count} филма още нямат брой гласове и прагът за гласове ги пропуска",
+  "movieDetail.scoreVotes": "{count} гласа",
+  "appAdmin.votesBackfill": "Брой гласове",
+  "appAdmin.votesBackfillHelp": "Оценката казва малко, докато не се знае колко души са я дали: 10,0 от три гласа изпреварва 8,4 от дванайсет хиляди. Филмите, добавени по-рано, нямат брой гласове и затова остават извън прага за гласове в библиотеката. Това иска от TMDB голия запис и записва само това число.",
+  "appAdmin.votesBackfillRun": "Попълване на броя гласове",
+  "appAdmin.votesBackfillPluginTooOld": "Приставката TMDb е версия {installed}; за броя гласове е нужна {required} или по-нова. Обновете я от Admin → Plugins, иначе тук няма да се попълни нищо.",
+  "appAdmin.votesBackfillQueueing": "Планиране на задача за гласове...",
+  "appAdmin.votesBackfillQueued": "Планирани са {count} задачи за броя гласове.",
+  "appAdmin.votesBackfillNothing": "Всеки филм, който може да бъде попълнен, вече има брой гласове."
 }

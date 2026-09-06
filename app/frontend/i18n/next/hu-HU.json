@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Pontszám ettől",
   "collection.scoreTo": "Pontszám eddig",
   "collection.scoreFilterHelp": "A pontszám, amelyet a metaadatforrásod ad a filmnek, 10-ből.",
-  "collection.scoreDataMissing": "{count} filmnek még nincs pontszáma, és a pontszűrő kihagyja őket"
+  "collection.scoreDataMissing": "{count} filmnek még nincs pontszáma, és a pontszűrő kihagyja őket",
+  "collection.scoreMinVotes": "Minimális szavazatszám",
+  "collection.voteDataMissing": "{count} filmnek még nincs szavazatszáma, és a szavazatküszöb kihagyja őket",
+  "movieDetail.scoreVotes": "{count} szavazat",
+  "appAdmin.votesBackfill": "Szavazatszámok",
+  "appAdmin.votesBackfillHelp": "Egy pontszám keveset mond, amíg nem tudni, hányan adták: a három szavazatból született 10,0 megelőzi a tizenkétezerből született 8,4-et. A korábban hozzáadott filmeknek nincs szavazatszámuk, ezért kimaradnak a könyvtár szavazatküszöbéből. Ez a puszta rekordot kéri le a TMDB-től, és csak azt az egy számot írja be.",
+  "appAdmin.votesBackfillRun": "Szavazatszámok kitöltése",
+  "appAdmin.votesBackfillPluginTooOld": "A TMDb bővítmény {installed} verziójú; a szavazatszámokhoz {required} vagy újabb kell. Frissítsd az Admin → Plugins alatt, különben itt semmi sem töltődik ki.",
+  "appAdmin.votesBackfillQueueing": "Szavazatszám-feladat ütemezése...",
+  "appAdmin.votesBackfillQueued": "{count} szavazatszám-feladat ütemezve.",
+  "appAdmin.votesBackfillNothing": "Minden film, amelyik kitölthető, már rendelkezik szavazatszámmal."
 }

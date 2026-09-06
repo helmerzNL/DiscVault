@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Βαθμολογία από",
   "collection.scoreTo": "Βαθμολογία έως",
   "collection.scoreFilterHelp": "Η βαθμολογία που δίνει στην ταινία η πηγή μεταδεδομένων σας, στα 10.",
-  "collection.scoreDataMissing": "{count} ταινίες δεν έχουν ακόμη βαθμολογία και μένουν εκτός του φίλτρου βαθμολογίας"
+  "collection.scoreDataMissing": "{count} ταινίες δεν έχουν ακόμη βαθμολογία και μένουν εκτός του φίλτρου βαθμολογίας",
+  "collection.scoreMinVotes": "Ελάχιστες ψήφοι",
+  "collection.voteDataMissing": "{count} ταινίες δεν έχουν ακόμη αριθμό ψήφων και μένουν εκτός ορίου ψήφων",
+  "movieDetail.scoreVotes": "{count} ψήφοι",
+  "appAdmin.votesBackfill": "Αριθμός ψήφων",
+  "appAdmin.votesBackfillHelp": "Μια βαθμολογία λέει λίγα χωρίς να ξέρουμε πόσοι την έδωσαν: το 10,0 από τρεις ψήφους προηγείται του 8,4 από δώδεκα χιλιάδες. Οι ταινίες που προστέθηκαν παλαιότερα δεν έχουν αριθμό ψήφων, οπότε μένουν εκτός του ορίου ψήφων της βιβλιοθήκης. Αυτό ζητά από το TMDB την απλή εγγραφή και γράφει μόνο αυτόν τον αριθμό.",
+  "appAdmin.votesBackfillRun": "Συμπλήρωση αριθμού ψήφων",
+  "appAdmin.votesBackfillPluginTooOld": "Το πρόσθετο TMDb είναι έκδοση {installed}· για τον αριθμό ψήφων χρειάζεται {required} ή νεότερη. Ενημερώστε το από Admin → Plugins, αλλιώς εδώ δεν θα συμπληρωθεί τίποτα.",
+  "appAdmin.votesBackfillQueueing": "Προγραμματισμός εργασίας ψήφων...",
+  "appAdmin.votesBackfillQueued": "Προγραμματίστηκαν {count} εργασίες αριθμού ψήφων.",
+  "appAdmin.votesBackfillNothing": "Κάθε ταινία που μπορεί να συμπληρωθεί έχει ήδη αριθμό ψήφων."
 }

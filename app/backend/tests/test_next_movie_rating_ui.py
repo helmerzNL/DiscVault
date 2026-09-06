@@ -35,6 +35,24 @@ def _source() -> str:
     with open(NEXT_VIEWS_UI_PATH, "r", encoding="utf-8") as handle:
         return handle.read()
 
+# A fixed-width window after the function's name is a proxy for "inside this
+# function", and it stops being one the moment the function grows. Adding the
+# vote count to the score pill pushed both of these past the function they
+# meant. Brace matching reads the real one, so it cannot go stale.
+def _function_source(source: str, name: str) -> str:
+    start = source.index("function %s(" % name)
+    depth = 0
+    for position in range(source.index("{", start), len(source)):
+        char = source[position]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : position + 1]
+    raise AssertionError("unbalanced braces reading %s" % name)
+
+
 
 def _without_comments(block: str) -> str:
     """Drop `//` comment lines.
@@ -114,8 +132,7 @@ class TwoScoresStayDistinctTests(unittest.TestCase):
         cls.source = _source()
 
     def test_the_external_score_names_itself_as_a_score(self):
-        start = self.source.index("function movieScoreLabel")
-        block = self.source[start : start + 500]
+        block = _function_source(self.source, "movieScoreLabel")
         self.assertIn('tNext("movieDetail.externalScore", "Score")', block)
 
     def test_the_personal_pill_is_a_button_and_the_external_one_is_not(self):
@@ -125,7 +142,7 @@ class TwoScoresStayDistinctTests(unittest.TestCase):
         block = self.source[start : start + 1400]
         self.assertIn("data-set-rating=", block)
         self.assertIn("<button type=", block)
-        external = self.source[self.source.index("function movieScoreLabel") :][:500]
+        external = _function_source(self.source, "movieScoreLabel")
         self.assertNotIn("<button", external)
 
     def test_only_one_number_reaches_a_tile(self):

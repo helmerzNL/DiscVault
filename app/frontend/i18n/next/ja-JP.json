@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "スコア下限",
   "collection.scoreTo": "スコア上限",
   "collection.scoreFilterHelp": "メタデータの提供元が映画に付けた10点満点のスコアです。",
-  "collection.scoreDataMissing": "{count}本の映画にはまだスコアがなく、スコアで絞り込むと除外されます"
+  "collection.scoreDataMissing": "{count}本の映画にはまだスコアがなく、スコアで絞り込むと除外されます",
+  "collection.scoreMinVotes": "最小投票数",
+  "collection.voteDataMissing": "{count}本の映画にはまだ投票数がなく、投票数で絞り込むと除外されます",
+  "movieDetail.scoreVotes": "{count}件の投票",
+  "appAdmin.votesBackfill": "投票数",
+  "appAdmin.votesBackfillHelp": "何人が付けたのか分からなければ、スコアはほとんど意味を持ちません。3件の10.0が1万2千件の8.4を上回ってしまいます。以前に追加した映画には投票数がないため、ライブラリの投票数の絞り込みから外れます。これはTMDBに基本レコードだけを問い合わせ、その数値だけを書き込みます。",
+  "appAdmin.votesBackfillRun": "投票数を補完する",
+  "appAdmin.votesBackfillPluginTooOld": "TMDbプラグインはバージョン{installed}です。投票数には{required}以降が必要です。Admin → Plugins で更新してください。そうしないと何も補完されません。",
+  "appAdmin.votesBackfillQueueing": "投票数ジョブを登録しています...",
+  "appAdmin.votesBackfillQueued": "{count}件の投票数ジョブを登録しました。",
+  "appAdmin.votesBackfillNothing": "補完できる映画はすべて投票数を持っています。"
 }

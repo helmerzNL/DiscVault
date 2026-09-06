@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Puntuación desde",
   "collection.scoreTo": "Puntuación hasta",
   "collection.scoreFilterHelp": "La puntuación que tu fuente de metadatos da a una película, sobre 10.",
-  "collection.scoreDataMissing": "{count} películas aún no tienen puntuación y quedan fuera del filtro de puntuación"
+  "collection.scoreDataMissing": "{count} películas aún no tienen puntuación y quedan fuera del filtro de puntuación",
+  "collection.scoreMinVotes": "Votos mínimos",
+  "collection.voteDataMissing": "{count} películas aún no tienen recuento de votos y quedan fuera de un mínimo de votos",
+  "movieDetail.scoreVotes": "{count} votos",
+  "appAdmin.votesBackfill": "Recuento de votos",
+  "appAdmin.votesBackfillHelp": "Una puntuación dice poco sin saber cuánta gente la dio: un 10,0 con tres votos supera a un 8,4 con doce mil. Las películas añadidas antes no tienen recuento de votos, así que quedan fuera del mínimo de votos de la biblioteca. Esto pide a TMDB la ficha básica y escribe solo ese número.",
+  "appAdmin.votesBackfillRun": "Rellenar el recuento de votos",
+  "appAdmin.votesBackfillPluginTooOld": "El complemento de TMDb es la versión {installed}; el recuento de votos necesita la {required} o posterior. Actualízalo en Admin → Plugins o aquí no se rellenará nada.",
+  "appAdmin.votesBackfillQueueing": "Programando la tarea de votos...",
+  "appAdmin.votesBackfillQueued": "{count} tareas de recuento de votos programadas.",
+  "appAdmin.votesBackfillNothing": "Todas las películas que se pueden rellenar ya tienen recuento de votos."
 }

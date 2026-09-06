@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Betyg från",
   "collection.scoreTo": "Betyg till",
   "collection.scoreFilterHelp": "Betyget som din metadatakälla ger en film, av 10.",
-  "collection.scoreDataMissing": "{count} filmer saknar ännu betyg och faller utanför ett betygsfilter"
+  "collection.scoreDataMissing": "{count} filmer saknar ännu betyg och faller utanför ett betygsfilter",
+  "collection.scoreMinVotes": "Minsta antal röster",
+  "collection.voteDataMissing": "{count} filmer saknar ännu röstantal och faller utanför en röstgräns",
+  "movieDetail.scoreVotes": "{count} röster",
+  "appAdmin.votesBackfill": "Röstantal",
+  "appAdmin.votesBackfillHelp": "Ett betyg säger lite utan att veta hur många som gav det: 10,0 från tre röster slår 8,4 från tolv tusen. Filmer som lades till tidigare saknar röstantal och hamnar därför utanför bibliotekets röstgräns. Detta ber TMDB om den nakna posten och skriver bara den siffran.",
+  "appAdmin.votesBackfillRun": "Fyll i röstantal",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb-tillägget är version {installed}; röstantal kräver {required} eller nyare. Uppdatera det under Admin → Plugins, annars fylls inget i här.",
+  "appAdmin.votesBackfillQueueing": "Schemalägger röstjobb...",
+  "appAdmin.votesBackfillQueued": "{count} röstjobb schemalagda.",
+  "appAdmin.votesBackfillNothing": "Alla filmer som kan fyllas i har redan ett röstantal."
 }

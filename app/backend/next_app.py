@@ -87,6 +87,10 @@ try:
     from .next_public_http import validate_public_url
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
+    from .next_metadata import count_movies_missing_rating_votes
+    from .next_metadata import movies_missing_rating_votes
+    from .next_metadata import movies_have_rating_votes
     from .next_metadata import TMDB_PLUGIN_ID
     from .next_metadata import count_movies_missing_film_origin
     from .next_metadata import movies_missing_film_origin
@@ -396,6 +400,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_public_http import validate_public_url
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
+    from next_metadata import count_movies_missing_rating_votes
+    from next_metadata import movies_missing_rating_votes
+    from next_metadata import movies_have_rating_votes
     from next_metadata import TMDB_PLUGIN_ID
     from next_metadata import count_movies_missing_film_origin
     from next_metadata import movies_missing_film_origin
@@ -4963,6 +4971,7 @@ def collection_movie_preview_entities(
                     m.metadata->>'director' AS director,
                     m.metadata->>'actor' AS actor,
                     m.rating,
+                    m.rating_votes,
                     mts.content_ratings,
                     concat_ws(' ',
                         m.metadata->>'actor',
@@ -5049,6 +5058,7 @@ def collection_movie_preview_entities(
                 m.metadata->>'director' AS director,
                 m.metadata->>'actor' AS actor,
                 m.rating,
+                m.rating_votes,
                 NULL::jsonb AS content_ratings,
                 concat_ws(' ',
                     m.metadata->>'actor',
@@ -13590,6 +13600,12 @@ _MOVIE_SYNC_COLUMNS: tuple[str, ...] = (
     "overview",
     "notes",
     "rating",
+    # Published, not accepted, for the same reason as `original_language` above:
+    # a metadata provider owns it. A client that could set it would be asserting
+    # how many strangers voted on a film, and the next refresh would overwrite
+    # the assertion anyway. Published because a client that shows the score
+    # without the sample behind it repeats the problem this field exists to fix.
+    "rating_votes",
     "purchase_date",
     "purchase_price",
     "estimated_value",
@@ -25527,6 +25543,93 @@ def origin_backfill_tmdb_plugin_state() -> dict[str, Any]:
         "requiredVersion": ORIGIN_CAPABLE_TMDB_PLUGIN_VERSION,
         "originCapable": _parse_plugin_version(installed)
         >= _parse_plugin_version(ORIGIN_CAPABLE_TMDB_PLUGIN_VERSION),
+    }
+
+
+# The TMDb plugin version that first emitted `ratingVotes`. Below it the
+# backfill runs, asks TMDB for every film, gets an answer with no vote count in
+# it and writes nothing -- a job that reports success over a plugin that never
+# returned the field. Plugins run from the writable install directory and are
+# replaced only by a strictly newer bundled copy, so an instance can sit below
+# this indefinitely with nothing saying so. That is the whole reason this
+# constant exists rather than a comment somewhere.
+VOTES_CAPABLE_TMDB_PLUGIN_VERSION = "1.9.0"
+
+
+def rating_votes_backfill_job_state(conn) -> dict[str, Any]:
+    """Queue state and the last run's own summary, for the admin card.
+
+    The counters alone cannot distinguish "not started" from "ran fifteen times
+    and wrote nothing", which is precisely what #719 reported about the origin
+    jobs: they are excluded from the Metadata job list by job type, so pressing
+    the button produced no visible change anywhere on the screen that owns it.
+    This job type has the same shape and would have the same hole.
+    """
+    state: dict[str, Any] = {
+        "counts": {"pending": 0, "running": 0, "completed": 0, "failed": 0},
+        "outstanding": 0,
+        "lastRun": None,
+    }
+    if not table_exists(conn, "background_jobs"):
+        return state
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT status, COUNT(*)::int AS count
+            FROM background_jobs
+            WHERE job_type = %s
+            GROUP BY status
+            """,
+            (MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE,),
+        )
+        for row in cur.fetchall():
+            state["counts"][str(row.get("status") or "unknown")] = int(row.get("count") or 0)
+        cur.execute(
+            """
+            SELECT status, result, error, finished_at
+            FROM background_jobs
+            WHERE job_type = %s AND finished_at IS NOT NULL
+            ORDER BY finished_at DESC
+            LIMIT 1
+            """,
+            (MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE,),
+        )
+        row = cur.fetchone()
+    state["outstanding"] = int(state["counts"].get("pending", 0)) + int(state["counts"].get("running", 0))
+    if row:
+        result = row.get("result") if isinstance(row.get("result"), dict) else {}
+        summary = result.get("summary") if isinstance(result.get("summary"), dict) else {}
+        state["lastRun"] = {
+            "status": row.get("status"),
+            "finishedAt": row.get("finished_at"),
+            # The error text is the reason a run wrote nothing -- an unconfigured
+            # API key, a disabled plugin -- and it is useless in a log nobody
+            # opens, so it travels to the screen that offered the button.
+            "error": row.get("error"),
+            "requested": int(summary.get("requested") or 0),
+            "updated": int(summary.get("updated") or 0),
+            "skipped": int(summary.get("skipped") or 0),
+            "failed": int(summary.get("failed") or 0),
+            "unresolved": int(summary.get("unresolved") or 0),
+        }
+    return state
+
+
+def rating_votes_backfill_tmdb_plugin_state() -> dict[str, Any]:
+    installed = (installed_plugin_version(TMDB_PLUGIN_ID) or "").strip()
+    return {
+        "installedVersion": installed,
+        "requiredVersion": VOTES_CAPABLE_TMDB_PLUGIN_VERSION,
+        "votesCapable": _parse_plugin_version(installed)
+        >= _parse_plugin_version(VOTES_CAPABLE_TMDB_PLUGIN_VERSION),
+    }
+
+
+def rating_votes_backfill_payload(conn) -> dict[str, Any]:
+    return {
+        **count_movies_missing_rating_votes(conn),
+        "jobs": rating_votes_backfill_job_state(conn),
+        "tmdbPlugin": rating_votes_backfill_tmdb_plugin_state(),
     }
 
 
@@ -38836,6 +38939,89 @@ def register_routes(flask_app: Flask) -> None:
             payload = origin_backfill_payload(conn)
         return response({"status": "ok", "queued": len(jobs), "jobs": jobs, **payload})
 
+    @flask_app.get("/api/next/admin/metadata/rating-votes-backfill")
+    def movie_rating_votes_backfill_status():
+        """How many films still have no vote count behind their score.
+
+        `unresolvable` is counted separately and deliberately, exactly as it is
+        for origin: a film with no TMDB identifier cannot be answered by this job
+        at all, and folding it into `pending` would leave a counter that never
+        reaches zero with nothing to explain why.
+        """
+        with connect() as conn:
+            require_next_permission(conn, "metadata.refresh_bulk")
+            payload = rating_votes_backfill_payload(conn)
+        return response({"status": "ok", **payload})
+
+    @flask_app.post("/api/next/admin/metadata/rating-votes-backfill")
+    def queue_movie_rating_votes_backfill():
+        """Queue the vote-count backfill for films that have none.
+
+        Not the bulk metadata refresh, for the reasons its origin sibling above
+        records: that one caps at 50 ids per request, asks TMDB with
+        append_to_response for credits, videos, images, release dates and
+        translations, and runs the whole merge pipeline. This asks for the bare
+        record and writes one integer, so 100 films fit in one job and a
+        2,500-film library is 25 of them.
+        """
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Vote count backfill body must be an object", 400)
+        try:
+            batch_size = int(body.get("batchSize") or 100)
+        except (TypeError, ValueError):
+            raise NextApiError("batchSize must be a number", 400)
+        batch_size = max(1, min(batch_size, 500))
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_bulk")
+            if not movies_have_rating_votes(conn):
+                raise NextApiError("Vote count storage is not available", 503)
+            # The ids, not just how many. A job carrying only `{"limit": 100}`
+            # re-runs the same "next 100 that still need it" query, so a film
+            # TMDB cannot answer stays at the head of that ordering and is
+            # retried by every job in the batch -- with an unfillable first
+            # hundred, the rest are never touched at all. Pinning the slice at
+            # queue time makes each job own a disjoint set.
+            outstanding = movies_missing_rating_votes(conn, limit=None)
+            if not outstanding:
+                return response({"status": "ok", "queued": 0, **rating_votes_backfill_payload(conn)})
+            jobs = []
+            with conn.transaction():
+                for start in range(0, len(outstanding), batch_size):
+                    slice_ids = [str(row["id"]) for row in outstanding[start : start + batch_size]]
+                    jobs.append(
+                        create_background_job(
+                            conn,
+                            job_type=MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE,
+                            payload={
+                                "movieIds": slice_ids,
+                                "limit": batch_size,
+                                "requestedBy": actor_job_payload(actor),
+                            },
+                        )
+                    )
+                # One audit event for the batch, not one per film. A 25-job run
+                # that wrote 25 audit rows would say the same thing 25 times.
+                audit_event(
+                    conn,
+                    event_type="metadata.rating_votes_backfill",
+                    category="metadata",
+                    actor=actor,
+                    target_type="collection",
+                    summary="Queued rating vote count backfill",
+                    metadata={
+                        "pending": len(outstanding),
+                        "jobs": len(jobs),
+                        "batchSize": batch_size,
+                    },
+                )
+            # Read after queueing, so the card is answered with the queue that
+            # now exists rather than the one that did before the press. The
+            # pre-queue counts made the origin panel look frozen even when the
+            # run had started.
+            payload = rating_votes_backfill_payload(conn)
+        return response({"status": "ok", "queued": len(jobs), "jobs": jobs, **payload})
+
     @flask_app.post("/api/next/metadata/jobs")
     def queue_metadata_refresh_jobs():
         body = request.get_json(silent=True) or {}
@@ -39299,6 +39485,7 @@ def register_routes(flask_app: Flask) -> None:
                     # it back. Leaving it out made the jobs it creates readable
                     # by the owner alone.
                     allowed_types.append(MOVIE_ORIGIN_BACKFILL_JOB_TYPE)
+                    allowed_types.append(MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE)
                 if permissions.intersection({"collection.import", "admin.restore_functional"}):
                     allowed_types.append(MIGRATION_JOB_TYPE)
                 if job_type and job_type not in allowed_types:

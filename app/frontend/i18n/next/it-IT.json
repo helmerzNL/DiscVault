@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Punteggio da",
   "collection.scoreTo": "Punteggio a",
   "collection.scoreFilterHelp": "Il punteggio che la tua fonte di metadati assegna a un film, su 10.",
-  "collection.scoreDataMissing": "{count} film non hanno ancora un punteggio e restano fuori dal filtro punteggio"
+  "collection.scoreDataMissing": "{count} film non hanno ancora un punteggio e restano fuori dal filtro punteggio",
+  "collection.scoreMinVotes": "Voti minimi",
+  "collection.voteDataMissing": "{count} film non hanno ancora il numero di voti e restano fuori da una soglia di voti",
+  "movieDetail.scoreVotes": "{count} voti",
+  "appAdmin.votesBackfill": "Numero di voti",
+  "appAdmin.votesBackfillHelp": "Un punteggio dice poco senza sapere quante persone lo hanno dato: 10,0 su tre voti batte 8,4 su dodicimila. I film aggiunti in precedenza non hanno il numero di voti e restano quindi fuori dalla soglia di voti della libreria. Questo chiede a TMDB la scheda essenziale e scrive solo quel numero.",
+  "appAdmin.votesBackfillRun": "Compila il numero di voti",
+  "appAdmin.votesBackfillPluginTooOld": "Il plugin TMDb è la versione {installed}; per il numero di voti serve la {required} o più recente. Aggiornalo in Admin → Plugins, altrimenti qui non verrà compilato nulla.",
+  "appAdmin.votesBackfillQueueing": "Pianificazione dell'attività voti...",
+  "appAdmin.votesBackfillQueued": "{count} attività per il numero di voti pianificate.",
+  "appAdmin.votesBackfillNothing": "Ogni film che può essere compilato ha già il numero di voti."
 }

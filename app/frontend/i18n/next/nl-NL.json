@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Score vanaf",
   "collection.scoreTo": "Score tot",
   "collection.scoreFilterHelp": "De score die je metadatabron een film geeft, op een schaal van 10.",
-  "collection.scoreDataMissing": "{count} films hebben nog geen score en vallen buiten een scorefilter"
+  "collection.scoreDataMissing": "{count} films hebben nog geen score en vallen buiten een scorefilter",
+  "collection.scoreMinVotes": "Minimaal aantal stemmen",
+  "collection.voteDataMissing": "{count} films hebben nog geen stemmenaantal en vallen buiten een stemmendrempel",
+  "movieDetail.scoreVotes": "{count} stemmen",
+  "appAdmin.votesBackfill": "Stemmenaantallen",
+  "appAdmin.votesBackfillHelp": "Een score zegt weinig zonder te weten hoeveel mensen hem gaven: 10,0 uit drie stemmen verslaat 8,4 uit twaalfduizend. Films die je eerder toevoegde hebben geen stemmenaantal en vallen daardoor buiten de stemmendrempel in je bibliotheek. Dit vraagt TMDB om het kale record en schrijft alleen dat ene getal.",
+  "appAdmin.votesBackfillRun": "Stemmenaantallen invullen",
+  "appAdmin.votesBackfillPluginTooOld": "De TMDb-plug-in is versie {installed}; voor stemmenaantallen is {required} of nieuwer nodig. Werk hem bij onder Admin → Plugins, anders wordt hier niets ingevuld.",
+  "appAdmin.votesBackfillQueueing": "Stemmenaantallen inplannen...",
+  "appAdmin.votesBackfillQueued": "{count} taken voor stemmenaantallen ingepland.",
+  "appAdmin.votesBackfillNothing": "Elke film die ingevuld kan worden heeft al een stemmenaantal."
 }

@@ -627,6 +627,16 @@ jobs:
       - name: Test that both library preview branches select the same columns
         run: python -m unittest tests.test_next_library_preview_branch_parity
 
+      # The vote count behind that score (#766). The claim nothing else can see
+      # is the NULL/0 split: NULL means "never asked", 0 means "asked, nobody
+      # voted", and every layer from the migration to the filter has to keep them
+      # apart. A DEFAULT 0 would make every film in an existing library claim TMDB
+      # had answered, permanently and silently -- the mirror of the flattening the
+      # score column can no longer undo. Runs the normalizer and, under node, the
+      # shipped client-side predicate. No database needed.
+      - name: Test the rating vote count and its floor
+        run: python -m unittest tests.test_next_rating_votes
+
       # Filtering the Library on the external score (TMDB's vote average), asked
       # for on #719. The behavioural half lifts the helpers and the predicate out
       # of next_views_ui.py and runs them under node, so it holds the one decision
