@@ -286,9 +286,8 @@ side must copy rather than re-derive. Where two platforms could plausibly read t
 differently, say which reading is correct — that is the difference between parity and two apps that
 merely look alike.
 
-App-Guidance sits under a different owner, so a session working in Core cannot push there. Prepare
-the entry, hand it over, and say plainly that it still needs to land — exactly as the App-Guidance
-section below already requires.
+The entry lands in App-Guidance the way every other write-up does — see the section below for how,
+including that it goes in through a branch and a pull request rather than straight onto `main`.
 
 ---
 
@@ -329,14 +328,21 @@ sources.
 - Say in the PR body what you recorded, or that you judged the change documentation-neutral.
   An unexplained silence is not the same as "nothing to record".
 
-The ownership constraint below applies here too: prepare the write-up and hand it over if the
-session cannot push to App-Guidance.
+The same applies here: the plugin write-up lands in App-Guidance like any other.
 
-**Attaching the repo:** App-Guidance sits under a different owner (`Flux76HQ`) than this repository
-(`helmerzNL`), and a session cannot attach a repo from another owner. A session working in DiscVault
-therefore cannot push there: prepare the document, hand it over, and say plainly that it still needs
-to land in App-Guidance. To commit it directly, start a session with App-Guidance as its initial
-source.
+**Where the repositories live, and pushing to them:** every Flux76 repository sits under
+**`Flux76HQ`** — App-Guidance, `DiscVaultApp`, `DiscVault-AndroidApp` and the rest. **This
+repository is the exception**: DiscVault Core is `helmerzNL/DiscVault`.
+
+Differing owners do **not** block anything. When the App-Guidance working copy is attached to the
+session, commit the document there directly and follow that repository's own rules — a branch off
+its default branch and a pull request, never a commit straight to `main`; its `CLAUDE.md` is
+authoritative for its workflow, and documentation-only edits are exempt from its `VERSION` bump.
+
+Only when the working copy is genuinely not available does the fallback apply: prepare the
+document, hand it over, and say plainly that it still needs to land. Do not claim you cannot push
+without having tried — that leaves a write-up sitting in a scratchpad that everyone believes was
+filed.
 
 ---
 
@@ -425,9 +431,9 @@ them. This rule exists because that exact mistake was made on this repository's 
 upload work.
 
 The current numbers, what each path allows, and the troubleshooting table live in
-[`edge-and-upload-limits.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/docs/apps/discvault/edge-and-upload-limits.md)
+[`edge-and-upload-limits.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/projects/discvault/specs/edge-and-upload-limits.md)
 in App-Guidance; the general rule is
-[`project-baseline.md` §6](https://github.com/Flux76HQ/App-Guidance/blob/main/docs/guidelines/project-baseline.md),
+[`project-baseline.md` §6](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md),
 which makes documenting those ceilings a required operational doc.
 
 ---
