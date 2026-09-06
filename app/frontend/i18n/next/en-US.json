@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Use as poster",
   "ownImages.useAsBackdrop": "Use as backdrop",
   "ownImages.promoted": "Cover updated.",
-  "appPreferences.showRatingBadgeOnTiles": "Show rating badge on tiles"
+  "appPreferences.showRatingBadgeOnTiles": "Show rating badge on tiles",
+  "collection.scoreFilter": "Score",
+  "collection.scoreFrom": "Score from",
+  "collection.scoreTo": "Score to",
+  "collection.scoreFilterHelp": "The score your metadata source gives a film, out of 10.",
+  "collection.scoreDataMissing": "{count} films have no score yet and are left out by a score filter"
 }

@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Użyj jako plakat",
   "ownImages.useAsBackdrop": "Użyj jako tło",
   "ownImages.promoted": "Okładka zaktualizowana.",
-  "appPreferences.showRatingBadgeOnTiles": "Pokaż ocenę na kafelkach"
+  "appPreferences.showRatingBadgeOnTiles": "Pokaż ocenę na kafelkach",
+  "collection.scoreFilter": "Ocena",
+  "collection.scoreFrom": "Ocena od",
+  "collection.scoreTo": "Ocena do",
+  "collection.scoreFilterHelp": "Ocena, którą filmowi wystawia Twoje źródło metadanych, w skali do 10.",
+  "collection.scoreDataMissing": "{count} filmów nie ma jeszcze oceny i filtr ocen je pomija"
 }

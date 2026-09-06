@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Brug som plakat",
   "ownImages.useAsBackdrop": "Brug som baggrund",
   "ownImages.promoted": "Omslag opdateret.",
-  "appPreferences.showRatingBadgeOnTiles": "Vis bedømmelse på felter"
+  "appPreferences.showRatingBadgeOnTiles": "Vis bedømmelse på felter",
+  "collection.scoreFilter": "Score",
+  "collection.scoreFrom": "Score fra",
+  "collection.scoreTo": "Score til",
+  "collection.scoreFilterHelp": "Den score, din metadatakilde giver en film, ud af 10.",
+  "collection.scoreDataMissing": "{count} film har endnu ingen score og udelades af et scorefilter"
 }

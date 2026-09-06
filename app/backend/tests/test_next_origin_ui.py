@@ -34,6 +34,26 @@ def _source() -> str:
         return handle.read()
 
 
+# A fixed-width window after the function's name is a proxy for "inside this
+# function", and it silently stops being one as soon as the function grows: the
+# assertion then fails for a reason that has nothing to do with what it claims.
+# Adding the score filter to the same panel pushed three of these windows past
+# the function they meant. Brace matching reads the real one, so it cannot go
+# stale.
+def _function_source(source: str, name: str) -> str:
+    start = source.index("function %s(" % name)
+    depth = 0
+    for position in range(source.index("{", start), len(source)):
+        char = source[position]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : position + 1]
+    raise AssertionError("unbalanced braces reading %s" % name)
+
+
 class AdvancedSearchWiringTests(unittest.TestCase):
     """All six edits a Pattern B filter needs, each silent if skipped."""
 
@@ -42,17 +62,17 @@ class AdvancedSearchWiringTests(unittest.TestCase):
         cls.source = _source()
 
     def test_the_defaults_carry_both_keys(self):
-        block = self.source[self.source.index("function advancedSearchDefaults"):][:600]
+        block = _function_source(self.source, "advancedSearchDefaults")
         self.assertIn('originCountry: "any"', block)
         self.assertIn('originalLanguage: "any"', block)
 
     def test_the_active_count_counts_both(self):
-        block = self.source[self.source.index("function advancedSearchActiveCount"):][:900]
+        block = _function_source(self.source, "advancedSearchActiveCount")
         self.assertIn('normalized.originCountry !== "any"', block)
         self.assertIn('normalized.originalLanguage !== "any"', block)
 
     def test_the_controls_are_read_back(self):
-        block = self.source[self.source.index("function readAdvancedSearchControls"):][:900]
+        block = _function_source(self.source, "readAdvancedSearchControls")
         self.assertIn("advancedOriginCountry", block)
         self.assertIn("advancedOriginLanguage", block)
 

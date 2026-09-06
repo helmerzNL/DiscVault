@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Folosește ca afiș",
   "ownImages.useAsBackdrop": "Folosește ca fundal",
   "ownImages.promoted": "Coperta a fost actualizată.",
-  "appPreferences.showRatingBadgeOnTiles": "Afișează evaluarea pe plăci"
+  "appPreferences.showRatingBadgeOnTiles": "Afișează evaluarea pe plăci",
+  "collection.scoreFilter": "Scor",
+  "collection.scoreFrom": "Scor de la",
+  "collection.scoreTo": "Scor până la",
+  "collection.scoreFilterHelp": "Scorul pe care sursa ta de metadate îl dă unui film, din 10.",
+  "collection.scoreDataMissing": "{count} filme nu au încă scor și rămân în afara filtrului de scor"
 }

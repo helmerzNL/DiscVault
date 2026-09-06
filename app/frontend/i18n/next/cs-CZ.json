@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Použít jako plakát",
   "ownImages.useAsBackdrop": "Použít jako pozadí",
   "ownImages.promoted": "Obal aktualizován.",
-  "appPreferences.showRatingBadgeOnTiles": "Zobrazit hodnocení na dlaždicích"
+  "appPreferences.showRatingBadgeOnTiles": "Zobrazit hodnocení na dlaždicích",
+  "collection.scoreFilter": "Hodnocení",
+  "collection.scoreFrom": "Hodnocení od",
+  "collection.scoreTo": "Hodnocení do",
+  "collection.scoreFilterHelp": "Hodnocení, které filmu dává váš zdroj metadat, z 10.",
+  "collection.scoreDataMissing": "{count} filmů zatím nemá hodnocení a filtr podle hodnocení je vynechá"
 }

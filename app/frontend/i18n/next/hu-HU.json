@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Használat plakátként",
   "ownImages.useAsBackdrop": "Használat háttérként",
   "ownImages.promoted": "Borító frissítve.",
-  "appPreferences.showRatingBadgeOnTiles": "Értékelés megjelenítése a csempéken"
+  "appPreferences.showRatingBadgeOnTiles": "Értékelés megjelenítése a csempéken",
+  "collection.scoreFilter": "Pontszám",
+  "collection.scoreFrom": "Pontszám ettől",
+  "collection.scoreTo": "Pontszám eddig",
+  "collection.scoreFilterHelp": "A pontszám, amelyet a metaadatforrásod ad a filmnek, 10-ből.",
+  "collection.scoreDataMissing": "{count} filmnek még nincs pontszáma, és a pontszűrő kihagyja őket"
 }

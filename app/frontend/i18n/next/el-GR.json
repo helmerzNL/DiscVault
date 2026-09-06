@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Χρήση ως αφίσα",
   "ownImages.useAsBackdrop": "Χρήση ως φόντο",
   "ownImages.promoted": "Το εξώφυλλο ενημερώθηκε.",
-  "appPreferences.showRatingBadgeOnTiles": "Εμφάνιση βαθμολογίας στα πλακίδια"
+  "appPreferences.showRatingBadgeOnTiles": "Εμφάνιση βαθμολογίας στα πλακίδια",
+  "collection.scoreFilter": "Βαθμολογία",
+  "collection.scoreFrom": "Βαθμολογία από",
+  "collection.scoreTo": "Βαθμολογία έως",
+  "collection.scoreFilterHelp": "Η βαθμολογία που δίνει στην ταινία η πηγή μεταδεδομένων σας, στα 10.",
+  "collection.scoreDataMissing": "{count} ταινίες δεν έχουν ακόμη βαθμολογία και μένουν εκτός του φίλτρου βαθμολογίας"
 }

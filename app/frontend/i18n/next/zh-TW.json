@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "用作海報",
   "ownImages.useAsBackdrop": "用作背景圖",
   "ownImages.promoted": "封面已更新。",
-  "appPreferences.showRatingBadgeOnTiles": "在磁磚上顯示評分"
+  "appPreferences.showRatingBadgeOnTiles": "在磁磚上顯示評分",
+  "collection.scoreFilter": "評分",
+  "collection.scoreFrom": "評分下限",
+  "collection.scoreTo": "評分上限",
+  "collection.scoreFilterHelp": "中繼資料來源為影片給出的評分，滿分 10 分。",
+  "collection.scoreDataMissing": "{count} 部影片尚無評分，評分篩選會將其排除"
 }

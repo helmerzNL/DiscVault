@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Käytä julisteena",
   "ownImages.useAsBackdrop": "Käytä taustakuvana",
   "ownImages.promoted": "Kansikuva päivitetty.",
-  "appPreferences.showRatingBadgeOnTiles": "Näytä arvio ruuduissa"
+  "appPreferences.showRatingBadgeOnTiles": "Näytä arvio ruuduissa",
+  "collection.scoreFilter": "Pisteet",
+  "collection.scoreFrom": "Pisteet alkaen",
+  "collection.scoreTo": "Pisteet enintään",
+  "collection.scoreFilterHelp": "Pisteet, jotka metatietolähteesi antaa elokuvalle, asteikolla 10.",
+  "collection.scoreDataMissing": "{count} elokuvalla ei ole vielä pisteitä, ja pistesuodatin jättää ne pois"
 }

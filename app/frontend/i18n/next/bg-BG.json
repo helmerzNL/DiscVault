@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Използвай като постер",
   "ownImages.useAsBackdrop": "Използвай като фон",
   "ownImages.promoted": "Обложката е обновена.",
-  "appPreferences.showRatingBadgeOnTiles": "Показвай оценка върху плочките"
+  "appPreferences.showRatingBadgeOnTiles": "Показвай оценка върху плочките",
+  "collection.scoreFilter": "Оценка",
+  "collection.scoreFrom": "Оценка от",
+  "collection.scoreTo": "Оценка до",
+  "collection.scoreFilterHelp": "Оценката, която вашият източник на метаданни дава на филма, от 10.",
+  "collection.scoreDataMissing": "{count} филма още нямат оценка и остават извън филтъра по оценка"
 }

@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Använd som affisch",
   "ownImages.useAsBackdrop": "Använd som bakgrund",
   "ownImages.promoted": "Omslaget uppdaterat.",
-  "appPreferences.showRatingBadgeOnTiles": "Visa betyg på rutor"
+  "appPreferences.showRatingBadgeOnTiles": "Visa betyg på rutor",
+  "collection.scoreFilter": "Betyg",
+  "collection.scoreFrom": "Betyg från",
+  "collection.scoreTo": "Betyg till",
+  "collection.scoreFilterHelp": "Betyget som din metadatakälla ger en film, av 10.",
+  "collection.scoreDataMissing": "{count} filmer saknar ännu betyg och faller utanför ett betygsfilter"
 }

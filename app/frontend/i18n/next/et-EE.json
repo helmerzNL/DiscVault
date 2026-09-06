@@ -3141,5 +3141,10 @@
   "ownImages.useAsPoster": "Kasuta plakatina",
   "ownImages.useAsBackdrop": "Kasuta taustapildina",
   "ownImages.promoted": "Kaanepilt uuendatud.",
-  "appPreferences.showRatingBadgeOnTiles": "Näita hinnangut paanidel"
+  "appPreferences.showRatingBadgeOnTiles": "Näita hinnangut paanidel",
+  "collection.scoreFilter": "Hinne",
+  "collection.scoreFrom": "Hinne alates",
+  "collection.scoreTo": "Hinne kuni",
+  "collection.scoreFilterHelp": "Hinne, mille sinu metaandmete allikas filmile annab, 10 palli skaalal.",
+  "collection.scoreDataMissing": "{count} filmil pole veel hinnet ja hindefilter jätab need välja"
 }
