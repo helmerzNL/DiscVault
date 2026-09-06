@@ -236,6 +236,39 @@ inferred). Carry the chosen type through the whole flow:
 - Before PR creation, run an i18n completeness pass (no missing keys, and no newly introduced
   hardcoded UI text without i18n keys).
 
+**Every feature is an explicit iOS/Android decision**
+
+DiscVault is three apps, not one: Core (this repository, the PWA and backend), the iOS app
+(`DiscVaultApp`) and the Android app (`DiscVault-AndroidApp`). A feature built here reaches the
+other two only if somebody decides it should.
+
+**There is no default.** A feature that lands in Core with no decision recorded is not "PWA-only" —
+it is a gap nobody can later tell apart from a deliberate choice. Six months on, "was this left out
+on purpose, or forgotten?" has no answer anywhere, and the honest reading is the pessimistic one.
+
+- **Ask before building, not after.** At the moment you classify the work (the bug/feature/chore
+  step above), ask the user: *do we want this on iOS and/or Android, and in what form?* Asked then,
+  the answer can still shape the design — a field the mobile apps need has to reach them over the
+  sync payload, and that is cheaper to decide before the column exists than after. This is **not
+  blocking**: with no answer, build the Core feature and record "not yet decided".
+- **The question is owed for a feature only.** A bug fix, a refactor or a chore inherits whatever
+  decision its feature already carries.
+- **Record the answer in the PR body**, as a required section — same spirit as the deployment-file
+  rule below, and for the same reason: silence is not the same as "nothing to do", and a reader
+  cannot tell the difference. State **iOS** and **Android** each as wanted / not wanted / not yet
+  decided, and when the answer is *not wanted*, say **why**. "Core-only, deliberately: this
+  configures the server and has no mobile surface" is a complete answer; an unexplained silence is
+  not.
+- **Write it on the mobile parity list** in App-Guidance,
+  `projects/discvault/specs/discvault-mobile-parity.md`. Every feature gets an entry — including the
+  ones decided against, which are the entries that stop the same question being asked twice. An
+  entry names the feature, the Core build it shipped in, the decision per platform, and what an
+  implementation would need: which sync fields already carry the data, and any semantics the mobile
+  side must copy rather than re-derive. Where two platforms could plausibly read the same stored
+  value differently, say which reading is correct.
+- App-Guidance sits under a different owner, so a session working in Core cannot push there. Prepare
+  the entry, hand it over, and say plainly that it still needs to land.
+
 **Record decisions in the App-Guidance documentation repo**
 
 Documentation lives in [`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance), not in
@@ -286,6 +319,8 @@ App-Guidance. Prepare the write-up and hand it over, saying plainly that it stil
    whose branch already targets beta, that is fine; otherwise branch off `origin/release/v26-beta`.
 2. Name the branch `<type-prefix>/<short-kebab-description>` using the classified type above.
 3. Plan the change against beta and keep the scope to that one bug/feature.
+4. For a **feature**, ask whether it should also exist on iOS and/or Android before building
+   it. Not blocking — with no answer, note "not yet decided" and carry on.
 
 **When the user asks to commit (or you are about to commit)**
 
@@ -299,10 +334,13 @@ App-Guidance. Prepare the write-up and hand it over, saying plainly that it stil
    title (feature PRs into beta may be squashed).
 5. Confirm translations are complete across all locales (no missing i18n keys and no new
    untranslated UI strings).
-6. Never merge with a red version guard. There is no longer anything to re-check about the
+6. For a feature, state the **iOS/Android decision** in the PR body — wanted, not wanted
+   (with the reason) or not yet decided — and prepare its entry for the mobile parity list
+   in App-Guidance.
+7. Never merge with a red version guard. There is no longer anything to re-check about the
    bump before merging — that is precisely what moving it into CI removed.
-7. Let it build/test on the beta channel before considering promotion.
-8. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
+8. Let it build/test on the beta channel before considering promotion.
+9. **After the PR merges, delete the feature branch** (`git push origin --delete <branch>`) —
    unless it is the active Copilot session/worktree branch (reused across PRs) or a
    permanent branch (`main`, `release/v26-beta`, `legacy`). If unsure, ask before deleting.
 
