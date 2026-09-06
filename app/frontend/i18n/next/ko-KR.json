@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "점수 최저",
   "collection.scoreTo": "점수 최고",
   "collection.scoreFilterHelp": "메타데이터 제공처가 영화에 매긴 10점 만점 점수입니다.",
-  "collection.scoreDataMissing": "{count}편의 영화에는 아직 점수가 없어 점수 필터에서 제외됩니다"
+  "collection.scoreDataMissing": "{count}편의 영화에는 아직 점수가 없어 점수 필터에서 제외됩니다",
+  "collection.scoreMinVotes": "최소 투표 수",
+  "collection.voteDataMissing": "{count}편의 영화에는 아직 투표 수가 없어 투표 수 필터에서 제외됩니다",
+  "movieDetail.scoreVotes": "투표 {count}회",
+  "appAdmin.votesBackfill": "투표 수",
+  "appAdmin.votesBackfillHelp": "몇 명이 줬는지 모르면 점수는 별 의미가 없습니다. 세 표의 10.0이 1만 2천 표의 8.4보다 앞서게 됩니다. 이전에 추가한 영화는 투표 수가 없어 라이브러리의 투표 수 필터에서 빠집니다. 이 작업은 TMDB에 기본 레코드만 요청해 그 숫자 하나만 기록합니다.",
+  "appAdmin.votesBackfillRun": "투표 수 채우기",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb 플러그인이 {installed} 버전입니다. 투표 수에는 {required} 이상이 필요합니다. Admin → Plugins에서 업데이트하세요. 그렇지 않으면 아무것도 채워지지 않습니다.",
+  "appAdmin.votesBackfillQueueing": "투표 수 작업을 예약하는 중...",
+  "appAdmin.votesBackfillQueued": "투표 수 작업 {count}건을 예약했습니다.",
+  "appAdmin.votesBackfillNothing": "채울 수 있는 모든 영화에 이미 투표 수가 있습니다."
 }

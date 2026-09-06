@@ -116,8 +116,7 @@ class FilterSchemaTests(unittest.TestCase):
         cls.source = _source()
 
     def test_the_schema_carries_a_custom_object(self):
-        start = self.source.index("function advancedSearchDefaults")
-        block = self.source[start : start + 900]
+        block = _function_source(self.source, "advancedSearchDefaults")
         self.assertIn("custom: {}", block)
 
     def test_a_stored_constraint_is_kept_rather_than_validated_against_data(self):

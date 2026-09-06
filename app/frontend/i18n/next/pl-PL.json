@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Ocena od",
   "collection.scoreTo": "Ocena do",
   "collection.scoreFilterHelp": "Ocena, którą filmowi wystawia Twoje źródło metadanych, w skali do 10.",
-  "collection.scoreDataMissing": "{count} filmów nie ma jeszcze oceny i filtr ocen je pomija"
+  "collection.scoreDataMissing": "{count} filmów nie ma jeszcze oceny i filtr ocen je pomija",
+  "collection.scoreMinVotes": "Minimalna liczba głosów",
+  "collection.voteDataMissing": "{count} filmów nie ma jeszcze liczby głosów i próg głosów je pomija",
+  "movieDetail.scoreVotes": "{count} głosów",
+  "appAdmin.votesBackfill": "Liczba głosów",
+  "appAdmin.votesBackfillHelp": "Ocena niewiele mówi, dopóki nie wiadomo, ilu ludzi ją wystawiło: 10,0 z trzech głosów wyprzedza 8,4 z dwunastu tysięcy. Filmy dodane wcześniej nie mają liczby głosów, więc pozostają poza progiem głosów w bibliotece. To pyta TMDB o sam rekord i zapisuje wyłącznie tę jedną liczbę.",
+  "appAdmin.votesBackfillRun": "Uzupełnij liczbę głosów",
+  "appAdmin.votesBackfillPluginTooOld": "Wtyczka TMDb ma wersję {installed}; liczba głosów wymaga {required} lub nowszej. Zaktualizuj ją w Admin → Plugins, inaczej nic się tu nie uzupełni.",
+  "appAdmin.votesBackfillQueueing": "Planowanie zadania liczby głosów...",
+  "appAdmin.votesBackfillQueued": "Zaplanowano {count} zadań liczby głosów.",
+  "appAdmin.votesBackfillNothing": "Każdy film, który można uzupełnić, ma już liczbę głosów."
 }

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Wertung ab",
   "collection.scoreTo": "Wertung bis",
   "collection.scoreFilterHelp": "Die Wertung, die deine Metadatenquelle einem Film gibt, von 10.",
-  "collection.scoreDataMissing": "{count} Filme haben noch keine Wertung und werden von einem Wertungsfilter ausgeschlossen"
+  "collection.scoreDataMissing": "{count} Filme haben noch keine Wertung und werden von einem Wertungsfilter ausgeschlossen",
+  "collection.scoreMinVotes": "Mindestanzahl Stimmen",
+  "collection.voteDataMissing": "{count} Filme haben noch keine Stimmenzahl und werden von einer Stimmenschwelle ausgeschlossen",
+  "movieDetail.scoreVotes": "{count} Stimmen",
+  "appAdmin.votesBackfill": "Stimmenzahlen",
+  "appAdmin.votesBackfillHelp": "Eine Wertung sagt wenig aus, solange unbekannt ist, wie viele Menschen sie abgegeben haben: 10,0 aus drei Stimmen schlägt 8,4 aus zwölftausend. Früher hinzugefügte Filme tragen keine Stimmenzahl und bleiben deshalb außerhalb der Stimmenschwelle in der Bibliothek. Dies fragt bei TMDB den bloßen Datensatz ab und schreibt nur diese eine Zahl.",
+  "appAdmin.votesBackfillRun": "Stimmenzahlen füllen",
+  "appAdmin.votesBackfillPluginTooOld": "Das TMDb-Plug-in hat Version {installed}; für Stimmenzahlen wird {required} oder neuer benötigt. Aktualisiere es unter Admin → Plugins, sonst wird hier nichts ergänzt.",
+  "appAdmin.votesBackfillQueueing": "Stimmenauftrag wird eingeplant...",
+  "appAdmin.votesBackfillQueued": "{count} Aufträge für Stimmenzahlen eingeplant.",
+  "appAdmin.votesBackfillNothing": "Jeder Film, der gefüllt werden kann, hat bereits eine Stimmenzahl."
 }

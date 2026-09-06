@@ -38,6 +38,8 @@ try:
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
+    from .next_metadata import backfill_movie_rating_votes
     from .next_metadata import backfill_movie_origins
     from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
@@ -91,6 +93,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
+    from next_metadata import backfill_movie_rating_votes
     from next_metadata import backfill_movie_origins
     from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
@@ -566,6 +570,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == MOVIE_ORIGIN_BACKFILL_JOB_TYPE:
         return process_movie_origin_backfill(payload, worker_id)
 
+    if job_type == MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE:
+        return process_movie_rating_votes_backfill(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
@@ -609,6 +616,23 @@ def process_movie_origin_backfill(payload: dict[str, Any], worker_id: str) -> di
     limit = int(payload.get("limit") or 100)
     with connect() as conn:
         summary = backfill_movie_origins(conn, movie_ids or None, limit=limit)
+    return {"workerId": worker_id, "summary": summary}
+
+
+def process_movie_rating_votes_backfill(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Fill the vote count behind the score for films that have none.
+
+    A batch of movie ids, or the next `limit` films that still need one.
+    Narrow like its origin sibling above: it asks TMDB for the bare record
+    and writes a single integer, so it runs over a whole library in minutes
+    rather than the hours a metadata refresh takes, and it rewrites no
+    artwork, credits or provenance on the way.
+    """
+    raw_ids = payload.get("movieIds") or payload.get("movie_ids") or []
+    movie_ids = [clean_text(item) for item in raw_ids if clean_text(item)] if isinstance(raw_ids, list) else []
+    limit = int(payload.get("limit") or 100)
+    with connect() as conn:
+        summary = backfill_movie_rating_votes(conn, movie_ids or None, limit=limit)
     return {"workerId": worker_id, "summary": summary}
 
 

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "評分下限",
   "collection.scoreTo": "評分上限",
   "collection.scoreFilterHelp": "中繼資料來源為影片給出的評分，滿分 10 分。",
-  "collection.scoreDataMissing": "{count} 部影片尚無評分，評分篩選會將其排除"
+  "collection.scoreDataMissing": "{count} 部影片尚無評分，評分篩選會將其排除",
+  "collection.scoreMinVotes": "最少投票數",
+  "collection.voteDataMissing": "{count} 部影片尚無投票數，投票數門檻會將其排除",
+  "movieDetail.scoreVotes": "{count} 人投票",
+  "appAdmin.votesBackfill": "投票數",
+  "appAdmin.votesBackfillHelp": "不知道有多少人打分，評分並無多少意義：三人打出的 10.0 會排在一萬兩千人打出的 8.4 之前。早先新增的影片沒有投票數，因此會被媒體庫的投票數門檻排除。此操作向 TMDB 請求基本記錄，並僅寫入那一個數字。",
+  "appAdmin.votesBackfillRun": "填入投票數",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb 外掛為 {installed} 版；投票數需要 {required} 或更新版本。請在 Admin → Plugins 中更新，否則這裡什麼也不會填入。",
+  "appAdmin.votesBackfillQueueing": "正在排程投票數工作...",
+  "appAdmin.votesBackfillQueued": "已排程 {count} 個投票數工作。",
+  "appAdmin.votesBackfillNothing": "每部可填入的影片都已有投票數。"
 }

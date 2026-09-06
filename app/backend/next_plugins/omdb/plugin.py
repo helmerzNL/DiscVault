@@ -38,6 +38,18 @@ def _runtime(value):
     return int(match.group(0)) if match else None
 
 
+def _votes(value):
+    """The vote count behind imdbRating, as an integer.
+
+    OMDb sends it group-separated -- "2,043,127" -- and sends the string "N/A"
+    when it has none. Returning None for the latter is deliberate and is the
+    whole contract of this field: null means "not known", while 0 would claim
+    OMDb had told us nobody has voted. See migration 092.
+    """
+    text = _clean(value).replace(",", "").replace(".", "").replace(" ", "")
+    return int(text) if text.isdigit() else None
+
+
 def _request(context, **params):
     api_key = _api_key(context)
     if not api_key:
@@ -66,6 +78,7 @@ def _normalize_movie(data):
             "runtimeMinutes": _runtime(data.get("Runtime")),
             "overview": _clean(data.get("Plot")),
             "rating": _clean(data.get("imdbRating")),
+            "ratingVotes": _votes(data.get("imdbVotes")),
             "director": _clean(data.get("Director")),
             "actor": _clean(data.get("Actors")),
             "genre": _clean(data.get("Genre")),

@@ -98,6 +98,12 @@ METADATA_MAIN_FIELDS = {
     "runtime_minutes",
     "overview",
     "rating",
+    # The sample behind `rating`, and provider-owned for exactly the same reason:
+    # no screen offers an input for it, and a number a user typed would be a
+    # claim about how many strangers voted. Integer, unlike `rating` beside it --
+    # see migration 092 for why the vote count did not inherit that column's
+    # `text`, and why NULL and 0 have to stay apart.
+    "rating_votes",
     # Provider-writable, but only because a human states it.
     #
     # This began as local-only: nothing could tell a series from a film, so any
@@ -354,6 +360,7 @@ METADATA_ENRICHMENT_FIELDS = {
     "runtime",
     "runtime_minutes",
     "rating",
+    "rating_votes",
     "audience_rating",
     "director",
     "directors",
@@ -472,6 +479,14 @@ MOVIE_FIELD_ALIASES = {
     "runtime": "runtime_minutes",
     "runtimeMinutes": "runtime_minutes",
     "audienceRating": "audience_rating",
+    # Every spelling a source is plausibly going to use. Without the alias the
+    # fall-through this dict's own comment describes drops the raw camelCase key
+    # into the metadata blob under its literal name -- where nothing reads it,
+    # nothing compares it numerically, and nothing says it happened.
+    "ratingVotes": "rating_votes",
+    "rating_votes": "rating_votes",
+    "voteCount": "rating_votes",
+    "vote_count": "rating_votes",
     "poster": "poster_url",
     "posterUrl": "poster_url",
     "poster_url": "poster_url",
@@ -900,6 +915,11 @@ def movie_film_origin(conn, movie_id: UUID) -> dict[str, Any]:
 
 
 MOVIE_ORIGIN_BACKFILL_JOB_TYPE = "metadata.backfill_origin"
+# Its own job type rather than a flag on the one above, because the two
+# select different films and a shared type would make the admin card unable
+# to say which run the counters belong to -- the failure #719 reported for
+# the origin jobs, which were invisible on the very screen that queued them.
+MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE = "metadata.backfill_rating_votes"
 
 
 # One TMDB id per film, resolved the way every other TMDB read in the codebase
@@ -933,6 +953,220 @@ m.deleted_at IS NULL
     SELECT 1 FROM movie_origin_countries moc WHERE moc.movie_id = m.id
   )
 """
+
+
+def movies_have_rating_votes(conn) -> bool:
+    """Whether ``movies.rating_votes`` exists yet (migration 092).
+
+    Every other guard in this module asks ``table_exists``, which cannot answer
+    a question about one column. Without this, an instance that has the code but
+    has not run migrations answers the backfill route with a 500 from
+    PostgreSQL rather than an empty queue.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_name = %s AND column_name = %s
+            LIMIT 1
+            """,
+            ("movies", "rating_votes"),
+        )
+        return cur.fetchone() is not None
+
+
+# A film needs a vote count when the column is still NULL. NULL, not 0: a film
+# TMDB has genuinely never had a vote for is answered and must leave the queue,
+# or the backfill asks about it again on every run for the life of the install.
+# That distinction is why migration 092 refused a DEFAULT, and this predicate is
+# the first place it pays for itself.
+MISSING_RATING_VOTES_PREDICATE = """
+m.deleted_at IS NULL
+  AND m.rating_votes IS NULL
+"""
+
+
+def movies_missing_rating_votes(conn, *, limit: int | None = 100) -> list[dict[str, Any]]:
+    """Films that have a TMDB id and no vote count yet, oldest first.
+
+    Deliberately the same shape, ordering and ``limit=None`` contract as
+    ``movies_missing_film_origin`` below, and it reuses that function's TMDB
+    join rather than restating it -- the comment on that constant records what
+    happened when the selector and the counter each carried their own copy: a
+    film stored under ``TMDB`` was counted as pending and never filled, and the
+    number stalled above zero with nothing to explain why.
+    """
+    if not table_exists(conn, "movie_identifiers") or not movies_have_rating_votes(conn):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT m.id, origin_tmdb.identifier AS tmdb_id
+            FROM movies m
+            {MISSING_ORIGIN_TMDB_JOIN}
+            WHERE {MISSING_RATING_VOTES_PREDICATE}
+              AND origin_tmdb.identifier IS NOT NULL
+            ORDER BY m.created_at, m.id
+            {"LIMIT %s" if limit is not None else ""}
+            """,
+            (limit,) if limit is not None else (),
+        )
+        return [dict(row) for row in cur.fetchall()]
+
+
+def count_movies_missing_rating_votes(conn) -> dict[str, int]:
+    """How many films still need a vote count, and how many can never get one.
+
+    The split matters for the same reason it does for origin: a film with no
+    TMDB identifier cannot be answered by this job at all, and folding it into
+    ``pending`` leaves a counter that never reaches zero with nothing on the
+    screen to say why. #719 is the report that produced that rule.
+    """
+    counts = {"pending": 0, "unresolvable": 0}
+    if not table_exists(conn, "movies") or not movies_have_rating_votes(conn):
+        return counts
+    has_identifiers = table_exists(conn, "movie_identifiers")
+    # Without the identifiers table nothing can be filled, so every film missing
+    # a vote count is unresolvable rather than pending -- the same correction
+    # the origin counter carries, for the same reason: reading both as zero says
+    # "nothing to do" about a library that can do nothing.
+    has_tmdb_expr = "origin_tmdb.identifier IS NOT NULL" if has_identifiers else "FALSE"
+    join = MISSING_ORIGIN_TMDB_JOIN if has_identifiers else ""
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+                COUNT(*) FILTER (WHERE has_tmdb)::int AS pending,
+                COUNT(*) FILTER (WHERE NOT has_tmdb)::int AS unresolvable
+            FROM (
+                SELECT
+                    m.id,
+                    {has_tmdb_expr} AS has_tmdb
+                FROM movies m
+                {join}
+                WHERE {MISSING_RATING_VOTES_PREDICATE}
+            ) AS missing
+            """
+        )
+        row = cur.fetchone()
+    if row:
+        counts["pending"] = int(row.get("pending") or 0)
+        counts["unresolvable"] = int(row.get("unresolvable") or 0)
+    return counts
+
+
+def backfill_movie_rating_votes(conn, movie_ids: list[Any] | None = None, *, limit: int = 100) -> dict[str, Any]:
+    """Fill the vote count for films that have none, and touch nothing else.
+
+    The sibling of ``backfill_movie_origins``, and narrow for the same reason it
+    is: ``refresh_movie_metadata`` asks TMDB with append_to_response for credits,
+    videos, images, release dates and translations, walks the whole merge
+    pipeline, rewrites artwork and provenance across the catalogue and emits a
+    global sync change per film. That is hours over a large library, to fill one
+    integer.
+
+    This asks for the bare record, writes only ``movies.rating_votes``, and emits
+    no sync change: the value travels on the next ordinary movie payload, which
+    already carries it.
+
+    It is deliberately a separate job from the origin backfill rather than a
+    second field on that one. The two select different films -- a library that
+    has already been through the origin backfill has origin everywhere and vote
+    counts nowhere -- so a single job could not serve both without asking TMDB
+    about films that need nothing from it. The cost is that a fresh install
+    running both makes two passes over the same films; the alternative was
+    rewriting a job that shipped days ago and is in active use.
+    """
+    summary = {"requested": 0, "updated": 0, "skipped": 0, "failed": 0, "unresolved": 0}
+    if movie_ids:
+        rows = []
+        with conn.cursor() as cur:
+            # The same LATERAL pick the selector uses, for the same two reasons:
+            # a film carrying two `tmdb` rows must not be asked about twice, and
+            # a provider id stored as `TMDB` must resolve here as well. A job is
+            # queued from the selector, so a mismatch between the two would hand
+            # a job ids it then records as unresolved.
+            cur.execute(
+                f"""
+                SELECT m.id, origin_tmdb.identifier AS tmdb_id
+                FROM movies m
+                {MISSING_ORIGIN_TMDB_JOIN}
+                WHERE m.id = ANY(%s) AND m.deleted_at IS NULL
+                """,
+                (list(movie_ids),),
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+    else:
+        rows = movies_missing_rating_votes(conn, limit=limit)
+    summary["requested"] = len(rows)
+    if not rows:
+        return summary
+    # The plugin *record* from the registry, not the `PluginDiscovery` dataclass
+    # `discovered_plugin` returns: `plugin_execution_context` reads its argument
+    # with `.get`, and mixing the two shapes is what made every origin job fail
+    # before its first TMDB request, silently, for a week (#719).
+    plugin = next(
+        (item for item in metadata_source_plugins(conn) if str(item.get("id") or "") == TMDB_PLUGIN_ID),
+        None,
+    )
+    # Raise rather than counting N failures. A summary of "100 failed" rides in a
+    # job whose status says it succeeded, so the reason never reaches a screen;
+    # an exception lands in `background_jobs.error`, which the admin card reads
+    # back and shows.
+    if not plugin:
+        raise RuntimeError(
+            "The TMDb plugin is not installed and enabled, so vote counts cannot be filled in."
+        )
+    config = plugin_config_from_db(conn, TMDB_PLUGIN_ID)
+    if plugin_requires_config(plugin, config, "movie_details"):
+        raise RuntimeError(
+            "The TMDb plugin has no API key configured, so vote counts cannot be filled in."
+        )
+    context = plugin_execution_context(conn, plugin, config)
+    for row in rows:
+        tmdb_id = clean_text(row.get("tmdb_id"))
+        if not tmdb_id:
+            summary["unresolved"] += 1
+            continue
+        # Every write below reopens the transaction, so the release belongs
+        # inside the loop rather than once before it: holding one open across a
+        # TMDB round trip, times the whole library, is what this job would
+        # otherwise do for minutes at a stretch.
+        release_read_transaction(conn)
+        try:
+            execution = run_plugin_entrypoint(
+                TMDB_PLUGIN_ID,
+                "movie_details",
+                {"tmdbId": tmdb_id, "id": tmdb_id},
+                context,
+            )
+        except Exception:
+            logger.warning("rating votes backfill failed for movie %s", row.get("id"), exc_info=True)
+            summary["failed"] += 1
+            continue
+        if not isinstance(execution, dict) or execution.get("status") != "ok":
+            summary["failed"] += 1
+            continue
+        result = execution.get("result") if isinstance(execution.get("result"), dict) else {}
+        movie = result.get("movie") if isinstance(result.get("movie"), dict) else {}
+        votes = normalize_vote_count(movie.get("ratingVotes"))
+        if votes is None:
+            # TMDB answered, but this plugin build does not carry the field, or
+            # carried something that is not a count. Not a failure, and not
+            # something to write: leaving the film pending means a later run
+            # picks it up once the plugin is updated. This is exactly the case
+            # the card's plugin-version warning exists to explain, because a run
+            # of nothing but skips looks identical to a run that never happened.
+            summary["skipped"] += 1
+            continue
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE movies SET rating_votes=%s WHERE id=%s",
+                (votes, row["id"]),
+            )
+        summary["updated"] += 1
+    return summary
 
 
 def movies_missing_film_origin(conn, *, limit: int | None = 100) -> list[dict[str, Any]]:
@@ -2082,6 +2316,41 @@ def normalize_year_value(value: Any) -> str | None:
     return match.group(0) if match else None
 
 
+def normalize_vote_count(value: Any) -> int | None:
+    """Coerce a provider's vote count to the ``integer`` ``movies.rating_votes`` stores.
+
+    Same failure shape as ``normalize_year_value`` above and the same reason for
+    existing: sources disagree on the type. TMDB sends ``vote_count`` as a JSON
+    number, OMDb sends ``imdbVotes`` group-separated as ``"2,043,127"``, and an
+    import path could send anything. Binding a string against an ``integer``
+    column aborts the whole UPDATE, so every field in the same refresh is lost --
+    not just this one.
+
+    Returns ``None`` rather than 0 for anything unusable. That distinction is the
+    point of the column (migration 092): ``None`` leaves the film in the backfill
+    queue and out of a vote floor, while 0 is a positive statement that nobody
+    has voted. Coercing a garbled value to 0 would make the film look answered.
+    """
+    if isinstance(value, bool):  # bool is an int subclass; never a count
+        return None
+    if isinstance(value, int):
+        return value if value >= 0 else None
+    if isinstance(value, float):
+        # A JSON number that arrived as 1204.0. Fractional votes do not exist,
+        # so anything with a fraction is not a count and is refused rather than
+        # rounded into one.
+        return int(value) if value >= 0 and value.is_integer() else None
+    text = clean_text(value)
+    if not text:
+        return None
+    # Group separators only: a comma in "2,043,127" and the dot in "2.043.127"
+    # are the same separator in different locales, and neither is a decimal
+    # point in a count. A value that still is not all digits afterwards -- a
+    # range, a suffix like "12K", free text -- is refused.
+    stripped = re.sub(r"[\s,.\u00a0\u202f']", "", text)
+    return int(stripped) if stripped.isdigit() else None
+
+
 def metadata_stable_uuid(kind: str, key: str) -> uuid.UUID:
     return uuid.uuid5(METADATA_NAMESPACE, f"{kind}:{key}")
 
@@ -2744,6 +3013,17 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
                 normalized_media_type = normalize_media_type(value)
                 if normalized_media_type:
                     movie_updates[key] = normalized_media_type
+                continue
+            # Third of the same family as `year` and `media_type` above:
+            # `movies.rating_votes` is an integer with a non-negative CHECK, so a
+            # source offering "2,043,127" or a stray float fails the whole UPDATE
+            # and takes every other field in the refresh with it. Lenient in,
+            # exact out; a value that is not a count is dropped rather than
+            # coerced to 0, which would claim the provider had answered.
+            if key == "rating_votes":
+                parsed_votes = normalize_vote_count(value)
+                if parsed_votes is not None:
+                    movie_updates[key] = parsed_votes
                 continue
             if key in METADATA_MAIN_FIELDS:
                 movie_updates[key] = value

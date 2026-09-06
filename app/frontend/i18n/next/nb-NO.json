@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Poeng fra",
   "collection.scoreTo": "Poeng til",
   "collection.scoreFilterHelp": "Poengene metadatakilden din gir en film, av 10.",
-  "collection.scoreDataMissing": "{count} filmer har ennå ingen poeng og faller utenfor et poengfilter"
+  "collection.scoreDataMissing": "{count} filmer har ennå ingen poeng og faller utenfor et poengfilter",
+  "collection.scoreMinVotes": "Minste antall stemmer",
+  "collection.voteDataMissing": "{count} filmer har ennå ingen stemmetall og faller utenfor en stemmegrense",
+  "movieDetail.scoreVotes": "{count} stemmer",
+  "appAdmin.votesBackfill": "Stemmetall",
+  "appAdmin.votesBackfillHelp": "Poeng sier lite uten å vite hvor mange som ga dem: 10,0 fra tre stemmer slår 8,4 fra tolv tusen. Filmer som ble lagt til tidligere har ingen stemmetall, og faller derfor utenfor stemmegrensen i biblioteket. Dette ber TMDB om den bare posten og skriver kun det ene tallet.",
+  "appAdmin.votesBackfillRun": "Fyll inn stemmetall",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb-utvidelsen er versjon {installed}; stemmetall krever {required} eller nyere. Oppdater den under Admin → Plugins, ellers fylles ingenting inn her.",
+  "appAdmin.votesBackfillQueueing": "Planlegger stemmejobb...",
+  "appAdmin.votesBackfillQueued": "{count} stemmejobber planlagt.",
+  "appAdmin.votesBackfillNothing": "Alle filmer som kan fylles ut har allerede et stemmetall."
 }

@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Įvertinimas nuo",
   "collection.scoreTo": "Įvertinimas iki",
   "collection.scoreFilterHelp": "Įvertinimas, kurį filmui suteikia jūsų metaduomenų šaltinis, iš 10.",
-  "collection.scoreDataMissing": "{count} filmų dar neturi įvertinimo ir įvertinimo filtras juos praleidžia"
+  "collection.scoreDataMissing": "{count} filmų dar neturi įvertinimo ir įvertinimo filtras juos praleidžia",
+  "collection.scoreMinVotes": "Mažiausias balsų skaičius",
+  "collection.voteDataMissing": "{count} filmų dar neturi balsų skaičiaus ir balsų riba juos praleidžia",
+  "movieDetail.scoreVotes": "{count} balsų",
+  "appAdmin.votesBackfill": "Balsų skaičius",
+  "appAdmin.votesBackfillHelp": "Įvertinimas pasako mažai, kol nežinoma, kiek žmonių jį davė: 10,0 iš trijų balsų aplenkia 8,4 iš dvylikos tūkstančių. Anksčiau pridėti filmai neturi balsų skaičiaus, todėl lieka už bibliotekos balsų ribos. Tai paprašo TMDB tik pagrindinio įrašo ir įrašo vien tą skaičių.",
+  "appAdmin.votesBackfillRun": "Užpildyti balsų skaičių",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb papildinys yra {installed} versijos; balsų skaičiui reikia {required} arba naujesnės. Atnaujinkite jį Admin → Plugins, kitaip čia niekas nebus užpildyta.",
+  "appAdmin.votesBackfillQueueing": "Planuojama balsų skaičiaus užduotis...",
+  "appAdmin.votesBackfillQueued": "Suplanuota {count} balsų skaičiaus užduočių.",
+  "appAdmin.votesBackfillNothing": "Kiekvienas filmas, kurį galima užpildyti, jau turi balsų skaičių."
 }

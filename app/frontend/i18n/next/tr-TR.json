@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Puan alt sınırı",
   "collection.scoreTo": "Puan üst sınırı",
   "collection.scoreFilterHelp": "Meta veri kaynağınızın filme verdiği 10 üzerinden puan.",
-  "collection.scoreDataMissing": "{count} filmin henüz puanı yok ve puan filtresi onları dışarıda bırakır"
+  "collection.scoreDataMissing": "{count} filmin henüz puanı yok ve puan filtresi onları dışarıda bırakır",
+  "collection.scoreMinVotes": "En az oy sayısı",
+  "collection.voteDataMissing": "{count} filmin henüz oy sayısı yok ve oy eşiği onları dışarıda bırakır",
+  "movieDetail.scoreVotes": "{count} oy",
+  "appAdmin.votesBackfill": "Oy sayıları",
+  "appAdmin.votesBackfillHelp": "Bir puan, kaç kişinin verdiği bilinmeden az şey anlatır: üç oydan gelen 10,0, on iki binden gelen 8,4'ü geçer. Daha önce eklenen filmlerde oy sayısı yoktur, bu yüzden kütüphanedeki oy eşiğinin dışında kalırlar. Bu işlem TMDB'den yalın kaydı ister ve yalnızca o tek sayıyı yazar.",
+  "appAdmin.votesBackfillRun": "Oy sayılarını doldur",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb eklentisi {installed} sürümünde; oy sayıları için {required} veya daha yenisi gerekir. Admin → Plugins altından güncelleyin, aksi halde burada hiçbir şey doldurulmaz.",
+  "appAdmin.votesBackfillQueueing": "Oy sayısı işi planlanıyor...",
+  "appAdmin.votesBackfillQueued": "{count} oy sayısı işi planlandı.",
+  "appAdmin.votesBackfillNothing": "Doldurulabilecek her filmin zaten bir oy sayısı var."
 }

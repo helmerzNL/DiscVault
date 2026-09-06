@@ -316,6 +316,12 @@ def _normalize_details(data):
             "overview": data.get("overview") or "",
             "runtimeMinutes": data.get("runtime"),
             "rating": str(data.get("vote_average") or "")[:4],
+            # The sample behind that score. Carried as the integer TMDB sends,
+            # not stringified like `rating` beside it: a vote floor compares
+            # numerically, and "1204" as text sorts below "9". A title TMDB has
+            # never had a vote for reports 0 here, which is a real answer and
+            # not the same as this key being absent -- see migration 092.
+            "ratingVotes": data.get("vote_count"),
             "director": ", ".join(directors),
             "actor": ", ".join(actors),
             "producer": ", ".join(producers),

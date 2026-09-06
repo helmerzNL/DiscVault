@@ -3146,5 +3146,15 @@
   "collection.scoreFrom": "Vērtējums no",
   "collection.scoreTo": "Vērtējums līdz",
   "collection.scoreFilterHelp": "Vērtējums, ko filmai piešķir tavs metadatu avots, no 10.",
-  "collection.scoreDataMissing": "{count} filmām vēl nav vērtējuma, un vērtējuma filtrs tās izlaiž"
+  "collection.scoreDataMissing": "{count} filmām vēl nav vērtējuma, un vērtējuma filtrs tās izlaiž",
+  "collection.scoreMinVotes": "Minimālais balsu skaits",
+  "collection.voteDataMissing": "{count} filmām vēl nav balsu skaita, un balsu slieksnis tās izlaiž",
+  "movieDetail.scoreVotes": "{count} balsis",
+  "appAdmin.votesBackfill": "Balsu skaits",
+  "appAdmin.votesBackfillHelp": "Vērtējums pasaka maz, kamēr nav zināms, cik cilvēku to devuši: 10,0 no trīs balsīm apsteidz 8,4 no divpadsmit tūkstošiem. Agrāk pievienotām filmām nav balsu skaita, tāpēc tās paliek ārpus bibliotēkas balsu sliekšņa. Šis pieprasa no TMDB tikai pamata ierakstu un ieraksta tikai šo vienu skaitli.",
+  "appAdmin.votesBackfillRun": "Aizpildīt balsu skaitu",
+  "appAdmin.votesBackfillPluginTooOld": "TMDb spraudnis ir versija {installed}; balsu skaitam nepieciešama {required} vai jaunāka. Atjaunini to sadaļā Admin → Plugins, citādi šeit nekas netiks aizpildīts.",
+  "appAdmin.votesBackfillQueueing": "Balsu skaita uzdevuma plānošana...",
+  "appAdmin.votesBackfillQueued": "Ieplānoti {count} balsu skaita uzdevumi.",
+  "appAdmin.votesBackfillNothing": "Katrai filmai, ko var aizpildīt, jau ir balsu skaits."
 }
