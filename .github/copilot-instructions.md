@@ -1,5 +1,25 @@
 # DiscVault contributor & agent instructions
 
+## The shared guidance lives in App-Guidance
+
+This document covers DiscVault Core. Everything **shared across Flux76 projects** lives in
+[`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance) and is not repeated here:
+the enforceable baseline in `shared/guidelines/project-baseline.md` (versioning, CI guardrails,
+secrets, release discipline, PR workflow), `AUTHORITY.md` for which document leads per domain,
+the normative sync contract in `projects/discvault/contracts/sync-contract.md`, and the DiscVault
+specs and cross-repo change specs under `projects/discvault/`.
+
+**Precedence.** On anything shared, App-Guidance leads and this document must not contradict it.
+On DiscVault's own two-branch model, its version guard and its promotion rule, this document
+leads — and `CLAUDE.md` mirrors it.
+
+One standing rule from the baseline that this document does not otherwise state: **an agent
+carries its own PR to merge** (baseline §8) — watch it, drive failing checks to green, and merge
+once every check passes, without asking again at the green light. "All green" is the condition,
+not a formality, and a red version guard is never green.
+
+---
+
 ## Version guard: CI bumps `app/VERSION`, your PR must not
 
 **Do not bump `app/VERSION` in a pull request.** The bump is applied by CI on
@@ -357,6 +377,45 @@ working copy is attached and as a hand-over only when it is not.
 - After promotion, verify `main` and `release/v26-beta` are content-identical
   (`git diff origin/main origin/release/v26-beta --stat` empty).
 - Promotion only merges — **never delete `release/v26-beta`** afterwards.
+
+---
+
+## A new feature gets a fresh worktree and its own session
+
+Build every new feature in a **fresh worktree** on its own branch off `release/v26-beta`, and in
+a **separate session**. One feature, one workspace, one session. Follow this automatically on
+every feature — do not wait to be reminded.
+
+A checkout is on one branch at a time, and the working tree, the index and the stash below it
+belong to the *directory*, not to the task. Two features built side by side in one checkout
+therefore do not merely risk mixing — mixing is the default, and the first `git add -A` of either
+takes the other's half-finished edits with it. Nothing errors: the diff looks like one change and
+the pull request looks like one change, because by then it is one change.
+
+Check it when you classify the work, alongside the iOS/Android question:
+
+- **Is this a feature?** A fix, a refactor or a chore inherits the workspace it is given — they
+  are short, and the ceremony costs more than it prevents.
+- **Is this directory a linked worktree?** It is when `git rev-parse --git-dir` differs from
+  `git rev-parse --git-common-dir`, provided `git rev-parse --show-superproject-working-tree` is
+  empty — that command names a superproject, and a submodule looks the same on the first test.
+
+If it is a feature and the checkout is shared, **say so before the first edit, not after**.
+Afterwards there is nothing left to warn about, because no tool can tell which lines belonged to
+which feature. It is a warning, not a veto: "build it here anyway" is a complete answer, and it
+is not re-argued.
+
+Two mechanics worth getting right:
+
+- **Prefer the agent platform's own worktree tool** over a hand-run `git worktree add`. The
+  native tool owns placement, branch creation and cleanup; a hand-made worktree is state the
+  platform cannot see, and therefore cannot clean up.
+- **Verify the worktree directory is ignored before creating it** — `git check-ignore -q
+  .worktrees`, and add it to `.gitignore` first if it is not. An unignored worktree directory
+  puts a second full checkout inside the repository, and the next `git add -A` commits it.
+
+Recorded centrally in App-Guidance `shared/guidelines/project-baseline.md` §16; this section is
+DiscVault's copy of it, and the two must not drift apart.
 
 ---
 

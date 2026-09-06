@@ -10,6 +10,30 @@ be reminded. **If a request would break the two-branch model or the merge-commit
 stop and warn the user before acting.**
 
 ---
+## The shared guidance lives in App-Guidance
+
+This file covers DiscVault Core. Everything that is **shared across Flux76 projects** lives in
+[`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance), and is not repeated here:
+
+| What you need | Where it is |
+|---|---|
+| The enforceable baseline — versioning, CI guardrails, secrets, release discipline, PR workflow | [`shared/guidelines/project-baseline.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md) |
+| Which document leads per domain, and where that document lives | [`AUTHORITY.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/AUTHORITY.md) |
+| The normative sync contract — identity, dedup, tombstones | [`projects/discvault/contracts/sync-contract.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/projects/discvault/contracts/sync-contract.md) |
+| DiscVault specs and cross-repo change specs | [`projects/discvault/`](https://github.com/Flux76HQ/App-Guidance/tree/main/projects/discvault) |
+
+**Precedence.** On anything shared, App-Guidance leads and this file must not contradict it. On
+DiscVault's own two-branch model, its version guard and its promotion rule, this file and
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md) lead. What to record there,
+and how, is under "Record decisions in the App-Guidance documentation repo" below.
+
+One standing rule from the baseline that this file does not otherwise state: **an agent carries
+its own PR to merge** ([§8](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md#8-agent-pull-requests-standing-authorisation-to-merge)) —
+watch it, drive failing checks to green, merge once every check passes, without asking again at
+the green light. "All green" is the condition, not a formality, and a red version guard is never
+green.
+
+---
 
 ## Branch & release workflow
 
@@ -215,6 +239,47 @@ the whole flow.
   prefix to commits and the PR title.
 
 ---
+## A new feature gets a fresh worktree and its own session
+
+Build every new feature in a **fresh worktree** on its own branch off `release/v26-beta`, and in
+a **separate session**. One feature, one workspace, one session. Follow this automatically — do
+not wait to be reminded.
+
+A checkout is on one branch at a time, and the working tree, the index and the stash below it
+belong to the *directory*, not to the task. Two features built side by side in one checkout
+therefore do not merely risk mixing — mixing is the default, and the first `git add -A` of either
+takes the other's half-finished edits with it. Nothing errors: the diff looks like one change and
+the pull request looks like one change, because by then it is one change. A session that
+alternates between two features has the matching failure — a commit on the wrong branch, caught
+only by whoever happens to notice.
+
+Check it at the moment you classify the work, alongside the iOS/Android question:
+
+- **Is this a feature?** A fix, a refactor or a chore inherits the workspace it is given — they
+  are short, and the ceremony costs more than it prevents.
+- **Is this directory a linked worktree?** It is when `git rev-parse --git-dir` differs from
+  `git rev-parse --git-common-dir`, provided `git rev-parse --show-superproject-working-tree` is
+  empty — that command names a superproject, and a submodule looks the same on the first test.
+
+If it is a feature and the checkout is shared, **say so before the first edit, not after**.
+Afterwards there is nothing left to warn about, because no tool can tell which lines belonged to
+which feature. It is a warning, not a veto: "build it here anyway" is a complete answer, and it
+is not re-argued.
+
+Two mechanics worth getting right:
+
+- **Prefer the harness's own worktree tool** (`EnterWorktree`, `/worktree`) over a hand-run
+  `git worktree add`. The native tool owns placement, branch creation and cleanup; a hand-made
+  worktree is state the harness cannot see, and therefore cannot clean up.
+- **Verify the worktree directory is ignored before creating it** — `git check-ignore -q
+  .worktrees`, and add it to `.gitignore` first if it is not. An unignored worktree directory
+  puts a second full checkout inside the repository, and the next `git add -A` commits it.
+
+The rule is recorded centrally in App-Guidance
+[`shared/guidelines/project-baseline.md` §16](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md#16-feature-work-gets-its-own-workspace-and-its-own-session);
+this section is DiscVault's copy of it, and the two must not drift apart.
+
+---
 
 ## Language & formatting of Git artifacts
 
@@ -356,6 +421,9 @@ filed.
 3. Keep the scope to that one bug/feature.
 4. For a **feature**, ask whether it should also exist on iOS and/or Android before
    building it. Not blocking — with no answer, note "not yet decided" and carry on.
+5. For a **feature**, build it in a fresh worktree off `release/v26-beta` and in a separate
+   session. If this is a shared checkout, say so **before the first edit** — afterwards the
+   changes cannot be told apart. A warning, not a veto.
 
 ### When committing
 
