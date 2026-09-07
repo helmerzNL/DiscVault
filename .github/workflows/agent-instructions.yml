@@ -1,0 +1,32 @@
+name: Agent Instructions
+
+on:
+  pull_request:
+    branches:
+      - release/v26-beta
+      - main
+
+jobs:
+  # `agent-instructions-lint` — its own job, and named exactly this, because a
+  # control has to be findable on the pull request under the name a document
+  # cites it by. `AGENTS.md` §11 lists it in the CI-controls table, and both
+  # pointer files tell the reader it is what fails when a canonical line is
+  # copied back into them. A control nobody can find under its cited name is not
+  # a control.
+  #
+  # It is a separate job rather than a step inside an existing one because steps
+  # in one job stop at the first failure: an unrelated red check would hide a
+  # duplicated rule in the instruction files until the next push.
+  agent-instructions-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # The validator's own tests first, then the validator — when the script
+      # fails you want to know whether the script is broken or the documents are.
+      - name: Test the agent-instructions validator
+        run: python -m unittest discover -s scripts -p "test_check_agent_instructions.py" -v
+
+      - name: Validate the agent instruction surfaces
+        run: python scripts/check_agent_instructions.py
