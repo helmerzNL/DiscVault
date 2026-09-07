@@ -34,6 +34,26 @@ def _source() -> str:
         return handle.read()
 
 
+# A fixed-width window after the function's name is a proxy for "inside this
+# function", and it silently stops being one as soon as the function grows: the
+# assertion then fails for a reason that has nothing to do with what it claims.
+# Adding the score filter to the same panel pushed three of these windows past
+# the function they meant. Brace matching reads the real one, so it cannot go
+# stale.
+def _function_source(source: str, name: str) -> str:
+    start = source.index("function %s(" % name)
+    depth = 0
+    for position in range(source.index("{", start), len(source)):
+        char = source[position]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : position + 1]
+    raise AssertionError("unbalanced braces reading %s" % name)
+
+
 class AdvancedSearchWiringTests(unittest.TestCase):
     """All six edits a Pattern B filter needs, each silent if skipped."""
 
@@ -42,17 +62,17 @@ class AdvancedSearchWiringTests(unittest.TestCase):
         cls.source = _source()
 
     def test_the_defaults_carry_both_keys(self):
-        block = self.source[self.source.index("function advancedSearchDefaults"):][:600]
+        block = _function_source(self.source, "advancedSearchDefaults")
         self.assertIn('originCountry: "any"', block)
         self.assertIn('originalLanguage: "any"', block)
 
     def test_the_active_count_counts_both(self):
-        block = self.source[self.source.index("function advancedSearchActiveCount"):][:900]
+        block = _function_source(self.source, "advancedSearchActiveCount")
         self.assertIn('normalized.originCountry !== "any"', block)
         self.assertIn('normalized.originalLanguage !== "any"', block)
 
     def test_the_controls_are_read_back(self):
-        block = self.source[self.source.index("function readAdvancedSearchControls"):][:900]
+        block = _function_source(self.source, "readAdvancedSearchControls")
         self.assertIn("advancedOriginCountry", block)
         self.assertIn("advancedOriginLanguage", block)
 
@@ -86,7 +106,10 @@ class StoredValueSurvivalTests(unittest.TestCase):
         # against the loaded movies, a saved smart filter silently widens to the
         # whole library while hydration is still running.
         start = self.source.index("function normalizeAdvancedSearch")
-        block = self.source[start : start + 2200]
+        # Read the complete function: adding another filter must not truncate
+        # this assertion before the origin normalization it verifies.
+        end = self.source.index("\n    function ", start + 1)
+        block = self.source[start:end]
         self.assertIn("/^[A-Za-z]{2}$/.test", block)
         self.assertIn("normalizeOriginLanguageValue(source.originalLanguage)", block)
 
@@ -222,6 +245,78 @@ class BackfillIsReachableTests(unittest.TestCase):
         block = self.source[start : start + 900]
         self.assertIn("appAdminOriginBackfillPending", block)
         self.assertIn("appAdminOriginBackfillUnresolvable", block)
+
+
+class BackfillReportsWhatItDidTests(unittest.TestCase):
+    """Pressing the button has to change something the operator can see.
+
+    It did not. The confirmation was written into `appAdminMetadataMessage` and
+    then overwritten milliseconds later by `refreshAppAdminMetadataJobs`, which
+    writes "Metadata jobs loaded." into the same node; the job list on that same
+    panel filters on the refresh job type, so the queued origin jobs never
+    appeared there either; and the counters came from the POST, which reads them
+    before it queues anything. Three separate silences, and together they are
+    the whole of "I pressed Fill in origin data and nothing seems to happen"
+    (#719).
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.source = _source()
+
+    def test_the_confirmation_is_set_after_the_refresh_that_would_overwrite_it(self):
+        start = self.source.index("async function queueAppAdminOriginBackfill")
+        block = self.source[start : start + 2200]
+        refresh = block.index("await refreshAppAdminMetadataJobs();")
+        confirmation = block.index('tNext("appAdmin.originBackfillQueued"')
+        self.assertLess(
+            refresh,
+            confirmation,
+            "the queue confirmation is set before the refresh that overwrites it",
+        )
+
+    def test_the_card_names_the_outstanding_jobs(self):
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn("appAdminOriginBackfillJobs", block)
+        self.assertIn('tNext("appAdmin.originBackfillRunning"', block)
+
+    def test_the_card_reports_the_last_run_rather_than_a_single_done(self):
+        # A run that asked TMDB about 100 films and wrote none of them is the
+        # outcome worth seeing, and only the split says it.
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn('tNext("appAdmin.originBackfillLastRun"', block)
+        self.assertIn("{updated}", block)
+        self.assertIn("{skipped}", block)
+        self.assertIn('tNext("appAdmin.originBackfillLastRunFailed"', block)
+
+    def test_a_tmdb_plugin_too_old_for_origin_is_named_on_the_card(self):
+        # Below 1.8.0 the plugin never returns `filmOrigin`, so the job succeeds
+        # and writes nothing. Nothing else in the app can say so.
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn("originCapable === false", block)
+        self.assertIn('tNext("appAdmin.originBackfillPluginTooOld"', block)
+
+    def test_the_button_is_disabled_while_a_run_is_still_outstanding(self):
+        start = self.source.index("function renderAppAdminOriginBackfill")
+        block = self.source[start : start + 4000]
+        self.assertIn('button.disabled = !(Number(counts?.pending) > 0) || outstanding > 0', block)
+
+    def test_the_poll_stops_when_the_queue_empties_or_the_tab_is_left(self):
+        """A timer that outlives its panel is a request every five seconds, forever."""
+        start = self.source.index("function scheduleAppAdminOriginBackfillPoll")
+        block = self.source[start : start + 1200]
+        self.assertIn('appAdmin.activeTab !== "metadata"', block)
+        self.assertIn('document.getElementById("appAdminOriginBackfillButton")', block)
+        self.assertIn("stopAppAdminOriginBackfillPoll();", block)
+        self.assertIn("jobs?.outstanding", block)
+
+    def test_reopening_the_panel_picks_a_running_backfill_back_up(self):
+        start = self.source.index("async function refreshAppAdminMetadataJobs")
+        block = self.source[start : start + 2000]
+        self.assertIn("scheduleAppAdminOriginBackfillPoll();", block)
 
 
 if __name__ == "__main__":

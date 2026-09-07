@@ -38,6 +38,8 @@ try:
     from .next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from .next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
+    from .next_metadata import backfill_movie_rating_votes
     from .next_metadata import backfill_movie_origins
     from .next_metadata import refresh_series_metadata
     from .next_metadata import lookup_metadata_sources
@@ -53,6 +55,8 @@ try:
     from .next_artwork_trash import purge_interval_hours
     from .next_sync_republish import SYNC_CATALOG_REPUBLISH_JOB_TYPE
     from .next_sync_republish import run_catalog_republish
+    from .next_custom_fields import custom_field_definition_rows
+    from .next_custom_fields import fill_movie_custom_values
     from .next_database import db_wait_timeout
     from .next_database import wait_for_database
     from .next_runtime_secrets import validate_runtime_secrets
@@ -89,6 +93,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_metadata import PERSON_METADATA_REFRESH_JOB_TYPE
     from next_metadata import SERIES_METADATA_REFRESH_JOB_TYPE
     from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
+    from next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
+    from next_metadata import backfill_movie_rating_votes
     from next_metadata import backfill_movie_origins
     from next_metadata import refresh_series_metadata
     from next_metadata import lookup_metadata_sources
@@ -104,6 +110,8 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_artwork_trash import purge_interval_hours
     from next_sync_republish import SYNC_CATALOG_REPUBLISH_JOB_TYPE
     from next_sync_republish import run_catalog_republish
+    from next_custom_fields import custom_field_definition_rows
+    from next_custom_fields import fill_movie_custom_values
     from next_database import db_wait_timeout
     from next_database import wait_for_database
     from next_runtime_secrets import validate_runtime_secrets
@@ -562,6 +570,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == MOVIE_ORIGIN_BACKFILL_JOB_TYPE:
         return process_movie_origin_backfill(payload, worker_id)
 
+    if job_type == MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE:
+        return process_movie_rating_votes_backfill(payload, worker_id)
+
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
@@ -605,6 +616,23 @@ def process_movie_origin_backfill(payload: dict[str, Any], worker_id: str) -> di
     limit = int(payload.get("limit") or 100)
     with connect() as conn:
         summary = backfill_movie_origins(conn, movie_ids or None, limit=limit)
+    return {"workerId": worker_id, "summary": summary}
+
+
+def process_movie_rating_votes_backfill(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    """Fill the vote count behind the score for films that have none.
+
+    A batch of movie ids, or the next `limit` films that still need one.
+    Narrow like its origin sibling above: it asks TMDB for the bare record
+    and writes a single integer, so it runs over a whole library in minutes
+    rather than the hours a metadata refresh takes, and it rewrites no
+    artwork, credits or provenance on the way.
+    """
+    raw_ids = payload.get("movieIds") or payload.get("movie_ids") or []
+    movie_ids = [clean_text(item) for item in raw_ids if clean_text(item)] if isinstance(raw_ids, list) else []
+    limit = int(payload.get("limit") or 100)
+    with connect() as conn:
+        summary = backfill_movie_rating_votes(conn, movie_ids or None, limit=limit)
     return {"workerId": worker_id, "summary": summary}
 
 
@@ -2233,6 +2261,11 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
             imported_movies: list[dict[str, Any]] = []
             imported_movie_ids: list[str] = []
             created_movie_ids: list[str] = []
+            # Read once for the whole run rather than per row: an import is
+            # thousands of rows and the definitions cannot change mid-transaction.
+            custom_field_defs = custom_field_definition_rows(conn)
+            custom_values_filled = 0
+            custom_value_skips: dict[str, int] = {}
             for index, item in enumerate(items[:5000], start=1):
                 if not isinstance(item, dict):
                     continue
@@ -2373,6 +2406,19 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
                         continue
                     with conn.transaction():
                         movie_id, was_created = upsert_import_movie(conn, plugin_id, item)
+                        # Fill-only, and never fatal: see fill_movie_custom_values.
+                        # A column mapped to a field that has since been archived,
+                        # or a cell the field's type refuses, is counted and
+                        # reported rather than ending the run for every other row.
+                        filled, skip_reasons = fill_movie_custom_values(
+                            conn,
+                            movie_id,
+                            item.get("customFields") or item.get("custom_fields"),
+                            fields=custom_field_defs,
+                        )
+                        custom_values_filled += filled
+                        for reason in skip_reasons:
+                            custom_value_skips[reason] = custom_value_skips.get(reason, 0) + 1
                         if table_exists(conn, "containers"):
                             for spec in import_item_container_specs(item):
                                 key = import_container_release_key(
@@ -2474,6 +2520,13 @@ def persist_collection_import(plugin_id: str, result: dict[str, Any], actor: dic
         "boxSetsDetected": len(detected_box_sets),
         "detectedBoxSets": detected_box_sets[:50],
         "rollbackMovieIds": created_movie_ids,
+        # Reported even when zero, because a mapped column that filled nothing
+        # and a column nobody mapped look identical from the outside otherwise.
+        "customFieldValuesFilled": custom_values_filled,
+        "customFieldValuesSkipped": [
+            {"reason": reason, "rows": count}
+            for reason, count in sorted(custom_value_skips.items(), key=lambda pair: -pair[1])
+        ][:20],
         "movies": imported_movies[:200],
         "review": review,
         "warnings": warnings,

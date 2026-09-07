@@ -102,6 +102,7 @@ CORE_BACKUP_TABLE_SPECS: tuple[TableSpec, ...] = (
             "overview",
             "notes",
             "rating",
+            "rating_votes",
             "purchase_date",
             "purchase_price",
             "estimated_value",

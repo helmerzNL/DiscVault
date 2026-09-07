@@ -68,6 +68,7 @@ class ExportColumnCatalogueTests(unittest.TestCase):
                 "originCountry",
                 "originalLanguage",
                 "personalRating",
+                "externalScore",
             ],
         )
 
@@ -236,6 +237,17 @@ class BuildExportTests(unittest.TestCase):
         }
         payload.update(overrides)
         return payload
+
+    def test_score_columns_can_be_selected_independently(self):
+        row = {"title": "Arrival", "externalScore": "8.25", "personalRating": "9"}
+        for columns, expected in [
+            (["externalScore"], "Score\r\n8.25\r\n"),
+            (["personalRating"], "My rating\r\n9\r\n"),
+            (["externalScore", "personalRating"], "My rating;Score\r\n9;8.25\r\n"),
+        ]:
+            with self.subTest(columns=columns):
+                body, _, _ = next_export.build_export(self._payload("csv", columns=columns, rows=[row]))
+                self.assertEqual(body.decode("utf-8-sig"), expected)
 
     def test_csv_contains_the_headers_rows_and_barcode_column(self):
         body, filename, mimetype = next_export.build_export(self._payload("csv"))

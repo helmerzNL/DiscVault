@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
-# DiscVault: reject purged iOS artifacts.
+# DiscVault: reject purged iOS artifacts, and keep the agent instruction
+# surfaces consistent.
 #
 # This hook used to bump app/VERSION as well. It must not: the bump is applied by
 # CI on release/v26-beta after the merge, and a pull request that carries a bump is
@@ -19,5 +20,13 @@ else
 fi
 
 "$PYTHON" app/scripts/check_forbidden_paths.py --staged || exit $?
+
+# Also in CI, as `agent-instructions-lint`. Both, not either: CI is too late for
+# this one. By the time it reports, the commit exists and the counterpart edit --
+# deleting the line that was just copied into a pointer file, or fixing the link
+# that moved -- is no longer the obvious next thing to do.
+#
+# It reads three markdown files, so it costs nothing to run on every commit.
+"$PYTHON" scripts/check_agent_instructions.py || exit $?
 
 exit 0

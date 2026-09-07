@@ -1,0 +1,631 @@
+# AGENTS.md — Working conventions for DiscVault Core
+
+Working conventions for **any** AI coding agent operating in this repository —
+Claude Code, GitHub Copilot, OpenAI Codex / ChatGPT, or anything else. This file
+is **canonical**: where a client-specific file disagrees with it, this file wins.
+
+Follow this process automatically on every feature, fix, commit, and promotion —
+do not wait to be reminded. **If a request would break the two-branch model or
+the merge-commit promotion rule, stop and warn the user before acting.**
+
+## Client surfaces
+
+| Client | Entry file it reads automatically | Client-specific extras |
+|---|---|---|
+| OpenAI Codex / ChatGPT | `AGENTS.md` (this file) | none |
+| Claude Code | [`CLAUDE.md`](CLAUDE.md) | none |
+| GitHub Copilot | [`.github/copilot-instructions.md`](.github/copilot-instructions.md) | none |
+
+`CLAUDE.md` and `.github/copilot-instructions.md` are deliberately thin: each adds
+only what is specific to its client and defers here for everything else. A rule
+written in two places drifts, and afterwards the stale copy reads exactly as
+authoritative as the current one — so which rule an agent follows would depend on
+which client happened to be driving. The `agent-instructions-lint` CI job fails
+the pull request when a canonical line reappears in a pointer file.
+
+## About this repository
+
+DiscVault Core is the PWA and backend at `helmerzNL/DiscVault` — the server, the
+web frontend, the MCP server and the plugin runtime. It is **one of three apps**:
+the iOS app lives in `Flux76HQ/DiscVaultApp` and the Android app in
+`Flux76HQ/DiscVault-AndroidApp`. Work here reaches those two only if somebody
+decides it should, which is why the iOS/Android decision below is a required step
+rather than an afterthought.
+
+## The shared guidance lives in App-Guidance
+
+This file covers DiscVault Core. Everything **shared across Flux76 projects**
+lives in [`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance) and
+is not repeated here:
+
+| What you need | Where it is |
+|---|---|
+| The enforceable baseline — versioning, CI guardrails, secrets, release discipline, PR workflow | [`shared/guidelines/project-baseline.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md) |
+| Which document leads per domain, and where that document lives | [`AUTHORITY.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/AUTHORITY.md) |
+| The normative sync contract — identity, dedup, tombstones | [`projects/discvault/contracts/sync-contract.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/projects/discvault/contracts/sync-contract.md) |
+| DiscVault specs and cross-repo change specs | [`projects/discvault/`](https://github.com/Flux76HQ/App-Guidance/tree/main/projects/discvault) |
+
+**Precedence.** On anything shared, App-Guidance leads and this file must not
+contradict it. On DiscVault's own two-branch model, its version guard and its
+promotion rule, this file leads.
+
+One standing rule from the baseline that this file does not otherwise state: **an
+agent carries its own PR to merge**
+([§8](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md#8-agent-pull-requests-standing-authorisation-to-merge))
+— watch it, drive failing checks to green, merge once every check passes, without
+asking again at the green light. "All green" is the condition, not a formality,
+and a red version guard is never green.
+
+---
+
+## 1. Classify the work first — bug / feature / other
+
+Before creating a branch or writing code, know what kind of work this is. Ask the
+user when it is not already obvious from the request; otherwise state the type you
+inferred and carry it through the whole flow.
+
+| Type | Branch prefix | Commit / PR prefix |
+|---|---|---|
+| bug | `fix/` | `fix:` |
+| feature | `feat/` | `feat:` |
+| docs | `docs/` | `docs:` |
+| chore | `chore/` | `chore:` |
+| refactor | `refactor/` | `refactor:` |
+
+- **Branch name:** `<prefix>/<short-kebab-description>` (e.g. `fix/loans-toggle-missing`).
+- **Commit + PR title:** start with the matching Conventional-Commits prefix.
+- The type does not change the merge rule — feature/fix PRs into beta may be
+  squashed, promotions to `main` are always merge commits — but keep the prefix in
+  the resulting title.
+- In an existing session whose branch is already fixed, keep that branch but still
+  apply the type prefix to commits and the PR title.
+
+## 2. Every feature is an explicit iOS/Android decision
+
+A feature built here reaches the iOS and Android apps only if somebody decides it
+should. **There is no default.** A feature that lands in Core with no decision
+recorded is not "PWA-only" — it is a gap nobody can later tell apart from a
+deliberate choice. Six months on, the question "was this left out on purpose, or
+forgotten?" has no answer anywhere, and the honest reading is the pessimistic one:
+it was forgotten.
+
+### Ask before building, not after
+
+Ask at the moment you classify the work (§1): **do we want this on iOS and/or
+Android, and in what form?** Asked then, the answer can still shape the design — a
+field the mobile apps need has to reach them over the sync payload, and that is
+cheaper to decide before the column exists than after.
+
+This is **not blocking**. With no answer, build the Core feature and record "not
+yet decided"; do not stall the work waiting for one.
+
+The question is owed for a *feature* only. A bug fix, a refactor or a chore
+inherits whatever decision its feature already carries.
+
+### Record the answer in the PR body
+
+A required section, in the same spirit as the deployment-file rule in §9 and for
+the same reason: **silence is not the same as "nothing to do"**, and a reader
+cannot tell the difference. State, explicitly and in one place:
+
+- **iOS** — wanted / not wanted / not yet decided;
+- **Android** — the same;
+- and when the answer is *not wanted*, **why** — so it reads as a decision rather
+  than an omission.
+
+"Core-only, deliberately: this configures the server and has no mobile surface" is
+a complete answer. An unexplained silence is not.
+
+### Write it on the mobile parity list
+
+The list lives in App-Guidance, at
+[`projects/discvault/specs/discvault-mobile-parity.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/projects/discvault/specs/discvault-mobile-parity.md).
+Every feature gets an entry — including the ones decided *against*, which are the
+entries that stop the same question being asked twice.
+
+An entry names the feature, the Core build it shipped in, the decision per
+platform, and what an implementation would need: which sync fields already carry
+the data, and any semantics the mobile side must copy rather than re-derive. Where
+two platforms could plausibly read the same stored value differently, say which
+reading is correct — that is the difference between parity and two apps that
+merely look alike.
+
+The entry lands in App-Guidance the way every other write-up does — see §7,
+including that it goes in through a branch and a pull request rather than straight
+onto `main`.
+
+## 3. A new feature gets a fresh worktree and its own session
+
+Build every new feature in a **fresh worktree** on its own branch off
+`release/v26-beta`, and in a **separate agent session**. One feature, one
+workspace, one session. Follow this automatically — do not wait to be reminded.
+
+A checkout is on one branch at a time, and the working tree, the index and the
+stash below it belong to the *directory*, not to the task. Two features built side
+by side in one checkout therefore do not merely risk mixing — mixing is the
+default, and the first `git add -A` of either takes the other's half-finished
+edits with it. Nothing errors: the diff looks like one change and the pull request
+looks like one change, because by then it is one change. A session that alternates
+between two features has the matching failure — a commit on the wrong branch,
+caught only by whoever happens to notice.
+
+Check it at the moment you classify the work, alongside the iOS/Android question:
+
+- **Is this a feature?** A fix, a refactor or a chore inherits the workspace it is
+  given — they are short, and the ceremony costs more than it prevents.
+- **Is this directory a linked worktree?** It is when `git rev-parse --git-dir`
+  differs from `git rev-parse --git-common-dir`, provided
+  `git rev-parse --show-superproject-working-tree` is empty — that command names a
+  superproject, and a submodule looks the same on the first test.
+
+If it is a feature and the checkout is shared, **say so before the first edit, not
+after**. Afterwards there is nothing left to warn about, because no tool can tell
+which lines belonged to which feature. It is a warning, not a veto: "build it here
+anyway" is a complete answer, and it is not re-argued.
+
+Two mechanics worth getting right:
+
+- **Prefer the agent platform's own worktree tool** over a hand-run
+  `git worktree add`. The native tool owns placement, branch creation and cleanup;
+  a hand-made worktree is state the platform cannot see, and therefore cannot
+  clean up. Where the platform has none, `app/.local/worktrees/` is the location
+  this repository already ignores.
+- **Verify the worktree directory is ignored before creating it** —
+  `git check-ignore -q <dir>`, and add it to `.gitignore` first if it is not. An
+  unignored worktree directory puts a second full checkout inside the repository,
+  and the next `git add -A` commits it.
+
+The rule is recorded centrally in App-Guidance
+[`shared/guidelines/project-baseline.md` §16](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md#16-feature-work-gets-its-own-workspace-and-its-own-session);
+this section is DiscVault's copy of it, and the two must not drift apart.
+
+## 4. Branch topology and release workflow
+
+DiscVault uses a **two-branch model**. Keep it that way.
+
+| Branch | Role | Images built |
+|---|---|---|
+| `release/v26-beta` | **Development** — all feature and fix work happens here | beta channel |
+| `main` | **Production** — live on discvault.eu | `:stable`, `:latest`, `:v26` |
+| `legacy` | Archive only — do not develop here | — |
+
+The **integration branch is `release/v26-beta`**, not GitHub's configured Default
+branch, which is `main`. Branch from beta and open pull requests into beta.
+
+### How to work
+
+1. **Branch feature/fix work off `release/v26-beta`**, never off `main` or `legacy`.
+2. Open the PR **into `release/v26-beta`**. Test on the beta channel.
+3. **Promote beta → `main` per feature** (or a small batch) once verified.
+
+> ⚠️ Never open a feature/fix PR directly into `main`, and never push directly to
+> `main`. `main` is production; changes reach it only through a deliberate
+> promotion PR.
+
+### Promote with a merge commit — never squash
+
+Promotion PRs from `release/v26-beta` to `main` **must** be merged with a real
+merge commit, never squashed:
+
+```sh
+gh pr merge <pr> --merge      # correct
+# gh pr merge <pr> --squash   # NEVER for a promotion
+```
+
+Squashing rewrites the promoted commits into a new commit that is **not** an
+ancestor of `release/v26-beta`; beta and main then diverge and the next promotion
+conflicts (typically on `app/VERSION` and large backend files). Feature/fix PRs
+*into beta* may be squashed — only promotions must use a merge commit.
+
+### Recovering from a diverged beta ↔ main
+
+- If a promotion was **squashed** and beta lost history, back-merge `main` into
+  beta with beta as the source of truth, then re-promote and merge that promotion
+  with `--merge`:
+
+  ```sh
+  git checkout release/v26-beta
+  git merge -s ort -X ours origin/main      # keep beta's content, absorb main's history
+  git diff origin/release/v26-beta --stat   # MUST be empty (purely historical merge)
+  git push origin release/v26-beta
+  ```
+
+- If work landed on **main first** and beta simply lags behind, back-merge main
+  into beta so both become content-identical again (a fast-forward when beta has
+  no unique commits):
+
+  ```sh
+  git checkout release/v26-beta
+  git merge origin/main
+  git diff origin/main --stat               # MUST be empty (content-identical)
+  git push origin release/v26-beta
+  ```
+
+After any reconciliation, verify `git diff origin/main origin/release/v26-beta --stat`
+is empty.
+
+### Branch protection
+
+`main` is protected: pull requests require a review, the version-guard check, and
+a review before merge. Do not push directly to `main`. `Block force pushes` is
+active on **every** branch in this repository — a rejected push is retried by
+restarting from the new tip, never with `--force`.
+
+### Cleaning up after a merge
+
+Delete a **feature branch** once its PR merges into `release/v26-beta` — stale
+branches pile up fast (we once had 19 to prune):
+
+```sh
+git push origin --delete <feature-branch>   # or the PR's "Delete branch" button
+```
+
+- A branch **ruleset** may print a warning like `Cannot delete this branch`; an
+  admin bypass still deletes it — the `[deleted]` line in the output confirms
+  success.
+- **Never delete** the permanent branches: `main`, `release/v26-beta`, `legacy`.
+- Promotions (beta → `main`) only **merge** — they never delete `release/v26-beta`.
+- Do **not** delete a branch an open agent session is still using: session
+  branches are reused across multiple PRs (one session may open #144, #148 and
+  #149 from the same branch). Delete only after the session is finished. If
+  unsure, ask first.
+
+#### Finding what is safe to prune
+
+"Commits ahead of beta" does **not** answer this. A branch usually lands through a
+*different* commit than the one it carries — a squash, a cherry-pick, or a
+re-implementation on top of newer beta — so that count stays above zero long after
+the work shipped. Deciding from it deletes live work.
+
+Use the report instead:
+
+```sh
+python app/scripts/prune_landed_branches.py --min-age-days 14
+```
+
+It calls a branch landed only when it is certain — merged, patch-equivalent
+(`git cherry`), carrying nothing but an `app/VERSION` bump, or content-identical to
+the base — and reports everything else as `keep`. A branch whose work was
+*re-implemented* differently on beta also reads as `keep`: the tool cannot tell
+that apart from unmerged work, and it errs toward keeping. Confirm those by hand
+before deleting.
+
+The `DiscVault Prune Landed Branches` workflow runs the same report every Monday
+and never deletes on a schedule. To delete, dispatch it with `apply: true`; it
+still refuses to touch a permanent branch, a branch with an open PR, or one pushed
+within `min_age_days`. Protect an active session branch explicitly with the `keep`
+input.
+
+### Follow-up work after a PR merges
+
+**Before every push or PR, check whether the branch's previous PR is already
+merged.** Fetch the base and confirm whether your last pushed commit is already an
+ancestor of it:
+
+```sh
+git fetch origin release/v26-beta
+git merge-base --is-ancestor <last-commit> origin/release/v26-beta
+```
+
+A merged PR is finished — it cannot track new work and **must not be reused**;
+never stack new commits on top of already-merged history.
+
+If it was merged, treat the follow-up as a fresh change:
+
+1. Restart the branch from the latest base, keeping the **same** name:
+   `git fetch origin release/v26-beta && git checkout -B <branch> origin/release/v26-beta`.
+2. Re-apply only the still-unmerged commits on top (cherry-pick / rebase) — drop
+   the ones already promoted into the base.
+3. Push (force-with-lease is fine when the branch carried only merged history) and
+   open a **new** PR into `release/v26-beta`. Any PR opened for it is a new PR, not
+   the merged one.
+
+Check for an existing open PR before opening a new one, and never push a branch
+without one.
+
+## 5. Version guard: CI bumps app/VERSION, a PR must not
+
+**Never bump `app/VERSION` in a pull request.** The bump is applied by CI on
+`release/v26-beta` after the merge; a PR that carries one is refused by
+[`.github/workflows/version-guard.yml`](.github/workflows/version-guard.yml) with:
+
+```text
+app/VERSION must not be changed in a pull request: CI bumps it on release/v26-beta after the merge.
+```
+
+### Why it moved out of the PR
+
+A hand-written bump is only valid against the base as it stood when it was
+written, and GitHub does not re-run a check when the base moves. A PR could be
+green when opened and wrong when merged, with nothing in between to notice.
+
+This happened three times: #473/#474, #516/#517 (repaired by #520), and
+finally #570/#571/#572 merging within 26 seconds, all bumping to 26.8.39 — two
+guards red on beta, `Build & Publish Docker Image` gating on the same job, and no
+image built for beta's head until #573 bumped it by hand.
+
+The old rule was "re-check the bump right before merging". Three sessions merging
+seconds apart cannot satisfy it: the bump goes stale in between and no human wins
+that race. Applied after the merge, the bump is derived from the branch it lands
+on and cannot go stale.
+
+### Where each thing now happens
+
+| Event | Behaviour |
+|---|---|
+| PR into `release/v26-beta` | `app/VERSION` must be **unchanged** (`check_version_bumped.py --forbid-change`) |
+| Push to `release/v26-beta` | The `version-bump` job in `docker-publish.yml` bumps the patch, commits to beta, and the image is built **from that commit** |
+| PR into `main` (a promotion) | The opposite rule: the diff **must** carry a newer version, checked with `--aggregate`. "Leave the file alone" belongs to PRs into beta only |
+| Push to `main` (a promotion) | Unchanged: the version must be strictly greater, and promotions carry beta's bump commits |
+
+The promotion row is not a special case bolted on — it is what the rule always
+meant. CI applies the bump on beta, so a promotion PR is the one pull request
+whose whole purpose is to carry those bumps to production. Applying "leave
+`app/VERSION` alone" there refused every promotion outright (#621).
+
+The bump commit deliberately carries **no `[skip ci]` marker**. GitHub honours
+that marker for `pull_request` as well as `push`, and beta's tip is always a bump
+commit — so it skipped every check on every promotion PR, and a required check
+that never reports blocks a merge exactly like a red one. A human replaying a bump
+commit is stood down by an explicit condition on the jobs in `docker-publish.yml`
+instead, where it cannot reach another pull request's checks.
+
+Protected paths are unchanged — they decide whether a bump is *due*, not who
+applies it:
+
+- `.github/workflows/`
+- `app/Dockerfile`, `app/docker-compose*`
+- `app/backend/`
+- `app/frontend/`
+- `app/mcp-server/`
+- `app/deploy/`
+- `app/scripts/`
+- `dist/plugins/`
+
+`*.md` and `*.txt` are ignored.
+
+### If the guard fails
+
+Restore the file from the base and commit that:
+
+```sh
+git checkout origin/release/v26-beta -- app/VERSION
+git commit -m "chore: leave app/VERSION to CI"
+```
+
+### Two consequences worth holding on to
+
+**The pre-commit hook no longer bumps.** `.githooks/pre-commit` still rejects
+forbidden iOS artifacts, but calling `bump_version.py` there would write the one
+file a PR must leave alone. `app/scripts/bump_version.py` still exists — CI invokes
+it with `--force` — but running it by hand on a feature branch produces a change
+the guard then refuses.
+
+**The bump job may never force-push**, for the reason given under branch
+protection above.
+
+If a guard is red, **do not merge**, and say so when someone is about to.
+
+## 6. Translations are part of "done"
+
+- Every feature and bug fix must include complete i18n updates for all supported
+  locales.
+- Do not open or merge a PR while translations are incomplete.
+- Before opening a PR, run an i18n completeness pass: no missing keys, and no
+  newly introduced hardcoded UI text without i18n keys.
+
+## 7. Record decisions in the App-Guidance documentation repo
+
+Documentation lives in
+[`Flux76HQ/App-Guidance`](https://github.com/Flux76HQ/App-Guidance), not in this
+repository. Whenever a session settles something that outlives its own PR, write
+it up there — do not wait to be asked.
+
+**What to record:** a route or contract between DiscVault and another system
+(MovieVault, the iOS app, a plugin API), an ownership or precedence rule (which
+source may supply a field, which value wins), a deliberate policy and why it
+exists, and the symptom-to-cause mapping that made a bug findable. A plain bug fix
+with no rule behind it does not need an entry; the release notes cover that.
+
+**How to record it:** describe the rule and the reasoning, not the diff — the
+document has to stay true after the code moves. Reference DiscVault symbols and
+paths so a reader can find the implementation, and keep an appendix mapping each
+rule to its source location. Carry open questions across as open questions instead
+of quietly resolving them. Write it in English, like every other shared artifact.
+
+### Adding or updating a plugin means updating the documentation
+
+Follow this automatically on every plugin change — do not wait to be asked. A
+plugin change is not done when the code passes. Every new plugin under
+`app/backend/next_plugins/`, and every version bump of an existing one, must carry
+its documentation in the same change set.
+
+DiscVault keeps no plugin documentation of its own, so "the documentation" means
+App-Guidance. A plugin is a contract with an external system — exactly the
+category this section says to record: what the plugin reaches, which fields it may
+supply, and how it loses against other sources.
+
+- **A new plugin** needs an entry covering its purpose, the source it speaks to,
+  and its precedence relative to the plugins answering the same question.
+- **A version bump** needs an entry only when behaviour a reader depends on
+  changed — a new field, a changed precedence, a different upstream. A routine fix
+  is release-notes material.
+- **A packaged artefact under `dist/plugins/`** is a release step, not a
+  substitute: shipping a new zip without repointing whatever pins the version
+  leaves installations on the old one.
+- Say in the PR body what you recorded, or that you judged the change
+  documentation-neutral. An unexplained silence is not the same as "nothing to
+  record".
+
+### Where the repositories live, and pushing to them
+
+Every Flux76 repository sits under **`Flux76HQ`** — App-Guidance, `DiscVaultApp`,
+`DiscVault-AndroidApp` and the rest. **This repository is the exception**:
+DiscVault Core is `helmerzNL/DiscVault`.
+
+Differing owners do **not** block anything. When the App-Guidance working copy is
+attached to the session, commit the document there directly and follow that
+repository's own rules — a branch off its default branch and a pull request, never
+a commit straight to `main`; its own `AGENTS.md` is authoritative for its
+workflow, and documentation-only edits are exempt from its `VERSION` bump.
+
+Only when the working copy is genuinely not available does the fallback apply:
+prepare the document, hand it over, and say plainly that it still needs to land.
+Do not claim you cannot push without having tried — that leaves a write-up sitting
+in a scratchpad that everyone believes was filed.
+
+## 8. Language and formatting of Git artifacts
+
+- **Always write Git artifacts in English** — branch names, commit messages, PR
+  titles, PR descriptions, and merge commit messages — regardless of the
+  conversation language. Chat replies to the user stay in the conversation
+  language; only the Git/GitHub artifacts are English.
+- **Use real Markdown, no literal escape sequences.** Write actual newlines, real
+  `-`/`*` bullets, real `` `code` `` backticks, and proper headings. Never emit
+  literal `\n`, `\t`, or `\"` as text — the description must render cleanly on
+  GitHub.
+- **Add your client's co-author trailer** to every commit unless the user opts
+  out. The exact trailer differs per client and is stated in that client's entry
+  file — see the client-surface table above.
+
+## 9. Deployment-file changes must be spelled out in the PR
+
+When a change touches a **Compose file** (`docker-compose*.yml`, `compose*.yml`)
+or an **environment template** (`.env.example`), the PR body must state,
+explicitly and in one place, exactly what the operator has to change in their own
+files.
+
+The reason is that these two files are *templates*, not the deployed
+configuration. A tracked `.env.example` and a tracked Compose file are read by CI
+and by the repository; the `.env` and the overrides that actually run the
+deployment are untracked and live on the host. So a diff that looks complete in
+the PR can still leave a running deployment missing a variable, and nothing fails
+until the setting is needed.
+
+State it as an operator instruction, not a diff summary:
+
+- the **exact variable name**, its default, and whether it must be added by hand;
+- the **exact Compose mapping** line, if one was added or changed;
+- whether an existing deployment keeps working untouched, or must be edited before
+  the next deploy.
+
+"No deployment-file changes in this PR" is a fine answer when true. Silence is
+not: the reader cannot tell the difference between "nothing to do" and "not
+mentioned".
+
+### The harder case: a limit with no tracked file at all
+
+A Compose file and an `.env.example` at least *appear* in the diff. The limits
+enforced **in front of** DiscVault do not appear in any repository — and since
+DiscVault is self-hosted, there is no knowing what is there: nothing, a reverse
+proxy, a CDN as well.
+
+DiscVault's own limit is the **last** one a request meets, so raising it does not
+by itself allow the operation. If something in front refuses first it returns its
+own error, and DiscVault never sees the request: nothing is logged, and nothing
+can explain it. Every place a person looks for the cause — the app's settings, its
+documented maximum, its logs — says the operation is allowed. **The absence of a
+log line is the diagnostic.**
+
+So: **a PR that raises a size, rate or timeout limit must state the new value as a
+number the operator can act on**, and never as one proxy's setting. "Whatever runs
+in front must allow 60 MB" travels; `client_max_body_size` does not — it is
+nginx-only, and a reader on any other proxy can neither follow it nor tell that it
+does not apply to them. This rule exists because that exact mistake was made on
+this repository's own upload work.
+
+The current numbers, what each path allows, and the troubleshooting table live in
+[`edge-and-upload-limits.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/projects/discvault/specs/edge-and-upload-limits.md)
+in App-Guidance; the general rule is
+[`project-baseline.md` §6](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/project-baseline.md),
+which makes documenting those ceilings a required operational doc.
+
+## 10. Secrets and configuration hygiene
+
+- Never commit `.env` or real secrets; only `.env.example` is tracked.
+- Keep `.env.example` complete and safe — placeholders only.
+- Keep tokens, hostnames and credentials out of the three agent entry files in
+  particular. They are the most-read files in the repository and the most likely
+  to be pasted into an issue.
+
+## 11. Local enforcement and CI controls
+
+Activate the hooks once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
+
+`.githooks/pre-commit` rejects forbidden iOS artifacts and runs
+`scripts/check_agent_instructions.py`. That second check also runs in CI, and it
+belongs in both places rather than either: CI reports it after the commit
+already exists, and by then the counterpart edit — deleting the line just copied
+into a pointer file, fixing the link that moved — is no longer the obvious next
+thing to do.
+
+The CI jobs that run on a pull request, and the name each one is findable by:
+
+| Job name | What it checks |
+|---|---|
+| `version-guard` | that `app/VERSION` is unchanged into beta, and newer into `main` |
+| `agent-instructions-lint` | that `AGENTS.md` stays canonical and unduplicated |
+
+A control has to be findable on the pull request under the name a document cites
+it by. Renaming a job without renaming its citations breaks the control as surely
+as deleting it.
+
+Run the instruction check locally before pushing:
+
+```sh
+python -m unittest discover -s scripts -p "test_check_agent_instructions.py"
+python scripts/check_agent_instructions.py
+```
+
+## 12. Checklists
+
+### When starting new work
+
+1. Base the work on `release/v26-beta`, **never** on `main` or `legacy`
+   (`git fetch origin release/v26-beta && git checkout -b <prefix>/<desc> origin/release/v26-beta`).
+2. Name the branch with the classified type prefix (§1).
+3. Keep the scope to that one bug/feature.
+4. For a **feature**, ask whether it should also exist on iOS and/or Android
+   before building it (§2). Not blocking — with no answer, note "not yet decided"
+   and carry on.
+5. For a **feature**, build it in a fresh worktree off `release/v26-beta` and in a
+   separate session (§3). If this is a shared checkout, say so **before the first
+   edit**. A warning, not a veto.
+
+### When committing
+
+1. Confirm you are on a **beta-based branch**, not on `main`.
+2. **Leave `app/VERSION` untouched** (§5).
+3. Start the commit message with the classified type prefix.
+4. Add your client's co-author trailer unless the user opts out (§8).
+5. Push and open the PR **into `release/v26-beta`** with the same type prefix in
+   its title.
+6. Confirm translations are complete across all locales (§6).
+7. For a feature, state the **iOS/Android decision** in the PR body and prepare its
+   entry for the mobile parity list (§2).
+8. Never merge a PR whose version guard is red.
+9. Let it build/test on the beta channel before considering promotion.
+10. After the PR merges, delete the feature branch — unless it is the active
+    session branch or a permanent branch.
+
+### When asked to "ship", "promote", or "push to main"
+
+1. Confirm the change landed on `release/v26-beta` first.
+2. Promote via a PR merged with `--merge` (a merge commit). **Never squash a
+   promotion.**
+3. Treat `release/v26-beta` as the source of truth; if beta and main diverge, use
+   the recovery recipe in §4.
+4. After promotion, verify `main` and `release/v26-beta` are content-identical
+   (`git diff origin/main origin/release/v26-beta --stat` empty).
+5. Promotion only merges — **never delete `release/v26-beta`**.
+
+---
+
+Full reference:
+[DiscVault 26 — Branching & releases](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/branching)
+and the [feature → production workflow](https://wiki.zbonline.nl/en/Projecten/Coding/discvault/feature-workflow)
+on the wiki.

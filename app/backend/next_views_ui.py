@@ -4809,6 +4809,11 @@ def ui_preview_html(
     .library-list-studio-column {
       width: 13%;
     }
+    .library-list-external-score-column,
+    .library-list-personal-rating-column {
+      width: 78px;
+      overflow-wrap: anywhere;
+    }
     .library-list-rating-column {
       width: 10%;
     }
@@ -4983,7 +4988,7 @@ def ui_preview_html(
     }
     @media (max-width: 1024px) {
       .library-list-table {
-        min-width: 0;
+        min-width: 520px;
         max-width: 100%;
       }
       .library-list-desktop-column {
@@ -5011,6 +5016,10 @@ def ui_preview_html(
       }
       .library-list-format-column {
         width: 72px;
+      }
+      .library-list-external-score-column,
+      .library-list-personal-rating-column {
+        width: 48px;
       }
       .library-list-behavior-column {
         width: 52px;
@@ -6842,6 +6851,19 @@ def ui_preview_html(
       color: var(--muted);
       font-size: .8rem;
       font-weight: 760;
+    }
+    /* A heading inside an auto-fit grid: spanning every column is what keeps it
+       a heading rather than a cell sitting beside the field it introduces. */
+    .import-mapping-grid .import-mapping-group {
+      grid-column: 1 / -1;
+      margin: 6px 0 0;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 760;
+      letter-spacing: .04em;
+      text-transform: uppercase;
     }
     .import-mapping-grid select,
     .import-review-action select {
@@ -15722,6 +15744,29 @@ def ui_preview_html(
                 </label>
               </div>
             </details>
+            <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="score">
+              <summary>
+                <span data-next-i18n="collection.scoreFilter">Score</span>
+                <svg class="library-adaptive-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41,8.58L12,13.17L16.59,8.58L18,10L12,16L6,10L7.41,8.58Z"/></svg>
+              </summary>
+              <div class="library-adaptive-group-body">
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreFrom">Score from</span>
+                  <input id="advancedScoreFrom" type="number" min="0" max="10" step="0.1" inputmode="decimal">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreTo">Score to</span>
+                  <input id="advancedScoreTo" type="number" min="0" max="10" step="0.1" inputmode="decimal">
+                </label>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreMinVotes">Minimum votes</span>
+                  <input id="advancedMinVotes" type="number" min="0" step="1" inputmode="numeric">
+                </label>
+                <p class="advanced-search-hint" id="advancedScoreExplainer" data-next-i18n="collection.scoreFilterHelp">The score your metadata source gives a film, out of 10.</p>
+                <p class="advanced-search-hint hidden" id="advancedScoreHint"></p>
+                <p class="advanced-search-hint hidden" id="advancedVotesHint"></p>
+              </div>
+            </details>
             <details class="library-adaptive-group advanced-search-group" data-library-adaptive-group data-library-advanced-group="origin">
               <summary>
                 <span data-next-i18n="collection.originFilter">Origin</span>
@@ -15801,6 +15846,17 @@ def ui_preview_html(
                     <option value="rated" data-next-i18n="collection.personalRated">Rated by me</option>
                     <option value="unrated" data-next-i18n="collection.personalUnrated">Not rated by me</option>
                     <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
+                  </select>
+                </label>
+                <div class="advanced-search-field">
+                  <span id="advancedTagsLabel" data-next-i18n="lists.tags">Tags</span>
+                  <div id="advancedTagFilter" class="bulk-tag-picker" role="group" aria-labelledby="advancedTagsLabel"></div>
+                </div>
+                <label class="advanced-search-field">
+                  <span data-next-i18n="collection.tagMatch">Tag matching</span>
+                  <select id="advancedTagMatch">
+                    <option value="any" data-next-i18n="collection.tagMatchAny">At least one tag (OR)</option>
+                    <option value="all" data-next-i18n="collection.tagMatchAll">All tags (AND)</option>
                   </select>
                 </label>
                 <label class="advanced-search-field">
@@ -17154,6 +17210,7 @@ def ui_preview_html(
           <div class="detail-card full detail-subpanel movie-detail-section-panel hidden" id="movieDetailCollectorsPanel" role="tabpanel" aria-labelledby="movieDetailCollectorsTab" data-detail-panel-group="movieSections">
             <h3 data-next-i18n="movieDetail.collectors">Collectors</h3>
             <div class="detail-fields" id="movieDetailCollectors"></div>
+            <div id="movieDetailCustomFields"></div>
             <div class="movie-collectors-links hidden" id="movieDetailCollectorsLinks"></div>
           </div>
           <div class="detail-card full movie-list-card" id="movieListStateCard">
@@ -19474,8 +19531,32 @@ def ui_preview_html(
                   </article>
                 </div>
                 <p class="import-source-meta" data-next-i18n="appAdmin.originBackfillUnresolvableHelp">Films with no TMDB match cannot be filled in this way, so that number is counted separately and does not reach zero.</p>
+                <p class="login-message" id="appAdminOriginBackfillJobs"></p>
+                <p class="login-message" id="appAdminOriginBackfillLastRun"></p>
+                <p class="login-message bad" id="appAdminOriginBackfillPluginWarning"></p>
                 <div class="profile-form-actions">
                   <button type="button" class="secondary-button" id="appAdminOriginBackfillButton" data-next-i18n="appAdmin.originBackfillRun">Fill in origin data</button>
+                </div>
+              </div>
+              <div class="detail-card profile-card full">
+                <h3 data-next-i18n="appAdmin.votesBackfill">Vote counts</h3>
+                <p data-next-i18n="appAdmin.votesBackfillHelp">A score means little without knowing how many people gave it: 10.0 from three votes outranks 8.4 from twelve thousand. Films added before this feature carry no vote count, so they stay out of the Library's vote floor. This asks TMDB for the bare record and writes that one number.</p>
+                <div class="app-admin-summary-grid">
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillPending">Films still missing it</span>
+                    <strong id="appAdminVotesBackfillPending">-</strong>
+                  </article>
+                  <article class="profile-dashboard-card">
+                    <span data-next-i18n="appAdmin.originBackfillUnresolvable">Not matched to TMDB</span>
+                    <strong id="appAdminVotesBackfillUnresolvable">-</strong>
+                  </article>
+                </div>
+                <p class="import-source-meta" data-next-i18n="appAdmin.originBackfillUnresolvableHelp">Films with no TMDB match cannot be filled in this way, so that number is counted separately and does not reach zero.</p>
+                <p class="login-message" id="appAdminVotesBackfillJobs"></p>
+                <p class="login-message" id="appAdminVotesBackfillLastRun"></p>
+                <p class="login-message bad" id="appAdminVotesBackfillPluginWarning"></p>
+                <div class="profile-form-actions">
+                  <button type="button" class="secondary-button" id="appAdminVotesBackfillButton" data-next-i18n="appAdmin.votesBackfillRun">Fill in vote counts</button>
                 </div>
               </div>
             </div>
@@ -20129,6 +20210,8 @@ def ui_preview_html(
     let libraryMetadataJobs = [];
     let libraryMetadataJobVisible = false;
     let libraryMetadataJobPollTimer = null;
+    let appAdminOriginBackfillTimer = null;
+    let appAdminVotesBackfillTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
       locale: localStorage.getItem("dv_next_locale") || "nl-NL",
@@ -25737,6 +25820,12 @@ def ui_preview_html(
         renderAppAdminArtworkTrash();
         renderAppAdminMetadataJobs();
         await refreshAppAdminOriginBackfill();
+        await refreshAppAdminVotesBackfill();
+        // Reopening the tab while a backfill is running has to pick the poll
+        // back up; otherwise the counters freeze at whatever they were when
+        // the panel drew and the run looks stalled.
+        if (Number(appAdmin.originBackfill?.jobs?.outstanding || 0)) scheduleAppAdminOriginBackfillPoll();
+        if (Number(appAdmin.votesBackfill?.jobs?.outstanding || 0)) scheduleAppAdminVotesBackfillPoll();
         setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.metadataJobsLoaded", "Metadata jobs loaded."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
@@ -25783,11 +25872,56 @@ def ui_preview_html(
       const unresolvable = document.getElementById("appAdminOriginBackfillUnresolvable");
       if (pending) pending.textContent = String(counts?.pending ?? "-");
       if (unresolvable) unresolvable.textContent = String(counts?.unresolvable ?? "-");
+      const jobs = counts?.jobs || null;
+      const outstanding = Number(jobs?.outstanding || 0);
+      // The queue, in words. Without it the only thing the press changed was a
+      // row in a table this screen does not list, so the honest reading of the
+      // card was "nothing happened" -- which is how it was reported.
+      setAppAdminMessage(
+        "appAdminOriginBackfillJobs",
+        outstanding
+          ? tNext("appAdmin.originBackfillRunning", "{count} jobs still to run.").replace("{count}", String(outstanding))
+          : "",
+        outstanding ? "good" : ""
+      );
+      const lastRun = counts?.lastRun || null;
+      let lastRunText = "";
+      let lastRunTone = "";
+      if (lastRun && lastRun.status === "failed") {
+        lastRunText = tNext("appAdmin.originBackfillLastRunFailed", "The last run failed: {error}")
+          .replace("{error}", String(lastRun.error || ""));
+        lastRunTone = "bad";
+      } else if (lastRun) {
+        // Updated *and* skipped, never a single "done". A run that asked TMDB
+        // about 100 films and wrote none of them is the outcome this card
+        // exists to make visible, and one number cannot say it.
+        lastRunText = tNext("appAdmin.originBackfillLastRun", "Last run: {updated} filled in, {skipped} without an answer, {failed} failed.")
+          .replace("{updated}", String(lastRun.updated || 0))
+          .replace("{skipped}", String(lastRun.skipped || 0))
+          .replace("{failed}", String(lastRun.failed || 0));
+        lastRunTone = Number(lastRun.failed || 0) > 0 ? "bad" : "";
+      }
+      setAppAdminMessage("appAdminOriginBackfillLastRun", lastRunText, lastRunTone);
+      const plugin = counts?.tmdbPlugin || null;
+      // A plugin below 1.8.0 answers every request without `filmOrigin`, so the
+      // job succeeds and writes nothing. Nothing else in the app can tell the
+      // operator that, and the counter it leaves behind looks identical to a
+      // backfill that has not started.
+      setAppAdminMessage(
+        "appAdminOriginBackfillPluginWarning",
+        plugin && plugin.originCapable === false
+          ? tNext("appAdmin.originBackfillPluginTooOld", "The TMDb plugin is version {installed}; {required} or newer is needed for origin data. Update it under Admin → Plugins, or this fills nothing in.")
+              .replace("{installed}", String(plugin.installedVersion || "?"))
+              .replace("{required}", String(plugin.requiredVersion || "1.8.0"))
+          : "",
+        "bad"
+      );
       const button = document.getElementById("appAdminOriginBackfillButton");
       // Nothing left to fill is a disabled button, not a hidden card: the two
       // counters are the answer to "why is my origin filter empty", and they
-      // have to stay readable once they reach zero.
-      if (button) button.disabled = !(Number(counts?.pending) > 0);
+      // have to stay readable once they reach zero. A run already in flight
+      // disables it too, so a second press cannot queue the same films twice.
+      if (button) button.disabled = !(Number(counts?.pending) > 0) || outstanding > 0;
     }
     async function refreshAppAdminOriginBackfill() {
       if (!canUseAdminTab("metadata")) return;
@@ -25801,6 +25935,26 @@ def ui_preview_html(
         renderAppAdminOriginBackfill(null);
       }
     }
+    // A queued backfill is minutes of work with no other way to see it finish.
+    // The poll stops on its own: when the queue empties, when the Metadata tab
+    // is left, and when the card is no longer in the document -- so it cannot
+    // outlive the screen that started it.
+    function scheduleAppAdminOriginBackfillPoll() {
+      if (appAdminOriginBackfillTimer) return;
+      appAdminOriginBackfillTimer = window.setInterval(async () => {
+        if (appAdmin.activeTab !== "metadata" || !document.getElementById("appAdminOriginBackfillButton")) {
+          stopAppAdminOriginBackfillPoll();
+          return;
+        }
+        await refreshAppAdminOriginBackfill();
+        if (!Number(appAdmin.originBackfill?.jobs?.outstanding || 0)) stopAppAdminOriginBackfillPoll();
+      }, 5000);
+    }
+    function stopAppAdminOriginBackfillPoll() {
+      if (!appAdminOriginBackfillTimer) return;
+      window.clearInterval(appAdminOriginBackfillTimer);
+      appAdminOriginBackfillTimer = null;
+    }
     async function queueAppAdminOriginBackfill() {
       setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.originBackfillQueueing", "Queueing origin backfill..."));
       try {
@@ -25809,6 +25963,13 @@ def ui_preview_html(
           headers: {"Content-Type": "application/json"},
           body: JSON.stringify({batchSize: 100})
         });
+        appAdmin.originBackfill = payload;
+        // The refresh first, the confirmation last. The other way round --
+        // which is how this shipped -- had `refreshAppAdminMetadataJobs`
+        // overwrite "{count} jobs queued" with "Metadata jobs loaded." in the
+        // same element milliseconds later, so the button reported nothing at
+        // all. Both siblings on this panel already order it this way.
+        await refreshAppAdminMetadataJobs();
         renderAppAdminOriginBackfill(payload);
         const queued = Number(payload.queued || 0);
         setAppAdminMessage(
@@ -25818,7 +25979,123 @@ def ui_preview_html(
             : tNext("appAdmin.originBackfillNothing", "Every film that can be filled already has its origin data."),
           queued ? "good" : ""
         );
+        if (queued) scheduleAppAdminOriginBackfillPoll();
+      } catch (error) {
+        setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
+      }
+    }
+    // The vote-count backfill card. Deliberately the same five parts as its
+    // origin sibling above -- two counters, the queue in words, the last run's
+    // own summary, and the plugin-version warning -- because the failure they
+    // guard against is the same one: a job type the Metadata job list filters
+    // out, so a press that queues 25 jobs changes nothing visible on the screen
+    // that offered the button (#719).
+    function renderAppAdminVotesBackfill(counts) {
+      const pending = document.getElementById("appAdminVotesBackfillPending");
+      const unresolvable = document.getElementById("appAdminVotesBackfillUnresolvable");
+      if (pending) pending.textContent = String(counts?.pending ?? "-");
+      if (unresolvable) unresolvable.textContent = String(counts?.unresolvable ?? "-");
+      const jobs = counts?.jobs || null;
+      const outstanding = Number(jobs?.outstanding || 0);
+      setAppAdminMessage(
+        "appAdminVotesBackfillJobs",
+        outstanding
+          ? tNext("appAdmin.originBackfillRunning", "{count} jobs still to run.").replace("{count}", String(outstanding))
+          : "",
+        outstanding ? "good" : ""
+      );
+      const lastRun = counts?.lastRun || null;
+      let lastRunText = "";
+      let lastRunTone = "";
+      if (lastRun && lastRun.status === "failed") {
+        lastRunText = tNext("appAdmin.originBackfillLastRunFailed", "The last run failed: {error}")
+          .replace("{error}", String(lastRun.error || ""));
+        lastRunTone = "bad";
+      } else if (lastRun) {
+        // Updated *and* skipped, never a single "done". A run that asked TMDB
+        // about 100 films and wrote none of them is the outcome this card
+        // exists to make visible, and one number cannot say it.
+        lastRunText = tNext("appAdmin.originBackfillLastRun", "Last run: {updated} filled in, {skipped} without an answer, {failed} failed.")
+          .replace("{updated}", String(lastRun.updated || 0))
+          .replace("{skipped}", String(lastRun.skipped || 0))
+          .replace("{failed}", String(lastRun.failed || 0));
+        lastRunTone = Number(lastRun.failed || 0) > 0 ? "bad" : "";
+      }
+      setAppAdminMessage("appAdminVotesBackfillLastRun", lastRunText, lastRunTone);
+      const plugin = counts?.tmdbPlugin || null;
+      // A plugin below the version that first emitted `ratingVotes` answers
+      // every request without it, so the job succeeds and writes nothing. The
+      // counter it leaves behind looks identical to a backfill that has not
+      // started, and nothing else in the app can tell the operator why.
+      setAppAdminMessage(
+        "appAdminVotesBackfillPluginWarning",
+        plugin && plugin.votesCapable === false
+          ? tNext("appAdmin.votesBackfillPluginTooOld", "The TMDb plugin is version {installed}; {required} or newer is needed for vote counts. Update it under Admin → Plugins, or this fills nothing in.")
+              .replace("{installed}", String(plugin.installedVersion || "?"))
+              .replace("{required}", String(plugin.requiredVersion || "1.9.0"))
+          : "",
+        "bad"
+      );
+      const button = document.getElementById("appAdminVotesBackfillButton");
+      // Nothing left to fill is a disabled button, not a hidden card: the two
+      // counters are the answer to "why does my vote floor match nothing", and
+      // they have to stay readable once they reach zero. A run already in
+      // flight disables it too, so a second press cannot queue the same films.
+      if (button) button.disabled = !(Number(counts?.pending) > 0) || outstanding > 0;
+    }
+    async function refreshAppAdminVotesBackfill() {
+      if (!canUseAdminTab("metadata")) return;
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/rating-votes-backfill");
+        appAdmin.votesBackfill = payload;
+        renderAppAdminVotesBackfill(payload);
+      } catch (error) {
+        // Silent on read: this rides along with the metadata panel load, and a
+        // failure here must not overwrite the message that load just set.
+        renderAppAdminVotesBackfill(null);
+      }
+    }
+    function scheduleAppAdminVotesBackfillPoll() {
+      if (appAdminVotesBackfillTimer) return;
+      appAdminVotesBackfillTimer = window.setInterval(async () => {
+        if (appAdmin.activeTab !== "metadata" || !document.getElementById("appAdminVotesBackfillButton")) {
+          stopAppAdminVotesBackfillPoll();
+          return;
+        }
+        await refreshAppAdminVotesBackfill();
+        if (!Number(appAdmin.votesBackfill?.jobs?.outstanding || 0)) stopAppAdminVotesBackfillPoll();
+      }, 5000);
+    }
+    function stopAppAdminVotesBackfillPoll() {
+      if (!appAdminVotesBackfillTimer) return;
+      window.clearInterval(appAdminVotesBackfillTimer);
+      appAdminVotesBackfillTimer = null;
+    }
+    async function queueAppAdminVotesBackfill() {
+      setAppAdminMessage("appAdminMetadataMessage", tNext("appAdmin.votesBackfillQueueing", "Queueing vote count backfill..."));
+      try {
+        const payload = await authApiJson("/api/next/admin/metadata/rating-votes-backfill", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({batchSize: 100})
+        });
+        appAdmin.votesBackfill = payload;
+        // The refresh first, the confirmation last. The other way round had
+        // `refreshAppAdminMetadataJobs` overwrite "{count} jobs queued" with
+        // "Metadata jobs loaded." in the same element milliseconds later, so
+        // the button reported nothing at all -- the bug #760 repaired on the
+        // sibling card.
         await refreshAppAdminMetadataJobs();
+        renderAppAdminVotesBackfill(payload);
+        const queued = Number(payload.queued || 0);
+        setAppAdminMessage(
+          "appAdminMetadataMessage",
+          queued
+            ? tNext("appAdmin.votesBackfillQueued", "{count} vote count backfill jobs queued.").replace("{count}", String(queued))
+            : tNext("appAdmin.votesBackfillNothing", "Every film that can be filled already has a vote count."),
+          queued ? "good" : ""
+        );
+        if (queued) scheduleAppAdminVotesBackfillPoll();
       } catch (error) {
         setAppAdminMessage("appAdminMetadataMessage", error.message || String(error), "bad");
       }
@@ -27289,14 +27566,63 @@ def ui_preview_html(
       });
       return result;
     }
+    // A score bound is stored as a canonical string so that "7", "7.0" and a
+    // comma-typed "7,0" are one filter rather than three, and so a saved smart
+    // filter reads the same on any keyboard. Out of range is clamped rather
+    // than dropped: a number input can be typed past its own max, and silently
+    // discarding "12" would show the whole library as if nothing was set.
+    function normalizeScoreBound(value) {
+      const raw = String(value ?? "").trim().replace(",", ".");
+      if (!raw) return "";
+      const parsed = Number.parseFloat(raw);
+      if (!Number.isFinite(parsed)) return "";
+      return String(Math.round(Math.min(10, Math.max(0, parsed)) * 10) / 10);
+    }
+    // The same bound as a number, or null for "not set". Every reader goes
+    // through this rather than through `filters.scoreFrom !== ""`, so a filters
+    // object built before these two fields existed reads as "no bound" instead
+    // of as NaN -- which compares false against everything and would quietly
+    // turn a missing field into "must have a score".
+    function scoreBoundNumber(value) {
+      const normalized = normalizeScoreBound(value);
+      return normalized === "" ? null : Number.parseFloat(normalized);
+    }
+    // A vote floor is a whole number of people, so it is canonicalised the way a
+    // score bound is but to an integer: "500", "500.0" and a group-separated
+    // "1.500" are one saved filter. Unlike the score there is no upper clamp --
+    // TMDB's most-voted titles are in the tens of thousands and the ceiling is
+    // nobody's to guess -- but a negative floor is meaningless and becomes 0,
+    // which has its own meaning ("the count is known") rather than being dropped.
+    function normalizeVoteFloor(value) {
+      const raw = String(value ?? "").trim().replace(/[\s,.\u00a0\u202f']/g, "");
+      if (!raw) return "";
+      const parsed = Number.parseInt(raw, 10);
+      if (!Number.isFinite(parsed)) return "";
+      return String(Math.max(0, parsed));
+    }
+    function voteFloorNumber(value) {
+      const normalized = normalizeVoteFloor(value);
+      return normalized === "" ? null : Number.parseInt(normalized, 10);
+    }
     function advancedSearchDefaults() {
       return {
         yearFrom: "",
         yearTo: "",
+        // The EXTERNAL score (movies.rating -- TMDB's vote average, or OMDb's
+        // IMDb rating), not the personal one under `personal`. Empty is "no
+        // bound"; "0" is a bound like any other and means "has a score at all".
+        scoreFrom: "",
+        scoreTo: "",
+        // How many people voted for that score to mean anything. Empty is "no
+        // floor"; "0" is a floor like any other and means "the vote count is
+        // known", which is not the same as "nobody voted" -- see migration 092.
+        minVotes: "",
         crew: "",
         digital: "any",
         artwork: "any",
         personal: "any",
+        tags: [],
+        tagMatch: "any",
         itemType: "any",
         location: "any",
         originCountry: "any",
@@ -27313,10 +27639,17 @@ def ui_preview_html(
       return {
         yearFrom: String(source.yearFrom || "").trim(),
         yearTo: String(source.yearTo || "").trim(),
+        scoreFrom: normalizeScoreBound(source.scoreFrom),
+        scoreTo: normalizeScoreBound(source.scoreTo),
+        minVotes: normalizeVoteFloor(source.minVotes),
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
         personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(source.personal) ? source.personal : "any",
+        // Upgrade the former single-tag format; an explicit empty list clears it.
+        // Keep IDs even before their movie pages or tag catalogue have loaded.
+        tags: normalizeTagSelection(Array.isArray(source.tags) ? source.tags : source.tag),
+        tagMatch: source.tagMatch === "all" ? "all" : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
         location: String(source.location || "any").trim() || "any",
         // Validated on SHAPE, deliberately not against the movies that happen to
@@ -27352,10 +27685,17 @@ def ui_preview_html(
       let count = 0;
       if (normalized.yearFrom) count += 1;
       if (normalized.yearTo) count += 1;
+      // Compared against "" rather than tested for truth: a bound of "0" is a
+      // real constraint ("has a score"), and `if ("0")` happens to be true only
+      // because it is a string. Saying so here keeps it true if it stops being one.
+      if (normalized.scoreFrom !== "") count += 1;
+      if (normalized.scoreTo !== "") count += 1;
+      if (normalized.minVotes !== "") count += 1;
       if (normalized.crew) count += 1;
       if (normalized.digital !== "any") count += 1;
       if (normalized.artwork !== "any") count += 1;
       if (normalized.personal !== "any") count += 1;
+      if (normalized.tags.length) count += 1;
       if (normalized.itemType !== "any") count += 1;
       if (normalized.location !== "any") count += 1;
       if (normalized.originCountry !== "any") count += 1;
@@ -27373,10 +27713,15 @@ def ui_preview_html(
       return normalizeAdvancedSearch({
         yearFrom: document.getElementById("advancedYearFrom")?.value || "",
         yearTo: document.getElementById("advancedYearTo")?.value || "",
+        scoreFrom: document.getElementById("advancedScoreFrom")?.value || "",
+        scoreTo: document.getElementById("advancedScoreTo")?.value || "",
+        minVotes: document.getElementById("advancedMinVotes")?.value || "",
         crew: document.getElementById("advancedCrewQuery")?.value || "",
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
+        tags: readTagFilterControls(),
+        tagMatch: document.getElementById("advancedTagMatch")?.value || "any",
         itemType: document.getElementById("advancedContainerType")?.value || "any",
         location: document.getElementById("advancedLocationFilter")?.value || "any",
         originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
@@ -27431,6 +27776,22 @@ def ui_preview_html(
           total + (movieOriginCountryValues(movie).length || movieOriginLanguageValue(movie) !== "any" ? 0 : 1),
         0
       );
+    }
+    // How many loaded films carry no external score. Shown for the same reason
+    // the origin hint is: "Score from 7" over a library nothing has scored yet
+    // returns nothing, and an empty library reads as a broken filter rather
+    // than as missing data. Counted over the loaded rows, so it grows with
+    // hydration exactly like the origin one.
+    function scoreDataMissingCount() {
+      return movies.reduce((total, movie) => total + (movieScoreNumber(movie) ? 0 : 1), 0);
+    }
+    // How many loaded films have no vote count at all. Same job as the score
+    // hint beside it, and it matters more: the column arrives empty on every
+    // existing library and fills only as films are refreshed, so a vote floor
+    // set on the day this ships legitimately matches nothing. Without the
+    // number on screen that is indistinguishable from a broken filter.
+    function voteDataMissingCount() {
+      return movies.reduce((total, movie) => total + (movieVoteCount(movie) === null ? 1 : 0), 0);
     }
     function populateOriginFilterSelect(id, values, current, labelFor, anyLabel) {
       const node = document.getElementById(id);
@@ -27516,6 +27877,40 @@ def ui_preview_html(
         </label>`;
       }).join("");
     }
+    function normalizeTagSelection(value) {
+      const values = Array.isArray(value) ? value : [value];
+      return [...new Set(values.filter((id) => typeof id === "string")
+        .map((id) => id.trim()).filter((id) => id && id !== "any"))];
+    }
+    function readTagFilterControls() {
+      const node = document.getElementById("advancedTagFilter");
+      if (!node) return normalizeTagSelection(advancedSearch.tags);
+      return normalizeTagSelection([...node.querySelectorAll('[data-advanced-tag][aria-pressed="true"]')]
+        .map((button) => button.dataset.advancedTag));
+    }
+    function syncTagFilterControl(current = advancedSearch.tags) {
+      const node = document.getElementById("advancedTagFilter");
+      if (!node) return;
+      const tags = new Map();
+      movies.forEach((movie) => {
+        (Array.isArray(movie.tags) ? movie.tags : []).forEach((tag) => {
+          if (tag?.id) tags.set(String(tag.id), String(tag.name || tag.id));
+        });
+      });
+      // The full personal catalogue also covers tags on pages still loading.
+      (Array.isArray(libraryTags) ? libraryTags : []).forEach((tag) => {
+        if (tag?.id) tags.set(String(tag.id), String(tag.name || tag.id));
+      });
+      const selected = new Set(normalizeTagSelection(current));
+      // A missing/deleted tag must keep matching nothing, never become "Any".
+      selected.forEach((id) => { if (!tags.has(id)) tags.set(id, id); });
+      const options = [...tags.entries()].sort((a, b) => a[1].localeCompare(b[1], localeState.locale));
+      node.innerHTML = options.length
+        ? options.map(([id, name]) => `<button type="button" class="bulk-tag-option" data-advanced-tag="${escapeHtml(id)}" aria-pressed="${selected.has(id) ? "true" : "false"}">${escapeHtml(name)}</button>`).join("")
+        : `<span class="bulk-tag-empty">${escapeHtml(libraryTagsLoaded
+            ? tNext("bulk.tagsEmpty", "No tags yet. Create tags from the Lists screen.")
+            : tNext("bulk.tagsLoading", "Loading tags..."))}</span>`;
+    }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
       const toggle = document.getElementById("advancedSearchToggleButton");
@@ -27537,10 +27932,15 @@ def ui_preview_html(
       }
       setAdvancedControlValue("advancedYearFrom", advancedSearch.yearFrom);
       setAdvancedControlValue("advancedYearTo", advancedSearch.yearTo);
+      setAdvancedControlValue("advancedScoreFrom", advancedSearch.scoreFrom);
+      setAdvancedControlValue("advancedScoreTo", advancedSearch.scoreTo);
+      setAdvancedControlValue("advancedMinVotes", advancedSearch.minVotes);
       setAdvancedControlValue("advancedCrewQuery", advancedSearch.crew);
       setAdvancedControlValue("advancedDigitalFilter", advancedSearch.digital);
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
+      syncTagFilterControl();
+      setAdvancedControlValue("advancedTagMatch", advancedSearch.tagMatch);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
       renderCustomFilterControls();
       populateOriginFilterSelect(
@@ -27557,6 +27957,24 @@ def ui_preview_html(
         languageLabel,
         tNext("collection.originalLanguageAny", "Any language")
       );
+      const scoreHint = document.getElementById("advancedScoreHint");
+      if (scoreHint) {
+        const missing = scoreDataMissingCount();
+        scoreHint.textContent = missing
+          ? tNext("collection.scoreDataMissing", "{count} films have no score yet and are left out by a score filter")
+              .replace("{count}", String(missing))
+          : "";
+        scoreHint.classList.toggle("hidden", missing === 0);
+      }
+      const votesHint = document.getElementById("advancedVotesHint");
+      if (votesHint) {
+        const missing = voteDataMissingCount();
+        votesHint.textContent = missing
+          ? tNext("collection.voteDataMissing", "{count} films have no vote count yet and are left out by a vote floor")
+              .replace("{count}", String(missing))
+          : "";
+        votesHint.classList.toggle("hidden", missing === 0);
+      }
       const originHint = document.getElementById("advancedOriginHint");
       if (originHint) {
         const missing = originDataMissingCount();
@@ -27785,6 +28203,7 @@ def ui_preview_html(
       }
       if (libraryTagsLoaded && !force) {
         renderBulkTagPicker();
+        syncTagFilterControl(readTagFilterControls());
         return;
       }
       try {
@@ -27795,6 +28214,7 @@ def ui_preview_html(
         libraryTags = [];
       }
       renderBulkTagPicker();
+      syncTagFilterControl(readTagFilterControls());
       updateBulkBar();
     }
     function syncBulkTargetCreateControls() {
@@ -28106,6 +28526,34 @@ def ui_preview_html(
     function movieYearNumber(movie) {
       return Number.parseInt(movie?.year || movie?.release_year || movie?.metadata?.year || "0", 10) || 0;
     }
+    // The external score as a number, 0 when there is none. TMDB writes 0.0 for
+    // a film nobody has voted on, so a stored zero is "not scored" rather than
+    // "scored zero" -- reading it as a number would drop every unvoted film into
+    // the results of "Score to 5", which is the opposite of what that asks for.
+    // Same chain as movieScoreLabel: the library page carries `rating` as a
+    // column, an older payload carries it inside `metadata`.
+    function movieScoreNumber(movie) {
+      const raw = String(movie?.rating ?? movie?.metadata?.rating ?? "").trim().replace(",", ".");
+      if (!raw) return 0;
+      const value = Number.parseFloat(raw);
+      return Number.isFinite(value) && value > 0 ? value : 0;
+    }
+    // The vote count as a number, or null when it is not known.
+    //
+    // The mirror image of movieScoreNumber above, and deliberately NOT the same
+    // rule: there, a stored 0 has to mean "not scored", because TMDB writes
+    // vote_average 0.0 for an unvoted film and the text column cannot tell that
+    // apart from an unfetched one. Here 0 is a real answer -- "we asked, nobody
+    // has voted" -- and the column is nullable precisely so it stays apart from
+    // "we never asked" (migration 092). Collapsing the two would make a vote
+    // floor unable to distinguish an unvoted film from an unfetched one, which
+    // is the whole point of the field.
+    function movieVoteCount(movie) {
+      const raw = movie?.rating_votes ?? movie?.ratingVotes ?? movie?.metadata?.rating_votes;
+      if (raw === null || raw === undefined || raw === "") return null;
+      const value = Number.parseInt(String(raw).trim().replace(/[\s,.\u00a0\u202f']/g, ""), 10);
+      return Number.isFinite(value) && value >= 0 ? value : null;
+    }
     function movieDigitalSourceNames(movie) {
       const snapshot = movie?.snapshot || {};
       const rows = Array.isArray(movie?.digital_sources)
@@ -28201,12 +28649,41 @@ def ui_preview_html(
       // exactly those films.
       return constraints.every(([key, constraint]) => customValueMatches(values.get(key), constraint));
     }
+    function movieMatchesTagFilter(movie, filters) {
+      const selected = normalizeTagSelection(Array.isArray(filters.tags) ? filters.tags : filters.tag);
+      if (!selected.length) return true;
+      const assigned = new Set((Array.isArray(movie?.tags) ? movie.tags : []).map((tag) => String(tag?.id || "")));
+      return filters.tagMatch === "all"
+        ? selected.every((id) => assigned.has(id))
+        : selected.some((id) => assigned.has(id));
+    }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
       const yearTo = Number.parseInt(filters.yearTo || "0", 10) || 0;
       if (yearFrom && (!year || year < yearFrom)) return false;
       if (yearTo && (!year || year > yearTo)) return false;
+      // Either bound means "has a score, inside this range". A film with no
+      // score is out -- the same call the year bounds above make, and the only
+      // one that answers "show me the good ones" honestly: an unscored film is
+      // not known to be good.
+      const scoreFrom = scoreBoundNumber(filters.scoreFrom);
+      const scoreTo = scoreBoundNumber(filters.scoreTo);
+      if (scoreFrom !== null || scoreTo !== null) {
+        const score = movieScoreNumber(movie);
+        if (!score) return false;
+        if (scoreFrom !== null && score < scoreFrom) return false;
+        if (scoreTo !== null && score > scoreTo) return false;
+      }
+      // The vote floor is independent of the score bounds: "at least 500 votes"
+      // on its own is the honest way to ask which films the metadata actually
+      // knows anything about. A film whose count is unknown is out, the same
+      // call the score bounds make -- an unknown sample cannot clear a floor.
+      const minVotes = voteFloorNumber(filters.minVotes);
+      if (minVotes !== null) {
+        const votes = movieVoteCount(movie);
+        if (votes === null || votes < minVotes) return false;
+      }
       if (filters.crew && !movieTextValue(movie).includes(filters.crew.toLowerCase())) return false;
       if (filters.digital === "plex" && !movieHasDigitalSource(movie, "plex")) return false;
       if (filters.digital === "jellyfin" && !movieHasDigitalSource(movie, "jellyfin")) return false;
@@ -28220,6 +28697,7 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      if (!movieMatchesTagFilter(movie, filters)) return false;
       // The viewer's OWN score, not the owner's: "films I have rated" must not
       // be answered with films somebody else rated.
       if (filters.personal === "rated" && !movie?.personal_rating) return false;
@@ -28342,7 +28820,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
+      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || normalizeTagSelection(Array.isArray(filters.tags) ? filters.tags : filters.tag).length || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -28765,13 +29243,11 @@ def ui_preview_html(
     }
     function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
       const allowed = compact
-        ? new Set(["title", "format", "behavior"])
+        ? new Set(["title", "format", "externalScore", "personalRating", "behavior"])
         // "rating" here is the age certificate, which is why the personal score
         // is "personalRating": reusing the key would silently repurpose the
-        // content-rating column. Wide set only -- the column is desktop-only, and
-        // a key allowed in the compact set renders a header whose click resets
-        // the sort to title with nothing failing.
-        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "tags", "behavior"]);
+        // content-rating column. Both score columns stay available in compact mode.
+        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "externalScore", "tags", "behavior"]);
       // A custom field is sortable on the wide layout too, but it cannot be in a
       // literal set: the keys only exist at runtime. Shape check plus a lookup
       // against the live definitions, so a sort naming a field that no longer
@@ -28958,7 +29434,8 @@ def ui_preview_html(
         watchActivity: libraryExportWatchActivityText(item),
         originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
         originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
-        personalRating: formatRatingScore(itemPersonalRatingValue(item)),
+        personalRating: itemPersonalRatingValue(item) === null ? "" : formatRatingScore(itemPersonalRatingValue(item)),
+        externalScore: itemExternalScoreValue(item) === null ? "" : String(itemExternalScoreValue(item)),
         ...customExportCells(movie),
       };
     }
@@ -29003,6 +29480,25 @@ def ui_preview_html(
         || (Number(left.watched) - Number(right.watched))
         || (left.watchlistTime - right.watchlistTime)
         || (Number(left.onWatchlist) - Number(right.onWatchlist));
+    }
+    function itemExternalScoreValue(item) {
+      // Containers have no movie score; never invent an average of their children.
+      if (item?.kind && item.kind !== "movie") return null;
+      return movieScoreNumber(item?.movie || item) || null;
+    }
+    function libraryListExternalScoreHtml(item) {
+      const score = itemExternalScoreValue(item);
+      if (score === null) return "";
+      return `<span class="library-list-rating-value" title="${escapeHtml(movieScoreLabel(item?.movie || item))}">${escapeHtml(String(score))}</span>`;
+    }
+    function compareExternalScore(a, b, direction) {
+      const left = itemExternalScoreValue(a);
+      const right = itemExternalScoreValue(b);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const diff = left - right;
+      return direction === "desc" ? -diff : diff;
     }
     function libraryListPersonalRatingHtml(item) {
       const score = itemPersonalRatingValue(item);
@@ -29063,6 +29559,11 @@ def ui_preview_html(
       return [...(items || [])].sort((a, b) => {
         if (typeof state.key === "string" && state.key.startsWith("custom:")) {
           const diff = compareCustomFieldValue(a, b, state.key.slice(7), state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
+        if (state.key === "externalScore") {
+          const diff = compareExternalScore(a, b, state.direction);
           if (diff) return diff;
           return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
         }
@@ -29143,7 +29644,8 @@ def ui_preview_html(
                 ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
-                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("externalScore", tNext("movieDetail.externalScore", "Score"), normalizedSort, "library-list-external-score-column")}
+                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column")}
                 ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
               </tr>
@@ -29177,7 +29679,8 @@ def ui_preview_html(
                     <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
                     <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
                     <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
-                    <td class="library-list-personal-rating-column library-list-desktop-column">${libraryListPersonalRatingHtml(item)}</td>
+                    <td class="library-list-external-score-column">${libraryListExternalScoreHtml(item)}</td>
+                    <td class="library-list-personal-rating-column">${libraryListPersonalRatingHtml(item)}</td>
                     <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
                     <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
                   </tr>
@@ -29531,7 +30034,15 @@ def ui_preview_html(
     // you cannot -- which reads correctly with no colour and in every locale.
     function movieScoreLabel(movie) {
       const value = valueText(movie?.rating || movie?.metadata?.rating || "");
-      return value ? `${tNext("movieDetail.externalScore", "Score")} ${value}` : "";
+      if (!value) return "";
+      // The sample, beside the number it produced. A 10.0 from three votes and
+      // an 8.4 from twelve thousand read identically without it, and the vote
+      // floor in the Library filter is unexplainable while the page it filters
+      // never shows the quantity being filtered on.
+      const votes = movieVoteCount(movie);
+      const score = `${tNext("movieDetail.externalScore", "Score")} ${value}`;
+      if (votes === null) return score;
+      return `${score} (${tNext("movieDetail.scoreVotes", "{count} votes").replace("{count}", votes.toLocaleString(localeState.locale || undefined))})`;
     }
     function localeCandidates() {
       const locale = String(localeState.locale || "en-US").replace("_", "-").toLowerCase();
@@ -32043,12 +32554,47 @@ def ui_preview_html(
     function customFieldDefinitions() {
       return Array.isArray(state?.customFields) ? state.customFields : [];
     }
+    // Beside the other owner-managed facts -- location, storage location,
+    // edition -- rather than in a panel of its own: a custom field is one of
+    // those, and it is read for the same reason.
+    //
+    // Deliberately not the edit form's list. That one filters archived
+    // definitions out, because archiving means "no new input"; a value already
+    // stored on an archived field keeps matching filters and keeps exporting
+    // (contract 4e.5), so refusing to show it here would hide data the rest of
+    // the app still acts on. A film with no value renders no row, and an
+    // instance with no fields renders no section: detailFieldSubsection returns
+    // "" when it produces no rows.
+    function renderMovieDetailCustomFields(detail) {
+      const container = document.getElementById("movieDetailCustomFields");
+      if (!container) return;
+      const values = movieCustomValueMap(detail?.movie);
+      const entries = customFieldDefinitions()
+        .filter((field) => values.has(String(field.key)))
+        // The owner's own order from Admin -> Custom fields, which is the order
+        // the server returns and the order they see everywhere else.
+        .map((field) => [
+          // Never translated: the owner typed the name.
+          field.name || field.key,
+          customValueDisplay(field, values.get(String(field.key)))
+        ]);
+      container.innerHTML = detailFieldSubsection(
+        tNext("movieDetail.customFields", "Custom fields"),
+        entries
+      );
+    }
     function renderMovieEditCustomFields(detail) {
       const container = document.getElementById("movieEditCustomFields");
       if (!container) return;
       const definitions = customFieldDefinitions().filter((field) => !field.archivedAt);
+      // `detail.movie.custom_values`, which is where `movie_detail_entity`
+      // attaches them. This read `detail.customValues`, a key only sync
+      // mutation results and the PUT response ever carry -- so every input
+      // rendered empty, `collectMovieEditCustomValues` turned each empty input
+      // into a null, and saving a film for any unrelated reason deleted every
+      // custom value it had. Silent on both sides.
       const values = new Map(
-        (detail?.customValues || []).map((item) => [String(item.key), item.value])
+        (detail?.movie?.custom_values || []).map((item) => [String(item.key), item.value])
       );
       container.classList.toggle("hidden", !definitions.length);
       container.innerHTML = definitions.map((field) => {
@@ -33977,6 +34523,7 @@ def ui_preview_html(
       }
       renderMovieDetailDiscs(detail.discs);
       document.getElementById("movieDetailCollectors").innerHTML = detailFieldRows(collectorsFields);
+      renderMovieDetailCustomFields(detail);
       bindContainerDetailLinks("movieDetailCollectors");
       renderMovieMetadataCompare(detail);
       // The change history is a diagnostic surface, like the debug cards below
@@ -34125,6 +34672,8 @@ def ui_preview_html(
       document.getElementById("movieDetailRelease").innerHTML = "";
       document.getElementById("movieDetailTechnical").innerHTML = "";
       document.getElementById("movieDetailCollectors").innerHTML = "";
+      const customFieldsBlock = document.getElementById("movieDetailCustomFields");
+      if (customFieldsBlock) customFieldsBlock.innerHTML = "";
       document.getElementById("movieMetadataComparePanel").innerHTML = "";
       document.getElementById("movieListStateSummary").textContent = "";
       document.getElementById("movieWatchHistoryPills").innerHTML = "";
@@ -37198,6 +37747,20 @@ def ui_preview_html(
       importCenter.preview = null;
       renderImportCenter();
     }
+    // The fields the owner defined, as mapping targets named `custom:<key>` --
+    // the same convention next_custom_fields.IMPORT_MAPPING_PREFIX states and
+    // the import plugin reads. Archived definitions are left out: archiving
+    // means "no new input", and an import is input.
+    //
+    // Their labels are the owner's own names and are deliberately not
+    // translated, for the reason customFieldDefinitions() gives: the owner
+    // typed them. Only the heading above them is, and it reuses an existing key
+    // rather than introducing a thirtieth translation of the same two words.
+    function importCustomFieldMappingFields() {
+      return customFieldDefinitions()
+        .filter((field) => field && field.key && !field.archivedAt)
+        .map((field) => [`custom:${field.key}`, String(field.name || field.key)]);
+    }
     function renderImportMapping() {
       const node = document.getElementById("importCenterMapping");
       const card = document.getElementById("importCenterMappingCard");
@@ -37210,18 +37773,24 @@ def ui_preview_html(
       }
       card.classList.remove("hidden");
       const effective = effectiveImportColumnMapping();
-      node.innerHTML = IMPORT_MAPPING_FIELDS.map(([field, fallback]) => {
+      const selectFor = ([field, label], translate) => {
         const current = effective[field] || "";
         return `
           <label>
-            <span>${escapeHtml(tNext(`importCenter.mapping.${field}`, fallback))}</span>
+            <span>${escapeHtml(translate ? tNext(`importCenter.mapping.${field}`, label) : label)}</span>
             <select data-import-mapping-field="${escapeHtml(field)}">
               <option value="">${escapeHtml(tNext("importCenter.mappingAuto", "Auto"))}</option>
               ${columns.map((column) => `<option value="${escapeHtml(column)}" ${column === current ? "selected" : ""}>${escapeHtml(column)}</option>`).join("")}
             </select>
           </label>
         `;
-      }).join("");
+      };
+      const customFields = importCustomFieldMappingFields();
+      node.innerHTML = IMPORT_MAPPING_FIELDS.map((entry) => selectFor(entry, true)).join("")
+        + (customFields.length
+          ? `<p class="import-mapping-group">${escapeHtml(tNext("movieDetail.customFields", "Custom fields"))}</p>`
+            + customFields.map((entry) => selectFor(entry, false)).join("")
+          : "");
     }
     function importReviewRows() {
       const preview = importCenter.preview || {};
@@ -47048,6 +47617,7 @@ def ui_preview_html(
         originCountry: tNext("movieDetail.originCountry", "Country of origin"),
         originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
         personalRating: tNext("lists.myRating", "My rating"),
+        externalScore: tNext("movieDetail.externalScore", "Score"),
         // The owner typed these; there is no key to look up.
         ...Object.fromEntries(
           customFieldDefinitions().map((field) => [`custom:${field.key}`, field.name || field.key])
@@ -50701,6 +51271,12 @@ def ui_preview_html(
         advancedSearchOpen = !advancedSearchOpen;
         localStorage.setItem("dv_next_advanced_search_open", advancedSearchOpen ? "true" : "false");
         syncAdvancedSearchControls();
+        if (advancedSearchOpen) loadLibraryTags();
+      });
+      if (advancedSearchOpen) loadLibraryTags();
+      document.getElementById("advancedTagFilter")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-advanced-tag]");
+        if (button) button.setAttribute("aria-pressed", button.getAttribute("aria-pressed") === "true" ? "false" : "true");
       });
       // Delegated against the static container: the rows are re-rendered from
       // the definitions on every sync, so a listener per row would stack.
@@ -51233,6 +51809,7 @@ def ui_preview_html(
       document.getElementById("appAdminSaveArtworkTrashSettingsButton")?.addEventListener("click", () => saveAppAdminArtworkTrashSettings());
       document.getElementById("appAdminPurgeArtworkTrashButton")?.addEventListener("click", () => purgeAppAdminArtworkTrash());
       document.getElementById("appAdminOriginBackfillButton")?.addEventListener("click", () => queueAppAdminOriginBackfill());
+      document.getElementById("appAdminVotesBackfillButton")?.addEventListener("click", () => queueAppAdminVotesBackfill());
       document.getElementById("appAdminArtworkTrashList")?.addEventListener("click", (event) => {
         const restoreButton = event.target.closest("[data-app-admin-artwork-restore]");
         if (restoreButton) {

@@ -7,9 +7,8 @@ the age-certificate column, in the sort whitelist, the value extractor and the
 table head alike. Reusing it silently repurposes the content-rating column
 instead of adding one.
 
-**The sort key is allowed in the wide set only.** The column is desktop-only, and
-a key allowed in the compact set renders a header whose click resets the sort
-back to title with nothing failing.
+**Both score sort keys are available in compact and wide layouts.** Their
+headers remain visible at every width, so compact sorting must retain the key.
 
 **The tile badge preference must be registered twice.** `APP_PREFERENCE_DEFAULTS`
 alone makes it a string preference, and the string "false" is truthy -- so
@@ -35,6 +34,24 @@ def _source() -> str:
     with open(NEXT_VIEWS_UI_PATH, "r", encoding="utf-8") as handle:
         return handle.read()
 
+# A fixed-width window after the function's name is a proxy for "inside this
+# function", and it stops being one the moment the function grows. Adding the
+# vote count to the score pill pushed both of these past the function they
+# meant. Brace matching reads the real one, so it cannot go stale.
+def _function_source(source: str, name: str) -> str:
+    start = source.index("function %s(" % name)
+    depth = 0
+    for position in range(source.index("{", start), len(source)):
+        char = source[position]
+        if char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return source[start : position + 1]
+    raise AssertionError("unbalanced braces reading %s" % name)
+
+
 
 def _without_comments(block: str) -> str:
     """Drop `//` comment lines.
@@ -58,13 +75,14 @@ class ColumnKeyTests(unittest.TestCase):
         block = self.source[start : start + 900]
         self.assertIn('"rating", "personalRating"', block)
 
-    def test_the_personal_rating_sort_is_desktop_only(self):
+    def test_both_score_sorts_are_available_in_compact_mode(self):
         start = self.source.index("function normalizeLibraryDetailSort")
         block = self.source[start : start + 900]
         compact = _without_comments(
             block[block.index("compact") : block.index(': new Set(["title", "director"')]
         )
-        self.assertNotIn("personalRating", compact)
+        self.assertIn("personalRating", compact)
+        self.assertIn("externalScore", compact)
 
     def test_the_content_rating_column_still_renders_the_certificate(self):
         # If this ever renders a score, the key collision happened.
@@ -77,7 +95,7 @@ class ColumnKeyTests(unittest.TestCase):
     def test_the_personal_rating_column_has_its_own_header_and_cell(self):
         self.assertIn('libraryListSortHeaderHtml("personalRating"', self.source)
         self.assertIn(
-            '<td class="library-list-personal-rating-column library-list-desktop-column">'
+            '<td class="library-list-personal-rating-column">'
             "${libraryListPersonalRatingHtml(item)}</td>",
             self.source,
         )
@@ -114,8 +132,7 @@ class TwoScoresStayDistinctTests(unittest.TestCase):
         cls.source = _source()
 
     def test_the_external_score_names_itself_as_a_score(self):
-        start = self.source.index("function movieScoreLabel")
-        block = self.source[start : start + 500]
+        block = _function_source(self.source, "movieScoreLabel")
         self.assertIn('tNext("movieDetail.externalScore", "Score")', block)
 
     def test_the_personal_pill_is_a_button_and_the_external_one_is_not(self):
@@ -125,7 +142,7 @@ class TwoScoresStayDistinctTests(unittest.TestCase):
         block = self.source[start : start + 1400]
         self.assertIn("data-set-rating=", block)
         self.assertIn("<button type=", block)
-        external = self.source[self.source.index("function movieScoreLabel") :][:500]
+        external = _function_source(self.source, "movieScoreLabel")
         self.assertNotIn("<button", external)
 
     def test_only_one_number_reaches_a_tile(self):
