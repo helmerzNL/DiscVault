@@ -4809,6 +4809,11 @@ def ui_preview_html(
     .library-list-studio-column {
       width: 13%;
     }
+    .library-list-external-score-column,
+    .library-list-personal-rating-column {
+      width: 78px;
+      overflow-wrap: anywhere;
+    }
     .library-list-rating-column {
       width: 10%;
     }
@@ -4983,7 +4988,7 @@ def ui_preview_html(
     }
     @media (max-width: 1024px) {
       .library-list-table {
-        min-width: 0;
+        min-width: 520px;
         max-width: 100%;
       }
       .library-list-desktop-column {
@@ -5011,6 +5016,10 @@ def ui_preview_html(
       }
       .library-list-format-column {
         width: 72px;
+      }
+      .library-list-external-score-column,
+      .library-list-personal-rating-column {
+        width: 48px;
       }
       .library-list-behavior-column {
         width: 52px;
@@ -29234,13 +29243,11 @@ def ui_preview_html(
     }
     function normalizeLibraryDetailSort(value, compact = libraryListCompactMode()) {
       const allowed = compact
-        ? new Set(["title", "format", "behavior"])
+        ? new Set(["title", "format", "externalScore", "personalRating", "behavior"])
         // "rating" here is the age certificate, which is why the personal score
         // is "personalRating": reusing the key would silently repurpose the
-        // content-rating column. Wide set only -- the column is desktop-only, and
-        // a key allowed in the compact set renders a header whose click resets
-        // the sort to title with nothing failing.
-        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "tags", "behavior"]);
+        // content-rating column. Both score columns stay available in compact mode.
+        : new Set(["title", "director", "actors", "studios", "rating", "personalRating", "externalScore", "tags", "behavior"]);
       // A custom field is sortable on the wide layout too, but it cannot be in a
       // literal set: the keys only exist at runtime. Shape check plus a lookup
       // against the live definitions, so a sort naming a field that no longer
@@ -29427,7 +29434,8 @@ def ui_preview_html(
         watchActivity: libraryExportWatchActivityText(item),
         originCountry: movieOriginCountryValues(movie).map(regionLabel).join(", "),
         originalLanguage: movieOriginLanguageValue(movie) !== "any" ? languageLabel(movieOriginLanguageValue(movie)) : "",
-        personalRating: formatRatingScore(itemPersonalRatingValue(item)),
+        personalRating: itemPersonalRatingValue(item) === null ? "" : formatRatingScore(itemPersonalRatingValue(item)),
+        externalScore: itemExternalScoreValue(item) === null ? "" : String(itemExternalScoreValue(item)),
         ...customExportCells(movie),
       };
     }
@@ -29472,6 +29480,25 @@ def ui_preview_html(
         || (Number(left.watched) - Number(right.watched))
         || (left.watchlistTime - right.watchlistTime)
         || (Number(left.onWatchlist) - Number(right.onWatchlist));
+    }
+    function itemExternalScoreValue(item) {
+      // Containers have no movie score; never invent an average of their children.
+      if (item?.kind && item.kind !== "movie") return null;
+      return movieScoreNumber(item?.movie || item) || null;
+    }
+    function libraryListExternalScoreHtml(item) {
+      const score = itemExternalScoreValue(item);
+      if (score === null) return "";
+      return `<span class="library-list-rating-value" title="${escapeHtml(movieScoreLabel(item?.movie || item))}">${escapeHtml(String(score))}</span>`;
+    }
+    function compareExternalScore(a, b, direction) {
+      const left = itemExternalScoreValue(a);
+      const right = itemExternalScoreValue(b);
+      if (left === null && right === null) return 0;
+      if (left === null) return 1;
+      if (right === null) return -1;
+      const diff = left - right;
+      return direction === "desc" ? -diff : diff;
     }
     function libraryListPersonalRatingHtml(item) {
       const score = itemPersonalRatingValue(item);
@@ -29532,6 +29559,11 @@ def ui_preview_html(
       return [...(items || [])].sort((a, b) => {
         if (typeof state.key === "string" && state.key.startsWith("custom:")) {
           const diff = compareCustomFieldValue(a, b, state.key.slice(7), state.direction);
+          if (diff) return diff;
+          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        }
+        if (state.key === "externalScore") {
+          const diff = compareExternalScore(a, b, state.direction);
           if (diff) return diff;
           return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
         }
@@ -29612,7 +29644,8 @@ def ui_preview_html(
                 ${libraryListSortHeaderHtml("actors", tNext("movieDetail.actors", "Actors"), normalizedSort, "library-list-actors-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("studios", tNext("collection.studioColumn", "Studio"), normalizedSort, "library-list-studio-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("rating", tNext("movieDetail.contentRating", "Content rating"), normalizedSort, "library-list-rating-column library-list-desktop-column")}
-                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column library-list-desktop-column")}
+                ${libraryListSortHeaderHtml("externalScore", tNext("movieDetail.externalScore", "Score"), normalizedSort, "library-list-external-score-column")}
+                ${libraryListSortHeaderHtml("personalRating", tNext("lists.myRating", "My rating"), normalizedSort, "library-list-personal-rating-column")}
                 ${libraryListSortHeaderHtml("tags", tNext("lists.tags", "Tags"), normalizedSort, "library-list-tags-column library-list-desktop-column")}
                 ${libraryListSortHeaderHtml("behavior", tNext("collection.behaviorColumn", "Watch activity"), normalizedSort, "library-list-behavior-column")}
               </tr>
@@ -29646,7 +29679,8 @@ def ui_preview_html(
                     <td class="library-list-actors-column library-list-desktop-column">${libraryListPeopleHtml(itemActorCredits(item))}</td>
                     <td class="library-list-studio-column library-list-desktop-column">${libraryListValueLinesHtml(itemStudioValues(item))}</td>
                     <td class="library-list-rating-column library-list-desktop-column">${libraryListValueLinesHtml(itemRatingValues(item))}</td>
-                    <td class="library-list-personal-rating-column library-list-desktop-column">${libraryListPersonalRatingHtml(item)}</td>
+                    <td class="library-list-external-score-column">${libraryListExternalScoreHtml(item)}</td>
+                    <td class="library-list-personal-rating-column">${libraryListPersonalRatingHtml(item)}</td>
                     <td class="library-list-tags-column library-list-desktop-column">${libraryListTagsHtml(item)}</td>
                     <td class="library-list-behavior-column">${libraryListBehaviorHtml(item)}</td>
                   </tr>
@@ -47583,6 +47617,7 @@ def ui_preview_html(
         originCountry: tNext("movieDetail.originCountry", "Country of origin"),
         originalLanguage: tNext("movieDetail.originalLanguage", "Original language"),
         personalRating: tNext("lists.myRating", "My rating"),
+        externalScore: tNext("movieDetail.externalScore", "Score"),
         // The owner typed these; there is no key to look up.
         ...Object.fromEntries(
           customFieldDefinitions().map((field) => [`custom:${field.key}`, field.name || field.key])
