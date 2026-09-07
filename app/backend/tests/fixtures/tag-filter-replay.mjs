@@ -1,8 +1,6 @@
-// Run the shipped advanced-filter functions, including their save/load path.
-import fs from 'node:fs';
+﻿import fs from 'node:fs';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
-
 const source = fs.readFileSync(new URL('../../next_views_ui.py', import.meta.url), 'utf8');
 function extract(name) {
   const start = source.indexOf(`function ${name}(`);
@@ -21,100 +19,103 @@ const names = [
   'readAdvancedSearchControls', 'readCustomFilterControls', 'persistAdvancedSearch',
   'saveSmartFilter', 'applySmartFilter', 'resetAdvancedSearch',
   'movieMatchesAdvancedSearch', 'containerMatchesAdvancedSearch',
-  'movieMatchesCustomFilters', 'movieCustomValueMap', 'customValueMatches',
-  'syncTagFilterControl',
+  'movieMatchesCustomFilters', 'movieCustomValueMap', 'customValueMatches', 'syncTagFilterControl',
 ];
+for (const name of ['normalizeTagSelection', 'readTagFilterControls', 'movieMatchesTagFilter']) {
+  if (source.includes(`function ${name}(`)) names.push(name);
+}
 const setup = `
 const CUSTOM_FILTER_OPS = ['is', 'contains', 'gte', 'lte', 'set', 'unset'];
 let advancedSearch = advancedSearchDefaults(), smartFilters = [], activeSmartFilterId = '';
-let members = [], customRows = {}, libraryTags = [], movies = [];
-const tagSelect = {value: 'any', innerHTML: ''};
-const controls = {advancedTagFilter: tagSelect};
+let members = [], customRows = {}, libraryTags = [], movies = [], selectedTags = [];
+let libraryTagsLoaded = true;
+const tagPicker = {innerHTML:'', querySelectorAll: () => selectedTags.map(id => ({dataset:{advancedTag:id}}))};
+const matchSelect = {value:'any'};
+const controls = {advancedTagFilter:tagPicker, advancedTagMatch:matchSelect};
 const document = {
   getElementById: id => controls[id] || null,
-  querySelectorAll: () => Object.entries(customRows).map(([key, c]) => ({dataset: {customFilterOp: key}, value: c.op})),
-  querySelector: selector => ({value: customRows[selector.split('"')[1]]?.value})
+  querySelectorAll: () => Object.entries(customRows).map(([key, c]) => ({dataset:{customFilterOp:key},value:c.op})),
+  querySelector: selector => ({value:customRows[selector.split('"')[1]]?.value})
 };
-const localStorage = {data: {}, setItem(k, v) {this.data[k] = v;}};
-const window = {prompt: () => 'Weekend films'};
-const tNext = (k, fallback) => fallback;
-const renderCollectionSurface = () => {};
-const containerGroupingEnabled = () => true;
-const containerMemberMovies = () => members;
-const movieYearNumber = () => null;
-const localeState = {locale: 'en-US'};
-const escapeHtml = value => String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('"', '&quot;');
+const localStorage = {data:{},setItem(k,v){this.data[k]=v;}};
+const window = {prompt:()=>'Weekend films'};
+const tNext = (k,fallback)=>fallback;
+const renderCollectionSurface = ()=>{};
+const containerGroupingEnabled = ()=>true;
+const containerMemberMovies = ()=>members;
+const movieYearNumber = ()=>null;
+const localeState = {locale:'en-US'};
+const escapeHtml = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 `;
-const context = vm.createContext({assert, console});
-vm.runInContext(names.map(extract).join('\n') + setup, context);
 const cases = {
-  'a tag alone is enough to save a smart filter': `
-    tagSelect.value = 'tag-only';
-    saveSmartFilter();
-    assert.equal(smartFilters.length, 1);
-    assert.equal(smartFilters[0].filters.tag, 'tag-only');
-    smartFilters = [];
+  'save/reload retains multiple tags, AND mode and all custom field types': `
+    selectedTags=['tag-one','tag-two']; matchSelect.value='all';
+    customRows={shelf:{op:'contains',value:'Cabinet'},price:{op:'gte',value:'0'},date:{op:'lte',value:'2026-09-07'},rip:{op:'is',value:'false'},edition:{op:'is',value:'limited'},present:{op:'set'},absent:{op:'unset'}};
+    saveSmartFilter(); smartFilters=JSON.parse(localStorage.data.dv_next_smart_filters);
+    assert.equal(smartFilters.length,1);
+    resetAdvancedSearch(); applySmartFilter(smartFilters[0].id);
+    assert.deepEqual(advancedSearch.tags,['tag-one','tag-two']);
+    assert.equal(advancedSearch.tagMatch,'all');
+    assert.deepEqual(advancedSearch.custom,customRows);
+    assert.equal(advancedSearchActiveCount(),8);
   `,
-  'save and reload retains the selected tag and every custom field type': `
-    tagSelect.value = 'tag-one';
-    customRows = {shelf:{op:'contains',value:'Cabinet'},price:{op:'gte',value:'0'},date:{op:'lte',value:'2026-09-07'},rip:{op:'is',value:'false'},edition:{op:'is',value:'limited'},present:{op:'set'},absent:{op:'unset'}};
-    saveSmartFilter();
-    smartFilters = JSON.parse(localStorage.data.dv_next_smart_filters);
-    resetAdvancedSearch();
-    applySmartFilter(smartFilters[0].id);
-    assert.equal(advancedSearch.tag, 'tag-one');
-    assert.deepEqual(advancedSearch.custom, customRows);
-    assert.equal(advancedSearchActiveCount(), 8);
+  'OR matches either selected ID, not an unrelated tag with the same name': `
+    const f=normalizeAdvancedSearch({tags:['one','two'],tagMatch:'any'});
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}]},f),true);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'two'}]},f),true);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'three',name:'one'}]},f),false);
+    assert.equal(movieMatchesAdvancedSearch({},f),false);
   `,
-  'a specific tag matches its ID, not any tag or another tag with the same name': `
-    const filters = {...advancedSearchDefaults(), tag: 'tag-one'};
-    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'tag-one', name:'Weekend'}]}, filters), true);
-    assert.equal(movieMatchesAdvancedSearch({has_tags:true, tags:[{id:'tag-two', name:'Weekend'}]}, filters), false);
-    assert.equal(movieMatchesAdvancedSearch({}, filters), false);
+  'AND requires every selected tag on the same movie': `
+    const f=normalizeAdvancedSearch({tags:['one','two'],tagMatch:'all'});
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'},{id:'two'},{id:'three'}]},f),true);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}]},f),false);
+    assert.equal(movieMatchesAdvancedSearch({},f),false);
   `,
-  'a tag-only filter excludes containers without a matching member': `
-    const filters = {...advancedSearchDefaults(), tag: 'tag-one'};
-    members = [{tags:[{id:'tag-two'}]}];
-    assert.equal(containerMatchesAdvancedSearch({id:'box'}, filters), false);
-    members.push({tags:[{id:'tag-one'}]});
-    assert.equal(containerMatchesAdvancedSearch({id:'box'}, filters), true);
-    members = [];
-    assert.equal(containerMatchesAdvancedSearch({id:'box'}, filters), false);
+  'containers require a member matching the complete tag expression': `
+    const f=normalizeAdvancedSearch({tags:['one','two'],tagMatch:'all'});
+    members=[{tags:[{id:'one'}]},{tags:[{id:'two'}]}];
+    assert.equal(containerMatchesAdvancedSearch({id:'box'},f),false);
+    assert.equal(containerMatchesAdvancedSearch({id:'box'},{...f,tagMatch:'any'}),true);
+    members.push({tags:[{id:'one'},{id:'two'}]});
+    assert.equal(containerMatchesAdvancedSearch({id:'box'},f),true);
+    members=[]; assert.equal(containerMatchesAdvancedSearch({id:'box'},f),false);
   `,
-  'old saved filters still match untagged films': `
-    const filters = normalizeAdvancedSearch({yearFrom:''});
-    assert.equal(filters.tag, 'any');
-    assert.equal(movieMatchesAdvancedSearch({}, filters), true);
-    assert.equal(advancedSearchActiveCount(filters), 0);
+  'legacy single-tag smart filters migrate without widening the selection': `
+    smartFilters=[{id:'old',filters:{tag:'one'}}]; applySmartFilter('old');
+    assert.deepEqual(advancedSearch.tags,['one']);
+    assert.equal(advancedSearch.tagMatch,'any');
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'two'}]},advancedSearch),false);
+    assert.deepEqual(normalizeAdvancedSearch({tag:'one',tags:[]}).tags,[]);
   `,
-  'tag options combine loaded movies and the full catalogue, escaping user labels': `
-    movies = [{tags:[{id:'tag-one', name:'Old name'}, {id:'tag-two', name:'Other'}]}];
-    libraryTags = [{id:'tag-one', name:'<Renamed & tag>'}, {id:'tag-three', name:'Not loaded yet'}];
-    syncTagFilterControl('tag-one');
-    assert.equal(tagSelect.value, 'tag-one');
-    assert.equal((tagSelect.innerHTML.match(/value="tag-one"/g) || []).length, 1);
-    assert.ok(tagSelect.innerHTML.includes('&lt;Renamed &amp; tag>'));
-    assert.ok(tagSelect.innerHTML.includes('value="tag-three"'));
-    assert.ok(!tagSelect.innerHTML.includes('Old name'));
+  'no selected tags means no constraint, including in AND mode': `
+    for(const old of [{},{tag:'any'},{tags:[],tagMatch:'all'}]) {
+      const f=normalizeAdvancedSearch(old);
+      assert.deepEqual(f.tags,[]); assert.equal(advancedSearchActiveCount(f),0);
+      assert.equal(movieMatchesAdvancedSearch({},f),true);
+    }
   `,
-  'a missing saved tag remains selected while pages are loading and when deleted': `
-    movies = []; libraryTags = [];
-    syncTagFilterControl('missing-tag');
-    assert.equal(tagSelect.value, 'missing-tag');
-    assert.ok(tagSelect.innerHTML.includes('value="missing-tag"'));
-    const filters = normalizeAdvancedSearch({tag:tagSelect.value});
-    assert.equal(movieMatchesAdvancedSearch({}, filters), false);
-    assert.equal(advancedSearchActiveCount(filters), 1);
+  'normalization removes duplicates and malformed entries and defaults invalid modes to OR': `
+    const f=normalizeAdvancedSearch({tags:['one','one',' two ','',null,{},'any'],tagMatch:'invalid'});
+    assert.deepEqual(f.tags,['one','two']); assert.equal(f.tagMatch,'any');
   `,
-  'tag and custom constraints must both match': `
-    const filters = normalizeAdvancedSearch({tag:'tag-one', custom:{rip:{op:'is',value:'false'}}});
-    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'tag-one'}],custom_values:[{key:'rip',type:'boolean',value:false}]}, filters), true);
-    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'tag-one'}],custom_values:[{key:'rip',type:'boolean',value:true}]}, filters), false);
+  'selected missing tags remain available and escaped names use the latest catalogue': `
+    movies=[{tags:[{id:'one',name:'Old'}]}]; libraryTags=[{id:'one',name:'<New & name>'}];
+    syncTagFilterControl(['one','missing']);
+    assert.ok(tagPicker.innerHTML.includes('data-advanced-tag="one"'));
+    assert.ok(tagPicker.innerHTML.includes('data-advanced-tag="missing"'));
+    assert.equal((tagPicker.innerHTML.match(/aria-pressed="true"/g)||[]).length,2);
+    assert.ok(tagPicker.innerHTML.includes('&lt;New &amp; name>'));
+  `,
+  'tag matches still require custom constraints to match': `
+    const f=normalizeAdvancedSearch({tags:['one','two'],custom:{rip:{op:'is',value:'false'}}});
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}],custom_values:[{key:'rip',type:'boolean',value:false}]},f),true);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}],custom_values:[{key:'rip',type:'boolean',value:true}]},f),false);
   `,
 };
-let failed = 0;
-for (const [name, code] of Object.entries(cases)) {
-  try {vm.runInContext(`{${code}}`, context); console.log('PASS: ' + name);}
-  catch (error) {failed++; console.error('FAIL: ' + name + '\n' + error.message);}
+let failed=0;
+for(const [name,code] of Object.entries(cases)) {
+  try {vm.runInNewContext(names.map(extract).join('\n')+setup+`{${code}}`,{assert,console});console.log('PASS: '+name);}
+  catch(error){failed++;console.error('FAIL: '+name+'\n'+error.message);}
 }
-process.exitCode = failed ? 1 : 0;
+process.exitCode=failed?1:0;
