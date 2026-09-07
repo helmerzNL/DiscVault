@@ -15839,9 +15839,16 @@ def ui_preview_html(
                     <option value="unlisted" data-next-i18n="collection.notOnPersonalLists">Not on personal lists</option>
                   </select>
                 </label>
+                <div class="advanced-search-field">
+                  <span id="advancedTagsLabel" data-next-i18n="lists.tags">Tags</span>
+                  <div id="advancedTagFilter" class="bulk-tag-picker" role="group" aria-labelledby="advancedTagsLabel"></div>
+                </div>
                 <label class="advanced-search-field">
-                  <span data-next-i18n="lists.tags">Tags</span>
-                  <select id="advancedTagFilter"></select>
+                  <span data-next-i18n="collection.tagMatch">Tag matching</span>
+                  <select id="advancedTagMatch">
+                    <option value="any" data-next-i18n="collection.tagMatchAny">At least one tag (OR)</option>
+                    <option value="all" data-next-i18n="collection.tagMatchAll">All tags (AND)</option>
+                  </select>
                 </label>
                 <label class="advanced-search-field">
                   <span data-next-i18n="collection.locationFilter">Location</span>
@@ -27605,7 +27612,8 @@ def ui_preview_html(
         digital: "any",
         artwork: "any",
         personal: "any",
-        tag: "any",
+        tags: [],
+        tagMatch: "any",
         itemType: "any",
         location: "any",
         originCountry: "any",
@@ -27629,8 +27637,10 @@ def ui_preview_html(
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
         personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(source.personal) ? source.personal : "any",
-        // Keep the ID even before its movie page or tag catalogue has loaded.
-        tag: typeof source.tag === "string" ? source.tag.trim() || "any" : "any",
+        // Upgrade the former single-tag format; an explicit empty list clears it.
+        // Keep IDs even before their movie pages or tag catalogue have loaded.
+        tags: normalizeTagSelection(Array.isArray(source.tags) ? source.tags : source.tag),
+        tagMatch: source.tagMatch === "all" ? "all" : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
         location: String(source.location || "any").trim() || "any",
         // Validated on SHAPE, deliberately not against the movies that happen to
@@ -27676,7 +27686,7 @@ def ui_preview_html(
       if (normalized.digital !== "any") count += 1;
       if (normalized.artwork !== "any") count += 1;
       if (normalized.personal !== "any") count += 1;
-      if (normalized.tag !== "any") count += 1;
+      if (normalized.tags.length) count += 1;
       if (normalized.itemType !== "any") count += 1;
       if (normalized.location !== "any") count += 1;
       if (normalized.originCountry !== "any") count += 1;
@@ -27701,7 +27711,8 @@ def ui_preview_html(
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
-        tag: document.getElementById("advancedTagFilter")?.value || "any",
+        tags: readTagFilterControls(),
+        tagMatch: document.getElementById("advancedTagMatch")?.value || "any",
         itemType: document.getElementById("advancedContainerType")?.value || "any",
         location: document.getElementById("advancedLocationFilter")?.value || "any",
         originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
@@ -27857,7 +27868,18 @@ def ui_preview_html(
         </label>`;
       }).join("");
     }
-    function syncTagFilterControl(current = advancedSearch.tag) {
+    function normalizeTagSelection(value) {
+      const values = Array.isArray(value) ? value : [value];
+      return [...new Set(values.filter((id) => typeof id === "string")
+        .map((id) => id.trim()).filter((id) => id && id !== "any"))];
+    }
+    function readTagFilterControls() {
+      const node = document.getElementById("advancedTagFilter");
+      if (!node) return normalizeTagSelection(advancedSearch.tags);
+      return normalizeTagSelection([...node.querySelectorAll('[data-advanced-tag][aria-pressed="true"]')]
+        .map((button) => button.dataset.advancedTag));
+    }
+    function syncTagFilterControl(current = advancedSearch.tags) {
       const node = document.getElementById("advancedTagFilter");
       if (!node) return;
       const tags = new Map();
@@ -27870,15 +27892,15 @@ def ui_preview_html(
       (Array.isArray(libraryTags) ? libraryTags : []).forEach((tag) => {
         if (tag?.id) tags.set(String(tag.id), String(tag.name || tag.id));
       });
-      const selected = current || "any";
+      const selected = new Set(normalizeTagSelection(current));
       // A missing/deleted tag must keep matching nothing, never become "Any".
-      if (selected !== "any" && !tags.has(selected)) tags.set(selected, selected);
+      selected.forEach((id) => { if (!tags.has(id)) tags.set(id, id); });
       const options = [...tags.entries()].sort((a, b) => a[1].localeCompare(b[1], localeState.locale));
-      node.innerHTML = [
-        `<option value="any">${escapeHtml(tNext("common.any", "Any"))}</option>`,
-        ...options.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`)
-      ].join("");
-      node.value = selected;
+      node.innerHTML = options.length
+        ? options.map(([id, name]) => `<button type="button" class="bulk-tag-option" data-advanced-tag="${escapeHtml(id)}" aria-pressed="${selected.has(id) ? "true" : "false"}">${escapeHtml(name)}</button>`).join("")
+        : `<span class="bulk-tag-empty">${escapeHtml(libraryTagsLoaded
+            ? tNext("bulk.tagsEmpty", "No tags yet. Create tags from the Lists screen.")
+            : tNext("bulk.tagsLoading", "Loading tags..."))}</span>`;
     }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
@@ -27909,6 +27931,7 @@ def ui_preview_html(
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
       syncTagFilterControl();
+      setAdvancedControlValue("advancedTagMatch", advancedSearch.tagMatch);
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
       renderCustomFilterControls();
       populateOriginFilterSelect(
@@ -28171,7 +28194,7 @@ def ui_preview_html(
       }
       if (libraryTagsLoaded && !force) {
         renderBulkTagPicker();
-        syncTagFilterControl(document.getElementById("advancedTagFilter")?.value || advancedSearch.tag);
+        syncTagFilterControl(readTagFilterControls());
         return;
       }
       try {
@@ -28182,7 +28205,7 @@ def ui_preview_html(
         libraryTags = [];
       }
       renderBulkTagPicker();
-      syncTagFilterControl(document.getElementById("advancedTagFilter")?.value || advancedSearch.tag);
+      syncTagFilterControl(readTagFilterControls());
       updateBulkBar();
     }
     function syncBulkTargetCreateControls() {
@@ -28617,6 +28640,14 @@ def ui_preview_html(
       // exactly those films.
       return constraints.every(([key, constraint]) => customValueMatches(values.get(key), constraint));
     }
+    function movieMatchesTagFilter(movie, filters) {
+      const selected = normalizeTagSelection(Array.isArray(filters.tags) ? filters.tags : filters.tag);
+      if (!selected.length) return true;
+      const assigned = new Set((Array.isArray(movie?.tags) ? movie.tags : []).map((tag) => String(tag?.id || "")));
+      return filters.tagMatch === "all"
+        ? selected.every((id) => assigned.has(id))
+        : selected.some((id) => assigned.has(id));
+    }
     function movieMatchesAdvancedSearch(movie, filters = effectiveAdvancedSearchFilters()) {
       const year = movieYearNumber(movie);
       const yearFrom = Number.parseInt(filters.yearFrom || "0", 10) || 0;
@@ -28657,7 +28688,7 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
-      if (filters.tag && filters.tag !== "any" && !(Array.isArray(movie?.tags) ? movie.tags : []).some((tag) => String(tag?.id || "") === filters.tag)) return false;
+      if (!movieMatchesTagFilter(movie, filters)) return false;
       // The viewer's OWN score, not the owner's: "films I have rated" must not
       // be answered with films somebody else rated.
       if (filters.personal === "rated" && !movie?.personal_rating) return false;
@@ -28780,7 +28811,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || (filters.tag && filters.tag !== "any") || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
+      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || normalizeTagSelection(Array.isArray(filters.tags) ? filters.tags : filters.tag).length || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -51208,6 +51239,10 @@ def ui_preview_html(
         if (advancedSearchOpen) loadLibraryTags();
       });
       if (advancedSearchOpen) loadLibraryTags();
+      document.getElementById("advancedTagFilter")?.addEventListener("click", (event) => {
+        const button = event.target.closest("[data-advanced-tag]");
+        if (button) button.setAttribute("aria-pressed", button.getAttribute("aria-pressed") === "true" ? "false" : "true");
+      });
       // Delegated against the static container: the rows are re-rendered from
       // the definitions on every sync, so a listener per row would stack.
       document.getElementById("advancedCustomFilters")?.addEventListener("change", (event) => {

@@ -106,7 +106,10 @@ class StoredValueSurvivalTests(unittest.TestCase):
         # against the loaded movies, a saved smart filter silently widens to the
         # whole library while hydration is still running.
         start = self.source.index("function normalizeAdvancedSearch")
-        block = self.source[start : start + 2200]
+        # Read the complete function: adding another filter must not truncate
+        # this assertion before the origin normalization it verifies.
+        end = self.source.index("\n    function ", start + 1)
+        block = self.source[start:end]
         self.assertIn("/^[A-Za-z]{2}$/.test", block)
         self.assertIn("normalizeOriginLanguageValue(source.originalLanguage)", block)
 
