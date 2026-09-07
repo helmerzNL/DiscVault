@@ -15840,6 +15840,10 @@ def ui_preview_html(
                   </select>
                 </label>
                 <label class="advanced-search-field">
+                  <span data-next-i18n="lists.tags">Tags</span>
+                  <select id="advancedTagFilter"></select>
+                </label>
+                <label class="advanced-search-field">
                   <span data-next-i18n="collection.locationFilter">Location</span>
                   <select id="advancedLocationFilter"></select>
                 </label>
@@ -27601,6 +27605,7 @@ def ui_preview_html(
         digital: "any",
         artwork: "any",
         personal: "any",
+        tag: "any",
         itemType: "any",
         location: "any",
         originCountry: "any",
@@ -27624,6 +27629,8 @@ def ui_preview_html(
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
         personal: ["any", "watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(source.personal) ? source.personal : "any",
+        // Keep the ID even before its movie page or tag catalogue has loaded.
+        tag: typeof source.tag === "string" ? source.tag.trim() || "any" : "any",
         itemType: ["any", "movie", "container", "box_set", "collection", "vault"].includes(source.itemType) ? source.itemType : "any",
         location: String(source.location || "any").trim() || "any",
         // Validated on SHAPE, deliberately not against the movies that happen to
@@ -27669,6 +27676,7 @@ def ui_preview_html(
       if (normalized.digital !== "any") count += 1;
       if (normalized.artwork !== "any") count += 1;
       if (normalized.personal !== "any") count += 1;
+      if (normalized.tag !== "any") count += 1;
       if (normalized.itemType !== "any") count += 1;
       if (normalized.location !== "any") count += 1;
       if (normalized.originCountry !== "any") count += 1;
@@ -27693,6 +27701,7 @@ def ui_preview_html(
         digital: document.getElementById("advancedDigitalFilter")?.value || "any",
         artwork: document.getElementById("advancedArtworkFilter")?.value || "any",
         personal: document.getElementById("advancedPersonalFilter")?.value || "any",
+        tag: document.getElementById("advancedTagFilter")?.value || "any",
         itemType: document.getElementById("advancedContainerType")?.value || "any",
         location: document.getElementById("advancedLocationFilter")?.value || "any",
         originCountry: document.getElementById("advancedOriginCountry")?.value || "any",
@@ -27848,6 +27857,29 @@ def ui_preview_html(
         </label>`;
       }).join("");
     }
+    function syncTagFilterControl(current = advancedSearch.tag) {
+      const node = document.getElementById("advancedTagFilter");
+      if (!node) return;
+      const tags = new Map();
+      movies.forEach((movie) => {
+        (Array.isArray(movie.tags) ? movie.tags : []).forEach((tag) => {
+          if (tag?.id) tags.set(String(tag.id), String(tag.name || tag.id));
+        });
+      });
+      // The full personal catalogue also covers tags on pages still loading.
+      (Array.isArray(libraryTags) ? libraryTags : []).forEach((tag) => {
+        if (tag?.id) tags.set(String(tag.id), String(tag.name || tag.id));
+      });
+      const selected = current || "any";
+      // A missing/deleted tag must keep matching nothing, never become "Any".
+      if (selected !== "any" && !tags.has(selected)) tags.set(selected, selected);
+      const options = [...tags.entries()].sort((a, b) => a[1].localeCompare(b[1], localeState.locale));
+      node.innerHTML = [
+        `<option value="any">${escapeHtml(tNext("common.any", "Any"))}</option>`,
+        ...options.map(([id, name]) => `<option value="${escapeHtml(id)}">${escapeHtml(name)}</option>`)
+      ].join("");
+      node.value = selected;
+    }
     function syncAdvancedSearchControls() {
       const panel = document.getElementById("advancedSearchPanel");
       const toggle = document.getElementById("advancedSearchToggleButton");
@@ -27876,6 +27908,7 @@ def ui_preview_html(
       setAdvancedControlValue("advancedDigitalFilter", advancedSearch.digital);
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
       setAdvancedControlValue("advancedPersonalFilter", advancedSearch.personal);
+      syncTagFilterControl();
       setAdvancedControlValue("advancedContainerType", advancedSearch.itemType);
       renderCustomFilterControls();
       populateOriginFilterSelect(
@@ -28138,6 +28171,7 @@ def ui_preview_html(
       }
       if (libraryTagsLoaded && !force) {
         renderBulkTagPicker();
+        syncTagFilterControl(document.getElementById("advancedTagFilter")?.value || advancedSearch.tag);
         return;
       }
       try {
@@ -28148,6 +28182,7 @@ def ui_preview_html(
         libraryTags = [];
       }
       renderBulkTagPicker();
+      syncTagFilterControl(document.getElementById("advancedTagFilter")?.value || advancedSearch.tag);
       updateBulkBar();
     }
     function syncBulkTargetCreateControls() {
@@ -28622,6 +28657,7 @@ def ui_preview_html(
       if (filters.personal === "unlisted" && (movie?.on_watchlist || movieIsWatched(movie))) return false;
       if (filters.personal === "onloan" && !movie?.on_loan) return false;
       if (filters.personal === "tagged" && !movie?.has_tags) return false;
+      if (filters.tag && filters.tag !== "any" && !(Array.isArray(movie?.tags) ? movie.tags : []).some((tag) => String(tag?.id || "") === filters.tag)) return false;
       // The viewer's OWN score, not the owner's: "films I have rated" must not
       // be answered with films somebody else rated.
       if (filters.personal === "rated" && !movie?.personal_rating) return false;
@@ -28744,7 +28780,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
+      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || (filters.tag && filters.tag !== "any") || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -51169,7 +51205,9 @@ def ui_preview_html(
         advancedSearchOpen = !advancedSearchOpen;
         localStorage.setItem("dv_next_advanced_search_open", advancedSearchOpen ? "true" : "false");
         syncAdvancedSearchControls();
+        if (advancedSearchOpen) loadLibraryTags();
       });
+      if (advancedSearchOpen) loadLibraryTags();
       // Delegated against the static container: the rows are re-rendered from
       // the definitions on every sync, so a listener per row would stack.
       document.getElementById("advancedCustomFilters")?.addEventListener("change", (event) => {
