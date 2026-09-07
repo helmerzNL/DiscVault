@@ -339,10 +339,10 @@ A hand-written bump is only valid against the base as it stood when it was
 written, and GitHub does not re-run a check when the base moves. A PR could be
 green when opened and wrong when merged, with nothing in between to notice.
 
-This happened three times: #473/#474, #516/#517 (repaired by #520), and finally
-#570/#571/#572 merging within 26 seconds, all bumping to 26.8.39 — two guards red
-on beta, `Build & Publish Docker Image` gating on the same job, and no image built
-for beta's head until #573 bumped it by hand.
+This happened three times: #473/#474, #516/#517 (repaired by #520), and
+finally #570/#571/#572 merging within 26 seconds, all bumping to 26.8.39 — two
+guards red on beta, `Build & Publish Docker Image` gating on the same job, and no
+image built for beta's head until #573 bumped it by hand.
 
 The old rule was "re-check the bump right before merging". Three sessions merging
 seconds apart cannot satisfy it: the bump goes stale in between and no human wins
@@ -555,6 +555,13 @@ Activate the hooks once per clone:
 ```sh
 git config core.hooksPath .githooks
 ```
+
+`.githooks/pre-commit` rejects forbidden iOS artifacts and runs
+`scripts/check_agent_instructions.py`. That second check also runs in CI, and it
+belongs in both places rather than either: CI reports it after the commit
+already exists, and by then the counterpart edit — deleting the line just copied
+into a pointer file, fixing the link that moved — is no longer the obvious next
+thing to do.
 
 The CI jobs that run on a pull request, and the name each one is findable by:
 
