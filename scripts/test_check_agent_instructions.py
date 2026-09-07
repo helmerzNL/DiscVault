@@ -207,6 +207,63 @@ class TestCodexPrompts(InstructionRepoTestCase):
         self.assertNoErrors()
 
 
+class TestMcpParity(InstructionRepoTestCase):
+    """The three clients must be offered the same MCP servers."""
+
+    CLAUDE = '{"mcpServers": {"squad_state": {"command": "npx"}}}\n'
+    COPILOT = '{"mcpServers": {"squad_state": {"command": "npx"}}}\n'
+    CODEX = '[mcp_servers.squad_state]\ncommand = "npx"\n'
+    EMPTY = '{"mcpServers": {}}\n'
+
+    def test_matching_servers_pass(self) -> None:
+        self.write(".mcp.json", self.CLAUDE)
+        self.write(".copilot/mcp-config.json", self.COPILOT)
+        self.write(".codex/config.toml.example", self.CODEX)
+        self.write(".codex/README.md", "# Codex\n")
+        self.write(
+            "AGENTS.md",
+            "# AGENTS.md\n\n## Client surfaces\n\nCLAUDE.md, "
+            ".github/copilot-instructions.md, .codex/README.md\n",
+        )
+        self.assertNoErrors()
+
+    def test_server_missing_for_one_client_is_an_error(self) -> None:
+        self.write(".mcp.json", self.CLAUDE)
+        self.write(".copilot/mcp-config.json", self.EMPTY)
+        self.assertErrorMentions("not for Copilot")
+
+    def test_example_file_is_used_when_the_live_file_is_absent(self) -> None:
+        """CI never sees .mcp.json -- it is gitignored -- so the example stands in."""
+        self.write(".mcp.json.example", self.CLAUDE)
+        self.write(".copilot/mcp-config.json.example", self.EMPTY)
+        self.assertErrorMentions("not for Copilot")
+
+    def test_live_file_wins_over_the_example(self) -> None:
+        self.write(".mcp.json", self.EMPTY)
+        self.write(".mcp.json.example", self.CLAUDE)
+        self.write(".copilot/mcp-config.json", self.COPILOT)
+        self.assertErrorMentions("not for Claude")
+
+    def test_example_prefixed_servers_are_ignored(self) -> None:
+        """EXAMPLE-* documents the shape of an entry; it is not configuration."""
+        self.write(".mcp.json", self.CLAUDE)
+        self.write(
+            ".copilot/mcp-config.json",
+            '{"mcpServers": {"squad_state": {}, "EXAMPLE-github": {}}}\n',
+        )
+        self.assertNoErrors()
+
+    def test_a_single_client_config_is_not_compared(self) -> None:
+        """Nothing to compare against is not a finding."""
+        self.write(".mcp.json", self.CLAUDE)
+        self.assertNoErrors()
+
+    def test_invalid_json_is_reported(self) -> None:
+        self.write(".mcp.json", "{not json")
+        self.write(".copilot/mcp-config.json", self.COPILOT)
+        self.assertErrorMentions("is not valid JSON")
+
+
 class TestLinks(InstructionRepoTestCase):
     def test_broken_relative_link_is_an_error(self) -> None:
         self.write(

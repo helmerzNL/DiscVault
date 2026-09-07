@@ -13,11 +13,17 @@ is simply done to the wrong rule.
 
 So the checks below are about *sameness*: that the pointers point, that no prose
 is duplicated between canonical and pointer, that every client surface present in
-the repository is named in AGENTS.md, and that the Codex prompt wrappers still
-match the Claude skills they wrap.
+the repository is named in AGENTS.md, that the Codex prompt wrappers still match
+the Claude skills they wrap, and that the three clients are offered the same MCP
+servers.
+
+The last two are the ones that keep switching clients free. Work done in Claude
+that adds a skill or a server leaves Codex behind, and nothing about that is
+visible from inside Claude -- see AGENTS.md section 10.
 
 Run by the `agent-instructions-lint` CI job.
 """
+import json
 import re
 import sys
 from pathlib import Path
@@ -45,6 +51,25 @@ HEADING_RE = re.compile(r"^(#{1,6})\s+(.*?)\s*$", re.M)
 # prose rather than a shared phrase. Sixty characters is comfortably past any
 # heading or list label the two files legitimately share.
 DUPLICATE_MIN_LENGTH = 60
+
+# Where each client declares its MCP servers. The live file comes first and the
+# tracked example second, because the two readers want different things: the
+# pre-commit hook should compare what is actually configured on this machine,
+# and CI -- where none of the live files exist -- should compare what everyone
+# else will copy. Codex has only an example, because it has no per-repository
+# config at all; its live config is ~/.codex/config.toml, outside the repo.
+MCP_SOURCES = {
+    "Claude": ("json", (".mcp.json", ".mcp.json.example")),
+    "Copilot": ("json", (".copilot/mcp-config.json", ".copilot/mcp-config.json.example")),
+    "Codex": ("toml", (".codex/config.toml.example",)),
+}
+
+# A server named EXAMPLE-* is illustration, not configuration: it documents the
+# shape of an entry for someone adding their own, and is not expected to exist
+# for the other clients.
+EXAMPLE_SERVER_PREFIX = "EXAMPLE-"
+
+CODEX_MCP_SECTION_RE = re.compile(r"^\s*\[mcp_servers\.([A-Za-z0-9_\-]+)\]", re.M)
 
 
 def slug(heading: str) -> str:
@@ -191,6 +216,55 @@ def check_codex_prompts_match_skills() -> list[str]:
     return errors
 
 
+def mcp_servers(kind: str, path: Path) -> tuple[set[str], str | None]:
+    """Server names declared in one client's config. Returns (names, parse error)."""
+    text = read(path)
+    if kind == "toml":
+        # A full TOML parse would also accept [mcp_servers.x] written inline or
+        # in a table array; the section header is the only form this repo's
+        # example uses, and the only one Codex documents.
+        names = set(CODEX_MCP_SECTION_RE.findall(text))
+    else:
+        try:
+            names = set(json.loads(text).get("mcpServers", {}))
+        except json.JSONDecodeError as exc:
+            return set(), f"{rel(path)} is not valid JSON: {exc}"
+    return {n for n in names if not n.startswith(EXAMPLE_SERVER_PREFIX)}, None
+
+
+def check_mcp_parity() -> list[str]:
+    """Every client offers the same MCP servers, or the same task fails for one
+    of them with nothing to say why."""
+    errors: list[str] = []
+    found: dict[str, tuple[Path, set[str]]] = {}
+    for client, (kind, candidates) in MCP_SOURCES.items():
+        for candidate in candidates:
+            path = ROOT / candidate
+            if path.is_file():
+                names, error = mcp_servers(kind, path)
+                if error:
+                    errors.append(error + ". Fix: repair the file")
+                else:
+                    found[client] = (path, names)
+                break
+
+    if len(found) < 2:
+        return errors
+
+    union: set[str] = set()
+    for _path, names in found.values():
+        union |= names
+    for client, (path, names) in sorted(found.items()):
+        for missing in sorted(union - names):
+            errors.append(
+                f"MCP server {missing!r} is configured for another client but not "
+                f"for {client} ({rel(path)}). Fix: add it there too, or remove it "
+                "everywhere -- a server that exists for one client makes the same "
+                "task succeed or fail depending on who is driving. See AGENTS.md section 10"
+            )
+    return errors
+
+
 def check_links() -> list[str]:
     errors = []
     for path in LINKED_DOCS:
@@ -229,6 +303,7 @@ def collect_errors() -> list[str]:
     errors.extend(check_no_duplicated_prose())
     errors.extend(check_surfaces_are_listed())
     errors.extend(check_codex_prompts_match_skills())
+    errors.extend(check_mcp_parity())
     errors.extend(check_links())
     return errors
 
