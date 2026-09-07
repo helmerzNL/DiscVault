@@ -635,7 +635,7 @@ jobs:
       # score column can no longer undo. Runs the normalizer and, under node, the
       # shipped client-side predicate. No database needed.
       - name: Test the rating vote count and its floor
-        run: python -m unittest tests.test_next_rating_votes
+        run: python -m unittest tests.test_next_rating_votes tests.test_next_rating_refresh
 
       # Filtering the Library on the external score (TMDB's vote average), asked
       # for on #719. The behavioural half lifts the helpers and the predicate out
