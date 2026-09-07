@@ -3375,6 +3375,12 @@ def should_apply_field(
         return False, format_reason
     if not value_present(current_value):
         return True, "current field is empty"
+    # Community scores and vote counts change over time. Fill-only merging
+    # otherwise freezes an existing score (including "0") while missing votes
+    # can still be filled, producing a stale score beside a current count.
+    # The merge caller still enforces field locks and first-provider priority.
+    if field in {"rating", "rating_votes"}:
+        return True, "provider rating refresh"
     if field in METADATA_TECHNICAL_FIELDS and release_priority:
         if format_reason in (
             "same-format release data",
