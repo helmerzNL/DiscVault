@@ -7,9 +7,8 @@ the age-certificate column, in the sort whitelist, the value extractor and the
 table head alike. Reusing it silently repurposes the content-rating column
 instead of adding one.
 
-**The sort key is allowed in the wide set only.** The column is desktop-only, and
-a key allowed in the compact set renders a header whose click resets the sort
-back to title with nothing failing.
+**Both score sort keys are available in compact and wide layouts.** Their
+headers remain visible at every width, so compact sorting must retain the key.
 
 **The tile badge preference must be registered twice.** `APP_PREFERENCE_DEFAULTS`
 alone makes it a string preference, and the string "false" is truthy -- so
@@ -76,13 +75,14 @@ class ColumnKeyTests(unittest.TestCase):
         block = self.source[start : start + 900]
         self.assertIn('"rating", "personalRating"', block)
 
-    def test_the_personal_rating_sort_is_desktop_only(self):
+    def test_both_score_sorts_are_available_in_compact_mode(self):
         start = self.source.index("function normalizeLibraryDetailSort")
         block = self.source[start : start + 900]
         compact = _without_comments(
             block[block.index("compact") : block.index(': new Set(["title", "director"')]
         )
-        self.assertNotIn("personalRating", compact)
+        self.assertIn("personalRating", compact)
+        self.assertIn("externalScore", compact)
 
     def test_the_content_rating_column_still_renders_the_certificate(self):
         # If this ever renders a score, the key collision happened.
@@ -95,7 +95,7 @@ class ColumnKeyTests(unittest.TestCase):
     def test_the_personal_rating_column_has_its_own_header_and_cell(self):
         self.assertIn('libraryListSortHeaderHtml("personalRating"', self.source)
         self.assertIn(
-            '<td class="library-list-personal-rating-column library-list-desktop-column">'
+            '<td class="library-list-personal-rating-column">'
             "${libraryListPersonalRatingHtml(item)}</td>",
             self.source,
         )
