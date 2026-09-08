@@ -14,7 +14,7 @@ function extract(name) {
 }
 const names = [
   'advancedSearchDefaults', 'normalizeAdvancedSearch', 'normalizeOriginLanguageValue',
-  'normalizeCustomFilters', 'normalizeScoreBound', 'scoreBoundNumber',
+  'normalizeCustomFilters', 'normalizeScoreBound', 'scoreBoundNumber', 'movieScoreNumber',
   'normalizeVoteFloor', 'voteFloorNumber', 'advancedSearchActiveCount',
   'readAdvancedSearchControls', 'readCustomFilterControls', 'persistAdvancedSearch',
   'saveSmartFilter', 'applySmartFilter', 'resetAdvancedSearch',
@@ -48,6 +48,13 @@ const localeState = {locale:'en-US'};
 const escapeHtml = value => String(value).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('"','&quot;');
 `;
 const cases = {
+  'score availability and tags constrain the same movie': `
+    const f=normalizeAdvancedSearch({tags:['one'],scoreAvailability:'without'});
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}]},f),true);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}],rating:'8'},f),false);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'two'}]},f),false);
+    assert.equal(movieMatchesAdvancedSearch({tags:[{id:'one'}],rating:'8'},{...f,scoreAvailability:'with'}),true);
+  `,
   'save/reload retains multiple tags, AND mode and all custom field types': `
     selectedTags=['tag-one','tag-two']; matchSelect.value='all';
     customRows={shelf:{op:'contains',value:'Cabinet'},price:{op:'gte',value:'0'},date:{op:'lte',value:'2026-09-07'},rip:{op:'is',value:'false'},edition:{op:'is',value:'limited'},present:{op:'set'},absent:{op:'unset'}};

@@ -2748,6 +2748,8 @@ def ui_preview_html(
       color: var(--text);
       background: color-mix(in srgb, var(--warn) 8%, transparent);
     }
+    .library-list-no-score { color: var(--muted); }
+    .library-render-progress,
     .library-render-sentinel {
       grid-column: 1 / -1;
       display: flex;
@@ -2758,6 +2760,7 @@ def ui_preview_html(
       color: var(--muted);
       font-size: 13px;
     }
+    .library-render-progress { flex-wrap: wrap; width: 100%; }
     .library-render-sentinel::before {
       content: "";
       width: 14px;
@@ -15751,6 +15754,14 @@ def ui_preview_html(
               </summary>
               <div class="library-adaptive-group-body">
                 <label class="advanced-search-field">
+                  <span data-next-i18n="collection.scoreAvailability">Score availability</span>
+                  <select id="advancedScoreAvailability">
+                    <option value="all" data-next-i18n="common.all">All</option>
+                    <option value="with" data-next-i18n="collection.withScore">With score</option>
+                    <option value="without" data-next-i18n="collection.withoutScore">Without score</option>
+                  </select>
+                </label>
+                <label class="advanced-search-field">
                   <span data-next-i18n="collection.scoreFrom">Score from</span>
                   <input id="advancedScoreFrom" type="number" min="0" max="10" step="0.1" inputmode="decimal">
                 </label>
@@ -27611,6 +27622,7 @@ def ui_preview_html(
         // The EXTERNAL score (movies.rating -- TMDB's vote average, or OMDb's
         // IMDb rating), not the personal one under `personal`. Empty is "no
         // bound"; "0" is a bound like any other and means "has a score at all".
+        scoreAvailability: "all",
         scoreFrom: "",
         scoreTo: "",
         // How many people voted for that score to mean anything. Empty is "no
@@ -27636,12 +27648,14 @@ def ui_preview_html(
     function normalizeAdvancedSearch(value) {
       const defaults = advancedSearchDefaults();
       const source = value && typeof value === "object" ? value : {};
+      const scoreAvailability = ["with", "without"].includes(source.scoreAvailability) ? source.scoreAvailability : "all";
       return {
         yearFrom: String(source.yearFrom || "").trim(),
         yearTo: String(source.yearTo || "").trim(),
-        scoreFrom: normalizeScoreBound(source.scoreFrom),
-        scoreTo: normalizeScoreBound(source.scoreTo),
-        minVotes: normalizeVoteFloor(source.minVotes),
+        scoreAvailability,
+        scoreFrom: scoreAvailability === "without" ? "" : normalizeScoreBound(source.scoreFrom),
+        scoreTo: scoreAvailability === "without" ? "" : normalizeScoreBound(source.scoreTo),
+        minVotes: scoreAvailability === "without" ? "" : normalizeVoteFloor(source.minVotes),
         crew: String(source.crew || "").trim(),
         digital: ["any", "plex", "jellyfin", "digital", "none"].includes(source.digital) ? source.digital : "any",
         artwork: ["any", "missingPoster", "missingBackdrop", "completeArtwork"].includes(source.artwork) ? source.artwork : "any",
@@ -27688,6 +27702,7 @@ def ui_preview_html(
       // Compared against "" rather than tested for truth: a bound of "0" is a
       // real constraint ("has a score"), and `if ("0")` happens to be true only
       // because it is a string. Saying so here keeps it true if it stops being one.
+      if (normalized.scoreAvailability !== "all") count += 1;
       if (normalized.scoreFrom !== "") count += 1;
       if (normalized.scoreTo !== "") count += 1;
       if (normalized.minVotes !== "") count += 1;
@@ -27709,10 +27724,20 @@ def ui_preview_html(
       const node = document.getElementById(id);
       if (node && node.value !== String(value || "")) node.value = String(value || "");
     }
+    function syncScoreAvailabilityControls(filters) {
+      const normalized = normalizeAdvancedSearch(filters);
+      setAdvancedControlValue("advancedScoreAvailability", normalized.scoreAvailability);
+      for (const [id, key] of [["advancedScoreFrom", "scoreFrom"], ["advancedScoreTo", "scoreTo"], ["advancedMinVotes", "minVotes"]]) {
+        setAdvancedControlValue(id, normalized[key]);
+        const node = document.getElementById(id);
+        if (node) node.disabled = normalized.scoreAvailability === "without";
+      }
+    }
     function readAdvancedSearchControls() {
       return normalizeAdvancedSearch({
         yearFrom: document.getElementById("advancedYearFrom")?.value || "",
         yearTo: document.getElementById("advancedYearTo")?.value || "",
+        scoreAvailability: document.getElementById("advancedScoreAvailability")?.value || "all",
         scoreFrom: document.getElementById("advancedScoreFrom")?.value || "",
         scoreTo: document.getElementById("advancedScoreTo")?.value || "",
         minVotes: document.getElementById("advancedMinVotes")?.value || "",
@@ -27932,9 +27957,7 @@ def ui_preview_html(
       }
       setAdvancedControlValue("advancedYearFrom", advancedSearch.yearFrom);
       setAdvancedControlValue("advancedYearTo", advancedSearch.yearTo);
-      setAdvancedControlValue("advancedScoreFrom", advancedSearch.scoreFrom);
-      setAdvancedControlValue("advancedScoreTo", advancedSearch.scoreTo);
-      setAdvancedControlValue("advancedMinVotes", advancedSearch.minVotes);
+      syncScoreAvailabilityControls(advancedSearch);
       setAdvancedControlValue("advancedCrewQuery", advancedSearch.crew);
       setAdvancedControlValue("advancedDigitalFilter", advancedSearch.digital);
       setAdvancedControlValue("advancedArtworkFilter", advancedSearch.artwork);
@@ -27964,7 +27987,7 @@ def ui_preview_html(
           ? tNext("collection.scoreDataMissing", "{count} films have no score yet and are left out by a score filter")
               .replace("{count}", String(missing))
           : "";
-        scoreHint.classList.toggle("hidden", missing === 0);
+        scoreHint.classList.toggle("hidden", missing === 0 || advancedSearch.scoreAvailability === "without");
       }
       const votesHint = document.getElementById("advancedVotesHint");
       if (votesHint) {
@@ -27973,7 +27996,7 @@ def ui_preview_html(
           ? tNext("collection.voteDataMissing", "{count} films have no vote count yet and are left out by a vote floor")
               .replace("{count}", String(missing))
           : "";
-        votesHint.classList.toggle("hidden", missing === 0);
+        votesHint.classList.toggle("hidden", missing === 0 || advancedSearch.scoreAvailability === "without");
       }
       const originHint = document.getElementById("advancedOriginHint");
       if (originHint) {
@@ -28669,6 +28692,9 @@ def ui_preview_html(
       // not known to be good.
       const scoreFrom = scoreBoundNumber(filters.scoreFrom);
       const scoreTo = scoreBoundNumber(filters.scoreTo);
+      const hasScore = movieScoreNumber(movie) > 0;
+      if (filters.scoreAvailability === "with" && !hasScore) return false;
+      if (filters.scoreAvailability === "without" && hasScore) return false;
       if (scoreFrom !== null || scoreTo !== null) {
         const score = movieScoreNumber(movie);
         if (!score) return false;
@@ -28820,7 +28846,7 @@ def ui_preview_html(
       if (filters.itemType === "movie") return false;
       if (["box_set", "collection", "vault"].includes(filters.itemType) && type !== filters.itemType) return false;
       const members = containerMemberMovies(container?.id);
-      if (filters.yearFrom || filters.yearTo || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || normalizeTagSelection(Array.isArray(filters.tags) ? filters.tags : filters.tag).length || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
+      if (filters.yearFrom || filters.yearTo || ["with", "without"].includes(filters.scoreAvailability) || scoreBoundNumber(filters.scoreFrom) !== null || scoreBoundNumber(filters.scoreTo) !== null || voteFloorNumber(filters.minVotes) !== null || filters.crew || ["plex", "jellyfin", "digital", "none"].includes(filters.digital) || ["watchlist", "watched", "unlisted", "onloan", "tagged", "rated", "unrated"].includes(filters.personal) || normalizeTagSelection(Array.isArray(filters.tags) ? filters.tags : filters.tag).length || filters.originCountry !== "any" || filters.originalLanguage !== "any" || Object.keys(filters.custom || {}).length) {
         if (!members.some((movie) => movieMatchesAdvancedSearch(movie, filters))) return false;
       }
       if (filters.artwork === "missingPoster" && containerPosterValue(container)) return false;
@@ -29488,7 +29514,10 @@ def ui_preview_html(
     }
     function libraryListExternalScoreHtml(item) {
       const score = itemExternalScoreValue(item);
-      if (score === null) return "";
+      if (score === null) {
+        if (item?.kind && item.kind !== "movie") return "";
+        return `<span class="library-list-no-score">${escapeHtml(tNext("movieDetail.noScore", "No score"))}</span>`;
+      }
       return `<span class="library-list-rating-value" title="${escapeHtml(movieScoreLabel(item?.movie || item))}">${escapeHtml(String(score))}</span>`;
     }
     function compareExternalScore(a, b, direction) {
@@ -29609,11 +29638,18 @@ def ui_preview_html(
       return items.length > libraryRenderLimit ? items.slice(0, libraryRenderLimit) : items;
     }
     function libraryRenderSentinelHtml(total) {
-      const count = Number(total) || 0;
-      if (count <= libraryRenderLimit) return "";
-      const remaining = count - libraryRenderLimit;
-      const label = tNext("collection.loadingMoreRows", "Loading more…");
-      return `<div class="library-render-sentinel" data-library-render-sentinel data-remaining="${remaining}"><span class="library-render-sentinel-label">${escapeHtml(label)}</span></div>`;
+      const count = Math.max(0, Number(total) || 0);
+      const shown = Math.min(count, libraryRenderLimit);
+      const incomplete = libraryMoviesHasMore === true && movies.length < libraryMovieTotal;
+      const label = (incomplete
+        ? tNext("collection.loadedRowsShown", "{shown} of {total} loaded rows shown")
+        : tNext("collection.rowsShown", "{shown} of {total} shown"))
+        .replace("{shown}", String(shown)).replace("{total}", String(count));
+      const more = count > shown;
+      return `<div class="library-render-progress"${more ? ` data-library-render-sentinel data-remaining="${count - shown}"` : ""}>
+        <span role="status" tabindex="-1" data-library-render-status>${escapeHtml(label)}</span>
+        ${more ? `<button type="button" class="secondary-button" data-library-load-more>${escapeHtml(tNext("collection.loadMore", "Load more"))}</button>` : ""}
+      </div>`;
     }
     function libraryAfterRender() {
       const hook = window.DiscVaultLibrary && window.DiscVaultLibrary.onRender;
@@ -51289,6 +51325,7 @@ def ui_preview_html(
         const op = opNode.value;
         wrap?.classList.toggle("hidden", op === "any" || op === "set" || op === "unset");
       });
+      document.getElementById("advancedScoreAvailability")?.addEventListener("change", () => syncScoreAvailabilityControls(readAdvancedSearchControls()));
       document.getElementById("advancedSearchApplyButton")?.addEventListener("click", applyAdvancedSearchFromControls);
       document.getElementById("advancedSearchResetButton")?.addEventListener("click", resetAdvancedSearch);
       document.getElementById("advancedSearchSaveButton")?.addEventListener("click", saveSmartFilter);
