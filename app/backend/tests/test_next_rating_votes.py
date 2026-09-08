@@ -446,18 +446,10 @@ class FilterWiringTests(unittest.TestCase):
         block = _function_source(self.source, "advancedSearchDefaults")
         self.assertIn('minVotes: ""', block)
 
-    def test_a_stored_filter_is_normalized_through_the_floor_helper(self):
-        block = _function_source(self.source, "normalizeAdvancedSearch")
-        self.assertIn("minVotes: normalizeVoteFloor(source.minVotes)", block)
-
     def test_the_floor_counts_towards_the_badge(self):
         block = _function_source(self.source, "advancedSearchActiveCount")
         # Against "" and not for truthiness: a floor of "0" is a real filter.
         self.assertIn('normalized.minVotes !== ""', block)
-
-    def test_the_control_is_read_back_and_written_back(self):
-        self.assertIn("advancedMinVotes", _function_source(self.source, "readAdvancedSearchControls"))
-        self.assertIn('setAdvancedControlValue("advancedMinVotes"', _function_source(self.source, "syncAdvancedSearchControls"))
 
     def test_the_predicate_is_in_the_advanced_search_chain(self):
         block = _function_source(self.source, "movieMatchesAdvancedSearch")

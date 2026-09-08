@@ -4,7 +4,10 @@ import shutil
 import subprocess
 import unittest
 from pathlib import Path
-from test_next_score_filter import _function_source
+try:
+    from .test_next_score_filter import _function_source
+except ImportError:
+    from test_next_score_filter import _function_source
 
 SOURCE = Path(__file__).resolve().parents[1] / "next_views_ui.py"
 
