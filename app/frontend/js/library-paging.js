@@ -109,9 +109,24 @@
   function warn(api, key, fallback) {
     if (!api || typeof api.setHydrationWarning !== "function") return;
     try {
-      api.setHydrationWarning(translate(key, fallback));
+      renderWithProgressFocus(function () { api.setHydrationWarning(translate(key, fallback)); });
     } catch (error) {
       /* the bridge may have been torn down mid-navigation */
+    }
+  }
+
+  function renderWithProgressFocus(render) {
+    // A page append or observer growth can replace a manually focused control too.
+    // Preserve only focus already inside this progress footer, never unrelated focus.
+    var active = document.activeElement;
+    var progress = active && typeof active.closest === "function"
+      ? active.closest(".library-render-progress") : null;
+    var surface = progress && progress.parentElement;
+    render();
+    if (surface) {
+      var target = surface.querySelector("[data-library-load-more]")
+        || surface.querySelector("[data-library-render-status]");
+      if (target) target.focus({ preventScroll: true });
     }
   }
 
@@ -123,14 +138,14 @@
         window.clearTimeout(state.renderTimer);
         state.renderTimer = null;
       }
-      api.render();
+      renderWithProgressFocus(function () { api.render(); });
       return;
     }
     if (state.renderTimer) return;
     state.renderTimer = window.setTimeout(function () {
       state.renderTimer = null;
       var current = bridge();
-      if (current && typeof current.render === "function") current.render();
+      if (current && typeof current.render === "function") renderWithProgressFocus(function () { current.render(); });
     }, RENDER_DEBOUNCE_MS);
   }
 
@@ -414,6 +429,15 @@
       window.setTimeout(run, 16);
     }
   }
+
+  // Delegation survives replacement of the library and location row surfaces.
+  document.addEventListener("click", function (event) {
+    var button = event.target && typeof event.target.closest === "function"
+      ? event.target.closest("[data-library-load-more]") : null;
+    if (!button) return;
+    event.preventDefault();
+    scheduleGrowth();
+  });
 
   function ensureObserver() {
     var api = bridge();

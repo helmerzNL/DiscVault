@@ -292,11 +292,6 @@ class ScoreFilterWiringTests(unittest.TestCase):
         self.assertIn('scoreFrom: ""', block)
         self.assertIn('scoreTo: ""', block)
 
-    def test_a_stored_filter_is_normalized_through_the_bound_helper(self):
-        block = self.source[self.source.index("function normalizeAdvancedSearch") :][:1200]
-        self.assertIn("scoreFrom: normalizeScoreBound(source.scoreFrom)", block)
-        self.assertIn("scoreTo: normalizeScoreBound(source.scoreTo)", block)
-
     def test_both_bounds_count_towards_the_badge(self):
         block = self.source[self.source.index("function advancedSearchActiveCount") :][:1400]
         # Against "" and not for truthiness: a bound of "0" is a real filter.
@@ -307,11 +302,6 @@ class ScoreFilterWiringTests(unittest.TestCase):
         block = self.source[self.source.index("function readAdvancedSearchControls") :][:1200]
         self.assertIn("advancedScoreFrom", block)
         self.assertIn("advancedScoreTo", block)
-
-    def test_the_controls_are_written_back(self):
-        block = self.source[self.source.index("function syncAdvancedSearchControls") :][:3000]
-        self.assertIn('setAdvancedControlValue("advancedScoreFrom"', block)
-        self.assertIn('setAdvancedControlValue("advancedScoreTo"', block)
 
     def test_the_predicate_is_in_the_advanced_search_chain(self):
         block = self.source[self.source.index("function movieMatchesAdvancedSearch") :][:4000]

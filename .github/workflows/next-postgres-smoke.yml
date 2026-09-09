@@ -644,7 +644,7 @@ jobs:
       # reading that as a score would open "Score to 5" -- the search for the duds
       # -- with every unscored film in the library. No database needed.
       - name: Test the library score filter
-        run: python -m unittest tests.test_next_score_filter
+        run: python -m unittest tests.test_next_score_filter tests.test_next_score_visibility tests.test_next_library_rating_columns
 
       # The film's country of origin and original language -- distinct from
       # movies.country/movies.language, which describe the disc. The PostgreSQL
