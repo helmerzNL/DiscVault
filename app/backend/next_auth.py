@@ -989,19 +989,48 @@ def next_auth_usable_login_method_count(
     user_id: UUID | str,
 ) -> int:
     checks: list[tuple[str, tuple[Any, ...]]] = []
-    if table_exists(conn, "passkey_credentials"):
+    if _passkey_access_valid() and table_exists(conn, "passkey_credentials"):
         checks.append(
             ("SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s", (user_id,))
         )
-    if table_exists(conn, "legacy_password_credentials"):
+    legacy_tables = (
+        "legacy_password_credentials",
+        "legacy_totp_credentials",
+        "legacy_mfa_recovery_codes",
+        "legacy_auth_flows",
+        "legacy_auth_attempts",
+    )
+    legacy_usable = (
+        legacy_auth_env_enabled()
+        and all(table_exists(conn, table_name) for table_name in legacy_tables)
+        and bool(
+            next_auth_setting_value(
+                conn,
+                table_exists,
+                LEGACY_AUTH_SETTING,
+                False,
+            )
+        )
+    )
+    if legacy_usable:
         checks.append(
             (
-                "SELECT COUNT(*) AS count FROM legacy_password_credentials WHERE user_id=%s",
+                """
+                SELECT COUNT(*) AS count
+                FROM legacy_password_credentials
+                WHERE user_id=%s
+                  AND (credential_expires_at IS NULL OR credential_expires_at > now())
+                  AND (locked_until IS NULL OR locked_until <= now())
+                """,
                 (user_id,),
             )
         )
     oidc_config = oidc_config_from_env()
-    if oidc_config and table_exists(conn, "oidc_identities"):
+    if (
+        oidc_config
+        and table_exists(conn, "oidc_identities")
+        and table_exists(conn, "oidc_auth_transactions")
+    ):
         checks.append(
             (
                 "SELECT COUNT(*) AS count FROM oidc_identities WHERE user_id=%s AND issuer=%s",

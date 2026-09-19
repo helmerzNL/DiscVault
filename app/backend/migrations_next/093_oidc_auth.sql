@@ -37,4 +37,3 @@ CREATE TABLE IF NOT EXISTS oidc_auth_transactions (
 
 CREATE INDEX IF NOT EXISTS idx_oidc_auth_transactions_expiry
     ON oidc_auth_transactions(expires_at, used_at);
-

@@ -39,12 +39,14 @@ try:  # pragma: no cover - exercised indirectly by both layouts
     from .next_auth import (
         next_api_token_hash,
         next_auth_current_user,
+        next_auth_usable_login_method_count,
         next_create_api_token_value,
         next_generate_recovery_codes,
         next_replace_recovery_codes,
     )
     from .next_common import NextApiError, parse_int_arg, parse_uuid, response, table_exists
     from .next_import import clean_text
+    from .next_oidc import oidc_config_from_env, oidc_identity_payloads
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_api_token import (
         api_access_token_row,
@@ -63,12 +65,14 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import (
         next_api_token_hash,
         next_auth_current_user,
+        next_auth_usable_login_method_count,
         next_create_api_token_value,
         next_generate_recovery_codes,
         next_replace_recovery_codes,
     )
     from next_common import NextApiError, parse_int_arg, parse_uuid, response, table_exists
     from next_import import clean_text
+    from next_oidc import oidc_config_from_env, oidc_identity_payloads
 
 
 def _next_app():
@@ -249,6 +253,7 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
                     "status": "ok",
                     "user": user_payload,
                     "credentials": credentials,
+                    "oidcIdentities": oidc_identity_payloads(conn, user["id"], table_exists),
                     "recovery": next_profile_recovery_payload(conn, user["id"]),
                     "apiAccess": profile_api_access_payload(conn, user),
                 }
@@ -848,13 +853,20 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
                 raise NextApiError("Unauthorized", 401)
             with conn.transaction():
                 with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE id=%s FOR UPDATE", (user["id"],))
+                    if not cur.fetchone():
+                        raise NextApiError("User not found", 404)
                     cur.execute(
-                        "SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s",
-                        (user["id"],),
+                        "SELECT id FROM passkey_credentials WHERE id=%s AND user_id=%s",
+                        (credential_id, user["id"]),
                     )
-                    owned_count = int(cur.fetchone()["count"])
-                    if owned_count <= 1:
-                        raise NextApiError("You cannot delete your last passkey from your profile", 400)
+                    if not cur.fetchone():
+                        raise NextApiError("Passkey not found", 404)
+                    if next_auth_usable_login_method_count(conn, table_exists, user["id"]) <= 1:
+                        raise NextApiError(
+                            "Add another sign-in method before removing this passkey",
+                            400,
+                        )
                     cur.execute(
                         "DELETE FROM passkey_credentials WHERE id=%s AND user_id=%s RETURNING id",
                         (credential_id, user["id"]),
@@ -873,3 +885,63 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
                     )
                     credentials = cur.fetchall()
         return response({"status": "deleted", "credentials": credentials})
+
+    @flask_app.delete("/api/next/profile/oidc/identities/<identity_id>")
+    def unlink_next_profile_oidc_identity(identity_id: str):
+        _app = _next_app()
+        identity_uuid = parse_uuid(identity_id, "identityId")
+        with connect() as conn:
+            user = next_auth_current_user(conn)
+            if not user:
+                raise NextApiError("Unauthorized", 401)
+            if not table_exists(conn, "oidc_identities"):
+                raise NextApiError("OIDC identities are not available", 503)
+            with conn.transaction():
+                with conn.cursor() as cur:
+                    cur.execute("SELECT id FROM users WHERE id=%s FOR UPDATE", (user["id"],))
+                    if not cur.fetchone():
+                        raise NextApiError("User not found", 404)
+                    cur.execute(
+                        """
+                        SELECT id, issuer
+                        FROM oidc_identities
+                        WHERE id=%s AND user_id=%s
+                        FOR UPDATE
+                        """,
+                        (identity_uuid, user["id"]),
+                    )
+                    identity = cur.fetchone()
+                    if not identity:
+                        raise NextApiError("OIDC identity not found", 404)
+                    config = oidc_config_from_env()
+                    target_is_usable = bool(config and identity["issuer"] == config.issuer)
+                    remaining = next_auth_usable_login_method_count(
+                        conn,
+                        table_exists,
+                        user["id"],
+                    ) - (1 if target_is_usable else 0)
+                    if remaining < 1:
+                        raise NextApiError(
+                            "Add another sign-in method before unlinking this identity",
+                            400,
+                        )
+                    cur.execute(
+                        "DELETE FROM oidc_identities WHERE id=%s AND user_id=%s RETURNING id",
+                        (identity_uuid, user["id"]),
+                    )
+                audit_event(
+                    conn,
+                    event_type="auth.oidc_unlinked",
+                    category="security",
+                    actor={
+                        "id": user["id"],
+                        "username": user["username"],
+                        "role": _app.next_user_primary_role(conn, user["id"]),
+                    },
+                    target_type="oidc_identity",
+                    target_id=identity_uuid,
+                    summary="Unlinked OIDC identity",
+                    metadata={"providerConfigured": target_is_usable},
+                )
+            identities = oidc_identity_payloads(conn, user["id"], table_exists)
+        return response({"status": "deleted", "oidcIdentities": identities})
