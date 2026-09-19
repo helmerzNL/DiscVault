@@ -85,6 +85,12 @@ try:
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
     )
+    from .next_oidc import (
+        oidc_auth_status,
+        oidc_config_from_env,
+        oidc_identity_count,
+        register_oidc_routes,
+    )
     from .next_runtime_secrets import jwt_secret
     from .scripts.sync_dedup_merge import (
         build_report as _dedup_build_report,
@@ -134,6 +140,12 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
     from next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
+    )
+    from next_oidc import (
+        oidc_auth_status,
+        oidc_config_from_env,
+        oidc_identity_count,
+        register_oidc_routes,
     )
     from next_runtime_secrets import jwt_secret
     from scripts.sync_dedup_merge import (
@@ -948,6 +960,12 @@ def next_auth_ready(conn, table_exists: TableExists) -> bool:
         credential_checks.append(
             "EXISTS (SELECT 1 FROM legacy_password_credentials l WHERE l.user_id=u.id)"
         )
+    if table_exists(conn, "oidc_identities") and table_exists(
+        conn, "oidc_auth_transactions"
+    ):
+        credential_checks.append(
+            "EXISTS (SELECT 1 FROM oidc_identities o WHERE o.user_id=u.id)"
+        )
     if not credential_checks:
         return False
     with conn.cursor() as cur:
@@ -963,6 +981,39 @@ def next_auth_ready(conn, table_exists: TableExists) -> bool:
         )
         row = cur.fetchone()
     return bool(row and row["ready"])
+
+
+def next_auth_usable_login_method_count(
+    conn,
+    table_exists: TableExists,
+    user_id: UUID | str,
+) -> int:
+    checks: list[tuple[str, tuple[Any, ...]]] = []
+    if table_exists(conn, "passkey_credentials"):
+        checks.append(
+            ("SELECT COUNT(*) AS count FROM passkey_credentials WHERE user_id=%s", (user_id,))
+        )
+    if table_exists(conn, "legacy_password_credentials"):
+        checks.append(
+            (
+                "SELECT COUNT(*) AS count FROM legacy_password_credentials WHERE user_id=%s",
+                (user_id,),
+            )
+        )
+    oidc_config = oidc_config_from_env()
+    if oidc_config and table_exists(conn, "oidc_identities"):
+        checks.append(
+            (
+                "SELECT COUNT(*) AS count FROM oidc_identities WHERE user_id=%s AND issuer=%s",
+                (user_id, oidc_config.issuer),
+            )
+        )
+    total = 0
+    with conn.cursor() as cur:
+        for query, params in checks:
+            cur.execute(query, params)
+            total += int((cur.fetchone() or {}).get("count") or 0)
+    return total
 
 
 _AUTH_ENABLED_ATTR = "_dv_auth_effective_enabled"
@@ -1363,6 +1414,19 @@ def register_next_auth_routes(
             path="/",
             secure=_request_is_secure(),
             samesite="Lax",
+        )
+        return result
+
+    def session_redirect(path: str, token: str):
+        result = make_response(redirect(path, code=302))
+        result.set_cookie(
+            SESSION_COOKIE_NAME,
+            token,
+            max_age=SESSION_COOKIE_MAX_AGE_SECONDS,
+            httponly=True,
+            secure=_request_is_secure(),
+            samesite="Lax",
+            path="/",
         )
         return result
 
@@ -2458,6 +2522,13 @@ def register_next_auth_routes(
             row = cur.fetchone()
         return int(row["count"] if row else 0)
 
+    def authentication_credential_count(conn) -> int:
+        return (
+            count_table(conn, "passkey_credentials")
+            + count_table(conn, "legacy_password_credentials")
+            + count_table(conn, "oidc_identities")
+        )
+
     def current_user(conn) -> dict[str, Any] | None:
         """The same resolution as the module-level function, so share its memo.
 
@@ -2999,6 +3070,7 @@ def register_next_auth_routes(
         user_count = count_table(conn, "users")
         credential_count = count_table(conn, "passkey_credentials")
         legacy_credential_count = count_table(conn, "legacy_password_credentials")
+        oidc_count = count_table(conn, "oidc_identities")
         with conn.cursor() as cur:
             cur.execute(
                 "SELECT COUNT(*) AS count FROM users WHERE status<>%s",
@@ -3019,7 +3091,7 @@ def register_next_auth_routes(
             legacy_available
             and not is_auth_ready
             and blocking_user_count == 0
-            and credential_count == 0
+            and credential_count + legacy_credential_count + oidc_count == 0
         )
         try:
             review_expires_at = _review_login_expires_at()
@@ -3032,10 +3104,11 @@ def register_next_auth_routes(
             "setup_required": not is_auth_ready,
             "registration_enabled": registration_enabled(conn) or not is_auth_ready,
             "has_users": user_count > 0,
-            "has_credentials": credential_count > 0,
+            "has_credentials": credential_count + legacy_credential_count + oidc_count > 0,
             "user_count": user_count,
             "credential_count": credential_count,
             "legacy_credential_count": legacy_credential_count,
+            "oidc_identity_count": oidc_count,
             "legacy_auth_available": legacy_available,
             "legacy_auth_enabled": effective_legacy,
             "legacy_auth_database_enabled": legacy_db_enabled(conn)
@@ -3059,6 +3132,10 @@ def register_next_auth_routes(
             "rbac_mode": rbac_mode(conn),
             "review_login_available": review_login_available,
             "review_login_expires_at": review_expires_at.isoformat() if review_expires_at else None,
+            **oidc_auth_status(
+                table_exists(conn, "oidc_identities")
+                and table_exists(conn, "oidc_auth_transactions")
+            ),
         }
 
     def route(*rules: str, methods: list[str] | None = None):
@@ -3119,10 +3196,7 @@ def register_next_auth_routes(
             if not table_exists(conn, "users") or not table_exists(conn, "passkey_credentials"):
                 raise next_api_error("Auth tables are not available", 503)
             has_users = count_table(conn, "users") > 0
-            has_credentials = (
-                count_table(conn, "passkey_credentials")
-                + count_table(conn, "legacy_password_credentials")
-            ) > 0
+            has_credentials = authentication_credential_count(conn) > 0
             with conn.cursor() as cur:
                 cur.execute(
                     "SELECT COUNT(*) AS count FROM users WHERE status=%s",
@@ -3237,10 +3311,7 @@ def register_next_auth_routes(
                         "SELECT pg_advisory_xact_lock(hashtext('discvault-legacy-bootstrap'))"
                     )
                 has_users = count_table(conn, "users") > 0
-                has_credentials = (
-                    count_table(conn, "passkey_credentials")
-                    + count_table(conn, "legacy_password_credentials")
-                ) > 0
+                has_credentials = authentication_credential_count(conn) > 0
                 with conn.cursor() as cur:
                     cur.execute(
                         "SELECT COUNT(*) AS count FROM users WHERE status=%s",
@@ -6094,6 +6165,21 @@ def register_next_auth_routes(
                     metadata={},
                 )
         return response({"status": "deleted"})
+
+    register_oidc_routes(
+        app,
+        connect=connect,
+        table_exists=table_exists,
+        current_user=current_user,
+        create_session_token=_create_token,
+        session_redirect=session_redirect,
+        registration_enabled=registration_enabled,
+        default_registration_role=default_registration_role,
+        assign_role=assign_role,
+        primary_role=primary_role,
+        set_auth_enabled=lambda conn: set_setting(conn, "auth_enabled", True),
+        normalize_username=_normalize_username,
+    )
 
     _register_admin_dedup_routes(
         route=route,
