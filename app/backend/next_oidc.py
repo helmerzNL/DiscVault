@@ -486,10 +486,8 @@ def _upsert_oidc_identity(
     return row
 
 
-def _callback_url() -> str:
-    scheme = str(request.headers.get("X-Forwarded-Proto") or request.scheme or "http").split(",", 1)[0].strip().lower()
-    host = str(request.host or "").strip()
-    origin = _validate_https_url(f"{scheme}://{host}", "OIDC callback origin")
+def _callback_url(configured_origin: str) -> str:
+    origin = _validate_https_url(configured_origin, "OIDC callback origin")
     return f"{origin}/api/next/auth/oidc/callback"
 
 
@@ -529,6 +527,7 @@ def register_oidc_routes(
     primary_role: Callable[[Any, UUID | str], str | None],
     set_auth_enabled: Callable[[Any], None],
     normalize_username: Callable[[Any], str],
+    callback_origin: Callable[[], str],
 ) -> None:
     def require_tables(conn) -> None:
         if not table_exists(conn, "oidc_identities") or not table_exists(conn, "oidc_auth_transactions"):
@@ -561,7 +560,7 @@ def register_oidc_routes(
             config = oidc_config_from_env()
             if not config:
                 raise OidcFlowError("oidc_disabled")
-            callback_url = _callback_url()
+            callback_url = _callback_url(callback_origin())
             discovery = oidc_discovery(config)
             state = secrets.token_urlsafe(32)
             nonce = secrets.token_urlsafe(32)

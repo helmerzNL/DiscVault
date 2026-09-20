@@ -6208,6 +6208,7 @@ def register_next_auth_routes(
         primary_role=primary_role,
         set_auth_enabled=lambda conn: set_setting(conn, "auth_enabled", True),
         normalize_username=_normalize_username,
+        callback_origin=lambda: (_configured_rp_origins() or [""])[0],
     )
 
     _register_admin_dedup_routes(
