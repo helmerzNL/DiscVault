@@ -70,7 +70,6 @@ class OidcConfig:
 
 _discovery_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _discovery_cache_lock = threading.Lock()
-_provider_reachable: bool | None = None
 
 
 def _utcnow() -> datetime:
@@ -145,7 +144,6 @@ def oidc_auth_status(table_exists: bool) -> dict[str, Any]:
     return {
         "oidc_available": bool(configured and table_exists),
         "oidc_provider_name": config.provider_name if config else None,
-        "oidc_provider_reachable": _provider_reachable if configured else None,
     }
 
 
@@ -196,16 +194,9 @@ def oidc_feedback_path(
     return urlunsplit(("", "", parsed.path, urlencode(query), parsed.fragment))
 
 
-def _set_provider_reachable(value: bool) -> None:
-    global _provider_reachable
-    _provider_reachable = value
-
-
 def clear_oidc_discovery_cache() -> None:
-    global _provider_reachable
     with _discovery_cache_lock:
         _discovery_cache.clear()
-    _provider_reachable = None
 
 
 def _openid_configuration_url(issuer: str) -> str:
@@ -236,7 +227,6 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
             return dict(cached[1])
     payload = fetch_oidc_document(_openid_configuration_url(config.issuer))
     if str(payload.get("issuer") or "").rstrip("/") != config.issuer:
-        _set_provider_reachable(False)
         raise OidcFlowError("provider_invalid")
     try:
         normalized = {
@@ -248,14 +238,12 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
             "jwks_uri": _validate_https_url(payload.get("jwks_uri"), "jwks_uri"),
         }
     except OidcConfigurationError as exc:
-        _set_provider_reachable(False)
         raise OidcFlowError("provider_invalid") from exc
     with _discovery_cache_lock:
         _discovery_cache[config.issuer] = (
             now + OIDC_DISCOVERY_CACHE_SECONDS,
             normalized,
         )
-    _set_provider_reachable(True)
     return dict(normalized)
 
 
@@ -293,11 +281,9 @@ def exchange_oidc_code(
             timeout=OIDC_HTTP_TIMEOUT,
         )
     except Exception as exc:
-        _set_provider_reachable(False)
         raise OidcFlowError("token_exchange_failed") from exc
     if not isinstance(token, dict) or not token.get("id_token"):
         raise OidcFlowError("id_token_missing")
-    _set_provider_reachable(True)
     return token
 
 
@@ -306,7 +292,7 @@ def validate_oidc_id_token(
     discovery: Mapping[str, Any],
     token: Mapping[str, Any],
     *,
-    nonce: str,
+    nonce_hash: str,
     code: str,
 ) -> dict[str, Any]:
     jwks = fetch_oidc_document(str(discovery["jwks_uri"]))
@@ -321,11 +307,10 @@ def validate_oidc_id_token(
                 "aud": {"essential": True, "value": config.client_id},
                 "exp": {"essential": True},
                 "iat": {"essential": True},
-                "nonce": {"essential": True, "value": nonce},
+                "nonce": {"essential": True},
             },
             claims_params={
                 "client_id": config.client_id,
-                "nonce": nonce,
                 "code": code,
                 "access_token": token.get("access_token"),
             },
@@ -334,7 +319,16 @@ def validate_oidc_id_token(
     except Exception as exc:
         raise OidcFlowError("id_token_invalid") from exc
     subject = str(claims.get("sub") or "").strip()
-    if not subject or len(subject) > 255:
+    presented_nonce = str(claims.get("nonce") or "")
+    if (
+        not subject
+        or len(subject) > 255
+        or not presented_nonce
+        or not secrets.compare_digest(
+            oidc_state_hash(presented_nonce),
+            str(nonce_hash or ""),
+        )
+    ):
         raise OidcFlowError("id_token_invalid")
     return dict(claims)
 
@@ -501,7 +495,7 @@ def _transaction_row(conn, state: str) -> dict[str, Any] | None:
             WHERE state_hash=%s
               AND used_at IS NULL
               AND expires_at > now()
-            RETURNING id, nonce, code_verifier, mode, initiating_user_id,
+            RETURNING id, nonce_hash, code_verifier, mode, initiating_user_id,
                       return_path, redirect_uri, expires_at
             """,
             (oidc_state_hash(state),),
@@ -576,14 +570,14 @@ def register_oidc_routes(
                         cur.execute(
                             """
                             INSERT INTO oidc_auth_transactions (
-                                state_hash, nonce, code_verifier, mode,
+                                state_hash, nonce_hash, code_verifier, mode,
                                 initiating_user_id, return_path, redirect_uri, expires_at
                             )
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 oidc_state_hash(state),
-                                nonce,
+                                oidc_state_hash(nonce),
                                 code_verifier,
                                 mode,
                                 actor["id"] if actor else None,
@@ -661,7 +655,7 @@ def register_oidc_routes(
                     config,
                     discovery,
                     token,
-                    nonce=str(transaction["nonce"]),
+                    nonce_hash=str(transaction["nonce_hash"]),
                     code=code,
                 )
                 subject = str(claims["sub"])
