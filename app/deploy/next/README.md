@@ -204,6 +204,66 @@ RP_ORIGINS=https://discvault.example.com
 comma-separated list of allowed origins. Browsers require a secure context for
 passkeys, so use HTTPS for non-localhost deployments.
 
+## Optional OpenID Connect (OIDC) login
+
+OIDC is disabled by default, so an existing deployment does not need any
+changes. Local passkeys, optional password login, and API tokens remain
+available when OIDC is enabled.
+
+Configure OIDC as follows:
+
+1. Choose the public origin users open in their browser, including the scheme
+   and any non-default port, for example `https://discvault.example.com`.
+   Non-localhost deployments must use HTTPS. `http://localhost` is the only
+   development exception. Put this canonical public origin first in
+   `RP_ORIGINS`; DiscVault derives the OIDC callback from that first value.
+2. In the identity provider, create a confidential OIDC client and register
+   this redirect URI, formed from that public origin and the exact callback
+   path:
+
+   ```text
+   https://discvault.example.com/api/next/auth/oidc/callback
+   ```
+
+   The callback path is exactly `/api/next/auth/oidc/callback`; do not add or
+   remove a trailing slash.
+3. Copy the provider's issuer URL, client ID, and client secret into the
+   untracked `.env` file:
+
+   ```text
+   DISCVAULT_OIDC_ISSUER=https://id.example.com
+   DISCVAULT_OIDC_CLIENT_ID=<client-id>
+   DISCVAULT_OIDC_CLIENT_SECRET=<client-secret>
+   DISCVAULT_OIDC_PROVIDER_NAME=Pocket ID
+   ```
+
+   The first three variables are all-or-none: leave all three empty to keep
+   OIDC disabled, or set all three to enable it. A partial configuration is
+   rejected. `DISCVAULT_OIDC_PROVIDER_NAME` is optional and only controls the
+   provider name shown on the sign-in button.
+4. Recreate `next-api` so the container receives the new environment:
+
+   ```bash
+   docker compose -p discvault_next_deploy up -d --force-recreate next-api
+   ```
+
+For Pocket ID, add an OIDC client in Pocket ID, use the DiscVault callback URI
+from step 2 as its allowed redirect URI, and copy Pocket ID's issuer URL, client
+ID, and client secret into the values above. The standard `openid`, `profile`,
+and `email` claims are sufficient; no Pocket ID-specific DiscVault setting is
+needed.
+
+Treat `DISCVAULT_OIDC_CLIENT_SECRET` like `JWT_SECRET`: never commit it, put it
+only in the deployment's untracked `.env` file or secret manager, restrict who
+can read that source, and rotate it at the provider if it is exposed. Do not put
+the secret directly in `docker-compose.yml` or command-line arguments.
+
+Both the public DiscVault origin and the issuer must have certificates trusted
+by the browser and the DiscVault host. TLS certificate verification is always
+enforced; DiscVault has no insecure/TLS-bypass option. Fix the certificate or
+install the issuing CA in the host/container trust store instead of disabling
+verification.
+
 ## Optional Legacy password authentication
 
 Set `LEGACY_AUTH_ENABLED=true` only when password + TOTP login is required.

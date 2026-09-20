@@ -402,5 +402,61 @@ class OidcWiringTests(unittest.TestCase):
         self.assertIn("def _bearer_api_token()", self.auth)
 
 
+class OidcDeploymentWiringTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        app_root = REPO_ROOT / "app"
+        cls.root_env = (app_root / ".env.example").read_text(encoding="utf-8")
+        cls.deploy_env = (
+            app_root / "deploy" / "next" / ".env.example"
+        ).read_text(encoding="utf-8")
+        cls.dev_compose = (
+            app_root / "docker-compose.next.yml"
+        ).read_text(encoding="utf-8")
+        cls.deploy_compose = (
+            app_root / "deploy" / "next" / "docker-compose.yml"
+        ).read_text(encoding="utf-8")
+        cls.deploy_readme = (
+            app_root / "deploy" / "next" / "README.md"
+        ).read_text(encoding="utf-8")
+
+    def test_all_oidc_variables_are_present_in_both_env_templates(self):
+        for name in (
+            next_oidc.OIDC_ISSUER_ENV,
+            next_oidc.OIDC_CLIENT_ID_ENV,
+            next_oidc.OIDC_CLIENT_SECRET_ENV,
+            next_oidc.OIDC_PROVIDER_NAME_ENV,
+        ):
+            with self.subTest(name=name):
+                self.assertIn(f"{name}=", self.root_env)
+                self.assertIn(f"{name}=", self.deploy_env)
+
+    def test_all_oidc_variables_are_forwarded_to_the_api_container(self):
+        for name in (
+            next_oidc.OIDC_ISSUER_ENV,
+            next_oidc.OIDC_CLIENT_ID_ENV,
+            next_oidc.OIDC_CLIENT_SECRET_ENV,
+            next_oidc.OIDC_PROVIDER_NAME_ENV,
+        ):
+            mapping = f"{name}: ${{{name}:-}}"
+            with self.subTest(name=name):
+                self.assertIn(mapping, self.dev_compose)
+                self.assertIn(mapping, self.deploy_compose)
+
+    def test_operator_documentation_names_the_exact_callback_and_origin_rule(self):
+        self.assertIn(
+            "https://discvault.example.com/api/next/auth/oidc/callback",
+            self.deploy_readme,
+        )
+        self.assertIn(
+            "Put this canonical public origin first in",
+            self.deploy_readme,
+        )
+        self.assertIn(
+            "`RP_ORIGINS`; DiscVault derives the OIDC callback from that first value.",
+            self.deploy_readme,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
