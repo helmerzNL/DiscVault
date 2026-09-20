@@ -31,6 +31,9 @@ OIDC_ISSUER_ENV = "DISCVAULT_OIDC_ISSUER"
 OIDC_CLIENT_ID_ENV = "DISCVAULT_OIDC_CLIENT_ID"
 OIDC_CLIENT_SECRET_ENV = "DISCVAULT_OIDC_CLIENT_SECRET"
 OIDC_PROVIDER_NAME_ENV = "DISCVAULT_OIDC_PROVIDER_NAME"
+OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV = (
+    "DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS"
+)
 OIDC_TRANSACTION_TTL_SECONDS = 5 * 60
 OIDC_FLOW_COOKIE_PREFIX = "dv_oidc_flow_"
 OIDC_FLOW_COOKIE_PATH = "/api/next/auth/oidc/callback"
@@ -48,6 +51,11 @@ OIDC_ALLOWED_ID_TOKEN_ALGORITHMS = (
     "ES512",
 )
 OIDC_USERNAME_SANITIZER = re.compile(r"[^A-Za-z0-9._@+-]+")
+OIDC_INTERNAL_HTTP_SUFFIXES = (
+    ".svc",
+    ".cluster.local",
+    ".internal",
+)
 
 
 class OidcConfigurationError(RuntimeError):
@@ -68,9 +76,13 @@ class OidcConfig:
     client_id: str
     client_secret: str
     provider_name: str
+    insecure_backchannel_origins: frozenset[str]
 
 
-_discovery_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+_discovery_cache: dict[
+    tuple[str, tuple[str, ...]],
+    tuple[float, dict[str, Any]],
+] = {}
 _discovery_cache_lock = threading.Lock()
 
 
@@ -112,27 +124,127 @@ def _validate_https_url(value: Any, label: str) -> str:
     return urlunsplit((parsed.scheme, authority, parsed.path.rstrip("/"), "", ""))
 
 
+def _internal_http_hostname(hostname: str) -> bool:
+    lowered = hostname.lower().rstrip(".")
+    if _is_local_hostname(lowered):
+        return True
+    try:
+        address = ipaddress.ip_address(lowered)
+    except ValueError:
+        return any(
+            lowered.endswith(suffix)
+            and lowered != suffix.removeprefix(".")
+            for suffix in OIDC_INTERNAL_HTTP_SUFFIXES
+        )
+    return bool(
+        address.is_private
+        and not address.is_link_local
+        and not address.is_multicast
+        and not address.is_reserved
+        and not address.is_unspecified
+    )
+
+
+def _validate_insecure_backchannel_origin(value: Any) -> str:
+    text = str(value or "").strip().rstrip("/")
+    try:
+        parsed = urlsplit(text)
+        port = parsed.port
+    except ValueError as exc:
+        raise OidcConfigurationError(
+            f"{OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV} contains an invalid URL"
+        ) from exc
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        parsed.scheme != "http"
+        or not hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+        or parsed.path not in {"", "/"}
+        or not _internal_http_hostname(hostname)
+    ):
+        raise OidcConfigurationError(
+            f"{OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV} accepts only exact "
+            "HTTP origins for private IPs, localhost, Kubernetes service "
+            "DNS names, or .internal hosts"
+        )
+    authority = hostname if port in {None, 80} else f"{hostname}:{port}"
+    if ":" in hostname and not hostname.startswith("["):
+        authority = f"[{hostname}]" if port in {None, 80} else f"[{hostname}]:{port}"
+    return urlunsplit(("http", authority, "", "", ""))
+
+
+def _validate_backchannel_url(
+    value: Any,
+    label: str,
+    insecure_origins: frozenset[str],
+) -> str:
+    text = str(value or "").strip().rstrip("/")
+    try:
+        parsed = urlsplit(text)
+        port = parsed.port
+    except ValueError as exc:
+        raise OidcConfigurationError(f"{label} is not a valid URL") from exc
+    if parsed.scheme != "http" or _is_local_hostname(str(parsed.hostname or "")):
+        return _validate_https_url(text, label)
+    hostname = str(parsed.hostname or "").lower()
+    if (
+        not hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise OidcConfigurationError(f"{label} is not a valid back-channel URL")
+    authority = hostname if port in {None, 80} else f"{hostname}:{port}"
+    if ":" in hostname and not hostname.startswith("["):
+        authority = f"[{hostname}]" if port in {None, 80} else f"[{hostname}]:{port}"
+    origin = urlunsplit(("http", authority, "", "", ""))
+    if origin not in insecure_origins:
+        raise OidcConfigurationError(
+            f"{label} uses HTTP outside "
+            f"{OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV}"
+        )
+    return urlunsplit(("http", authority, parsed.path.rstrip("/"), "", ""))
+
+
 def oidc_config_from_env(environ: Mapping[str, str] | None = None) -> OidcConfig | None:
     values = environ if environ is not None else os.environ
     issuer = str(values.get(OIDC_ISSUER_ENV) or "").strip()
     client_id = str(values.get(OIDC_CLIENT_ID_ENV) or "").strip()
     client_secret = str(values.get(OIDC_CLIENT_SECRET_ENV) or "").strip()
+    insecure_origins_raw = str(
+        values.get(OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV) or ""
+    ).strip()
     configured = (bool(issuer), bool(client_id), bool(client_secret))
     if any(configured) and not all(configured):
         raise OidcConfigurationError(
             f"{OIDC_ISSUER_ENV}, {OIDC_CLIENT_ID_ENV}, and {OIDC_CLIENT_SECRET_ENV} must be set together"
         )
     if not any(configured):
+        if insecure_origins_raw:
+            raise OidcConfigurationError(
+                f"{OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV} requires OIDC "
+                "issuer, client ID, and client secret"
+            )
         return None
     normalized_issuer = _validate_https_url(issuer, OIDC_ISSUER_ENV)
     provider_name = str(values.get(OIDC_PROVIDER_NAME_ENV) or "").strip() or "OIDC"
     if len(provider_name) > 120:
         raise OidcConfigurationError(f"{OIDC_PROVIDER_NAME_ENV} must be 120 characters or fewer")
+    insecure_origins = frozenset(
+        _validate_insecure_backchannel_origin(item)
+        for item in insecure_origins_raw.split(",")
+        if item.strip()
+    )
     return OidcConfig(
         issuer=normalized_issuer,
         client_id=client_id,
         client_secret=client_secret,
         provider_name=provider_name,
+        insecure_backchannel_origins=insecure_origins,
     )
 
 
@@ -211,7 +323,10 @@ def fetch_oidc_document(url: str) -> dict[str, Any]:
             url,
             headers={"Accept": "application/json"},
             timeout=OIDC_HTTP_TIMEOUT,
+            allow_redirects=False,
         )
+        if 300 <= result.status_code < 400:
+            raise OidcFlowError("provider_invalid")
         result.raise_for_status()
         payload = result.json()
     except (requests.RequestException, ValueError) as exc:
@@ -223,8 +338,12 @@ def fetch_oidc_document(url: str) -> dict[str, Any]:
 
 def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]:
     now = time.monotonic()
+    cache_key = (
+        config.issuer,
+        tuple(sorted(config.insecure_backchannel_origins)),
+    )
     with _discovery_cache_lock:
-        cached = _discovery_cache.get(config.issuer)
+        cached = _discovery_cache.get(cache_key)
         if cached and not force and cached[0] > now:
             return dict(cached[1])
     payload = fetch_oidc_document(_openid_configuration_url(config.issuer))
@@ -236,13 +355,21 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
             "authorization_endpoint": _validate_https_url(
                 payload.get("authorization_endpoint"), "authorization_endpoint"
             ),
-            "token_endpoint": _validate_https_url(payload.get("token_endpoint"), "token_endpoint"),
-            "jwks_uri": _validate_https_url(payload.get("jwks_uri"), "jwks_uri"),
+            "token_endpoint": _validate_backchannel_url(
+                payload.get("token_endpoint"),
+                "token_endpoint",
+                config.insecure_backchannel_origins,
+            ),
+            "jwks_uri": _validate_backchannel_url(
+                payload.get("jwks_uri"),
+                "jwks_uri",
+                config.insecure_backchannel_origins,
+            ),
         }
     except OidcConfigurationError as exc:
         raise OidcFlowError("provider_invalid") from exc
     with _discovery_cache_lock:
-        _discovery_cache[config.issuer] = (
+        _discovery_cache[cache_key] = (
             now + OIDC_DISCOVERY_CACHE_SECONDS,
             normalized,
         )
@@ -281,6 +408,7 @@ def exchange_oidc_code(
             code=code,
             code_verifier=code_verifier,
             timeout=OIDC_HTTP_TIMEOUT,
+            allow_redirects=False,
         )
     except Exception as exc:
         raise OidcFlowError("token_exchange_failed") from exc
@@ -545,7 +673,20 @@ def register_oidc_routes(
         if not table_exists(conn, "oidc_identities") or not table_exists(conn, "oidc_auth_transactions"):
             raise OidcFlowError("oidc_not_ready")
 
-    def record_failure(conn, code: str, transaction: Mapping[str, Any] | None = None) -> None:
+    def record_failure(
+        conn,
+        code: str,
+        transaction: Mapping[str, Any] | None = None,
+        *,
+        mode: str | None = None,
+    ) -> None:
+        flow_mode = str((transaction or {}).get("mode") or mode or "").lower()
+        if flow_mode not in {"login", "link"}:
+            flow_mode = "unknown"
+        try:
+            config = oidc_config_from_env()
+        except OidcConfigurationError:
+            config = None
         audit_event(
             conn,
             event_type="auth.oidc_failed",
@@ -553,11 +694,40 @@ def register_oidc_routes(
             target_type="oidc_provider",
             summary="OIDC authentication failed",
             metadata={
-                "provider": (oidc_config_from_env().provider_name if oidc_config_from_env() else None),
+                "provider": config.provider_name if config else None,
                 "code": code,
-                "mode": (transaction or {}).get("mode"),
+                "mode": flow_mode,
             },
         )
+
+    def persist_failure(
+        code: str,
+        transaction: Mapping[str, Any] | None = None,
+        *,
+        mode: str | None = None,
+    ) -> None:
+        flow_mode = str((transaction or {}).get("mode") or mode or "").lower()
+        if flow_mode not in {"login", "link"}:
+            flow_mode = "unknown"
+        app.logger.warning(
+            "OIDC %s failed with %s",
+            flow_mode,
+            code,
+        )
+        try:
+            with connect() as conn:
+                with conn.transaction():
+                    record_failure(
+                        conn,
+                        code,
+                        transaction,
+                        mode=mode,
+                    )
+        except Exception:
+            app.logger.warning(
+                "Unable to persist OIDC failure audit event",
+                exc_info=True,
+            )
 
     @app.get("/api/next/auth/oidc/start")
     def oidc_start():
@@ -567,6 +737,7 @@ def register_oidc_routes(
         )
         mode = str(request.args.get("mode") or "login").strip().lower()
         if mode not in {"login", "link"}:
+            persist_failure("invalid_request", mode=mode)
             return redirect(oidc_feedback_path(return_path, error="invalid_request"), code=302)
         try:
             config = oidc_config_from_env()
@@ -647,8 +818,10 @@ def register_oidc_routes(
             )
             return result
         except OidcFlowError as exc:
+            persist_failure(exc.code, mode=mode)
             return redirect(oidc_feedback_path(return_path, error=exc.code), code=302)
         except OidcConfigurationError:
+            persist_failure("oidc_misconfigured", mode=mode)
             return redirect(
                 oidc_feedback_path(return_path, error="oidc_misconfigured"),
                 code=302,
@@ -814,12 +987,7 @@ def register_oidc_routes(
                     secure=cookie_secure,
                 )
         except OidcFlowError as exc:
-            try:
-                with connect() as conn:
-                    with conn.transaction():
-                        record_failure(conn, exc.code, transaction)
-            except Exception:
-                app.logger.warning("Unable to persist OIDC failure audit event", exc_info=True)
+            persist_failure(exc.code, transaction)
             return _clear_flow_cookie(
                 redirect(
                     oidc_feedback_path(return_path, error=exc.code),
@@ -829,6 +997,7 @@ def register_oidc_routes(
                 secure=cookie_secure,
             )
         except OidcConfigurationError:
+            persist_failure("oidc_misconfigured", transaction)
             return _clear_flow_cookie(
                 redirect(
                     oidc_feedback_path(

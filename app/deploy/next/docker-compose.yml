@@ -52,6 +52,7 @@ services:
       DISCVAULT_OIDC_CLIENT_ID: ${DISCVAULT_OIDC_CLIENT_ID:-}
       DISCVAULT_OIDC_CLIENT_SECRET: ${DISCVAULT_OIDC_CLIENT_SECRET:-}
       DISCVAULT_OIDC_PROVIDER_NAME: ${DISCVAULT_OIDC_PROVIDER_NAME:-}
+      DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS: ${DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS:-}
       # Only next-api terminates HTTP, so only next-api needs to know which hop
       # may speak for a client. Empty means no forwarding header is believed.
       DISCVAULT_TRUSTED_PROXIES: ${DISCVAULT_TRUSTED_PROXIES:-}
