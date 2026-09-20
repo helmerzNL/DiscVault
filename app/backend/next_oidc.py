@@ -306,7 +306,7 @@ def validate_oidc_id_token(
     discovery: Mapping[str, Any],
     token: Mapping[str, Any],
     *,
-    nonce: str,
+    nonce_hash: str,
     code: str,
 ) -> dict[str, Any]:
     jwks = fetch_oidc_document(str(discovery["jwks_uri"]))
@@ -321,11 +321,10 @@ def validate_oidc_id_token(
                 "aud": {"essential": True, "value": config.client_id},
                 "exp": {"essential": True},
                 "iat": {"essential": True},
-                "nonce": {"essential": True, "value": nonce},
+                "nonce": {"essential": True},
             },
             claims_params={
                 "client_id": config.client_id,
-                "nonce": nonce,
                 "code": code,
                 "access_token": token.get("access_token"),
             },
@@ -334,7 +333,16 @@ def validate_oidc_id_token(
     except Exception as exc:
         raise OidcFlowError("id_token_invalid") from exc
     subject = str(claims.get("sub") or "").strip()
-    if not subject or len(subject) > 255:
+    presented_nonce = str(claims.get("nonce") or "")
+    if (
+        not subject
+        or len(subject) > 255
+        or not presented_nonce
+        or not secrets.compare_digest(
+            oidc_state_hash(presented_nonce),
+            str(nonce_hash or ""),
+        )
+    ):
         raise OidcFlowError("id_token_invalid")
     return dict(claims)
 
@@ -501,7 +509,7 @@ def _transaction_row(conn, state: str) -> dict[str, Any] | None:
             WHERE state_hash=%s
               AND used_at IS NULL
               AND expires_at > now()
-            RETURNING id, nonce, code_verifier, mode, initiating_user_id,
+            RETURNING id, nonce_hash, code_verifier, mode, initiating_user_id,
                       return_path, redirect_uri, expires_at
             """,
             (oidc_state_hash(state),),
@@ -576,14 +584,14 @@ def register_oidc_routes(
                         cur.execute(
                             """
                             INSERT INTO oidc_auth_transactions (
-                                state_hash, nonce, code_verifier, mode,
+                                state_hash, nonce_hash, code_verifier, mode,
                                 initiating_user_id, return_path, redirect_uri, expires_at
                             )
                             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 oidc_state_hash(state),
-                                nonce,
+                                oidc_state_hash(nonce),
                                 code_verifier,
                                 mode,
                                 actor["id"] if actor else None,
@@ -661,7 +669,7 @@ def register_oidc_routes(
                     config,
                     discovery,
                     token,
-                    nonce=str(transaction["nonce"]),
+                    nonce_hash=str(transaction["nonce_hash"]),
                     code=code,
                 )
                 subject = str(claims["sub"])
