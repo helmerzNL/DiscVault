@@ -32,6 +32,8 @@ OIDC_CLIENT_ID_ENV = "DISCVAULT_OIDC_CLIENT_ID"
 OIDC_CLIENT_SECRET_ENV = "DISCVAULT_OIDC_CLIENT_SECRET"
 OIDC_PROVIDER_NAME_ENV = "DISCVAULT_OIDC_PROVIDER_NAME"
 OIDC_TRANSACTION_TTL_SECONDS = 5 * 60
+OIDC_FLOW_COOKIE_PREFIX = "dv_oidc_flow_"
+OIDC_FLOW_COOKIE_PATH = "/api/next/auth/oidc/callback"
 OIDC_HTTP_TIMEOUT = (3.05, 10)
 OIDC_DISCOVERY_CACHE_SECONDS = 5 * 60
 OIDC_ALLOWED_ID_TOKEN_ALGORITHMS = (
@@ -495,8 +497,8 @@ def _transaction_row(conn, state: str) -> dict[str, Any] | None:
             WHERE state_hash=%s
               AND used_at IS NULL
               AND expires_at > now()
-            RETURNING id, nonce_hash, code_verifier, mode, initiating_user_id,
-                      return_path, redirect_uri, expires_at
+            RETURNING id, nonce_hash, browser_binding_hash, code_verifier, mode,
+                      initiating_user_id, return_path, redirect_uri, expires_at
             """,
             (oidc_state_hash(state),),
         )
@@ -507,12 +509,28 @@ def _safe_subject_digest(issuer: str, subject: str) -> str:
     return hashlib.sha256(f"{issuer}\0{subject}".encode("utf-8")).hexdigest()[:16]
 
 
+def _flow_cookie_name(state: str) -> str:
+    return f"{OIDC_FLOW_COOKIE_PREFIX}{oidc_state_hash(state)[:24]}"
+
+
+def _clear_flow_cookie(result, state: str, *, secure: bool):
+    if state:
+        result.delete_cookie(
+            _flow_cookie_name(state),
+            path=OIDC_FLOW_COOKIE_PATH,
+            secure=secure,
+            httponly=True,
+            samesite="Lax",
+        )
+    return result
+
+
 def register_oidc_routes(
     app: Flask,
     *,
     connect: Callable[[], Any],
     table_exists: Callable[[Any, str], bool],
-    current_user: Callable[[Any], dict[str, Any] | None],
+    current_session_user: Callable[[Any], dict[str, Any] | None],
     create_session_token: Callable[[str, str], str],
     session_redirect: Callable[[str, str], Any],
     registration_enabled: Callable[[Any], bool],
@@ -559,9 +577,10 @@ def register_oidc_routes(
             state = secrets.token_urlsafe(32)
             nonce = secrets.token_urlsafe(32)
             code_verifier = secrets.token_urlsafe(64)
+            browser_binding = secrets.token_urlsafe(32)
             with connect() as conn:
                 require_tables(conn)
-                actor = current_user(conn)
+                actor = current_session_user(conn)
                 if mode == "link" and not actor:
                     raise OidcFlowError("login_required")
                 with conn.transaction():
@@ -570,14 +589,16 @@ def register_oidc_routes(
                         cur.execute(
                             """
                             INSERT INTO oidc_auth_transactions (
-                                state_hash, nonce_hash, code_verifier, mode,
-                                initiating_user_id, return_path, redirect_uri, expires_at
+                                state_hash, nonce_hash, browser_binding_hash,
+                                code_verifier, mode, initiating_user_id,
+                                return_path, redirect_uri, expires_at
                             )
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                             """,
                             (
                                 oidc_state_hash(state),
                                 oidc_state_hash(nonce),
+                                oidc_state_hash(browser_binding),
                                 code_verifier,
                                 mode,
                                 actor["id"] if actor else None,
@@ -614,17 +635,31 @@ def register_oidc_routes(
                 nonce=nonce,
                 code_verifier=code_verifier,
             )
-            return redirect(authorization_url, code=302)
+            result = redirect(authorization_url, code=302)
+            result.set_cookie(
+                _flow_cookie_name(state),
+                browser_binding,
+                max_age=OIDC_TRANSACTION_TTL_SECONDS,
+                secure=urlsplit(callback_url).scheme == "https",
+                httponly=True,
+                samesite="Lax",
+                path=OIDC_FLOW_COOKIE_PATH,
+            )
+            return result
         except OidcFlowError as exc:
             return redirect(oidc_feedback_path(return_path, error=exc.code), code=302)
         except OidcConfigurationError:
-            return redirect(oidc_feedback_path(return_path, error="oidc_misconfigured"), code=302)
+            return redirect(
+                oidc_feedback_path(return_path, error="oidc_misconfigured"),
+                code=302,
+            )
 
     @app.get("/api/next/auth/oidc/callback")
     def oidc_callback():
         state = str(request.args.get("state") or "").strip()
         transaction: dict[str, Any] | None = None
         return_path = "/"
+        cookie_secure = request.is_secure
         try:
             if not state:
                 raise OidcFlowError("invalid_state")
@@ -638,6 +673,21 @@ def register_oidc_routes(
                 if not transaction:
                     raise OidcFlowError("invalid_state")
                 return_path = safe_oidc_return_path(transaction.get("return_path"), "/")
+                cookie_secure = (
+                    urlsplit(str(transaction.get("redirect_uri") or "")).scheme
+                    == "https"
+                )
+                browser_binding = str(
+                    request.cookies.get(_flow_cookie_name(state)) or ""
+                )
+                if (
+                    not browser_binding
+                    or not secrets.compare_digest(
+                        oidc_state_hash(browser_binding),
+                        str(transaction.get("browser_binding_hash") or ""),
+                    )
+                ):
+                    raise OidcFlowError("invalid_state")
                 if request.args.get("error"):
                     raise OidcFlowError("provider_denied")
                 code = str(request.args.get("code") or "").strip()
@@ -661,7 +711,10 @@ def register_oidc_routes(
                 subject = str(claims["sub"])
                 with conn.transaction():
                     with conn.cursor() as cur:
-                        cur.execute("SELECT pg_advisory_xact_lock(hashtext('discvault-oidc-identity'))")
+                        cur.execute(
+                            "SELECT pg_advisory_xact_lock("
+                            "hashtext('discvault-legacy-bootstrap'))"
+                        )
                         cur.execute(
                             """
                             SELECT oi.id, oi.user_id, u.username, u.display_name, u.status
@@ -674,7 +727,7 @@ def register_oidc_routes(
                         )
                         identity = cur.fetchone()
                     mode = str(transaction["mode"])
-                    actor = current_user(conn)
+                    actor = current_session_user(conn)
                     created_user = False
                     if mode == "link":
                         initiating_user_id = transaction.get("initiating_user_id")
@@ -746,9 +799,20 @@ def register_oidc_routes(
                         },
                     )
                 if str(transaction["mode"]) == "link":
-                    return redirect(oidc_feedback_path(return_path, linked=True), code=302)
+                    return _clear_flow_cookie(
+                        redirect(
+                            oidc_feedback_path(return_path, linked=True),
+                            code=302,
+                        ),
+                        state,
+                        secure=cookie_secure,
+                    )
                 token_value = create_session_token(str(user["id"]), str(user["username"]))
-                return session_redirect(return_path, token_value)
+                return _clear_flow_cookie(
+                    session_redirect(return_path, token_value),
+                    state,
+                    secure=cookie_secure,
+                )
         except OidcFlowError as exc:
             try:
                 with connect() as conn:
@@ -756,6 +820,23 @@ def register_oidc_routes(
                         record_failure(conn, exc.code, transaction)
             except Exception:
                 app.logger.warning("Unable to persist OIDC failure audit event", exc_info=True)
-            return redirect(oidc_feedback_path(return_path, error=exc.code), code=302)
+            return _clear_flow_cookie(
+                redirect(
+                    oidc_feedback_path(return_path, error=exc.code),
+                    code=302,
+                ),
+                state,
+                secure=cookie_secure,
+            )
         except OidcConfigurationError:
-            return redirect(oidc_feedback_path(return_path, error="oidc_misconfigured"), code=302)
+            return _clear_flow_cookie(
+                redirect(
+                    oidc_feedback_path(
+                        return_path,
+                        error="oidc_misconfigured",
+                    ),
+                    code=302,
+                ),
+                state,
+                secure=cookie_secure,
+            )

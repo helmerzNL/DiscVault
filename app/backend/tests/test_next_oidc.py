@@ -285,6 +285,7 @@ class OidcTransactionTests(unittest.TestCase):
         row = {
             "id": "transaction",
             "nonce_hash": "hash",
+            "browser_binding_hash": "browser-hash",
             "code_verifier": "verifier",
             "mode": "login",
         }
@@ -314,6 +315,9 @@ class OidcWiringTests(unittest.TestCase):
         cls.nonce_migration = (
             backend / "migrations_next" / "094_oidc_nonce_hash.sql"
         ).read_text(encoding="utf-8")
+        cls.browser_binding_migration = (
+            backend / "migrations_next" / "095_oidc_browser_binding.sql"
+        ).read_text(encoding="utf-8")
 
     def test_identity_constraints_are_exact_and_durable(self):
         self.assertIn("UNIQUE (issuer, subject)", self.migration)
@@ -328,12 +332,27 @@ class OidcWiringTests(unittest.TestCase):
         )
         self.assertLess(delete, rename)
 
-    def test_readiness_requires_both_oidc_tables(self):
+    def test_existing_oidc_identity_keeps_authentication_fail_closed(self):
         start = self.auth.index("def next_auth_ready(")
-        end = self.auth.index("\n\n_AUTH_ENABLED_ATTR", start)
+        end = self.auth.index(
+            "\n\ndef next_auth_usable_login_method_count(",
+            start,
+        )
         body = self.auth[start:end]
         self.assertIn('table_exists(conn, "oidc_identities")', body)
-        self.assertIn('table_exists(conn, "oidc_auth_transactions")', body)
+        self.assertNotIn('table_exists(conn, "oidc_auth_transactions")', body)
+
+    def test_browser_binding_is_hashed_and_required(self):
+        self.assertIn(
+            "ADD COLUMN browser_binding_hash text",
+            self.browser_binding_migration,
+        )
+        self.assertIn(
+            "ALTER COLUMN browser_binding_hash SET NOT NULL",
+            self.browser_binding_migration,
+        )
+        self.assertIn("oidc_state_hash(browser_binding)", self.oidc)
+        self.assertIn("request.cookies.get(_flow_cookie_name(state))", self.oidc)
 
     def test_callback_creation_does_not_use_request_host(self):
         start = self.oidc.index("def _callback_url(")
@@ -351,7 +370,7 @@ class OidcWiringTests(unittest.TestCase):
     def test_registration_and_owner_bootstrap_are_explicit(self):
         self.assertIn("not registration_enabled(conn)", self.oidc)
         self.assertIn('"owner" if user_count == 0', self.oidc)
-        self.assertIn("SELECT pg_advisory_xact_lock", self.oidc)
+        self.assertIn("hashtext('discvault-legacy-bootstrap')", self.oidc)
         self.assertIn('user.get("status") != "active"', self.oidc)
 
     def test_linking_is_bound_to_the_initiating_user(self):
@@ -359,6 +378,16 @@ class OidcWiringTests(unittest.TestCase):
             'str(actor["id"]) != str(initiating_user_id)',
             self.oidc,
         )
+        self.assertIn("current_session_user(conn)", self.oidc)
+        self.assertIn("next_auth_current_session_user(conn)", self.profile)
+
+    def test_linking_and_unlinking_require_a_cookie_session(self):
+        start = self.auth.index("def next_auth_current_session_user(")
+        end = self.auth.index("\n\ndef _auth_table_exists(", start)
+        body = self.auth[start:end]
+        self.assertIn("_session_cookie_token()", body)
+        self.assertNotIn("_bearer_token()", body)
+        self.assertNotIn("_bearer_api_token()", body)
 
     def test_unlink_checks_another_usable_login_method(self):
         self.assertIn("next_auth_usable_login_method_count(", self.profile)
