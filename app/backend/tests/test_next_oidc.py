@@ -54,6 +54,47 @@ class OidcConfigurationTests(unittest.TestCase):
             "http://localhost:1411",
         )
 
+    def test_explicit_kubernetes_backchannel_origin_is_accepted(self):
+        values = {
+            **OIDC_ENV,
+            next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV: (
+                "http://pocket-id.pocket-id.svc.cluster.local:1411"
+            ),
+        }
+        config = next_oidc.oidc_config_from_env(values)
+        self.assertEqual(
+            config.insecure_backchannel_origins,
+            frozenset(
+                {
+                    "http://pocket-id.pocket-id.svc.cluster.local:1411",
+                }
+            ),
+        )
+
+    def test_insecure_backchannel_requires_complete_oidc_configuration(self):
+        with self.assertRaises(next_oidc.OidcConfigurationError):
+            next_oidc.oidc_config_from_env(
+                {
+                    next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV: (
+                        "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                    ),
+                }
+            )
+
+    def test_insecure_backchannel_rejects_public_and_link_local_hosts(self):
+        for origin in (
+            "http://example.com",
+            "http://169.254.169.254",
+            "http://pocket-id.pocket-id.svc.cluster.local:1411/path",
+        ):
+            with self.subTest(origin=origin):
+                values = {
+                    **OIDC_ENV,
+                    next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV: origin,
+                }
+                with self.assertRaises(next_oidc.OidcConfigurationError):
+                    next_oidc.oidc_config_from_env(values)
+
     def test_status_exposes_no_secret_or_provider_endpoint(self):
         with mock.patch.dict(os.environ, OIDC_ENV, clear=True):
             payload = next_oidc.oidc_auth_status(True)
@@ -163,6 +204,116 @@ class OidcDiscoveryTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(next_oidc.OidcFlowError, "provider_invalid"):
                 next_oidc.oidc_discovery(self.config)
+
+    def test_discovery_accepts_exact_allowlisted_private_backchannels(self):
+        config = next_oidc.oidc_config_from_env(
+            {
+                **OIDC_ENV,
+                next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV: (
+                    "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                ),
+            }
+        )
+        metadata = {
+            "issuer": config.issuer,
+            "authorization_endpoint": f"{config.issuer}/authorize",
+            "token_endpoint": (
+                "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                "/api/oidc/token"
+            ),
+            "jwks_uri": (
+                "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                "/.well-known/jwks.json"
+            ),
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value=metadata,
+        ):
+            discovery = next_oidc.oidc_discovery(config)
+        self.assertEqual(discovery["token_endpoint"], metadata["token_endpoint"])
+        self.assertEqual(discovery["jwks_uri"], metadata["jwks_uri"])
+
+    def test_allowlist_never_weakens_browser_authorization_endpoint(self):
+        config = next_oidc.oidc_config_from_env(
+            {
+                **OIDC_ENV,
+                next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV: (
+                    "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                ),
+            }
+        )
+        metadata = {
+            "issuer": config.issuer,
+            "authorization_endpoint": (
+                "http://pocket-id.pocket-id.svc.cluster.local:1411/authorize"
+            ),
+            "token_endpoint": (
+                "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                "/api/oidc/token"
+            ),
+            "jwks_uri": (
+                "http://pocket-id.pocket-id.svc.cluster.local:1411"
+                "/.well-known/jwks.json"
+            ),
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value=metadata,
+        ):
+            with self.assertRaisesRegex(next_oidc.OidcFlowError, "provider_invalid"):
+                next_oidc.oidc_discovery(config)
+
+    def test_document_fetches_do_not_follow_redirects(self):
+        response = mock.Mock(status_code=200)
+        response.json.return_value = {"keys": []}
+        with mock.patch.object(
+            next_oidc.requests,
+            "get",
+            return_value=response,
+        ) as request_get:
+            next_oidc.fetch_oidc_document("https://id.example.test/jwks")
+        request_get.assert_called_once_with(
+            "https://id.example.test/jwks",
+            headers={"Accept": "application/json"},
+            timeout=next_oidc.OIDC_HTTP_TIMEOUT,
+            allow_redirects=False,
+        )
+
+    def test_document_fetch_rejects_a_redirect_response(self):
+        response = mock.Mock(status_code=302)
+        with mock.patch.object(
+            next_oidc.requests,
+            "get",
+            return_value=response,
+        ):
+            with self.assertRaisesRegex(
+                next_oidc.OidcFlowError,
+                "provider_invalid",
+            ):
+                next_oidc.fetch_oidc_document(
+                    "https://id.example.test/jwks"
+                )
+        response.json.assert_not_called()
+
+    def test_token_exchange_does_not_follow_redirects(self):
+        client = mock.Mock()
+        client.fetch_token.return_value = {"id_token": "encoded"}
+        with mock.patch.object(
+            next_oidc,
+            "OAuth2Session",
+            return_value=client,
+        ):
+            next_oidc.exchange_oidc_code(
+                self.config,
+                {"token_endpoint": "https://id.example.test/token"},
+                code="code",
+                code_verifier="verifier",
+                redirect_uri="https://vault.example.test/api/next/auth/oidc/callback",
+            )
+        self.assertFalse(client.fetch_token.call_args.kwargs["allow_redirects"])
 
 
 class OidcIdTokenTests(unittest.TestCase):
@@ -389,6 +540,14 @@ class OidcWiringTests(unittest.TestCase):
         self.assertNotIn("_bearer_token()", body)
         self.assertNotIn("_bearer_api_token()", body)
 
+    def test_start_and_callback_failures_are_audited(self):
+        self.assertIn('event_type="auth.oidc_failed"', self.oidc)
+        self.assertIn("persist_failure(exc.code, mode=mode)", self.oidc)
+        self.assertIn("persist_failure(exc.code, transaction)", self.oidc)
+        self.assertIn('"code": code', self.oidc)
+        self.assertIn('"mode": flow_mode', self.oidc)
+        self.assertIn('flow_mode = "unknown"', self.oidc)
+
     def test_unlink_checks_another_usable_login_method(self):
         self.assertIn("next_auth_usable_login_method_count(", self.profile)
         self.assertIn("remaining < 1", self.profile)
@@ -426,6 +585,7 @@ class OidcDeploymentWiringTests(unittest.TestCase):
             next_oidc.OIDC_CLIENT_ID_ENV,
             next_oidc.OIDC_CLIENT_SECRET_ENV,
             next_oidc.OIDC_PROVIDER_NAME_ENV,
+            next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV,
         ):
             with self.subTest(name=name):
                 self.assertIn(f"{name}=", self.root_env)
@@ -437,6 +597,7 @@ class OidcDeploymentWiringTests(unittest.TestCase):
             next_oidc.OIDC_CLIENT_ID_ENV,
             next_oidc.OIDC_CLIENT_SECRET_ENV,
             next_oidc.OIDC_PROVIDER_NAME_ENV,
+            next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV,
         ):
             mapping = f"{name}: ${{{name}:-}}"
             with self.subTest(name=name):

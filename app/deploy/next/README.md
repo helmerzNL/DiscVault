@@ -235,12 +235,29 @@ Configure OIDC as follows:
    DISCVAULT_OIDC_CLIENT_ID=<client-id>
    DISCVAULT_OIDC_CLIENT_SECRET=<client-secret>
    DISCVAULT_OIDC_PROVIDER_NAME=Pocket ID
+   DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS=
    ```
 
    The first three variables are all-or-none: leave all three empty to keep
    OIDC disabled, or set all three to enable it. A partial configuration is
    rejected. `DISCVAULT_OIDC_PROVIDER_NAME` is optional and only controls the
    provider name shown on the sign-in button.
+
+   Keep `DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS` empty when discovery
+   publishes normal HTTPS endpoints. If the provider deliberately advertises
+   private HTTP token and JWKS endpoints, set it to the exact origin or
+   comma-separated origins DiscVault may contact. For Pocket ID running in
+   Kubernetes with `INTERNAL_APP_URL`, for example:
+
+   ```text
+   DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS=http://pocket-id.pocket-id.svc.cluster.local:1411
+   ```
+
+   This exception applies only to server-side token and JWKS requests.
+   `DISCVAULT_OIDC_ISSUER` and the browser-facing `authorization_endpoint`
+   still require HTTPS. DiscVault accepts only exact private IP, localhost,
+   Kubernetes Service DNS, or `.internal` origins and never follows redirects
+   on discovery, token, or JWKS requests.
 4. Recreate `next-api` so the container receives the new environment:
 
    ```bash
@@ -260,9 +277,13 @@ the secret directly in `docker-compose.yml` or command-line arguments.
 
 Both the public DiscVault origin and the issuer must have certificates trusted
 by the browser and the DiscVault host. TLS certificate verification is always
-enforced; DiscVault has no insecure/TLS-bypass option. Fix the certificate or
-install the issuing CA in the host/container trust store instead of disabling
-verification.
+enforced for HTTPS. The only HTTP exception is an exact origin explicitly
+listed in `DISCVAULT_OIDC_INSECURE_BACKCHANNEL_ORIGINS`; it never applies to
+browser authorization.
+
+OIDC failures are written to the DiscVault Audit log as
+`auth.oidc_failed` events with a safe error code and flow mode. Secrets, tokens,
+authorization codes, state, nonce, endpoint URLs and PKCE values are not logged.
 
 ## Optional Legacy password authentication
 
