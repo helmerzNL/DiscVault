@@ -174,6 +174,7 @@ try:
     from .next_auth import _rp_id
     from .next_auth import _rp_origins
     from .next_auth import _verify_signature
+    from .next_oidc import validate_oidc_environment
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
@@ -487,6 +488,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import _rp_id
     from next_auth import _rp_origins
     from next_auth import _verify_signature
+    from next_oidc import validate_oidc_environment
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
@@ -986,6 +988,7 @@ PRICE_DISPLAY_RATE_RETRY_AFTER = timedelta(minutes=5)
 
 def create_app() -> Flask:
     validate_runtime_secrets()
+    validate_oidc_environment()
     flask_app = Flask(__name__)
     CORS(flask_app, supports_credentials=True)
     register_routes(flask_app)
