@@ -70,7 +70,6 @@ class OidcConfig:
 
 _discovery_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 _discovery_cache_lock = threading.Lock()
-_provider_reachable: bool | None = None
 
 
 def _utcnow() -> datetime:
@@ -145,7 +144,6 @@ def oidc_auth_status(table_exists: bool) -> dict[str, Any]:
     return {
         "oidc_available": bool(configured and table_exists),
         "oidc_provider_name": config.provider_name if config else None,
-        "oidc_provider_reachable": _provider_reachable if configured else None,
     }
 
 
@@ -196,16 +194,9 @@ def oidc_feedback_path(
     return urlunsplit(("", "", parsed.path, urlencode(query), parsed.fragment))
 
 
-def _set_provider_reachable(value: bool) -> None:
-    global _provider_reachable
-    _provider_reachable = value
-
-
 def clear_oidc_discovery_cache() -> None:
-    global _provider_reachable
     with _discovery_cache_lock:
         _discovery_cache.clear()
-    _provider_reachable = None
 
 
 def _openid_configuration_url(issuer: str) -> str:
@@ -236,7 +227,6 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
             return dict(cached[1])
     payload = fetch_oidc_document(_openid_configuration_url(config.issuer))
     if str(payload.get("issuer") or "").rstrip("/") != config.issuer:
-        _set_provider_reachable(False)
         raise OidcFlowError("provider_invalid")
     try:
         normalized = {
@@ -248,14 +238,12 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
             "jwks_uri": _validate_https_url(payload.get("jwks_uri"), "jwks_uri"),
         }
     except OidcConfigurationError as exc:
-        _set_provider_reachable(False)
         raise OidcFlowError("provider_invalid") from exc
     with _discovery_cache_lock:
         _discovery_cache[config.issuer] = (
             now + OIDC_DISCOVERY_CACHE_SECONDS,
             normalized,
         )
-    _set_provider_reachable(True)
     return dict(normalized)
 
 
@@ -293,11 +281,9 @@ def exchange_oidc_code(
             timeout=OIDC_HTTP_TIMEOUT,
         )
     except Exception as exc:
-        _set_provider_reachable(False)
         raise OidcFlowError("token_exchange_failed") from exc
     if not isinstance(token, dict) or not token.get("id_token"):
         raise OidcFlowError("id_token_missing")
-    _set_provider_reachable(True)
     return token
 
 
