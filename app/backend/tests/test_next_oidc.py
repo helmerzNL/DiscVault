@@ -285,6 +285,7 @@ class OidcTransactionTests(unittest.TestCase):
         row = {
             "id": "transaction",
             "nonce_hash": "hash",
+            "browser_binding_hash": "browser-hash",
             "code_verifier": "verifier",
             "mode": "login",
         }
@@ -314,6 +315,9 @@ class OidcWiringTests(unittest.TestCase):
         cls.nonce_migration = (
             backend / "migrations_next" / "094_oidc_nonce_hash.sql"
         ).read_text(encoding="utf-8")
+        cls.browser_binding_migration = (
+            backend / "migrations_next" / "095_oidc_browser_binding.sql"
+        ).read_text(encoding="utf-8")
 
     def test_identity_constraints_are_exact_and_durable(self):
         self.assertIn("UNIQUE (issuer, subject)", self.migration)
@@ -322,15 +326,33 @@ class OidcWiringTests(unittest.TestCase):
         self.assertNotIn("lower(subject", self.migration.lower())
 
     def test_nonce_migration_drops_live_flows_before_renaming(self):
-        self.assertIn("DELETE FROM oidc_auth_transactions", self.nonce_migration)
-        self.assertIn("RENAME COLUMN nonce TO nonce_hash", self.nonce_migration)
+        delete = self.nonce_migration.index("DELETE FROM oidc_auth_transactions")
+        rename = self.nonce_migration.index(
+            "RENAME COLUMN nonce TO nonce_hash"
+        )
+        self.assertLess(delete, rename)
 
-    def test_readiness_requires_both_oidc_tables(self):
+    def test_existing_oidc_identity_keeps_authentication_fail_closed(self):
         start = self.auth.index("def next_auth_ready(")
-        end = self.auth.index("\n\n_AUTH_ENABLED_ATTR", start)
+        end = self.auth.index(
+            "\n\ndef next_auth_usable_login_method_count(",
+            start,
+        )
         body = self.auth[start:end]
         self.assertIn('table_exists(conn, "oidc_identities")', body)
-        self.assertIn('table_exists(conn, "oidc_auth_transactions")', body)
+        self.assertNotIn('table_exists(conn, "oidc_auth_transactions")', body)
+
+    def test_browser_binding_is_hashed_and_required(self):
+        self.assertIn(
+            "ADD COLUMN browser_binding_hash text",
+            self.browser_binding_migration,
+        )
+        self.assertIn(
+            "ALTER COLUMN browser_binding_hash SET NOT NULL",
+            self.browser_binding_migration,
+        )
+        self.assertIn("oidc_state_hash(browser_binding)", self.oidc)
+        self.assertIn("request.cookies.get(_flow_cookie_name(state))", self.oidc)
 
     def test_callback_creation_does_not_use_request_host(self):
         start = self.oidc.index("def _callback_url(")
@@ -348,7 +370,7 @@ class OidcWiringTests(unittest.TestCase):
     def test_registration_and_owner_bootstrap_are_explicit(self):
         self.assertIn("not registration_enabled(conn)", self.oidc)
         self.assertIn('"owner" if user_count == 0', self.oidc)
-        self.assertIn("SELECT pg_advisory_xact_lock", self.oidc)
+        self.assertIn("hashtext('discvault-legacy-bootstrap')", self.oidc)
         self.assertIn('user.get("status") != "active"', self.oidc)
 
     def test_linking_is_bound_to_the_initiating_user(self):
@@ -356,6 +378,16 @@ class OidcWiringTests(unittest.TestCase):
             'str(actor["id"]) != str(initiating_user_id)',
             self.oidc,
         )
+        self.assertIn("current_session_user(conn)", self.oidc)
+        self.assertIn("next_auth_current_session_user(conn)", self.profile)
+
+    def test_linking_and_unlinking_require_a_cookie_session(self):
+        start = self.auth.index("def next_auth_current_session_user(")
+        end = self.auth.index("\n\ndef _auth_table_exists(", start)
+        body = self.auth[start:end]
+        self.assertIn("_session_cookie_token()", body)
+        self.assertNotIn("_bearer_token()", body)
+        self.assertNotIn("_bearer_api_token()", body)
 
     def test_unlink_checks_another_usable_login_method(self):
         self.assertIn("next_auth_usable_login_method_count(", self.profile)
@@ -368,6 +400,62 @@ class OidcWiringTests(unittest.TestCase):
         self.assertNotIn("API_TOKEN_PREFIX", self.oidc)
         self.assertNotIn('"/mcp"', self.oidc)
         self.assertIn("def _bearer_api_token()", self.auth)
+
+
+class OidcDeploymentWiringTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        app_root = REPO_ROOT / "app"
+        cls.root_env = (app_root / ".env.example").read_text(encoding="utf-8")
+        cls.deploy_env = (
+            app_root / "deploy" / "next" / ".env.example"
+        ).read_text(encoding="utf-8")
+        cls.dev_compose = (
+            app_root / "docker-compose.next.yml"
+        ).read_text(encoding="utf-8")
+        cls.deploy_compose = (
+            app_root / "deploy" / "next" / "docker-compose.yml"
+        ).read_text(encoding="utf-8")
+        cls.deploy_readme = (
+            app_root / "deploy" / "next" / "README.md"
+        ).read_text(encoding="utf-8")
+
+    def test_all_oidc_variables_are_present_in_both_env_templates(self):
+        for name in (
+            next_oidc.OIDC_ISSUER_ENV,
+            next_oidc.OIDC_CLIENT_ID_ENV,
+            next_oidc.OIDC_CLIENT_SECRET_ENV,
+            next_oidc.OIDC_PROVIDER_NAME_ENV,
+        ):
+            with self.subTest(name=name):
+                self.assertIn(f"{name}=", self.root_env)
+                self.assertIn(f"{name}=", self.deploy_env)
+
+    def test_all_oidc_variables_are_forwarded_to_the_api_container(self):
+        for name in (
+            next_oidc.OIDC_ISSUER_ENV,
+            next_oidc.OIDC_CLIENT_ID_ENV,
+            next_oidc.OIDC_CLIENT_SECRET_ENV,
+            next_oidc.OIDC_PROVIDER_NAME_ENV,
+        ):
+            mapping = f"{name}: ${{{name}:-}}"
+            with self.subTest(name=name):
+                self.assertIn(mapping, self.dev_compose)
+                self.assertIn(mapping, self.deploy_compose)
+
+    def test_operator_documentation_names_the_exact_callback_and_origin_rule(self):
+        self.assertIn(
+            "https://discvault.example.com/api/next/auth/oidc/callback",
+            self.deploy_readme,
+        )
+        self.assertIn(
+            "Put this canonical public origin first in",
+            self.deploy_readme,
+        )
+        self.assertIn(
+            "`RP_ORIGINS`; DiscVault derives the OIDC callback from that first value.",
+            self.deploy_readme,
+        )
 
 
 if __name__ == "__main__":

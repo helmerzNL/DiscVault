@@ -960,9 +960,7 @@ def next_auth_ready(conn, table_exists: TableExists) -> bool:
         credential_checks.append(
             "EXISTS (SELECT 1 FROM legacy_password_credentials l WHERE l.user_id=u.id)"
         )
-    if table_exists(conn, "oidc_identities") and table_exists(
-        conn, "oidc_auth_transactions"
-    ):
+    if table_exists(conn, "oidc_identities"):
         credential_checks.append(
             "EXISTS (SELECT 1 FROM oidc_identities o WHERE o.user_id=u.id)"
         )
@@ -1175,6 +1173,28 @@ def next_auth_current_user(conn) -> dict[str, Any] | None:
         return None
     _remember_request_actor(actor)
     return dict(actor)
+
+
+def next_auth_current_session_user(conn) -> dict[str, Any] | None:
+    token = _session_cookie_token()
+    if not token:
+        return None
+    payload = _verify_token(token)
+    user_id = payload.get("sub") if payload else None
+    if not user_id:
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, username, display_name, first_name, last_name, status,
+                   created_at, updated_at
+            FROM users
+            WHERE id=%s AND status='active'
+            """,
+            (user_id,),
+        )
+        actor = cur.fetchone()
+    return dict(actor) if actor else None
 
 
 def _auth_table_exists(conn, table_name: str) -> bool:
@@ -6199,7 +6219,7 @@ def register_next_auth_routes(
         app,
         connect=connect,
         table_exists=table_exists,
-        current_user=current_user,
+        current_session_user=next_auth_current_session_user,
         create_session_token=_create_token,
         session_redirect=session_redirect,
         registration_enabled=registration_enabled,

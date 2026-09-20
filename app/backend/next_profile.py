@@ -38,6 +38,7 @@ try:  # pragma: no cover - exercised indirectly by both layouts
     )
     from .next_auth import (
         next_api_token_hash,
+        next_auth_current_session_user,
         next_auth_current_user,
         next_auth_usable_login_method_count,
         next_create_api_token_value,
@@ -64,6 +65,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     )
     from next_auth import (
         next_api_token_hash,
+        next_auth_current_session_user,
         next_auth_current_user,
         next_auth_usable_login_method_count,
         next_create_api_token_value,
@@ -891,7 +893,7 @@ def register_next_profile_routes(flask_app: Flask, *, connect) -> None:  # pragm
         _app = _next_app()
         identity_uuid = parse_uuid(identity_id, "identityId")
         with connect() as conn:
-            user = next_auth_current_user(conn)
+            user = next_auth_current_session_user(conn)
             if not user:
                 raise NextApiError("Unauthorized", 401)
             if not table_exists(conn, "oidc_identities"):
