@@ -322,8 +322,11 @@ class OidcWiringTests(unittest.TestCase):
         self.assertNotIn("lower(subject", self.migration.lower())
 
     def test_nonce_migration_drops_live_flows_before_renaming(self):
-        self.assertIn("DELETE FROM oidc_auth_transactions", self.nonce_migration)
-        self.assertIn("RENAME COLUMN nonce TO nonce_hash", self.nonce_migration)
+        delete = self.nonce_migration.index("DELETE FROM oidc_auth_transactions")
+        rename = self.nonce_migration.index(
+            "RENAME COLUMN nonce TO nonce_hash"
+        )
+        self.assertLess(delete, rename)
 
     def test_readiness_requires_both_oidc_tables(self):
         start = self.auth.index("def next_auth_ready(")
