@@ -29,6 +29,7 @@ try:
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
     from .next_import import clean_text
+    from .next_common import physical_media_format_key
     from .next_common import physical_media_formats_compatible
     from .next_common import import_writer_identifiers
     from .next_common import resolve_import_identity_match
@@ -87,6 +88,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
+    from next_common import physical_media_format_key
     from next_common import physical_media_formats_compatible
     from next_common import import_writer_identifiers
     from next_common import resolve_import_identity_match
