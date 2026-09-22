@@ -58,6 +58,12 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
         "Disc Total",
         "Number of Discs",
         "No of Discs",
+        # CLZ Movies' own column is "Nr Discs" ("Nr" is its abbreviation for
+        # "Number", also seen bare in `externalId` above). "Nr of Discs"
+        # follows the same "<counter word> of Discs" shape as the two aliases
+        # above and is the export's own alternate phrasing for the column.
+        "Nr Discs",
+        "Nr of Discs",
         "Aantal Discs",
         "Aantal Schijven",
         "Blu-ray discs",
