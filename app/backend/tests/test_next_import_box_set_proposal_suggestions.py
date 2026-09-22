@@ -17,6 +17,7 @@ from __future__ import annotations
 import os
 import sys
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 
@@ -86,6 +87,94 @@ class ImportBoxSetProposalSuggestionTests(unittest.TestCase):
         )
 
         self.assertEqual(len(suggestions["boxSetProposals"]), 2)
+
+    def test_candidate_without_overview_is_offered_with_empty_overview(self):
+        suggestions = self.suggestions_for(
+            [
+                {
+                    "pluginId": "omdb",
+                    "sourceLabel": "OMDb",
+                    "candidates": [{"title": "The Godfather", "year": "1972", "imdbId": "tt0068646"}],
+                }
+            ]
+        )
+
+        self.assertEqual(suggestions["items"][0]["overview"], "")
+
+    def test_movie_updates_fallback_without_overview_is_offered(self):
+        suggestions = self.suggestions_for(
+            [
+                {
+                    "pluginId": "movievault_v2",
+                    "sourceLabel": "MovieVault",
+                    "movieUpdates": {"title": "The Godfather", "year": "1972"},
+                }
+            ]
+        )
+
+        self.assertEqual(suggestions["items"][0]["overview"], "")
+
+    def test_proposal_without_title_is_carried_into_the_preview(self):
+        suggestions = self.suggestions_for(
+            [{"pluginId": "movievault", "sourceLabel": "MovieVault", "boxSetProposal": _proposal(title=None)}]
+        )
+
+        self.assertEqual(len(suggestions["boxSetProposals"]), 1)
+        self.assertIsNone(suggestions["boxSetProposals"][0]["audit"]["title"])
+
+    def test_proposal_without_title_can_become_a_container_review(self):
+        reviews = next_app.import_source_box_set_reviews(
+            [{"containerType": "box_set", "boxSetProposal": _proposal(title=None)}],
+            [],
+        )
+
+        self.assertEqual(len(reviews), 1)
+        self.assertIsNone(reviews[0]["title"])
+
+    def test_proposal_without_title_can_become_a_queue_review(self):
+        reviews = next_app.import_source_box_set_reviews(
+            [],
+            [{"detectedBoxSetProposal": _proposal(title=None)}],
+        )
+
+        self.assertEqual(len(reviews), 1)
+        self.assertIsNone(reviews[0]["title"])
+
+    def test_titleless_container_without_a_proposal_stays_reviewable(self):
+        reviews = next_app.import_source_box_set_reviews(
+            [{"containerType": "box_set", "members": []}],
+            [],
+        )
+
+        self.assertEqual(len(reviews), 1)
+        self.assertIsNone(reviews[0]["title"])
+
+
+class ImportUploadCandidateTests(unittest.TestCase):
+    def test_unexpected_metadata_suggestion_failure_is_not_silenced(self):
+        with (
+            patch.object(
+                next_app,
+                "inspect_import_source_plugin",
+                return_value=({"found": True, "readable": True}, {}),
+            ),
+            patch.object(next_app, "import_source_summary", return_value={"pluginId": "import_clz_movies"}),
+            patch.object(
+                next_app,
+                "inspect_import_source_selection",
+                side_effect=[
+                    {"source": {"pluginId": "import_clz_movies"}},
+                    RuntimeError("metadata suggestions failed"),
+                ],
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "metadata suggestions failed"):
+                next_app.import_upload_candidates(
+                    MagicMock(),
+                    source_path=Path("collection.csv"),
+                    plugins=[{"id": "import_clz_movies", "name": "CLZ Movies"}],
+                    actor={"id": "00000000-0000-0000-0000-000000000011", "permissions": ["*"]},
+                )
 
 
 if __name__ == "__main__":

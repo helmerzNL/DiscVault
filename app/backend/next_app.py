@@ -3394,7 +3394,7 @@ def import_source_metadata_suggestions(
                 "title": candidate_title,
                 "year": candidate_year,
                 "posterUrl": clean_text(candidate.get("posterUrl") or candidate.get("poster_url") or candidate.get("poster")),
-                "overview": clean_text(candidate.get("overview") or candidate.get("plot"))[:500],
+                "overview": (clean_text(candidate.get("overview") or candidate.get("plot")) or "")[:500],
                 "identifiers": candidate_identifiers,
             }
         )
@@ -3427,7 +3427,7 @@ def import_source_metadata_suggestions(
             key = json_lib.dumps(
                 {
                     "provider": provider,
-                    "title": clean_text(proposal.get("title") or proposal.get("name")).casefold(),
+                    "title": (clean_text(proposal.get("title") or proposal.get("name")) or "").casefold(),
                     "barcode": clean_text(proposal.get("barcode")),
                     "members": len(box_set_proposal_member_list(proposal)),
                 },
@@ -3581,7 +3581,7 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
         if proposal_members:
             seen_reviews.add((
                 clean_text(proposal.get("barcode") or container.get("barcode")),
-                clean_text(container.get("title") or proposal.get("title") or proposal.get("name")).casefold(),
+                (clean_text(container.get("title") or proposal.get("title") or proposal.get("name")) or "").casefold(),
             ))
             reviews.append(
                 {
@@ -3637,7 +3637,7 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
                 "members": members,
             }
         )
-        seen_reviews.add((clean_text(container.get("barcode")), clean_text(container.get("title")).casefold()))
+        seen_reviews.add((clean_text(container.get("barcode")), (clean_text(container.get("title")) or "").casefold()))
     for row in review_queue:
         proposal = row.get("detectedBoxSetProposal") if isinstance(row.get("detectedBoxSetProposal"), dict) else {}
         proposal_members = box_set_proposal_member_list(proposal)
@@ -3645,7 +3645,7 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
             continue
         key = (
             clean_text(proposal.get("barcode") or row.get("barcode")),
-            clean_text(proposal.get("title") or proposal.get("name") or row.get("title")).casefold(),
+            (clean_text(proposal.get("title") or proposal.get("name") or row.get("title")) or "").casefold(),
         )
         if key in seen_reviews:
             continue
@@ -4369,16 +4369,13 @@ def import_upload_candidates(
                 }
             )
     if best_plugin_id and best_payload:
-        try:
-            best_preview = inspect_import_source_selection(
-                conn,
-                plugin_id=best_plugin_id,
-                payload=best_payload,
-                actor=actor,
-                include_metadata_suggestions=True,
-            )
-        except Exception:
-            pass
+        best_preview = inspect_import_source_selection(
+            conn,
+            plugin_id=best_plugin_id,
+            payload=best_payload,
+            actor=actor,
+            include_metadata_suggestions=True,
+        )
     candidates.sort(
         key=lambda item: (
             safe_int(((item.get("recognition") or {}).get("score") or 0) if isinstance(item.get("recognition"), dict) else 0),
