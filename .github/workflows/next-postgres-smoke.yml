@@ -509,6 +509,11 @@ jobs:
       - name: Test custom fields as import mapping targets
         run: python -m unittest tests.test_next_import_custom_fields
 
+      # Series-level IMDb/TMDb ids must not merge distinct season releases, but
+      # they still identify the same compatible release when title or year alone differs.
+      - name: Test imported movie identity precedence
+        run: python -m unittest tests.test_next_import_identity
+
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
