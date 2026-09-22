@@ -1350,9 +1350,22 @@ def source_public_id(prefix: str, value: str, *, fallback: str) -> str:
 def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "") -> UUID | None:
     barcode = clean_text(item.get("barcode"))
     item_format = clean_text(item.get("format"))
+    item_title = clean_text(item.get("title"))
+    item_year = clean_text(item.get("year"))
 
     def row_format_matches(row: dict[str, Any]) -> bool:
         return physical_media_formats_compatible(row.get("format"), item_format)
+
+    def row_provider_identity_matches(row: dict[str, Any]) -> bool:
+        if not row_format_matches(row):
+            return False
+        row_title = clean_text(row.get("title"))
+        row_year = clean_text(row.get("year"))
+        title_conflicts = bool(item_title and row_title and item_title.casefold() != row_title.casefold())
+        year_conflicts = bool(item_year and row_year and item_year != row_year)
+        # IMDb and TMDb IDs may identify a whole series, so two conflicting
+        # release fields outweigh a provider match while one alone does not.
+        return not (title_conflicts and year_conflicts)
 
     with conn.cursor() as cur:
         public_id = clean_text(public_id)
@@ -1376,7 +1389,7 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
                     continue
                 cur.execute(
                     """
-                    SELECT m.id AS movie_id, m.format
+                    SELECT m.id AS movie_id, m.title, m.year, m.format
                     FROM movie_identifiers mi
                     JOIN movies m ON m.id = mi.movie_id
                     WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
@@ -1385,11 +1398,9 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
                     (provider, identifier),
                 )
                 for row in cur.fetchall():
-                    if row_format_matches(row):
+                    if row_provider_identity_matches(row):
                         return row["movie_id"]
-        title = clean_text(item.get("title"))
-        year = clean_text(item.get("year"))
-        if title and year:
+        if item_title and item_year:
             cur.execute(
                 """
                 SELECT id, format
@@ -1397,7 +1408,7 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
                 WHERE lower(title)=lower(%s) AND year=%s
                 ORDER BY updated_at DESC
                 """,
-                (title, year),
+                (item_title, item_year),
             )
             for row in cur.fetchall():
                 if row_format_matches(row):
