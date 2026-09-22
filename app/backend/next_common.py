@@ -237,3 +237,153 @@ def physical_format_label(value: Any) -> str:
     if "dvd" in lowered and "hd dvd" not in lowered:
         return "DVD"
     return text
+
+
+# The identity/conflict rules an import writes by (`import_movie_existing_id`
+# in next_worker.py) and the rules the preview predicts by (`import_source_conflicts`
+# in next_app.py) used to be two hand-written copies. They drifted: the writer
+# skipped a format-incompatible row and kept looking, ordered candidates by
+# recency, and only ever checked `tmdb`/`imdb` identifiers; the preview took
+# the first row Postgres happened to return, applied no format check, and
+# matched against any provider identifier ever recorded. Two copies of "how do
+# we decide this is the same film" cannot both be right, and only one of them
+# runs at write time - so this is the one both sides now call.
+def physical_media_format_key(value: Any) -> str:
+    """A coarse bucket for a physical media format string.
+
+    Two formats compare equal only after this normalisation: case, separators
+    (`-`/`_`/`/`) and near-synonyms ("4K UHD" vs "Ultra HD Blu-ray") are folded
+    away, but nothing is invented for a format nobody recognises.
+    """
+    text = (str(value or "").strip()).casefold().replace("-", " ").replace("_", " ").replace("/", " ")
+    text = " ".join(text.split())
+    if not text:
+        return ""
+    if "ultra hd" in text or "uhd" in text or "4k" in text:
+        return "ultra_hd_blu_ray"
+    if "blu ray" in text or "bluray" in text or text == "bd":
+        return "blu_ray"
+    if text in {"dvd", "dvd video"}:
+        return "dvd"
+    if "hd dvd" in text or "hddvd" in text:
+        return "hd_dvd"
+    if "laserdisc" in text or "laser disc" in text:
+        return "laserdisc"
+    if "svcd" in text or "vcd" in text:
+        return "vcd_svcd"
+    return text
+
+
+def physical_media_formats_compatible(candidate: Any, expected: Any) -> bool:
+    """Whether a candidate row's format may stand in for the imported item's.
+
+    An unrecognised or blank format on either side never blocks a match -
+    only two *recognised, different* formats do.
+    """
+    candidate_key = physical_media_format_key(candidate)
+    expected_key = physical_media_format_key(expected)
+    return not candidate_key or not expected_key or candidate_key == expected_key
+
+
+def import_writer_identifiers(item: dict[str, Any]) -> dict[str, str]:
+    """The only provider identifiers an import write ever matches or stores by.
+
+    `import_movie_existing_id` looks up `movie_identifiers` rows filtered to
+    exactly these two providers, and `upsert_import_movie` only ever writes
+    these two providers with `identifier_type='movie_id'`. A preview that
+    matched on a broader set (e.g. a plugin's own `identifiers` dict) would
+    report a conflict the writer can never see - so this is the one set both
+    sides look at.
+    """
+
+    def _text(value: Any) -> str:
+        return " ".join(str(value or "").split())
+
+    return {
+        "tmdb": _text(item.get("tmdbId") or item.get("tmdb_id")),
+        "imdb": _text(item.get("imdbId") or item.get("imdb_id")),
+    }
+
+
+def best_format_compatible_match(
+    candidates: Any,
+    expected_format: Any,
+    *,
+    title: str = "",
+    year: str = "",
+) -> dict[str, Any] | None:
+    """The first candidate (already in preference order) whose format fits.
+
+    `candidates` must already be ordered most-preferred-first - most-recently
+    -updated row first for a real query, most-recently-proposed-create first
+    for an in-batch pool - so this only ever adds the format filter on top of
+    that ordering, exactly as `import_movie_existing_id` does today.
+
+    A candidate is also rejected if it conflicts with `title`/`year` on
+    *both* fields at once. A shared TMDb/IMDb id can identify a whole TV
+    series across many season/movie rows, so a provider-identifier match
+    that is merely one field off (a different season's on-disc title, or a
+    re-release year) is still very likely the same film; one that disagrees
+    on both is not (see #793). `title`/`year` default to empty because a
+    title+year candidate's own query already guarantees no conflict is
+    possible - passing them there would never trigger, so this check is only
+    load-bearing for a provider-identifier match.
+    """
+    for candidate in candidates:
+        if not physical_media_formats_compatible(candidate.get("format"), expected_format):
+            continue
+        candidate_title = str(candidate.get("title") or "").strip()
+        candidate_year = str(candidate.get("year") or "").strip()
+        title_conflicts = bool(title and candidate_title and title.casefold() != candidate_title.casefold())
+        year_conflicts = bool(year and candidate_year and str(year) != candidate_year)
+        if title_conflicts and year_conflicts:
+            continue
+        return candidate
+    return None
+
+
+def resolve_import_identity_match(
+    *,
+    barcode: str,
+    identifiers: dict[str, str],
+    title: str,
+    year: str,
+    item_format: Any,
+    barcode_candidates,
+    identifier_candidates,
+    title_year_candidates,
+) -> tuple[str, dict[str, Any]] | None:
+    """The shared barcode -> identifier -> title+year precedence.
+
+    Returns `(reason, row)` for the winning candidate, or `None`. Each
+    `*_candidates` callable supplies that stage's rows in preference order;
+    the caller decides where those rows come from - a live query for the
+    writer, a live query merged with an in-batch pool for the preview - which
+    is what lets both sides share this one precedence instead of maintaining
+    two.
+
+    - `barcode_candidates()` -> rows for an exact barcode match. A barcode
+      match is trusted regardless of format (matching both existing callers),
+      so only the first row is used.
+    - `identifier_candidates(provider, identifier)` -> rows for one provider
+      identifier, most-preferred first.
+    - `title_year_candidates(title, year)` -> rows for a case-insensitive
+      title + exact year match, most-preferred first.
+    """
+    if barcode:
+        rows = barcode_candidates()
+        if rows:
+            return "barcode", rows[0]
+    for provider, identifier in identifiers.items():
+        if not identifier:
+            continue
+        row = best_format_compatible_match(
+            identifier_candidates(provider, identifier), item_format, title=title, year=year
+        )
+        if row:
+            return provider, row
+    if title and year:
+        row = best_format_compatible_match(title_year_candidates(title, year), item_format, title=title, year=year)
+        if row:
+            return "title_year", row
+    return None

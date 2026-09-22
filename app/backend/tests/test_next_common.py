@@ -55,6 +55,102 @@ class NextCommonHelperTests(unittest.TestCase):
         parsed = next_common.parse_uuid_list([str(identifier), str(identifier)], "movieIds")
         self.assertEqual(parsed, [identifier])
 
+    def test_resolve_import_identity_match_prefers_barcode_over_everything(self):
+        """Barcode wins outright, with no format check - both existing
+        callers (writer and preview) already relied on that."""
+        result = next_common.resolve_import_identity_match(
+            barcode="123",
+            identifiers={"tmdb": "999"},
+            title="A",
+            year="2000",
+            item_format="DVD",
+            barcode_candidates=lambda: [{"id": "by-barcode", "format": "Blu-ray"}],
+            identifier_candidates=lambda provider, identifier: [{"id": "by-identifier"}],
+            title_year_candidates=lambda title, year: [{"id": "by-title-year"}],
+        )
+        self.assertEqual(result, ("barcode", {"id": "by-barcode", "format": "Blu-ray"}))
+
+    def test_resolve_import_identity_match_falls_through_an_incompatible_identifier_row(self):
+        """A format-incompatible identifier row must be skipped in favour of
+        a later, compatible one - not simply the first row returned."""
+        result = next_common.resolve_import_identity_match(
+            barcode="",
+            identifiers={"tmdb": "999"},
+            title="",
+            year="",
+            item_format="Blu-ray",
+            barcode_candidates=lambda: [],
+            identifier_candidates=lambda provider, identifier: [
+                {"id": "wrong-format", "format": "DVD"},
+                {"id": "right-format", "format": "Blu-ray"},
+            ],
+            title_year_candidates=lambda title, year: [],
+        )
+        self.assertEqual(result, ("tmdb", {"id": "right-format", "format": "Blu-ray"}))
+
+    def test_resolve_import_identity_match_falls_back_to_title_year(self):
+        result = next_common.resolve_import_identity_match(
+            barcode="",
+            identifiers={"tmdb": "", "imdb": ""},
+            title="Predator",
+            year="1987",
+            item_format="",
+            barcode_candidates=lambda: [],
+            identifier_candidates=lambda provider, identifier: [],
+            title_year_candidates=lambda title, year: [{"id": "by-title-year", "format": ""}],
+        )
+        self.assertEqual(result, ("title_year", {"id": "by-title-year", "format": ""}))
+
+    def test_resolve_import_identity_match_rejects_identifier_row_conflicting_on_both_fields(self):
+        """A shared TMDb/IMDb id can identify a whole TV series, so a
+        provider-identifier row that disagrees with the import on *both*
+        title and year is the wrong season/entry and must be skipped (#793) -
+        even when it is format-compatible and no other candidate exists."""
+        result = next_common.resolve_import_identity_match(
+            barcode="",
+            identifiers={"imdb": "tt9184820"},
+            title="Star Trek: Lower Decks: Season 2",
+            year="2021",
+            item_format="Blu-ray",
+            barcode_candidates=lambda: [],
+            identifier_candidates=lambda provider, identifier: [
+                {"id": "season-1", "title": "Star Trek: Lower Decks: Season 1", "year": "2020", "format": "Blu-ray"},
+            ],
+            title_year_candidates=lambda title, year: [],
+        )
+        self.assertIsNone(result)
+
+    def test_resolve_import_identity_match_keeps_identifier_row_conflicting_on_one_field(self):
+        """One disagreeing release field (an edition suffix, a re-release
+        year) is not enough to reject a provider-identifier match - only
+        both fields disagreeing at once is (#793)."""
+        result = next_common.resolve_import_identity_match(
+            barcode="",
+            identifiers={"imdb": "tt0103772"},
+            title="Basic Instinct 4K",
+            year="1992",
+            item_format="Blu-ray",
+            barcode_candidates=lambda: [],
+            identifier_candidates=lambda provider, identifier: [
+                {"id": "basic-instinct", "title": "Basic Instinct", "year": "1992", "format": "Blu-ray"},
+            ],
+            title_year_candidates=lambda title, year: [],
+        )
+        self.assertEqual(result, ("imdb", {"id": "basic-instinct", "title": "Basic Instinct", "year": "1992", "format": "Blu-ray"}))
+
+    def test_resolve_import_identity_match_returns_none_when_nothing_fits(self):
+        result = next_common.resolve_import_identity_match(
+            barcode="",
+            identifiers={},
+            title="",
+            year="",
+            item_format="",
+            barcode_candidates=lambda: [],
+            identifier_candidates=lambda provider, identifier: [],
+            title_year_candidates=lambda title, year: [],
+        )
+        self.assertIsNone(result)
+
     def test_count_table_returns_zero_for_missing_table(self):
         class _FakeCursor:
             def __enter__(self):
