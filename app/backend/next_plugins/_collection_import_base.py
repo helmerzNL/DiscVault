@@ -14,6 +14,7 @@ from typing import Any
 
 
 SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".json", ".xml"}
+CSV_DELIMITERS = ",;\t|"
 
 COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "externalId": ("ID", "Id", "Movie ID", "MovieId", "Film ID", "Collection Number", "Nummer", "Nr", "No"),
@@ -239,6 +240,23 @@ def xml_single_child_keys(element: ET.Element) -> list[str]:
         if key.casefold() == "displayname":
             return keys
         keys.append(key)
+
+
+def _sniff_csv_dialect(sample: str) -> type[csv.Dialect]:
+    if not sample.strip():
+        return csv.excel
+    header = next((line for line in sample.splitlines() if line.strip()), "")
+    last_error: csv.Error | None = None
+    for candidate in (sample, header):
+        if not candidate.strip():
+            continue
+        try:
+            return csv.Sniffer().sniff(candidate, delimiters=CSV_DELIMITERS)
+        except csv.Error as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    return csv.excel
 
 
 def first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
@@ -659,11 +677,20 @@ class CollectionImportPlugin:
         return []
 
     def read_csv(self, path: Path, delimiter: str | None = None) -> list[dict[str, Any]]:
-        raw = path.read_text(encoding="utf-8-sig", errors="replace")
-        sample = raw[:4096]
-        dialect = csv.excel_tab if delimiter == "\t" else csv.Sniffer().sniff(sample, delimiters=",;\t|") if sample.strip() else csv.excel
-        reader = csv.DictReader(raw.splitlines(), dialect=dialect)
-        return [dict(row) for row in reader if any(text(value) for value in row.values())]
+        with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+            sample = handle.read(4096)
+            handle.seek(0)
+            if delimiter is not None:
+                dialect = csv.excel_tab if delimiter == "\t" else csv.excel
+            else:
+                dialect = _sniff_csv_dialect(sample)
+            reader = csv.DictReader(
+                handle,
+                dialect=dialect,
+                delimiter=delimiter or dialect.delimiter,
+                doublequote=True,
+            )
+            return [dict(row) for row in reader if any(text(value) for value in row.values())]
 
     def read_json(self, path: Path) -> list[dict[str, Any]]:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
