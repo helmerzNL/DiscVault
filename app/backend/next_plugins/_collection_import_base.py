@@ -182,6 +182,59 @@ def text(value: Any) -> str:
     return str(value).strip()
 
 
+def xml_local_name(element: ET.Element) -> str:
+    return element.tag.split("}")[-1]
+
+
+def xml_has_repeated_child_tags(element: ET.Element) -> bool:
+    for descendant in element.iter():
+        child_tags = [xml_local_name(child).casefold() for child in list(descendant)]
+        if len(child_tags) != len(set(child_tags)):
+            return True
+    return False
+
+
+def xml_scalar_text(element: ET.Element) -> str:
+    direct = text(element.text)
+    if direct:
+        return direct
+    if xml_has_repeated_child_tags(element):
+        return ""
+
+    display_names = [
+        text(descendant.text)
+        for descendant in element.iter()
+        if descendant is not element
+        and xml_local_name(descendant).casefold() == "displayname"
+        and text(descendant.text)
+    ]
+    if len(display_names) == 1:
+        return display_names[0]
+    if display_names:
+        return ""
+
+    descendant_values = [
+        text(descendant.text)
+        for descendant in element.iter()
+        if descendant is not element and text(descendant.text)
+    ]
+    return descendant_values[0] if len(descendant_values) == 1 else ""
+
+
+def xml_single_child_keys(element: ET.Element) -> list[str]:
+    keys: list[str] = []
+    current = element
+    while True:
+        children = list(current)
+        if len(children) != 1:
+            return keys
+        current = children[0]
+        key = xml_local_name(current)
+        if key.casefold() == "displayname":
+            return keys
+        keys.append(key)
+
+
 def first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
     if not isinstance(row, dict):
         return ""
@@ -622,15 +675,18 @@ class CollectionImportPlugin:
         root = ET.parse(path).getroot()
         candidates = []
         for element in root.iter():
-            tag = element.tag.split("}")[-1].casefold()
+            tag = xml_local_name(element).casefold()
             if tag not in {"movie", "title", "item", "entry", "film"}:
                 continue
             row: dict[str, Any] = {key: value for key, value in element.attrib.items()}
             for child in list(element):
-                key = child.tag.split("}")[-1]
-                value = text(child.text)
+                key = xml_local_name(child)
+                value = xml_scalar_text(child)
                 if value:
                     row[key] = value
+                    if not text(child.text):
+                        for nested_key in xml_single_child_keys(child):
+                            row.setdefault(nested_key, value)
             if row:
                 candidates.append(row)
         return candidates
