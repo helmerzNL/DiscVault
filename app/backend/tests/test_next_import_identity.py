@@ -67,7 +67,7 @@ class ImportMovieIdentityTests(unittest.TestCase):
                     provider_rows={
                         provider: (
                             {
-                                "movie_id": f"{provider}-season-1",
+                                "id": f"{provider}-season-1",
                                 "title": "Star Trek: Lower Decks: Season 1",
                                 "year": "2020",
                                 "format": "Blu-ray",
@@ -96,13 +96,13 @@ class ImportMovieIdentityTests(unittest.TestCase):
             provider_rows={
                 "imdb": (
                     {
-                        "movie_id": "season-1",
+                        "id": "season-1",
                         "title": "Star Trek: Lower Decks: Season 1",
                         "year": "2020",
                         "format": "Blu-ray",
                     },
                     {
-                        "movie_id": "season-2",
+                        "id": "season-2",
                         "title": "Star Trek: Lower Decks: Season 2",
                         "year": "2021",
                         "format": "Blu-ray",
@@ -132,7 +132,7 @@ class ImportMovieIdentityTests(unittest.TestCase):
                     provider_rows={
                         "imdb": (
                             {
-                                "movie_id": "basic-instinct",
+                                "id": "basic-instinct",
                                 "title": "Basic Instinct",
                                 "year": "1992",
                                 "format": "Blu-ray",
@@ -145,7 +145,7 @@ class ImportMovieIdentityTests(unittest.TestCase):
 
     def test_provider_id_matching_keeps_physical_format_compatibility(self):
         stored = {
-            "movie_id": "basic-instinct",
+            "id": "basic-instinct",
             "title": "Basic Instinct",
             "year": "1992",
             "format": "Blu-ray",
@@ -194,7 +194,7 @@ class ImportMovieIdentityTests(unittest.TestCase):
             provider_rows={
                 "imdb": (
                     {
-                        "movie_id": "provider-season-1",
+                        "id": "provider-season-1",
                         "title": "Star Trek: Lower Decks: Season 1",
                         "year": "2020",
                         "format": "DVD",

@@ -211,6 +211,10 @@ try:
     from .next_common import json_ready
     from .next_common import parse_bool_value
     from .next_common import physical_format_label
+    from .next_common import physical_media_format_key
+    from .next_common import physical_media_formats_compatible
+    from .next_common import import_writer_identifiers
+    from .next_common import resolve_import_identity_match
     from .next_common import parse_int_arg
     from .next_common import parse_uuid
     from .next_common import parse_uuid_list
@@ -525,6 +529,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import json_ready
     from next_common import parse_bool_value
     from next_common import physical_format_label
+    from next_common import physical_media_format_key
+    from next_common import physical_media_formats_compatible
+    from next_common import import_writer_identifiers
+    from next_common import resolve_import_identity_match
     from next_common import parse_int_arg
     from next_common import parse_uuid
     from next_common import parse_uuid_list
@@ -1404,30 +1412,12 @@ def perform_update_check(conn, requested_channel: Any = None) -> dict[str, Any]:
         }
 
 
-def physical_media_format_key(value: Any) -> str:
-    text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
-    text = " ".join(text.split())
-    if not text:
-        return ""
-    if "ultra hd" in text or "uhd" in text or "4k" in text:
-        return "ultra_hd_blu_ray"
-    if "blu ray" in text or "bluray" in text or text == "bd":
-        return "blu_ray"
-    if text in {"dvd", "dvd video"}:
-        return "dvd"
-    if "hd dvd" in text or "hddvd" in text:
-        return "hd_dvd"
-    if "laserdisc" in text or "laser disc" in text:
-        return "laserdisc"
-    if "svcd" in text or "vcd" in text:
-        return "vcd_svcd"
-    return text
 
-
-def physical_media_formats_compatible(candidate: Any, expected: Any) -> bool:
-    candidate_key = physical_media_format_key(candidate)
-    expected_key = physical_media_format_key(expected)
-    return not candidate_key or not expected_key or candidate_key == expected_key
+# physical_media_format_key/physical_media_formats_compatible now live in
+# next_common.py so the import writer and the import preview share one
+# definition of "compatible format" instead of two copies drifting apart.
+# They are imported above (see the NextApiError import block for each
+# runtime layout) alongside the rest of the shared import-identity helpers.
 
 
 def should_reuse_box_set_container_for_import(
@@ -2964,82 +2954,141 @@ def merge_selected_import_movie_candidate(
 
 
 def import_source_conflicts(conn, items: list[dict[str, Any]], *, limit: int = 50) -> list[dict[str, Any]]:
+    """Predict, item by item, whether the writer will create or update.
+
+    This shares `resolve_import_identity_match` with `import_movie_existing_id`
+    (the writer) so a "existing" verdict here means the writer really will
+    find that row - same barcode/identifier/title+year precedence, same
+    format-compatibility filter, same tmdb/imdb-only identifier scope.
+
+    The one thing a plain shared query cannot give it for free: the writer
+    processes a batch as a sequence of writes on one connection, so item 7 in
+    a batch can match the row item 3 just inserted. This preview never
+    writes, so it keeps an in-memory pool of every earlier item's own
+    barcode/identifiers/title+year and treats a pool hit as if it were the
+    most-recently-touched real row - which is exactly the role that row would
+    play once the writer had actually created or updated it (see #791).
+    """
     if not table_exists(conn, "movies"):
         return []
     conflicts: list[dict[str, Any]] = []
-    for index, item in enumerate(items[:limit], start=1):
-        if not isinstance(item, dict):
-            continue
-        title = clean_text(item.get("title") or item.get("name"))
-        year = clean_text(item.get("year") or item.get("releaseYear") or item.get("release_year"))
-        barcode = clean_text(item.get("barcode"))
-        match: dict[str, Any] | None = None
-        with conn.cursor() as cur:
-            if barcode:
+    identifiers_available = table_exists(conn, "movie_identifiers")
+
+    pool_by_barcode: dict[str, dict[str, Any]] = {}
+    pool_by_identifier: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    pool_by_title_year: dict[tuple[str, str], list[dict[str, Any]]] = {}
+
+    with conn.cursor() as cur:
+        for index, item in enumerate(items[:limit], start=1):
+            if not isinstance(item, dict):
+                continue
+            title = clean_text(item.get("title") or item.get("name"))
+            year = clean_text(item.get("year") or item.get("releaseYear") or item.get("release_year"))
+            barcode = clean_text(item.get("barcode"))
+            item_format = import_source_item_format(item)
+            identifiers = import_writer_identifiers(item)
+
+            def barcode_candidates(_barcode: str = barcode) -> list[dict[str, Any]]:
+                pooled = pool_by_barcode.get(_barcode)
+                if pooled:
+                    return [pooled]
                 cur.execute(
-                    "SELECT id, title, year, barcode FROM movies WHERE barcode=%s LIMIT 1",
-                    (barcode,),
+                    "SELECT id, title, year, barcode, format FROM movies WHERE barcode=%s LIMIT 1",
+                    (_barcode,),
                 )
-                row = cur.fetchone()
-                if row:
-                    match = {
-                        "id": str(row["id"]),
-                        "title": row.get("title"),
-                        "year": row.get("year"),
-                        "barcode": row.get("barcode"),
-                        "reason": "barcode",
-                    }
-            if not match and table_exists(conn, "movie_identifiers"):
-                for provider, identifier in import_source_item_identifiers(item).items():
-                    cur.execute(
-                        """
-                        SELECT m.id, m.title, m.year, m.barcode
-                        FROM movie_identifiers mi
-                        JOIN movies m ON m.id=mi.movie_id
-                        WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
-                        LIMIT 1
-                        """,
-                        (provider, identifier),
-                    )
-                    row = cur.fetchone()
-                    if row:
-                        match = {
-                            "id": str(row["id"]),
-                            "title": row.get("title"),
-                            "year": row.get("year"),
-                            "barcode": row.get("barcode"),
-                            "reason": provider,
-                        }
-                        break
-            if not match and title and year:
+                return cur.fetchall()
+
+            def identifier_candidates(
+                provider: str,
+                identifier: str,
+                _pool: dict[tuple[str, str], list[dict[str, Any]]] = pool_by_identifier,
+            ) -> list[dict[str, Any]]:
+                pooled = list(reversed(_pool.get((provider, identifier), [])))
+                if not identifiers_available:
+                    return pooled
                 cur.execute(
                     """
-                    SELECT id, title, year, barcode
+                    SELECT m.id, m.title, m.year, m.barcode, m.format
+                    FROM movie_identifiers mi
+                    JOIN movies m ON m.id=mi.movie_id
+                    WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
+                    ORDER BY m.updated_at DESC
+                    """,
+                    (provider, identifier),
+                )
+                return pooled + cur.fetchall()
+
+            def title_year_candidates(
+                match_title: str,
+                match_year: str,
+                _pool: dict[tuple[str, str], list[dict[str, Any]]] = pool_by_title_year,
+            ) -> list[dict[str, Any]]:
+                pooled = list(reversed(_pool.get((match_title.casefold(), match_year), [])))
+                cur.execute(
+                    """
+                    SELECT id, title, year, barcode, format
                     FROM movies
                     WHERE lower(title)=lower(%s) AND year=%s
-                    LIMIT 1
+                    ORDER BY updated_at DESC
                     """,
-                    (title, year),
+                    (match_title, match_year),
                 )
-                row = cur.fetchone()
-                if row:
-                    match = {
-                        "id": str(row["id"]),
-                        "title": row.get("title"),
-                        "year": row.get("year"),
-                        "barcode": row.get("barcode"),
-                        "reason": "title_year",
-                    }
-        conflicts.append(
-            {
-                "index": index,
+                return pooled + cur.fetchall()
+
+            result = resolve_import_identity_match(
+                barcode=barcode,
+                identifiers=identifiers,
+                title=title,
+                year=year,
+                item_format=item_format,
+                barcode_candidates=barcode_candidates,
+                identifier_candidates=identifier_candidates,
+                title_year_candidates=title_year_candidates,
+            )
+
+            match: dict[str, Any] | None = None
+            if result:
+                reason, row = result
+                match = {
+                    "id": str(row["id"]),
+                    "title": row.get("title"),
+                    "year": row.get("year"),
+                    "barcode": row.get("barcode"),
+                    "reason": reason,
+                }
+
+            conflicts.append(
+                {
+                    "index": index,
+                    "title": title,
+                    "year": year,
+                    "barcode": barcode,
+                    "state": "existing" if match else "new",
+                    "match": match,
+                }
+            )
+
+            # This item is about to be created or updated, so a later item in
+            # the same batch that shares its identity must see it - the same
+            # visibility the writer gets for free from processing the batch
+            # sequentially on one connection. A synthetic "pending-N" id is
+            # enough: this pool only ever feeds the classification above, and
+            # a match's `id` is a display fallback, never a navigable link.
+            pool_row = {
+                "id": f"pending-{index}",
                 "title": title,
                 "year": year,
                 "barcode": barcode,
-                "state": "existing" if match else "new",
-                "match": match,
+                "format": item_format,
             }
-        )
+            if barcode:
+                pool_by_barcode[barcode] = pool_row
+            for provider, identifier in identifiers.items():
+                if identifier:
+                    pool_by_identifier.setdefault((provider, identifier), []).append(pool_row)
+            if title and year:
+                pool_by_title_year.setdefault((title.casefold(), year), []).append(pool_row)
+
     return conflicts
 
 
