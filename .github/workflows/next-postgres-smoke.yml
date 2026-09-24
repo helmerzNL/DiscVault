@@ -121,6 +121,20 @@ jobs:
       - name: Test the passkey login ceremony
         run: python -m unittest tests.test_next_passkey_ceremony
 
+      # The other front door, and it had never been listed here at all. Both
+      # modules are needed and neither replaces the other: test_next_oidc reads
+      # the module as source, which is how the wiring rules are checkable at
+      # all, and is exactly why it could not see #799 -- an `oidc_identities`
+      # row permitted one login ever, because a query returned the identity's
+      # primary key under the name `id` and the caller spent it as a user id.
+      # Two uuid columns disagreeing is only visible against a database, which
+      # is what test_next_oidc_login_identity brings.
+      - name: Test the OIDC login ceremony
+        run: >-
+          python -m unittest
+          tests.test_next_oidc
+          tests.test_next_oidc_login_identity
+
       # Reads the routing table out of the source and checks that the token the
       # server hands its own native clients can actually pass every gate the
       # advertised contract sends them through. Tightening a route's permission

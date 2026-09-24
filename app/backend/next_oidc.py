@@ -563,6 +563,42 @@ def _insert_oidc_user(
     raise OidcFlowError("username_unavailable")
 
 
+def _lookup_oidc_identity(
+    conn,
+    *,
+    issuer: str,
+    subject: str,
+) -> dict[str, Any] | None:
+    """Return the linked account for an (issuer, subject), shaped like a user.
+
+    The caller uses the returned row as the user it is signing in, so ``id``
+    has to be ``users.id``. It used to be ``oidc_identities.id``: every caller
+    downstream -- the identity upsert, the audit actor, the role lookup and the
+    session token -- then received the identity's primary key in place of the
+    account's. The upsert is where it surfaced, because its
+    ``WHERE oidc_identities.user_id=EXCLUDED.user_id`` guard cannot match a
+    value that is not a user id, so ``RETURNING`` came back empty and every
+    login after the first raised ``identity_already_linked`` (#799). Both
+    columns are ``uuid``, so nothing failed loudly.
+
+    ``identity_id`` carries the identity's own primary key for callers that
+    want it, and is deliberately not called ``id``.
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT u.id AS id, oi.id AS identity_id, oi.user_id,
+                   u.username, u.display_name, u.status
+            FROM oidc_identities oi
+            JOIN users u ON u.id=oi.user_id
+            WHERE oi.issuer=%s AND oi.subject=%s
+            FOR UPDATE
+            """,
+            (issuer, subject),
+        )
+        return cur.fetchone()
+
+
 def _upsert_oidc_identity(
     conn,
     *,
@@ -888,17 +924,11 @@ def register_oidc_routes(
                             "SELECT pg_advisory_xact_lock("
                             "hashtext('discvault-legacy-bootstrap'))"
                         )
-                        cur.execute(
-                            """
-                            SELECT oi.id, oi.user_id, u.username, u.display_name, u.status
-                            FROM oidc_identities oi
-                            JOIN users u ON u.id=oi.user_id
-                            WHERE oi.issuer=%s AND oi.subject=%s
-                            FOR UPDATE
-                            """,
-                            (config.issuer, subject),
-                        )
-                        identity = cur.fetchone()
+                    identity = _lookup_oidc_identity(
+                        conn,
+                        issuer=config.issuer,
+                        subject=subject,
+                    )
                     mode = str(transaction["mode"])
                     actor = current_session_user(conn)
                     created_user = False
