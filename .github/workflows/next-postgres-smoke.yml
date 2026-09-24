@@ -427,6 +427,16 @@ jobs:
       - name: Test signing in twice with the same OIDC identity
         run: python -m unittest tests.test_next_oidc_login_identity
 
+      # #804: a failed callback rolled back oidc_auth_transactions.used_at
+      # along with everything else, because require_tables() issuing a SELECT
+      # before `with conn.transaction():` on the same connection turned that
+      # block into a SAVEPOINT rather than an outer transaction -- so the mark
+      # shared fate with a later failure on that connection. Only a real
+      # database observes this: it is PostgreSQL/psycopg transaction-scoping
+      # behaviour, not something the source text can show.
+      - name: Test the OIDC used_at mark survives a failed callback
+        run: python -m unittest tests.test_next_oidc_used_at
+
       # Below the migrations for the reason the block further down gives, and
       # for a second one specific to this pair: they do not merely read tables,
       # they assert what PostgreSQL *does* -- which index the planner picks, and

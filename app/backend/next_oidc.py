@@ -875,49 +875,62 @@ def register_oidc_routes(
             config = oidc_config_from_env()
             if not config:
                 raise OidcFlowError("oidc_disabled")
+            # Marked on its own connection, committed before the rest of the
+            # callback runs. `require_tables()` issues a SELECT before this
+            # point on a fresh connection, so a `with conn.transaction():`
+            # opened afterwards on that SAME connection is a SAVEPOINT, not an
+            # outer transaction -- psycopg 3 decides outer-vs-savepoint by
+            # whether the connection is IDLE at entry. A later OidcFlowError
+            # raised anywhere else in this handler, on a different connection,
+            # would otherwise never touch this mark; the bug was that it used
+            # to share the main connection and got rolled back with it. A
+            # connection scoped to just this write starts IDLE, so its own
+            # `transaction()` block is a real BEGIN/COMMIT that survives
+            # regardless of what happens afterwards.
+            with connect() as txn_conn:
+                require_tables(txn_conn)
+                with txn_conn.transaction():
+                    transaction = _transaction_row(txn_conn, state)
+            if not transaction:
+                raise OidcFlowError("invalid_state")
+            return_path = safe_oidc_return_path(transaction.get("return_path"), "/")
+            cookie_secure = (
+                urlsplit(str(transaction.get("redirect_uri") or "")).scheme
+                == "https"
+            )
+            browser_binding = str(
+                request.cookies.get(_flow_cookie_name(state)) or ""
+            )
+            if (
+                not browser_binding
+                or not secrets.compare_digest(
+                    oidc_state_hash(browser_binding),
+                    str(transaction.get("browser_binding_hash") or ""),
+                )
+            ):
+                raise OidcFlowError("invalid_state")
+            if request.args.get("error"):
+                raise OidcFlowError("provider_denied")
+            code = str(request.args.get("code") or "").strip()
+            if not code:
+                raise OidcFlowError("authorization_code_missing")
+            discovery = oidc_discovery(config)
+            token = exchange_oidc_code(
+                config,
+                discovery,
+                code=code,
+                code_verifier=str(transaction["code_verifier"]),
+                redirect_uri=str(transaction["redirect_uri"]),
+            )
+            claims = validate_oidc_id_token(
+                config,
+                discovery,
+                token,
+                nonce_hash=str(transaction["nonce_hash"]),
+                code=code,
+            )
+            subject = str(claims["sub"])
             with connect() as conn:
-                require_tables(conn)
-                with conn.transaction():
-                    transaction = _transaction_row(conn, state)
-                if not transaction:
-                    raise OidcFlowError("invalid_state")
-                return_path = safe_oidc_return_path(transaction.get("return_path"), "/")
-                cookie_secure = (
-                    urlsplit(str(transaction.get("redirect_uri") or "")).scheme
-                    == "https"
-                )
-                browser_binding = str(
-                    request.cookies.get(_flow_cookie_name(state)) or ""
-                )
-                if (
-                    not browser_binding
-                    or not secrets.compare_digest(
-                        oidc_state_hash(browser_binding),
-                        str(transaction.get("browser_binding_hash") or ""),
-                    )
-                ):
-                    raise OidcFlowError("invalid_state")
-                if request.args.get("error"):
-                    raise OidcFlowError("provider_denied")
-                code = str(request.args.get("code") or "").strip()
-                if not code:
-                    raise OidcFlowError("authorization_code_missing")
-                discovery = oidc_discovery(config)
-                token = exchange_oidc_code(
-                    config,
-                    discovery,
-                    code=code,
-                    code_verifier=str(transaction["code_verifier"]),
-                    redirect_uri=str(transaction["redirect_uri"]),
-                )
-                claims = validate_oidc_id_token(
-                    config,
-                    discovery,
-                    token,
-                    nonce_hash=str(transaction["nonce_hash"]),
-                    code=code,
-                )
-                subject = str(claims["sub"])
                 with conn.transaction():
                     with conn.cursor() as cur:
                         cur.execute(

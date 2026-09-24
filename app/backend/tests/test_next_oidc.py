@@ -586,6 +586,34 @@ class OidcWiringTests(unittest.TestCase):
         self.assertNotIn('"/mcp"', self.oidc)
         self.assertIn("def _bearer_api_token()", self.auth)
 
+    def test_transaction_row_is_marked_on_a_connection_of_its_own(self):
+        """Regression for #804: the `used_at` mark must not share a connection
+        with the rest of the callback.
+
+        `require_tables()` issues a SELECT before `_transaction_row()` runs, so
+        a `with conn.transaction():` opened afterwards on that same connection
+        is a SAVEPOINT, not an outer transaction (psycopg 3 decides
+        outer-vs-savepoint by whether the connection is IDLE at entry). A later
+        `OidcFlowError` on that same connection then rolls the mark back with
+        everything else -- which is exactly what tests/test_next_oidc_used_at.py
+        proves against a real database. This is the source-level half: it
+        fails immediately, without a database, if `_transaction_row` is ever
+        moved back onto the connection the rest of the callback uses.
+        """
+        callback = self.oidc[self.oidc.index("def oidc_callback():") :]
+        first_connect = callback.index("with connect() as txn_conn:")
+        transaction_row_call = callback.index("_transaction_row(txn_conn, state)")
+        # The transaction-row connection must close (dedent back out of its
+        # `with` block) before the callback opens the connection everything
+        # else runs on -- otherwise they are the same connection again.
+        txn_conn_block_end = callback.index("\n            if not transaction:", first_connect)
+        second_connect = callback.index("with connect() as conn:", txn_conn_block_end)
+        self.assertLess(first_connect, transaction_row_call)
+        self.assertLess(transaction_row_call, txn_conn_block_end)
+        self.assertLess(txn_conn_block_end, second_connect)
+        # And the two must genuinely be different connection objects.
+        self.assertNotIn("_transaction_row(conn, state)", callback)
+
 
 class OidcDeploymentWiringTests(unittest.TestCase):
     @classmethod
