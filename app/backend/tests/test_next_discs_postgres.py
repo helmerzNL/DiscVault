@@ -702,7 +702,7 @@ class MovieDiscSyncWireTests(unittest.TestCase):
                 {"title": "Wire Box", "discCount": 2},
                 mutation_id="create-disc-count",
             )
-            self.assertEqual(created["entity"]["discCount"], 2)
+            self.assertEqual(created["entity"]["disc_count"], 2)
             entity_id = created["entityId"]
             with conn.cursor() as cur:
                 cur.execute(
@@ -719,7 +719,7 @@ class MovieDiscSyncWireTests(unittest.TestCase):
                 entity_id=entity_id,
                 mutation_id="update-disc-count",
             )
-            self.assertEqual(updated["entity"]["discCount"], 2)
+            self.assertEqual(updated["entity"]["disc_count"], 2)
 
     def _linked_show(self, conn, *, suffix):
         """A SHOW release already linked to a series, the server-side way.
