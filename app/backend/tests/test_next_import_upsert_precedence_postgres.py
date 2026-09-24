@@ -113,6 +113,26 @@ class ImportUpsertPrecedenceTests(unittest.TestCase):
         # '' is blank, not a value worth protecting.
         self.assertEqual(row["country"], "NL")
 
+    def test_disc_count_is_written_and_then_only_filled_not_overwritten(self):
+        with self.connect() as conn:
+            movie_id, _ = self._import(conn, title="Dune", discCount=2)
+            row = self._row(conn, movie_id)
+            self.assertEqual(row["disc_count"], 2)
+            # A later import with a different count must not clobber the one
+            # already stored -- same fill-only rule as every other column.
+            self._import(conn, title="Dune", discCount=3)
+            row = self._row(conn, movie_id)
+            self.assertEqual(row["disc_count"], 2)
+
+    def test_disc_count_is_filled_when_blank(self):
+        with self.connect() as conn:
+            movie_id, _ = self._import(conn, title="Dune")
+            row = self._row(conn, movie_id)
+            self.assertIsNone(row["disc_count"])
+            self._import(conn, title="Dune", discCount=2)
+            row = self._row(conn, movie_id)
+            self.assertEqual(row["disc_count"], 2)
+
     def test_a_second_import_updates_rather_than_duplicates(self):
         with self.connect() as conn:
             first_id, first_created = self._import(conn, title="Bohemian Rhapsody", year="2018")
