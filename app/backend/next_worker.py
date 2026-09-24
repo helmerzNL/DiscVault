@@ -1423,6 +1423,7 @@ IMPORT_MOVIE_COLUMNS: tuple[tuple[str, str | None, bool], ...] = (
     ("runtime_minutes", None, False),
     ("overview", "overview", True),
     ("rating", None, True),
+    ("disc_count", None, False),
 )
 
 # Review fields that map onto a metadata key rather than a column.
@@ -1940,6 +1941,8 @@ def import_release_date(value: Any) -> str | None:
 
 
 def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUID, bool]:
+    from next_app import clamp_disc_count
+
     title = clean_text(item.get("title"))
     if not title:
         raise RuntimeError("Import item is missing title")
@@ -1978,11 +1981,12 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 runtime_minutes,
                 overview,
                 rating,
+                disc_count,
                 metadata,
                 created_at,
                 updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             -- An import FILLS a field, it does not OVERWRITE one: the
             -- assignments below read existing-first, so a value already on the
             -- film survives and only a blank one is filled from the file. The
@@ -2023,6 +2027,7 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 item.get("runtimeMinutes") or item.get("runtime_minutes") or None,
                 clean_text(item.get("overview") or item.get("plot")) or None,
                 clean_text(item.get("rating")) or None,
+                clamp_disc_count(item.get("discCount") or item.get("disc_count")),
                 Jsonb(json_ready(metadata)),
                 protected_metadata_keys,
             ),

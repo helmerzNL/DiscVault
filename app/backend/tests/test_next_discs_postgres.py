@@ -695,6 +695,32 @@ class MovieDiscSyncWireTests(unittest.TestCase):
             )
             self.assertEqual(updated["entity"]["discs"], [])
 
+    def test_disc_count_persists_and_a_later_upsert_with_none_supplied_keeps_it(self):
+        with self.connect() as conn:
+            created = self._push(
+                conn,
+                {"title": "Wire Box", "discCount": 2},
+                mutation_id="create-disc-count",
+            )
+            self.assertEqual(created["entity"]["discCount"], 2)
+            entity_id = created["entityId"]
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE movies SET public_id = %s WHERE id = %s",
+                    (f"{PREFIX}-{entity_id}", entity_id),
+                )
+            conn.commit()
+            # A later upsert that says nothing about discCount must not null it
+            # out -- same fill-only rule apply_movie_upsert follows for every
+            # other column.
+            updated = self._push(
+                conn,
+                {"title": "Wire Box renamed"},
+                entity_id=entity_id,
+                mutation_id="update-disc-count",
+            )
+            self.assertEqual(updated["entity"]["discCount"], 2)
+
     def _linked_show(self, conn, *, suffix):
         """A SHOW release already linked to a series, the server-side way.
 

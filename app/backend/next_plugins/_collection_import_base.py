@@ -259,17 +259,33 @@ def _sniff_csv_dialect(sample: str) -> type[csv.Dialect]:
     return csv.excel
 
 
+_ALIAS_COLLAPSE_RE = re.compile(r"[^a-z0-9]")
+
+
+def _collapse_key(value: Any) -> str:
+    return _ALIAS_COLLAPSE_RE.sub("", str(value).casefold())
+
+
 def first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
     if not isinstance(row, dict):
         return ""
     direct = {str(key): value for key, value in row.items()}
     folded = {str(key).strip().casefold(): value for key, value in row.items()}
+    # An XML element name cannot contain a space, so a multi-word alias like
+    # "Disc Count" or "Nr Discs" can never match a tag like <nrdiscs> through
+    # the fold above alone. Collapsing both sides to alphanumerics-only makes
+    # every alias in COMMON_ALIASES matchable against any source's spelling,
+    # not just the ones that happen to already carry a no-space variant.
+    collapsed = {_collapse_key(key): value for key, value in row.items()}
     for alias in aliases:
         if alias in direct and direct[alias] not in (None, "", [], {}):
             return direct[alias]
         folded_value = folded.get(alias.casefold())
         if folded_value not in (None, "", [], {}):
             return folded_value
+        collapsed_value = collapsed.get(_collapse_key(alias))
+        if collapsed_value not in (None, "", [], {}):
+            return collapsed_value
     return ""
 
 
@@ -446,11 +462,17 @@ def sum_disc_counts(row: dict[str, Any], aliases: tuple[str, ...], column_name: 
     must treat as "unknown", not as zero.
     """
     mapped = text(column_name)
-    wanted = {alias.casefold() for alias in ((mapped,) if mapped else aliases)}
+    source_aliases = (mapped,) if mapped else aliases
+    wanted = {alias.casefold() for alias in source_aliases}
+    # Same gap as `first_value`: an XML tag like <nrdiscs> can never match a
+    # multi-word alias through case folding alone, since the tag can carry no
+    # space. Collapsing to alphanumerics-only closes it here too.
+    wanted_collapsed = {_collapse_key(alias) for alias in source_aliases}
     total = 0
     found = False
     for key, value in (row or {}).items():
-        if text(key).casefold() not in wanted:
+        key_text = text(key)
+        if key_text.casefold() not in wanted and _collapse_key(key_text) not in wanted_collapsed:
             continue
         digits = re.fullmatch(r"-?\d+", text(value))
         if not digits:
@@ -795,6 +817,7 @@ class CollectionImportPlugin:
             "barcode": barcode,
             "productIdentifiers": product_identifiers,
             "format": media_format,
+            "discCount": disc_count,
             "edition": text(mapped_value(row, aliases["edition"], column_mapping.get("edition"))),
             "country": text(mapped_value(row, aliases["country"], column_mapping.get("country"))),
             "language": text(mapped_value(row, aliases["language"], column_mapping.get("language"))),

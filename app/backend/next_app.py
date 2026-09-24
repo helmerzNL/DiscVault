@@ -12221,6 +12221,14 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
         return None
 
 
+def movie_disc_count_value(body: dict[str, Any], existing: dict[str, Any]) -> int | None:
+    keys = ("discCount", "disc_count")
+    if not any(key in body for key in keys):
+        return existing.get("disc_count")
+    raw = next(body[key] for key in keys if key in body)
+    return clamp_disc_count(raw)
+
+
 def movie_media_type_value(body: dict[str, Any], existing: dict[str, Any]) -> str:
     """Resolve the edited media type, keyed on presence like the runtime helper.
 
@@ -13415,6 +13423,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "location": pick_text("location"),
         "location_id": location_id,
         "runtime_minutes": movie_runtime_value(body, existing),
+        "disc_count": movie_disc_count_value(body, existing),
         "estimated_value": movie_estimated_value(body, existing),
         "estimated_value_currency": movie_estimated_value_currency(body, existing),
         "metadata_edits": movie_metadata_edits(body),
@@ -23443,6 +23452,7 @@ def apply_movie_upsert(
                 overview,
                 notes,
                 rating,
+                disc_count,
                 purchase_date,
                 purchase_price,
                 estimated_value,
@@ -23462,7 +23472,7 @@ def apply_movie_upsert(
                 -- NULL would defeat the DEFAULT and hit the NOT NULL instead.
                 COALESCE(%s, %s),
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s,
+                %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -23496,6 +23506,7 @@ def apply_movie_upsert(
                 overview=COALESCE(EXCLUDED.overview, movies.overview),
                 notes=COALESCE(EXCLUDED.notes, movies.notes),
                 rating=COALESCE(EXCLUDED.rating, movies.rating),
+                disc_count=COALESCE(EXCLUDED.disc_count, movies.disc_count),
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
                 estimated_value=COALESCE(EXCLUDED.estimated_value, movies.estimated_value),
@@ -23528,6 +23539,7 @@ def apply_movie_upsert(
                 fields["overview"],
                 fields["notes"],
                 fields["rating"],
+                fields["disc_count"],
                 fields["purchase_date"],
                 fields["purchase_price"],
                 fields["estimated_value"],

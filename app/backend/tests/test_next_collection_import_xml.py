@@ -126,6 +126,27 @@ class ClzXmlImportTests(unittest.TestCase):
         self.assertNotIn("format", movie)
         self.assertNotIn("language", movie)
 
+    def test_no_space_disc_count_tag_matches_multi_word_alias(self):
+        # CLZ Movies' own XML element is <nrdiscs>, with no separator -- an XML
+        # tag can never contain a space. Every alias for discCount in
+        # COMMON_ALIASES has one ("Nr Discs", "Disc Count", ...), so this can
+        # only pass if the matcher collapses both sides before comparing, not
+        # just case-folds them.
+        _row, movie = self.read_movie(
+            """<?xml version="1.0" encoding="UTF-8"?>
+<movieinfo>
+  <movies>
+    <movie>
+      <title>The Shawshank Redemption</title>
+      <nrdiscs>2</nrdiscs>
+    </movie>
+  </movies>
+</movieinfo>
+"""
+        )
+
+        self.assertEqual(movie["discCount"], 2)
+
 
 if __name__ == "__main__":
     unittest.main()
