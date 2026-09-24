@@ -516,7 +516,33 @@ class OidcWiringTests(unittest.TestCase):
         callback = self.oidc[self.oidc.index("def oidc_callback():") :]
         self.assertNotIn("WHERE email=", callback)
         self.assertNotIn("WHERE username=", callback)
-        self.assertIn("WHERE oi.issuer=%s AND oi.subject=%s", callback)
+        # The lookup moved into _lookup_oidc_identity, so that the row it hands
+        # back is shaped like a user rather than like an identity (#799). What
+        # it matches on is unchanged: the subject the provider asserted, and
+        # nothing a stranger could claim by choosing an email address.
+        self.assertIn("_lookup_oidc_identity(", callback)
+        lookup = self.oidc[
+            self.oidc.index("def _lookup_oidc_identity(") : self.oidc.index(
+                "\n\ndef _upsert_oidc_identity("
+            )
+        ]
+        self.assertNotIn("WHERE email=", lookup)
+        self.assertNotIn("WHERE username=", lookup)
+        self.assertIn("WHERE oi.issuer=%s AND oi.subject=%s", lookup)
+
+    def test_the_identity_lookup_hands_back_the_account_id(self):
+        """Source-level half of #799; tests/test_next_oidc_login_identity.py
+        proves the behaviour against a database."""
+        lookup = self.oidc[
+            self.oidc.index("def _lookup_oidc_identity(") : self.oidc.index(
+                "\n\ndef _upsert_oidc_identity("
+            )
+        ]
+        self.assertIn("u.id AS id", lookup)
+        self.assertIn("oi.id AS identity_id", lookup)
+        # `SELECT oi.id,` -- the identity key under the bare name `id` -- is
+        # the thing that must not come back.
+        self.assertNotIn("SELECT oi.id,", lookup)
 
     def test_registration_and_owner_bootstrap_are_explicit(self):
         self.assertIn("not registration_enabled(conn)", self.oidc)

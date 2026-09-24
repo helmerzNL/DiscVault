@@ -121,6 +121,14 @@ jobs:
       - name: Test the passkey login ceremony
         run: python -m unittest tests.test_next_passkey_ceremony
 
+      # The other front door, and it had never been listed here at all. This
+      # half reads the module as source -- the callback's wiring rules, which
+      # are checkable no other way -- so it belongs above the migrations. Its
+      # database half is listed below them, because source text is exactly what
+      # could not see #799.
+      - name: Test the OIDC callback wiring
+        run: python -m unittest tests.test_next_oidc
+
       # Reads the routing table out of the source and checks that the token the
       # server hands its own native clients can actually pass every gate the
       # advertised contract sends them through. Tightening a route's permission
@@ -408,6 +416,16 @@ jobs:
 
       - name: Show migration status
         run: python next_database.py status
+
+      # The database half of the OIDC front door, and the half that matters:
+      # #799 was two `uuid` columns disagreeing. The callback's lookup returned
+      # `oidc_identities.id` under the name `id`, the caller spent it as a user
+      # id, and the upsert's `WHERE oidc_identities.user_id=EXCLUDED.user_id`
+      # guard could not match it -- so an identity row permitted exactly one
+      # login, ever. Nothing type-errored and the source read correctly, which
+      # is why the module above it was blind to this and a real schema is not.
+      - name: Test signing in twice with the same OIDC identity
+        run: python -m unittest tests.test_next_oidc_login_identity
 
       # Below the migrations for the reason the block further down gives, and
       # for a second one specific to this pair: they do not merely read tables,
