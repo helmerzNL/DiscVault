@@ -20242,15 +20242,18 @@ def ui_preview_html(
     let appAdminVotesBackfillTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
-      locale: "nl-NL",
+      locale: "en-US",
       messages: {},
       locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
     };
+    // The last fallback is British English, which the catalog serves as en-US
+    // (the "en-gb" alias below).
+    const SHELL_FALLBACK_LOCALE = "en-GB";
     // Only an explicit pick is pinned in localStorage. loadLocale() used to
     // store every successful load, so one fallback page view was enough to
     // pin a browser to nl-NL, indistinguishable from a deliberate choice.
     // Browsers pinned that way before the flag existed are told apart by value:
-    // the fallback can only ever have written nl-NL, so any other stored
+    // the old fallback could only ever have written nl-NL, so any other stored
     // locale was chosen.
     function normalizeShellLocale(value) {
       const raw = String(value || "").trim().replace("_", "-").toLowerCase();
@@ -20277,7 +20280,7 @@ def ui_preview_html(
         const normalized = normalizeShellLocale(candidate);
         if (normalized) return normalized;
       }
-      return "nl-NL";
+      return normalizeShellLocale(SHELL_FALLBACK_LOCALE) || "en-US";
     }
     localeState.locale = preferredNextLocale();
     function usableImage(value) {
@@ -27238,7 +27241,7 @@ def ui_preview_html(
       }).catch(() => { lastPersistedLocale = null; });
     }
     async function loadLocale(locale, {explicit = false} = {}) {
-      const normalized = locale || "nl-NL";
+      const normalized = locale || normalizeShellLocale(SHELL_FALLBACK_LOCALE) || "en-US";
       try {
         const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
         if (!response.ok) throw new Error(`i18n ${response.status}`);
