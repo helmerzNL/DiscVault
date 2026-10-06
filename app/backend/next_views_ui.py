@@ -20242,10 +20242,44 @@ def ui_preview_html(
     let appAdminVotesBackfillTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
-      locale: localStorage.getItem("dv_next_locale") || "nl-NL",
+      locale: "nl-NL",
       messages: {},
       locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
     };
+    // Only an explicit pick is pinned in localStorage. loadLocale() used to
+    // store every successful load, so one fallback page view was enough to
+    // pin a browser to nl-NL, indistinguishable from a deliberate choice.
+    // Browsers pinned that way before the flag existed are told apart by value:
+    // the fallback can only ever have written nl-NL, so any other stored
+    // locale was chosen.
+    function normalizeShellLocale(value) {
+      const raw = String(value || "").trim().replace("_", "-").toLowerCase();
+      if (!raw) return "";
+      const aliases = {};
+      localeState.locales.forEach((item) => {
+        aliases[String(item.locale).toLowerCase()] = item.locale;
+        if (item.legacy) aliases[String(item.legacy).toLowerCase()] = item.locale;
+      });
+      aliases.nb = "nb-NO";
+      aliases.no = "nb-NO";
+      aliases["no-no"] = "nb-NO";
+      aliases["en-gb"] = "en-US";
+      aliases["zh-hant"] = "zh-TW";
+      if (aliases[raw]) return aliases[raw];
+      return aliases[raw.split("-", 1)[0]] || "";
+    }
+    function preferredNextLocale() {
+      const stored = normalizeShellLocale(localStorage.getItem("dv_next_locale") || localStorage.getItem("dv_lang"));
+      const explicit = localStorage.getItem("dv_next_locale_explicit") === "1";
+      if (stored && (explicit || stored !== "nl-NL")) return stored;
+      const browserLocales = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+      for (const candidate of browserLocales) {
+        const normalized = normalizeShellLocale(candidate);
+        if (normalized) return normalized;
+      }
+      return "nl-NL";
+    }
+    localeState.locale = preferredNextLocale();
     function usableImage(value) {
       const text = String(value || "");
       return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") || text.startsWith("/api/next/movievault-v2/posters/") ? text : "";
@@ -27203,7 +27237,7 @@ def ui_preview_html(
         body: JSON.stringify({ locale: value })
       }).catch(() => { lastPersistedLocale = null; });
     }
-    async function loadLocale(locale) {
+    async function loadLocale(locale, {explicit = false} = {}) {
       const normalized = locale || "nl-NL";
       try {
         const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
@@ -27211,8 +27245,11 @@ def ui_preview_html(
         const payload = await response.json();
         localeState.locale = payload.locale || normalized;
         localeState.messages = payload.messages || {};
-        localStorage.setItem("dv_next_locale", localeState.locale);
-        localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        if (explicit) {
+          localStorage.setItem("dv_next_locale", localeState.locale);
+          localStorage.setItem("dv_next_locale_explicit", "1");
+          localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        }
         persistNextLocale(localeState.locale);
       } catch (error) {
         console.warn("Next i18n catalog unavailable", error);
@@ -27285,7 +27322,7 @@ def ui_preview_html(
         `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(localeOptionLabel(item))}</option>`
       )).join("");
       select.value = localeState.locale;
-      select.onchange = () => loadLocale(select.value);
+      select.onchange = () => loadLocale(select.value, {explicit: true});
     }
     function setTheme(preference) {
       const selected = preference || "system";
@@ -51529,7 +51566,7 @@ def ui_preview_html(
       setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
       setProfileMenuStyle(effectiveProfileMenuStyle());
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
-        select.addEventListener("change", (event) => loadLocale(event.target.value));
+        select.addEventListener("change", (event) => loadLocale(event.target.value, {explicit: true}));
       });
       document.querySelectorAll("[data-theme-choice]").forEach((button) => {
         button.addEventListener("click", () => {
