@@ -20246,9 +20246,7 @@ def ui_preview_html(
       messages: {},
       locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
     };
-    // The last fallback is British English, which the catalog serves as en-US
-    // (the "en-gb" alias below).
-    const SHELL_FALLBACK_LOCALE = "en-GB";
+    const SHELL_FALLBACK_LOCALE = "en-US";
     // Only an explicit pick is pinned in localStorage. loadLocale() used to
     // store every successful load, so one fallback page view was enough to
     // pin a browser to nl-NL, indistinguishable from a deliberate choice.
@@ -20280,7 +20278,7 @@ def ui_preview_html(
         const normalized = normalizeShellLocale(candidate);
         if (normalized) return normalized;
       }
-      return normalizeShellLocale(SHELL_FALLBACK_LOCALE) || "en-US";
+      return SHELL_FALLBACK_LOCALE;
     }
     localeState.locale = preferredNextLocale();
     function usableImage(value) {
@@ -27241,7 +27239,7 @@ def ui_preview_html(
       }).catch(() => { lastPersistedLocale = null; });
     }
     async function loadLocale(locale, {explicit = false} = {}) {
-      const normalized = locale || normalizeShellLocale(SHELL_FALLBACK_LOCALE) || "en-US";
+      const normalized = locale || SHELL_FALLBACK_LOCALE;
       try {
         const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
         if (!response.ok) throw new Error(`i18n ${response.status}`);

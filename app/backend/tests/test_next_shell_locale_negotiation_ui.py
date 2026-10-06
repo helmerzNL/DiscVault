@@ -30,12 +30,12 @@ class ShellLocaleNegotiationTests(unittest.TestCase):
         start = self.source.index(signature)
         return self.source[start:start + 2500]
 
-    def test_shell_consults_browser_languages_with_british_english_last(self):
+    def test_shell_consults_browser_languages_with_us_english_last(self):
         body = self.function_body("function preferredNextLocale()")
         self.assertIn("navigator.languages", body)
         loop_end = body.index("return normalized;")
         self.assertIn("SHELL_FALLBACK_LOCALE", body[loop_end:loop_end + 120])
-        self.assertIn('const SHELL_FALLBACK_LOCALE = "en-GB";', self.source)
+        self.assertIn('const SHELL_FALLBACK_LOCALE = "en-US";', self.source)
 
     def test_initial_locale_is_not_read_straight_from_storage(self):
         self.assertNotIn(
