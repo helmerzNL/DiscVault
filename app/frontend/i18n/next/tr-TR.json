@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb eklentisi {installed} sürümünde; oy sayıları için {required} veya daha yenisi gerekir. Admin → Plugins altından güncelleyin, aksi halde burada hiçbir şey doldurulmaz.",
   "appAdmin.votesBackfillQueueing": "Oy sayısı işi planlanıyor...",
   "appAdmin.votesBackfillQueued": "{count} oy sayısı işi planlandı.",
-  "appAdmin.votesBackfillNothing": "Doldurulabilecek her filmin zaten bir oy sayısı var."
+  "appAdmin.votesBackfillNothing": "Doldurulabilecek her filmin zaten bir oy sayısı var.",
+  "movieDetail.editSectionContainers": "Box setler ve koleksiyonlar",
+  "movieDetail.containersHint": "Bu başlığı eklemek için bir box set, vault veya koleksiyonu işaretleyin; kaldırmak için işareti kaldırın. Değişiklikler kaydettiğinizde uygulanır.",
+  "movieDetail.containersEmpty": "Seçilecek box set, vault veya koleksiyon henüz yok.",
+  "movieDetail.containersSaveFailed": "Başlık kaydedildi ancak box set ve koleksiyon değişiklikleri kaydedilmedi."
 }

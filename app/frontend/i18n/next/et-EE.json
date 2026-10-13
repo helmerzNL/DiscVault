@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb pistikprogrammi versioon on {installed}; häälte arvu jaoks on vaja versiooni {required} või uuemat. Uuenda seda menüüs Admin → Plugins, muidu ei täideta siin midagi.",
   "appAdmin.votesBackfillQueueing": "Häälte arvu töö ajastamine...",
   "appAdmin.votesBackfillQueued": "Ajastatud {count} häälte arvu tööd.",
-  "appAdmin.votesBackfillNothing": "Igal filmil, mida saab täita, on juba häälte arv."
+  "appAdmin.votesBackfillNothing": "Igal filmil, mida saab täita, on juba häälte arv.",
+  "movieDetail.editSectionContainers": "Karbikomplektid ja kogud",
+  "movieDetail.containersHint": "Märgi karbikomplekt, vault või kogu, et pealkiri sinna lisada; eemalda märge, et see eemaldada. Muudatused rakenduvad salvestamisel.",
+  "movieDetail.containersEmpty": "Valida pole veel ühtegi karbikomplekti, vaulti ega kogu.",
+  "movieDetail.containersSaveFailed": "Pealkiri salvestati, kuid karbikomplektide ja kogude muudatusi mitte."
 }

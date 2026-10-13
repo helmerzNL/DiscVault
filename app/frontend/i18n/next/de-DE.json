@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Das TMDb-Plug-in hat Version {installed}; für Stimmenzahlen wird {required} oder neuer benötigt. Aktualisiere es unter Admin → Plugins, sonst wird hier nichts ergänzt.",
   "appAdmin.votesBackfillQueueing": "Stimmenauftrag wird eingeplant...",
   "appAdmin.votesBackfillQueued": "{count} Aufträge für Stimmenzahlen eingeplant.",
-  "appAdmin.votesBackfillNothing": "Jeder Film, der gefüllt werden kann, hat bereits eine Stimmenzahl."
+  "appAdmin.votesBackfillNothing": "Jeder Film, der gefüllt werden kann, hat bereits eine Stimmenzahl.",
+  "movieDetail.editSectionContainers": "Boxsets & Sammlungen",
+  "movieDetail.containersHint": "Haken Sie ein Boxset, einen Vault oder eine Sammlung an, um den Titel hinzuzufügen; entfernen Sie den Haken, um ihn zu entfernen. Änderungen gelten nach dem Speichern.",
+  "movieDetail.containersEmpty": "Noch keine Boxsets, Vaults oder Sammlungen zur Auswahl.",
+  "movieDetail.containersSaveFailed": "Der Titel wurde gespeichert, die Änderungen an Boxsets und Sammlungen jedoch nicht."
 }

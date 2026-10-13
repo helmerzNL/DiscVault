@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "A TMDb bővítmény {installed} verziójú; a szavazatszámokhoz {required} vagy újabb kell. Frissítsd az Admin → Plugins alatt, különben itt semmi sem töltődik ki.",
   "appAdmin.votesBackfillQueueing": "Szavazatszám-feladat ütemezése...",
   "appAdmin.votesBackfillQueued": "{count} szavazatszám-feladat ütemezve.",
-  "appAdmin.votesBackfillNothing": "Minden film, amelyik kitölthető, már rendelkezik szavazatszámmal."
+  "appAdmin.votesBackfillNothing": "Minden film, amelyik kitölthető, már rendelkezik szavazatszámmal.",
+  "movieDetail.editSectionContainers": "Díszdobozok és gyűjtemények",
+  "movieDetail.containersHint": "Jelöljön be egy díszdobozt, vaultot vagy gyűjteményt a cím hozzáadásához; törölje a jelölést az eltávolításhoz. A módosítások mentéskor lépnek érvénybe.",
+  "movieDetail.containersEmpty": "Még nincs választható díszdoboz, vault vagy gyűjtemény.",
+  "movieDetail.containersSaveFailed": "A cím mentve lett, de a díszdobozok és gyűjtemények módosításai nem."
 }

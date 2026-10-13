@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "L'extension TMDb est en version {installed} ; le nombre de votes nécessite la {required} ou plus récente. Mettez-la à jour dans Admin → Plugins, sinon rien ne sera rempli ici.",
   "appAdmin.votesBackfillQueueing": "Planification de la tâche de votes...",
   "appAdmin.votesBackfillQueued": "{count} tâches de nombre de votes planifiées.",
-  "appAdmin.votesBackfillNothing": "Tous les films pouvant être remplis ont déjà un nombre de votes."
+  "appAdmin.votesBackfillNothing": "Tous les films pouvant être remplis ont déjà un nombre de votes.",
+  "movieDetail.editSectionContainers": "Coffrets et collections",
+  "movieDetail.containersHint": "Cochez un coffret, un vault ou une collection pour y ajouter ce titre ; décochez-le pour l’en retirer. Les modifications s’appliquent à l’enregistrement.",
+  "movieDetail.containersEmpty": "Aucun coffret, vault ou collection à choisir pour le moment.",
+  "movieDetail.containersSaveFailed": "Le titre a été enregistré, mais pas les modifications des coffrets et collections."
 }

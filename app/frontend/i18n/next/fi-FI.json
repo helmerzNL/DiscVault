@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb-liitännäisen versio on {installed}; äänimääriä varten tarvitaan {required} tai uudempi. Päivitä se kohdassa Admin → Plugins, tai tähän ei täyty mitään.",
   "appAdmin.votesBackfillQueueing": "Ajoitetaan äänimäärätehtävää...",
   "appAdmin.votesBackfillQueued": "{count} äänimäärätehtävää ajoitettu.",
-  "appAdmin.votesBackfillNothing": "Jokaisella täytettävissä olevalla elokuvalla on jo äänimäärä."
+  "appAdmin.votesBackfillNothing": "Jokaisella täytettävissä olevalla elokuvalla on jo äänimäärä.",
+  "movieDetail.editSectionContainers": "Boxsetit ja kokoelmat",
+  "movieDetail.containersHint": "Valitse boxset, vault tai kokoelma lisätäksesi nimikkeen siihen; poista valinta poistaaksesi sen. Muutokset otetaan käyttöön tallennettaessa.",
+  "movieDetail.containersEmpty": "Valittavia boxsettejä, vaultteja tai kokoelmia ei ole vielä.",
+  "movieDetail.containersSaveFailed": "Nimike tallennettiin, mutta boxsetti- ja kokoelmamuutoksia ei."
 }

@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "El complemento de TMDb es la versión {installed}; el recuento de votos necesita la {required} o posterior. Actualízalo en Admin → Plugins o aquí no se rellenará nada.",
   "appAdmin.votesBackfillQueueing": "Programando la tarea de votos...",
   "appAdmin.votesBackfillQueued": "{count} tareas de recuento de votos programadas.",
-  "appAdmin.votesBackfillNothing": "Todas las películas que se pueden rellenar ya tienen recuento de votos."
+  "appAdmin.votesBackfillNothing": "Todas las películas que se pueden rellenar ya tienen recuento de votos.",
+  "movieDetail.editSectionContainers": "Cofres y colecciones",
+  "movieDetail.containersHint": "Marca un box set, cofre o colección para añadir este título; desmárcalo para quitarlo. Los cambios se aplican al guardar.",
+  "movieDetail.containersEmpty": "Todavía no hay box sets, cofres ni colecciones para elegir.",
+  "movieDetail.containersSaveFailed": "El título se guardó, pero no los cambios de box sets y colecciones."
 }

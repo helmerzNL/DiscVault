@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Плагін TMDb має версію {installed}; для кількості голосів потрібна {required} або новіша. Оновіть його в Admin → Plugins, інакше тут нічого не заповниться.",
   "appAdmin.votesBackfillQueueing": "Планування завдання щодо голосів...",
   "appAdmin.votesBackfillQueued": "Заплановано {count} завдань щодо кількості голосів.",
-  "appAdmin.votesBackfillNothing": "Кожен фільм, який можна заповнити, уже має кількість голосів."
+  "appAdmin.votesBackfillNothing": "Кожен фільм, який можна заповнити, уже має кількість голосів.",
+  "movieDetail.editSectionContainers": "Бокссети та колекції",
+  "movieDetail.containersHint": "Позначте бокссет, сейф або колекцію, щоб додати до них назву; зніміть позначку, щоб видалити. Зміни застосовуються після збереження.",
+  "movieDetail.containersEmpty": "Поки немає бокссетів, сейфів чи колекцій для вибору.",
+  "movieDetail.containersSaveFailed": "Назву збережено, але зміни бокссетів і колекцій не збережено."
 }

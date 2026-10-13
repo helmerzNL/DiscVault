@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Vtičnik TMDb je različica {installed}; za število glasov je potrebna {required} ali novejša. Posodobite ga v Admin → Plugins, sicer se tu ne bo nič izpolnilo.",
   "appAdmin.votesBackfillQueueing": "Načrtovanje opravila števila glasov...",
   "appAdmin.votesBackfillQueued": "Načrtovanih {count} opravil števila glasov.",
-  "appAdmin.votesBackfillNothing": "Vsak film, ki ga je mogoče izpolniti, že ima število glasov."
+  "appAdmin.votesBackfillNothing": "Vsak film, ki ga je mogoče izpolniti, že ima število glasov.",
+  "movieDetail.editSectionContainers": "Škatlasti kompleti in zbirke",
+  "movieDetail.containersHint": "Označite škatlasti komplet, vault ali zbirko, da jim dodate naslov; odznačite, da ga odstranite. Spremembe se uporabijo ob shranjevanju.",
+  "movieDetail.containersEmpty": "Za izbiro še ni škatlastih kompletov, vaultov ali zbirk.",
+  "movieDetail.containersSaveFailed": "Naslov je shranjen, spremembe škatlastih kompletov in zbirk pa ne."
 }

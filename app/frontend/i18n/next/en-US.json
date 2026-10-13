@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "The TMDb plugin is version {installed}; {required} or newer is needed for vote counts. Update it under Admin → Plugins, or this fills nothing in.",
   "appAdmin.votesBackfillQueueing": "Queueing vote count backfill...",
   "appAdmin.votesBackfillQueued": "{count} vote count backfill jobs queued.",
-  "appAdmin.votesBackfillNothing": "Every film that can be filled already has a vote count."
+  "appAdmin.votesBackfillNothing": "Every film that can be filled already has a vote count.",
+  "movieDetail.editSectionContainers": "Box-sets & collections",
+  "movieDetail.containersHint": "Tick a box-set, vault or collection to add this title to it; untick one to remove the title from it. Changes apply when you save.",
+  "movieDetail.containersEmpty": "No box-sets, vaults or collections to choose from yet.",
+  "movieDetail.containersSaveFailed": "The title was saved, but its box-set and collection changes were not."
 }

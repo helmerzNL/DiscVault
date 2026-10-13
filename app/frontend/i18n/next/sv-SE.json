@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb-tillägget är version {installed}; röstantal kräver {required} eller nyare. Uppdatera det under Admin → Plugins, annars fylls inget i här.",
   "appAdmin.votesBackfillQueueing": "Schemalägger röstjobb...",
   "appAdmin.votesBackfillQueued": "{count} röstjobb schemalagda.",
-  "appAdmin.votesBackfillNothing": "Alla filmer som kan fyllas i har redan ett röstantal."
+  "appAdmin.votesBackfillNothing": "Alla filmer som kan fyllas i har redan ett röstantal.",
+  "movieDetail.editSectionContainers": "Boxset och samlingar",
+  "movieDetail.containersHint": "Bocka i ett boxset, en vault eller en samling för att lägga till titeln; avmarkera för att ta bort den. Ändringar tillämpas när du sparar.",
+  "movieDetail.containersEmpty": "Det finns inga boxset, vaults eller samlingar att välja bland ännu.",
+  "movieDetail.containersSaveFailed": "Titeln sparades, men ändringarna av boxset och samlingar sparades inte."
 }

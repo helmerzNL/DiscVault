@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Dodatak TMDb je verzija {installed}; za broj glasova potrebna je {required} ili novija. Ažurirajte ga u Admin → Plugins, inače se ovdje neće ništa popuniti.",
   "appAdmin.votesBackfillQueueing": "Planiranje zadatka broja glasova...",
   "appAdmin.votesBackfillQueued": "Planirano {count} zadataka broja glasova.",
-  "appAdmin.votesBackfillNothing": "Svaki film koji se može popuniti već ima broj glasova."
+  "appAdmin.votesBackfillNothing": "Svaki film koji se može popuniti već ima broj glasova.",
+  "movieDetail.editSectionContainers": "Box setovi i zbirke",
+  "movieDetail.containersHint": "Označite box set, vault ili zbirku kako biste dodali naslov; uklonite oznaku za uklanjanje. Promjene se primjenjuju pri spremanju.",
+  "movieDetail.containersEmpty": "Još nema box setova, vaultova ni zbirki za odabir.",
+  "movieDetail.containersSaveFailed": "Naslov je spremljen, ali promjene box setova i zbirki nisu."
 }

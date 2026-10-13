@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Pluginul TMDb este versiunea {installed}; pentru numărul de voturi este nevoie de {required} sau mai nouă. Actualizează-l din Admin → Plugins, altfel aici nu se completează nimic.",
   "appAdmin.votesBackfillQueueing": "Se planifică sarcina de voturi...",
   "appAdmin.votesBackfillQueued": "{count} sarcini pentru numărul de voturi planificate.",
-  "appAdmin.votesBackfillNothing": "Fiecare film care poate fi completat are deja număr de voturi."
+  "appAdmin.votesBackfillNothing": "Fiecare film care poate fi completat are deja număr de voturi.",
+  "movieDetail.editSectionContainers": "Seturi box și colecții",
+  "movieDetail.containersHint": "Bifați un set box, un vault sau o colecție pentru a adăuga titlul; debifați pentru a-l elimina. Modificările se aplică la salvare.",
+  "movieDetail.containersEmpty": "Nu există încă seturi box, vaulturi sau colecții de ales.",
+  "movieDetail.containersSaveFailed": "Titlul a fost salvat, dar modificările seturilor box și colecțiilor nu."
 }
