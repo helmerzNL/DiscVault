@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "Stemmenaantallen inplannen...",
   "appAdmin.votesBackfillQueued": "{count} taken voor stemmenaantallen ingepland.",
   "appAdmin.votesBackfillNothing": "Elke film die ingevuld kan worden heeft al een stemmenaantal.",
-  "movieDetail.editSectionContainers": "Box-sets & collecties",
-  "movieDetail.containersHint": "Vink een box-set, vault of collectie aan om deze titel eraan toe te voegen; haal het vinkje weg om de titel eruit te verwijderen. Wijzigingen gelden na opslaan.",
-  "movieDetail.containersEmpty": "Er zijn nog geen box-sets, vaults of collecties om uit te kiezen.",
-  "movieDetail.containersSaveFailed": "De titel is opgeslagen, maar de wijzigingen aan box-sets en collecties niet."
+  "movieDetail.containersSaveFailed": "De titel is opgeslagen, maar de wijzigingen aan box-sets en collecties niet.",
+  "movieDetail.containerNone": "Geen container"
 }

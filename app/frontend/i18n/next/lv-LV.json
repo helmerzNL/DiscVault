@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "Balsu skaita uzdevuma plānošana...",
   "appAdmin.votesBackfillQueued": "Ieplānoti {count} balsu skaita uzdevumi.",
   "appAdmin.votesBackfillNothing": "Katrai filmai, ko var aizpildīt, jau ir balsu skaits.",
-  "movieDetail.editSectionContainers": "Kastīšu komplekti un kolekcijas",
-  "movieDetail.containersHint": "Atzīmējiet kastīšu komplektu, vault vai kolekciju, lai tai pievienotu nosaukumu; noņemiet atzīmi, lai to noņemtu. Izmaiņas stājas spēkā saglabājot.",
-  "movieDetail.containersEmpty": "Vēl nav kastīšu komplektu, vault vai kolekciju, no kurām izvēlēties.",
-  "movieDetail.containersSaveFailed": "Nosaukums tika saglabāts, bet kastīšu komplektu un kolekciju izmaiņas netika."
+  "movieDetail.containersSaveFailed": "Nosaukums tika saglabāts, bet kastīšu komplektu un kolekciju izmaiņas netika.",
+  "movieDetail.containerNone": "Nav konteinera"
 }

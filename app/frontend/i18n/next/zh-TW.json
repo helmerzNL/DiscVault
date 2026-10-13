@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "正在排程投票數工作...",
   "appAdmin.votesBackfillQueued": "已排程 {count} 個投票數工作。",
   "appAdmin.votesBackfillNothing": "每部可填入的影片都已有投票數。",
-  "movieDetail.editSectionContainers": "套裝與合集",
-  "movieDetail.containersHint": "勾選套裝、保險庫或合集即可將此影片加入其中；取消勾選則將其移除。變更將在儲存時生效。",
-  "movieDetail.containersEmpty": "目前沒有可選擇的套裝、保險庫或合集。",
-  "movieDetail.containersSaveFailed": "影片已儲存，但套裝和合集的變更未能儲存。"
+  "movieDetail.containersSaveFailed": "影片已儲存，但套裝和合集的變更未能儲存。",
+  "movieDetail.containerNone": "無容器"
 }

@@ -218,7 +218,6 @@ def ui_preview_html(
         "edit_technical": "M3 17V19H9V17H3M3 5V7H13V5H3M13 21V19H21V17H13V15H11V21H13M7 9V11H3V13H7V15H9V9H7M21 13V11H11V13H21M15 9H17V7H21V5H17V3H15V9Z",
         "edit_discs": "M12 11A1 1 0 0 0 11 12A1 1 0 0 0 12 13A1 1 0 0 0 13 12A1 1 0 0 0 12 11M12 16.5C9.5 16.5 7.5 14.5 7.5 12S9.5 7.5 12 7.5 16.5 9.5 16.5 12 14.5 16.5 12 16.5M12 2A10 10 0 0 0 2 12A10 10 0 0 0 12 22A10 10 0 0 0 22 12A10 10 0 0 0 12 2Z",
         "edit_collectors": "M16 9H19L14 16M10 9H14L12 17M5 9H8L10 16M15 4H17L19 7H16M11 4H13L14 7H10M7 4H9L8 7H5M6 2L2 8L12 22L22 8L18 2H6Z",
-        "edit_containers": "M3 3H21V7H3V3M4 8H20V21H4V8M9.5 11A0.5 0.5 0 0 0 9 11.5V13H15V11.5A0.5 0.5 0 0 0 14.5 11H9.5Z",
         "edit_notes": "M14 10H19.5L14 4.5V10M5 3H15L21 9V19A2 2 0 0 1 19 21H5C3.89 21 3 20.1 3 19V5C3 3.89 3.89 3 5 3M5 12V14H19V12H5M5 16V18H14V16H5Z",
         "edit_series": "M8.16 3L6.75 4.41L9.34 7H4C2.89 7 2 7.89 2 9V19C2 20.11 2.89 21 4 21H20C21.11 21 22 20.11 22 19V9C22 7.89 21.11 7 20 7H14.66L17.25 4.41L15.84 3L12 6.84L8.16 3M4 9H20V19H4V9Z",
     }
@@ -16860,7 +16859,6 @@ def ui_preview_html(
                 <button type="button" id="movieEditTabTechnical" role="tab" aria-controls="movieEditReleaseTechnicalSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditReleaseTechnicalSection" aria-label="Technical" title="Technical" data-next-i18n-aria="movieDetail.technical" data-next-i18n-title="movieDetail.technical">""" + nav_icon("edit_technical") + """<span class="profile-tab-label" data-next-i18n="movieDetail.technical">Technical</span></button>
                 <button type="button" id="movieEditTabDiscs" role="tab" aria-controls="movieEditDiscsSection" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditDiscsSection" aria-label="Discs" title="Discs" data-next-i18n-aria="movieDetail.discs" data-next-i18n-title="movieDetail.discs">""" + nav_icon("edit_discs") + """<span class="profile-tab-label" data-next-i18n="movieDetail.discs">Discs</span></button>
                 <button type="button" id="movieEditTabCollectors" role="tab" aria-controls="movieEditSectionCollectors" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionCollectors" aria-label="Collectors" title="Collectors" data-next-i18n-aria="movieDetail.collectors" data-next-i18n-title="movieDetail.collectors">""" + nav_icon("edit_collectors") + """<span class="profile-tab-label" data-next-i18n="movieDetail.collectors">Collectors</span></button>
-                <button type="button" class="hidden" id="movieEditTabContainers" role="tab" aria-controls="movieEditSectionContainers" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionContainers" aria-label="Box-sets &amp; collections" title="Box-sets &amp; collections" data-next-i18n-aria="movieDetail.editSectionContainers" data-next-i18n-title="movieDetail.editSectionContainers">""" + nav_icon("edit_containers") + """<span class="profile-tab-label" data-next-i18n="movieDetail.editSectionContainers">Box-sets &amp; collections</span></button>
                 <button type="button" id="movieEditTabText" role="tab" aria-controls="movieEditSectionText" aria-selected="false" data-detail-tab="movieEditSections" data-detail-panel="movieEditSectionText" aria-label="Overview &amp; notes" title="Overview &amp; notes" data-next-i18n-aria="movieDetail.editSectionText" data-next-i18n-title="movieDetail.editSectionText">""" + nav_icon("edit_notes") + """<span class="profile-tab-label" data-next-i18n="movieDetail.editSectionText">Overview &amp; notes</span></button>
               </nav>
               <div class="movie-edit-sections">
@@ -17160,12 +17158,15 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.estimatedValueCurrency">Currency</span>
                       <select id="movieEditEstimatedValueCurrency" name="estimated_value_currency"></select>
                     </label>
+                    <label for="movieEditContainerTarget" class="wide hidden" id="movieEditContainerField">
+                      <span data-next-i18n="bulk.containerTarget">Container</span>
+                      <select id="movieEditContainerTarget" name="containerTarget"></select>
+                    </label>
+                    <label for="movieEditContainerCreateTitle" class="wide hidden" id="movieEditContainerCreateField">
+                      <span id="movieEditContainerCreateLabel" data-next-i18n="bulk.containerCreateTitleLabel">Container name</span>
+                      <input id="movieEditContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
+                    </label>
                   </div>
-                </div>
-                <div class="detail-subsection hidden" id="movieEditSectionContainers" role="tabpanel" aria-labelledby="movieEditTabContainers" data-detail-panel-group="movieEditSections">
-                  <h4 class="detail-subsection-title" data-next-i18n="movieDetail.editSectionContainers">Box-sets &amp; collections</h4>
-                  <p class="hint" data-next-i18n="movieDetail.containersHint">Tick a box-set, vault or collection to add this title to it; untick one to remove the title from it. Changes apply when you save.</p>
-                  <div id="movieEditContainerGroups"></div>
                 </div>
                 <div class="detail-subsection hidden" id="movieEditSectionText" role="tabpanel" aria-labelledby="movieEditTabText" data-detail-panel-group="movieEditSections">
                   <h4 class="detail-subsection-title" data-next-i18n="movieDetail.editSectionText">Overview &amp; notes</h4>
@@ -32865,102 +32866,124 @@ def ui_preview_html(
         body: JSON.stringify({values})
       });
     }
-    // Box-set / vault / collection membership for the title being edited.
-    // `movieEditContainerBaseline` is what the server said when the panel
-    // opened, so Save sends only the ticks that actually changed.
+    // The same Container picker the Library bulk bar uses: one list of box-sets,
+    // vaults and collections (plus "+ New ..."), one choice. The title belongs to
+    // at most the container chosen here, so picking another moves it and picking
+    // "No container" unlinks it. `movieEditContainerBaseline` is the link read when
+    // the form opened; Save only writes when the choice differs from it.
     let movieEditContainerBaseline = null;
+    let movieEditContainerPermissions = {};
+    function movieEditContainerCreateAllowed(type) {
+      const perms = movieEditContainerPermissions || {};
+      return type === "collection" ? !!perms.canAddToCollection : !!perms.canCreateContainer;
+    }
     async function loadMovieEditContainers(movieId) {
-      const tab = document.getElementById("movieEditTabContainers");
-      const host = document.getElementById("movieEditContainerGroups");
-      if (!tab || !host || !movieId) return;
+      const field = document.getElementById("movieEditContainerField");
+      const select = document.getElementById("movieEditContainerTarget");
+      if (!field || !select || !movieId) return;
       movieEditContainerBaseline = null;
-      let actions;
+      let payload;
       try {
-        actions = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/library-actions`);
+        payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/library-actions`);
       } catch (error) {
-        tab.classList.add("hidden");
+        field.classList.add("hidden");
         return;
       }
       if (String(movieId) !== String(activeDetailMovieId)) return;
-      const groups = [
-        ["boxSets", "containerManage.boxSets", "Box-sets"],
-        ["vaults", "containerManage.vaults", "Vaults"],
-        ["collections", "containerManage.collections", "Collections"]
+      const actions = (payload && payload.actions) || {};
+      movieEditContainerPermissions = actions.permissions || {};
+      const groups = actions.containers || {};
+      const byType = [
+        ["box_set", groups.boxSets || []],
+        ["vault", groups.vaults || []],
+        ["collection", groups.collections || []]
       ];
-      const containers = (actions && actions.actions && actions.actions.containers) || {};
-      host.textContent = "";
-      const baseline = {};
-      let shown = 0;
-      groups.forEach(([key, labelKey, fallback]) => {
-        const items = (containers[key] || []).filter((item) => item.linked || item.canAdd);
-        if (!items.length) return;
-        const fieldset = document.createElement("fieldset");
-        fieldset.className = "movie-edit-checkbox-group";
-        const legend = document.createElement("legend");
-        legend.textContent = tNext(labelKey, fallback);
-        fieldset.appendChild(legend);
+      let linkedValue = "";
+      let linkedLabel = "";
+      const groupHtml = [];
+      byType.forEach(([type, items]) => {
+        const options = [];
         items.forEach((item) => {
-          const label = document.createElement("label");
-          const box = document.createElement("input");
-          box.type = "checkbox";
-          box.value = item.id;
-          box.dataset.containerType = item.containerType;
-          box.checked = !!item.linked;
-          box.disabled = item.linked ? !item.canRemove : !item.canAdd;
-          const text = document.createElement("span");
-          text.textContent = item.year ? `${item.title} (${item.year})` : String(item.title || "");
-          label.appendChild(box);
-          label.appendChild(text);
-          fieldset.appendChild(label);
-          baseline[item.id] = {linked: !!item.linked, type: item.containerType};
-          shown += 1;
+          const value = bulkContainerOptionValue({container_type: type, id: item.id});
+          if (item.linked && !linkedValue) { linkedValue = value; linkedLabel = item.title || ""; }
+          if (!item.linked && !item.canAdd) return;
+          options.push(`<option value="${escapeHtml(value)}">${escapeHtml(item.title || item.publicId || item.id)}</option>`);
         });
-        host.appendChild(fieldset);
-      });
-      if (!shown) {
-        const empty = document.createElement("p");
-        empty.className = "hint";
-        empty.textContent = tNext("movieDetail.containersEmpty", "No box-sets, vaults or collections to choose from yet.");
-        host.appendChild(empty);
-      }
-      movieEditContainerBaseline = baseline;
-      tab.classList.toggle("hidden", !shown);
-    }
-    // Applies the changed ticks. Returns the number of memberships written and
-    // throws one Error naming every failure, so the movie save is not reported
-    // as failed when only a membership was refused.
-    async function saveMovieEditContainers() {
-      const baseline = movieEditContainerBaseline;
-      const host = document.getElementById("movieEditContainerGroups");
-      if (!baseline || !host || !activeDetailMovieId) return 0;
-      const movieId = encodeURIComponent(activeDetailMovieId);
-      let written = 0;
-      const failures = [];
-      for (const box of Array.from(host.querySelectorAll("input[type=checkbox]"))) {
-        const before = baseline[box.value];
-        if (!before || before.linked === box.checked) continue;
-        const operation = box.checked ? "add" : "remove";
-        try {
-          if (before.type === "collection") {
-            await authApiJson(`/api/next/bulk/collections/${encodeURIComponent(box.value)}/items`, {
-              method: "POST",
-              headers: {"Content-Type": "application/json"},
-              body: JSON.stringify({movieIds: [activeDetailMovieId], operation})
-            });
-          } else {
-            await authApiJson(`/api/next/movies/${movieId}/containers/${encodeURIComponent(box.value)}`, {
-              method: box.checked ? "POST" : "DELETE"
-            });
-          }
-          written += 1;
-        } catch (error) {
-          failures.push(error.message || String(error));
+        if (movieEditContainerCreateAllowed(type)) {
+          const config = bulkCreateTargetConfig(type);
+          options.push(`<option value="${escapeHtml(bulkCreateTargetValue(type))}">${escapeHtml(tNext(config.createLabelKey, config.createLabelFallback))}</option>`);
         }
+        if (options.length) groupHtml.push(`<optgroup label="${escapeHtml(containerTypeLabel(type))}">${options.join("")}</optgroup>`);
+      });
+      select.innerHTML = [`<option value="">${escapeHtml(tNext("movieDetail.containerNone", "No container"))}</option>`].concat(groupHtml).join("");
+      select.value = linkedValue;
+      movieEditContainerBaseline = linkedValue;
+      field.classList.toggle("hidden", !groupHtml.length);
+      syncMovieEditContainerCreate();
+    }
+    function syncMovieEditContainerCreate() {
+      const select = document.getElementById("movieEditContainerTarget");
+      const field = document.getElementById("movieEditContainerCreateField");
+      const input = document.getElementById("movieEditContainerCreateTitle");
+      if (!select || !field || !input) return;
+      const selection = bulkContainerSelection(select.value);
+      field.classList.toggle("hidden", !selection.createType);
+      if (selection.createType) {
+        const config = bulkCreateTargetConfig(selection.createType);
+        input.placeholder = tNext(config.placeholderKey, config.placeholderFallback);
+        const label = document.getElementById("movieEditContainerCreateLabel");
+        if (label) label.textContent = tNext(config.nameLabelKey, config.nameLabelFallback);
+      } else {
+        input.value = "";
       }
-      if (failures.length) {
-        throw new Error(`${tNext("movieDetail.containersSaveFailed", "The title was saved, but its box-set and collection changes were not.")} ${failures.join("; ")}`);
+    }
+    async function setMovieEditContainerLink(selection, operation) {
+      const movieId = encodeURIComponent(activeDetailMovieId);
+      const containerId = encodeURIComponent(selection.containerId);
+      if (selection.targetType === "collection") {
+        await authApiJson(`/api/next/bulk/collections/${containerId}/items`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds: [activeDetailMovieId], operation})
+        });
+      } else {
+        await authApiJson(`/api/next/movies/${movieId}/containers/${containerId}`, {
+          method: operation === "add" ? "POST" : "DELETE"
+        });
       }
-      return written;
+    }
+    // Returns true when a link changed. Throws one Error, worded so the title
+    // save is not reported as failed when only the container link was refused.
+    async function saveMovieEditContainers() {
+      const select = document.getElementById("movieEditContainerTarget");
+      if (!select || movieEditContainerBaseline === null || !activeDetailMovieId) return false;
+      if (select.value === movieEditContainerBaseline) return false;
+      const failed = (error) => new Error(
+        `${tNext("movieDetail.containersSaveFailed", "The title was saved, but its box-set and collection changes were not.")} ${error.message || String(error)}`
+      );
+      try {
+        let target = bulkContainerSelection(select.value);
+        if (target.createType) {
+          const title = String(document.getElementById("movieEditContainerCreateTitle")?.value || "").trim();
+          if (!title) throw new Error(tNext("containerManage.titleRequired", "Enter a name first."));
+          const created = await authApiJson("/api/next/containers", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({containerType: target.createType, title})
+          });
+          const newId = String(created?.detail?.container?.id || created?.detail?.id || created?.container?.id || "");
+          if (!newId) throw new Error(tNext("bulk.createContainerFailed", "Container was created, but no target id was returned."));
+          target = {targetType: target.createType, containerId: newId, createType: ""};
+        }
+        // Link the new container before unlinking the old one, so a refused
+        // add leaves the title where it was.
+        if (target.containerId) await setMovieEditContainerLink(target, "add");
+        const previous = bulkContainerSelection(movieEditContainerBaseline);
+        if (previous.containerId) await setMovieEditContainerLink(previous, "remove");
+      } catch (error) {
+        throw failed(error);
+      }
+      return true;
     }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
@@ -46598,7 +46621,7 @@ def ui_preview_html(
         }
         if (containerError) {
           setMovieDetailMessage(containerError.message || String(containerError), "bad");
-          activateDetailTab("movieEditSections", "movieEditSectionContainers");
+          activateDetailTab("movieEditSections", "movieEditSectionCollectors");
           return;
         }
         setMovieEditPanelVisible(false);
@@ -52991,6 +53014,7 @@ def ui_preview_html(
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditCancelButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("movieEditContainerTarget")?.addEventListener("change", syncMovieEditContainerCreate);
       // Native validation may flag a control on an edit section that is not
       // the one on screen; reveal its section so the browser can focus it.
       document.getElementById("movieEditForm")?.addEventListener("invalid", (event) => {

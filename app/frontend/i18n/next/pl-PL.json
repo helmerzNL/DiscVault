@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "Planowanie zadania liczby głosów...",
   "appAdmin.votesBackfillQueued": "Zaplanowano {count} zadań liczby głosów.",
   "appAdmin.votesBackfillNothing": "Każdy film, który można uzupełnić, ma już liczbę głosów.",
-  "movieDetail.editSectionContainers": "Box sety i kolekcje",
-  "movieDetail.containersHint": "Zaznacz box set, vault lub kolekcję, aby dodać do niej tytuł; odznacz, aby go usunąć. Zmiany zostaną zastosowane po zapisaniu.",
-  "movieDetail.containersEmpty": "Nie ma jeszcze box setów, vaultów ani kolekcji do wyboru.",
-  "movieDetail.containersSaveFailed": "Tytuł został zapisany, ale zmiany w box setach i kolekcjach nie."
+  "movieDetail.containersSaveFailed": "Tytuł został zapisany, ale zmiany w box setach i kolekcjach nie.",
+  "movieDetail.containerNone": "Brak kontenera"
 }

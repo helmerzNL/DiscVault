@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "Planlegger stemmejobb...",
   "appAdmin.votesBackfillQueued": "{count} stemmejobber planlagt.",
   "appAdmin.votesBackfillNothing": "Alle filmer som kan fylles ut har allerede et stemmetall.",
-  "movieDetail.editSectionContainers": "Boksett og samlinger",
-  "movieDetail.containersHint": "Huk av for et boksett, en vault eller en samling for å legge til tittelen; fjern haken for å fjerne den. Endringer gjelder når du lagrer.",
-  "movieDetail.containersEmpty": "Det finnes ingen boksett, vaults eller samlinger å velge mellom ennå.",
-  "movieDetail.containersSaveFailed": "Tittelen ble lagret, men endringene i boksett og samlinger ble ikke det."
+  "movieDetail.containersSaveFailed": "Tittelen ble lagret, men endringene i boksett og samlinger ble ikke det.",
+  "movieDetail.containerNone": "Ingen beholder"
 }

@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "A agendar a tarefa de votos...",
   "appAdmin.votesBackfillQueued": "{count} tarefas de contagem de votos agendadas.",
   "appAdmin.votesBackfillNothing": "Todos os filmes que podem ser preenchidos já têm contagem de votos.",
-  "movieDetail.editSectionContainers": "Box sets e coleções",
-  "movieDetail.containersHint": "Assinale um box set, vault ou coleção para lhe adicionar este título; desassinale para o remover. As alterações aplicam-se ao guardar.",
-  "movieDetail.containersEmpty": "Ainda não há box sets, vaults ou coleções para escolher.",
-  "movieDetail.containersSaveFailed": "O título foi guardado, mas as alterações a box sets e coleções não."
+  "movieDetail.containersSaveFailed": "O título foi guardado, mas as alterações a box sets e coleções não.",
+  "movieDetail.containerNone": "Sem contentor"
 }
