@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "投票数ジョブを登録しています...",
   "appAdmin.votesBackfillQueued": "{count}件の投票数ジョブを登録しました。",
   "appAdmin.votesBackfillNothing": "補完できる映画はすべて投票数を持っています。",
-  "movieDetail.editSectionContainers": "ボックスセットとコレクション",
-  "movieDetail.containersHint": "ボックスセット、Vault、コレクションにチェックを入れるとこの作品を追加し、外すと削除します。変更は保存時に反映されます。",
-  "movieDetail.containersEmpty": "選択できるボックスセット、Vault、コレクションはまだありません。",
-  "movieDetail.containersSaveFailed": "作品は保存されましたが、ボックスセットとコレクションの変更は保存されませんでした。"
+  "movieDetail.containersSaveFailed": "作品は保存されましたが、ボックスセットとコレクションの変更は保存されませんでした。",
+  "movieDetail.containerNone": "コンテナなし"
 }

@@ -3196,8 +3196,6 @@
   "appAdmin.votesBackfillQueueing": "Planuojama balsų skaičiaus užduotis...",
   "appAdmin.votesBackfillQueued": "Suplanuota {count} balsų skaičiaus užduočių.",
   "appAdmin.votesBackfillNothing": "Kiekvienas filmas, kurį galima užpildyti, jau turi balsų skaičių.",
-  "movieDetail.editSectionContainers": "Dėžučių rinkiniai ir kolekcijos",
-  "movieDetail.containersHint": "Pažymėkite dėžučių rinkinį, vault arba kolekciją, kad pridėtumėte pavadinimą; nuimkite žymę, kad pašalintumėte. Pakeitimai pritaikomi išsaugojus.",
-  "movieDetail.containersEmpty": "Kol kas nėra dėžučių rinkinių, vault ar kolekcijų, iš kurių galima rinktis.",
-  "movieDetail.containersSaveFailed": "Pavadinimas išsaugotas, bet dėžučių rinkinių ir kolekcijų pakeitimai – ne."
+  "movieDetail.containersSaveFailed": "Pavadinimas išsaugotas, bet dėžučių rinkinių ir kolekcijų pakeitimai – ne.",
+  "movieDetail.containerNone": "Be konteinerio"
 }
