@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb-udvidelsen er version {installed}; stemmetal kræver {required} eller nyere. Opdatér den under Admin → Plugins, ellers udfyldes intet her.",
   "appAdmin.votesBackfillQueueing": "Planlægger stemmejob...",
   "appAdmin.votesBackfillQueued": "{count} stemmejob planlagt.",
-  "appAdmin.votesBackfillNothing": "Alle film, der kan udfyldes, har allerede et stemmetal."
+  "appAdmin.votesBackfillNothing": "Alle film, der kan udfyldes, har allerede et stemmetal.",
+  "movieDetail.editSectionContainers": "Boxsæt og samlinger",
+  "movieDetail.containersHint": "Sæt kryds ved et boxsæt, et vault eller en samling for at føje titlen til det; fjern krydset for at fjerne titlen. Ændringer anvendes, når du gemmer.",
+  "movieDetail.containersEmpty": "Der er endnu ingen boxsæt, vaults eller samlinger at vælge imellem.",
+  "movieDetail.containersSaveFailed": "Titlen blev gemt, men ændringerne i boxsæt og samlinger blev ikke."
 }

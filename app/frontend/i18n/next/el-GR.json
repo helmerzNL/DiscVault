@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Το πρόσθετο TMDb είναι έκδοση {installed}· για τον αριθμό ψήφων χρειάζεται {required} ή νεότερη. Ενημερώστε το από Admin → Plugins, αλλιώς εδώ δεν θα συμπληρωθεί τίποτα.",
   "appAdmin.votesBackfillQueueing": "Προγραμματισμός εργασίας ψήφων...",
   "appAdmin.votesBackfillQueued": "Προγραμματίστηκαν {count} εργασίες αριθμού ψήφων.",
-  "appAdmin.votesBackfillNothing": "Κάθε ταινία που μπορεί να συμπληρωθεί έχει ήδη αριθμό ψήφων."
+  "appAdmin.votesBackfillNothing": "Κάθε ταινία που μπορεί να συμπληρωθεί έχει ήδη αριθμό ψήφων.",
+  "movieDetail.editSectionContainers": "Box set και συλλογές",
+  "movieDetail.containersHint": "Επιλέξτε ένα box set, vault ή συλλογή για να προσθέσετε τον τίτλο· καταργήστε την επιλογή για να τον αφαιρέσετε. Οι αλλαγές εφαρμόζονται κατά την αποθήκευση.",
+  "movieDetail.containersEmpty": "Δεν υπάρχουν ακόμη box set, vault ή συλλογές για επιλογή.",
+  "movieDetail.containersSaveFailed": "Ο τίτλος αποθηκεύτηκε, αλλά οι αλλαγές σε box set και συλλογές όχι."
 }

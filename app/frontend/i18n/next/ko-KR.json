@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb 플러그인이 {installed} 버전입니다. 투표 수에는 {required} 이상이 필요합니다. Admin → Plugins에서 업데이트하세요. 그렇지 않으면 아무것도 채워지지 않습니다.",
   "appAdmin.votesBackfillQueueing": "투표 수 작업을 예약하는 중...",
   "appAdmin.votesBackfillQueued": "투표 수 작업 {count}건을 예약했습니다.",
-  "appAdmin.votesBackfillNothing": "채울 수 있는 모든 영화에 이미 투표 수가 있습니다."
+  "appAdmin.votesBackfillNothing": "채울 수 있는 모든 영화에 이미 투표 수가 있습니다.",
+  "movieDetail.editSectionContainers": "박스 세트 및 컬렉션",
+  "movieDetail.containersHint": "박스 세트, Vault 또는 컬렉션을 선택하면 이 타이틀이 추가되고, 선택을 해제하면 제거됩니다. 변경 사항은 저장할 때 적용됩니다.",
+  "movieDetail.containersEmpty": "선택할 수 있는 박스 세트, Vault 또는 컬렉션이 아직 없습니다.",
+  "movieDetail.containersSaveFailed": "타이틀은 저장되었지만 박스 세트 및 컬렉션 변경 사항은 저장되지 않았습니다."
 }

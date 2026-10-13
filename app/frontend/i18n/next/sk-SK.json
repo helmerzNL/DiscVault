@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Zásuvný modul TMDb má verziu {installed}; pre počty hlasov je potrebná {required} alebo novšia. Aktualizujte ho v Admin → Plugins, inak sa tu nič nedoplní.",
   "appAdmin.votesBackfillQueueing": "Plánuje sa úloha počtu hlasov...",
   "appAdmin.votesBackfillQueued": "Naplánovaných {count} úloh počtu hlasov.",
-  "appAdmin.votesBackfillNothing": "Každý film, ktorý sa dá doplniť, už má počet hlasov."
+  "appAdmin.votesBackfillNothing": "Každý film, ktorý sa dá doplniť, už má počet hlasov.",
+  "movieDetail.editSectionContainers": "Boxsety a kolekcie",
+  "movieDetail.containersHint": "Začiarknutím boxsetu, trezoru alebo kolekcie do neho titul pridáte, zrušením začiarknutia ho odoberiete. Zmeny sa použijú po uložení.",
+  "movieDetail.containersEmpty": "Zatiaľ nie sú na výber žiadne boxsety, trezory ani kolekcie.",
+  "movieDetail.containersSaveFailed": "Titul bol uložený, ale zmeny boxsetov a kolekcií nie."
 }

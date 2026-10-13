@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "Il plugin TMDb è la versione {installed}; per il numero di voti serve la {required} o più recente. Aggiornalo in Admin → Plugins, altrimenti qui non verrà compilato nulla.",
   "appAdmin.votesBackfillQueueing": "Pianificazione dell'attività voti...",
   "appAdmin.votesBackfillQueued": "{count} attività per il numero di voti pianificate.",
-  "appAdmin.votesBackfillNothing": "Ogni film che può essere compilato ha già il numero di voti."
+  "appAdmin.votesBackfillNothing": "Ogni film che può essere compilato ha già il numero di voti.",
+  "movieDetail.editSectionContainers": "Cofanetti e raccolte",
+  "movieDetail.containersHint": "Seleziona un cofanetto, un vault o una raccolta per aggiungervi il titolo; deseleziona per rimuoverlo. Le modifiche si applicano al salvataggio.",
+  "movieDetail.containersEmpty": "Non ci sono ancora cofanetti, vault o raccolte tra cui scegliere.",
+  "movieDetail.containersSaveFailed": "Il titolo è stato salvato, ma le modifiche a cofanetti e raccolte no."
 }

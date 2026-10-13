@@ -3195,5 +3195,9 @@
   "appAdmin.votesBackfillPluginTooOld": "TMDb 插件为 {installed} 版；投票数需要 {required} 或更新版本。请在 Admin → Plugins 中更新，否则这里什么也不会填充。",
   "appAdmin.votesBackfillQueueing": "正在排队投票数任务...",
   "appAdmin.votesBackfillQueued": "已排队 {count} 个投票数任务。",
-  "appAdmin.votesBackfillNothing": "每部可填充的影片都已有投票数。"
+  "appAdmin.votesBackfillNothing": "每部可填充的影片都已有投票数。",
+  "movieDetail.editSectionContainers": "套装与合集",
+  "movieDetail.containersHint": "勾选套装、保险库或合集即可将此影片加入其中；取消勾选则将其移除。更改将在保存时生效。",
+  "movieDetail.containersEmpty": "暂时没有可选择的套装、保险库或合集。",
+  "movieDetail.containersSaveFailed": "影片已保存，但套装和合集的更改未能保存。"
 }
