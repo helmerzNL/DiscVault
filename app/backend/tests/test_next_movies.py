@@ -94,6 +94,24 @@ class NextMovieEditPolicyTests(unittest.TestCase):
                 existing={"title": "Existing"},
             )
 
+    def test_movie_update_payload_keeps_disc_count_on_an_unrelated_edit(self):
+        # Regression for #801: an edit that says nothing about discCount must
+        # not blank the column -- it previously did, on every edit.
+        payload = movie_update_payload(
+            {"title": "Existing", "notes": "x"},
+            existing={"title": "Existing", "disc_count": 2},
+        )
+
+        self.assertEqual(payload["disc_count"], 2)
+
+    def test_movie_update_payload_writes_an_explicit_disc_count(self):
+        payload = movie_update_payload(
+            {"title": "Existing", "discCount": 3},
+            existing={"title": "Existing", "disc_count": 2},
+        )
+
+        self.assertEqual(payload["disc_count"], 3)
+
     def test_movie_metadata_edits_no_longer_accepts_manual_genre(self):
         # Genre is read-only and TMDB-only: even a well-formed manual edit
         # payload must never produce a "genre" metadata edit.

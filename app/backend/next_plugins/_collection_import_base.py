@@ -14,6 +14,7 @@ from typing import Any
 
 
 SUPPORTED_EXTENSIONS = {".csv", ".tsv", ".json", ".xml"}
+CSV_DELIMITERS = ",;\t|"
 
 COMMON_ALIASES: dict[str, tuple[str, ...]] = {
     "externalId": ("ID", "Id", "Movie ID", "MovieId", "Film ID", "Collection Number", "Nummer", "Nr", "No"),
@@ -58,6 +59,12 @@ COMMON_ALIASES: dict[str, tuple[str, ...]] = {
         "Disc Total",
         "Number of Discs",
         "No of Discs",
+        # CLZ Movies' own column is "Nr Discs" ("Nr" is its abbreviation for
+        # "Number", also seen bare in `externalId` above). "Nr of Discs"
+        # follows the same "<counter word> of Discs" shape as the two aliases
+        # above and is the export's own alternate phrasing for the column.
+        "Nr Discs",
+        "Nr of Discs",
         "Aantal Discs",
         "Aantal Schijven",
         "Blu-ray discs",
@@ -182,17 +189,103 @@ def text(value: Any) -> str:
     return str(value).strip()
 
 
+def xml_local_name(element: ET.Element) -> str:
+    return element.tag.split("}")[-1]
+
+
+def xml_has_repeated_child_tags(element: ET.Element) -> bool:
+    for descendant in element.iter():
+        child_tags = [xml_local_name(child).casefold() for child in list(descendant)]
+        if len(child_tags) != len(set(child_tags)):
+            return True
+    return False
+
+
+def xml_scalar_text(element: ET.Element) -> str:
+    direct = text(element.text)
+    if direct:
+        return direct
+    if xml_has_repeated_child_tags(element):
+        return ""
+
+    display_names = [
+        text(descendant.text)
+        for descendant in element.iter()
+        if descendant is not element
+        and xml_local_name(descendant).casefold() == "displayname"
+        and text(descendant.text)
+    ]
+    if len(display_names) == 1:
+        return display_names[0]
+    if display_names:
+        return ""
+
+    descendant_values = [
+        text(descendant.text)
+        for descendant in element.iter()
+        if descendant is not element and text(descendant.text)
+    ]
+    return descendant_values[0] if len(descendant_values) == 1 else ""
+
+
+def xml_single_child_keys(element: ET.Element) -> list[str]:
+    keys: list[str] = []
+    current = element
+    while True:
+        children = list(current)
+        if len(children) != 1:
+            return keys
+        current = children[0]
+        key = xml_local_name(current)
+        if key.casefold() == "displayname":
+            return keys
+        keys.append(key)
+
+
+def _sniff_csv_dialect(sample: str) -> type[csv.Dialect]:
+    if not sample.strip():
+        return csv.excel
+    header = next((line for line in sample.splitlines() if line.strip()), "")
+    last_error: csv.Error | None = None
+    for candidate in (sample, header):
+        if not candidate.strip():
+            continue
+        try:
+            return csv.Sniffer().sniff(candidate, delimiters=CSV_DELIMITERS)
+        except csv.Error as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    return csv.excel
+
+
+_ALIAS_COLLAPSE_RE = re.compile(r"[^a-z0-9]")
+
+
+def _collapse_key(value: Any) -> str:
+    return _ALIAS_COLLAPSE_RE.sub("", str(value).casefold())
+
+
 def first_value(row: dict[str, Any], aliases: tuple[str, ...]) -> Any:
     if not isinstance(row, dict):
         return ""
     direct = {str(key): value for key, value in row.items()}
     folded = {str(key).strip().casefold(): value for key, value in row.items()}
+    # An XML element name cannot contain a space, so a multi-word alias like
+    # "Disc Count" or "Nr Discs" can never match a tag like <nrdiscs> through
+    # the fold above alone. Collapsing both sides to alphanumerics-only makes
+    # every alias in COMMON_ALIASES matchable against any source's spelling,
+    # not just the ones that happen to already carry a no-space variant.
+    collapsed = {_collapse_key(key): value for key, value in row.items()}
     for alias in aliases:
         if alias in direct and direct[alias] not in (None, "", [], {}):
             return direct[alias]
         folded_value = folded.get(alias.casefold())
         if folded_value not in (None, "", [], {}):
             return folded_value
+        collapsed_value = collapsed.get(_collapse_key(alias))
+        if collapsed_value not in (None, "", [], {}):
+            return collapsed_value
     return ""
 
 
@@ -369,11 +462,17 @@ def sum_disc_counts(row: dict[str, Any], aliases: tuple[str, ...], column_name: 
     must treat as "unknown", not as zero.
     """
     mapped = text(column_name)
-    wanted = {alias.casefold() for alias in ((mapped,) if mapped else aliases)}
+    source_aliases = (mapped,) if mapped else aliases
+    wanted = {alias.casefold() for alias in source_aliases}
+    # Same gap as `first_value`: an XML tag like <nrdiscs> can never match a
+    # multi-word alias through case folding alone, since the tag can carry no
+    # space. Collapsing to alphanumerics-only closes it here too.
+    wanted_collapsed = {_collapse_key(alias) for alias in source_aliases}
     total = 0
     found = False
     for key, value in (row or {}).items():
-        if text(key).casefold() not in wanted:
+        key_text = text(key)
+        if key_text.casefold() not in wanted and _collapse_key(key_text) not in wanted_collapsed:
             continue
         digits = re.fullmatch(r"-?\d+", text(value))
         if not digits:
@@ -600,11 +699,20 @@ class CollectionImportPlugin:
         return []
 
     def read_csv(self, path: Path, delimiter: str | None = None) -> list[dict[str, Any]]:
-        raw = path.read_text(encoding="utf-8-sig", errors="replace")
-        sample = raw[:4096]
-        dialect = csv.excel_tab if delimiter == "\t" else csv.Sniffer().sniff(sample, delimiters=",;\t|") if sample.strip() else csv.excel
-        reader = csv.DictReader(raw.splitlines(), dialect=dialect)
-        return [dict(row) for row in reader if any(text(value) for value in row.values())]
+        with path.open("r", encoding="utf-8-sig", errors="replace", newline="") as handle:
+            sample = handle.read(4096)
+            handle.seek(0)
+            if delimiter is not None:
+                dialect = csv.excel_tab if delimiter == "\t" else csv.excel
+            else:
+                dialect = _sniff_csv_dialect(sample)
+            reader = csv.DictReader(
+                handle,
+                dialect=dialect,
+                delimiter=delimiter or dialect.delimiter,
+                doublequote=True,
+            )
+            return [dict(row) for row in reader if any(text(value) for value in row.values())]
 
     def read_json(self, path: Path) -> list[dict[str, Any]]:
         data = json.loads(path.read_text(encoding="utf-8-sig"))
@@ -622,15 +730,18 @@ class CollectionImportPlugin:
         root = ET.parse(path).getroot()
         candidates = []
         for element in root.iter():
-            tag = element.tag.split("}")[-1].casefold()
+            tag = xml_local_name(element).casefold()
             if tag not in {"movie", "title", "item", "entry", "film"}:
                 continue
             row: dict[str, Any] = {key: value for key, value in element.attrib.items()}
             for child in list(element):
-                key = child.tag.split("}")[-1]
-                value = text(child.text)
+                key = xml_local_name(child)
+                value = xml_scalar_text(child)
                 if value:
                     row[key] = value
+                    if not text(child.text):
+                        for nested_key in xml_single_child_keys(child):
+                            row.setdefault(nested_key, value)
             if row:
                 candidates.append(row)
         return candidates
@@ -706,6 +817,7 @@ class CollectionImportPlugin:
             "barcode": barcode,
             "productIdentifiers": product_identifiers,
             "format": media_format,
+            "discCount": disc_count,
             "edition": text(mapped_value(row, aliases["edition"], column_mapping.get("edition"))),
             "country": text(mapped_value(row, aliases["country"], column_mapping.get("country"))),
             "language": text(mapped_value(row, aliases["language"], column_mapping.get("language"))),

@@ -15402,6 +15402,7 @@ def ui_preview_html(
         </div>
       </div>
       <div class="login-actions">
+        <button type="button" class="login-primary hidden" id="appOidcLoginButton" data-next-i18n="auth.oidcSignIn">Sign in with identity provider</button>
         <button type="button" class="login-primary" id="appLoginButton" data-next-i18n="auth.loginDescription">Sign in with passkey</button>
         <button type="button" class="secondary-button hidden" id="appReviewToggleButton" data-next-i18n="auth.signIn">Sign in</button>
         <button type="button" class="secondary-button" id="appInviteToggleButton" data-next-i18n="auth.inviteOnly">Invite-only access</button>
@@ -17157,6 +17158,14 @@ def ui_preview_html(
                       <span data-next-i18n="movieDetail.estimatedValueCurrency">Currency</span>
                       <select id="movieEditEstimatedValueCurrency" name="estimated_value_currency"></select>
                     </label>
+                    <label for="movieEditContainerTarget" class="wide hidden" id="movieEditContainerField">
+                      <span data-next-i18n="bulk.containerTarget">Container</span>
+                      <select id="movieEditContainerTarget" name="containerTarget"></select>
+                    </label>
+                    <label for="movieEditContainerCreateTitle" class="wide hidden" id="movieEditContainerCreateField">
+                      <span id="movieEditContainerCreateLabel" data-next-i18n="bulk.containerCreateTitleLabel">Container name</span>
+                      <input id="movieEditContainerCreateTitle" maxlength="240" autocomplete="off" data-next-i18n-placeholder="bulk.containerCreatePlaceholder" placeholder="New container name">
+                    </label>
                   </div>
                 </div>
                 <div class="detail-subsection hidden" id="movieEditSectionText" role="tabpanel" aria-labelledby="movieEditTabText" data-detail-panel-group="movieEditSections">
@@ -18516,6 +18525,20 @@ def ui_preview_html(
                       <button type="button" class="primary-button" id="profileAddPasskeyButton" data-next-i18n="profile.addPasskey">Add passkey</button>
                     </div>
                     <div class="login-message" id="profileSecurityMessage" aria-live="polite"></div>
+                  </section>
+                  <section class="profile-dashboard-card profile-security-card oidc hidden" id="profileOidcSecurity" data-security-dashboard-card="oidc">
+                    <div class="profile-dashboard-card-head">
+                      <div class="profile-dashboard-card-title">
+                        <span class="profile-dashboard-card-icon">""" + nav_icon("security") + """</span>
+                        <div>
+                          <h4 data-next-i18n="profile.oidcTitle">Linked identity provider</h4>
+                          <p data-next-i18n="profile.oidcHelp">Link an identity provider as another way to sign in.</p>
+                        </div>
+                      </div>
+                      <button type="button" class="secondary-button" id="profileOidcLinkButton" data-next-i18n="profile.oidcLink">Link identity</button>
+                    </div>
+                    <div class="profile-passkey-list" id="profileOidcIdentityList"></div>
+                    <div class="login-message" id="profileOidcMessage" aria-live="polite"></div>
                   </section>
                   <section class="profile-dashboard-card profile-security-card legacy" id="profileLegacySecurity" data-security-dashboard-card="legacy">
                     <div class="profile-dashboard-card-head">
@@ -20077,6 +20100,8 @@ def ui_preview_html(
     let profileCredentials = [];
     let profileRecovery = {};
     let profileLegacy = {};
+    let profileOidcIdentities = [];
+    let oidcCallbackFeedback = null;
     let profileMfaEnrollment = {stage: "", flowToken: "", recoveryCodes: []};
     let profileApiAccess = {available: false, manageable: false, tokens: [], allowedPermissions: [], mcpTools: []};
     let profileApiShowRevoked = false;
@@ -20225,10 +20250,45 @@ def ui_preview_html(
     let appAdminVotesBackfillTimer = null;
     let activePreferenceTab = "appearance";
     const localeState = {
-      locale: localStorage.getItem("dv_next_locale") || "nl-NL",
+      locale: "en-US",
       messages: {},
       locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
     };
+    const SHELL_FALLBACK_LOCALE = "en-US";
+    // Only an explicit pick is pinned in localStorage. loadLocale() used to
+    // store every successful load, so one fallback page view was enough to
+    // pin a browser to nl-NL, indistinguishable from a deliberate choice.
+    // Browsers pinned that way before the flag existed are told apart by value:
+    // the old fallback could only ever have written nl-NL, so any other stored
+    // locale was chosen.
+    function normalizeShellLocale(value) {
+      const raw = String(value || "").trim().replace("_", "-").toLowerCase();
+      if (!raw) return "";
+      const aliases = {};
+      localeState.locales.forEach((item) => {
+        aliases[String(item.locale).toLowerCase()] = item.locale;
+        if (item.legacy) aliases[String(item.legacy).toLowerCase()] = item.locale;
+      });
+      aliases.nb = "nb-NO";
+      aliases.no = "nb-NO";
+      aliases["no-no"] = "nb-NO";
+      aliases["en-gb"] = "en-US";
+      aliases["zh-hant"] = "zh-TW";
+      if (aliases[raw]) return aliases[raw];
+      return aliases[raw.split("-", 1)[0]] || "";
+    }
+    function preferredNextLocale() {
+      const stored = normalizeShellLocale(localStorage.getItem("dv_next_locale") || localStorage.getItem("dv_lang"));
+      const explicit = localStorage.getItem("dv_next_locale_explicit") === "1";
+      if (stored && (explicit || stored !== "nl-NL")) return stored;
+      const browserLocales = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language];
+      for (const candidate of browserLocales) {
+        const normalized = normalizeShellLocale(candidate);
+        if (normalized) return normalized;
+      }
+      return SHELL_FALLBACK_LOCALE;
+    }
+    localeState.locale = preferredNextLocale();
     function usableImage(value) {
       const text = String(value || "");
       return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") || text.startsWith("/api/next/movievault-v2/posters/") ? text : "";
@@ -21155,6 +21215,114 @@ def ui_preview_html(
         return "";
       }
     }
+    function oidcProviderName() {
+      return String(
+        currentAuthStatus.oidcProviderName
+        || currentAuthStatus.oidc_provider_name
+        || "OIDC"
+      ).trim().slice(0, 120) || "OIDC";
+    }
+    function oidcAvailable() {
+      return Boolean(currentAuthStatus.oidcAvailable ?? currentAuthStatus.oidc_available);
+    }
+    function safeLocalReturnPath(value) {
+      const fallback = "/";
+      const candidate = String(value || "").trim();
+      if (!candidate.startsWith("/") || candidate.startsWith("//") || candidate.includes("\\\\")) return fallback;
+      try {
+        const parsed = new URL(candidate, window.location.origin);
+        if (parsed.origin !== window.location.origin) return fallback;
+        for (const key of [
+          "oidc", "oidc_status", "oidcStatus", "oidc_linked", "oidcLinked",
+          "oidc_error", "oidcError", "oidc_error_description", "oidcErrorDescription"
+        ]) parsed.searchParams.delete(key);
+        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
+      } catch (_) {
+        return fallback;
+      }
+    }
+    function startOidcLogin(linkMode = false) {
+      if (!oidcAvailable()) return;
+      const button = linkMode
+        ? document.getElementById("profileOidcLinkButton")
+        : document.getElementById("appOidcLoginButton");
+      if (button) button.disabled = true;
+      const provider = oidcProviderName();
+      if (linkMode) {
+        setProfileOidcMessage(
+          tNext("profile.oidcLinking", "Opening {provider}...").replace("{provider}", provider)
+        );
+      } else {
+        setLoginMessage(
+          tNext("auth.oidcRedirecting", "Opening {provider}...").replace("{provider}", provider)
+        );
+      }
+      const params = new URLSearchParams();
+      if (linkMode) params.set("mode", "link");
+      params.set("returnPath", linkMode ? "/profile" : safeLocalReturnPath(
+        `${window.location.pathname}${window.location.search}${window.location.hash}`
+      ));
+      window.location.assign(`/api/next/auth/oidc/start?${params.toString()}`);
+    }
+    function readOidcCallbackFeedback() {
+      if (oidcCallbackFeedback) return oidcCallbackFeedback;
+      let params;
+      try {
+        params = new URLSearchParams(window.location.search || "");
+      } catch (_) {
+        return null;
+      }
+      const error = params.get("oidc_error") || params.get("oidcError") || "";
+      const detail = params.get("oidc_error_description") || params.get("oidcErrorDescription") || "";
+      const status = params.get("oidc_status") || params.get("oidcStatus") || params.get("oidc") || "";
+      const linked = ["1", "true", "linked", "success"].includes(
+        String(params.get("oidc_linked") || params.get("oidcLinked") || status).toLowerCase()
+      );
+      if (!error && !linked) return null;
+      const safeDetail = String(detail || error)
+        .replace(/[\\u0000-\\u001f\\u007f]/g, " ")
+        .trim()
+        .slice(0, 240);
+      oidcCallbackFeedback = error
+        ? {tone: "bad", error: true, detail: safeDetail}
+        : {tone: "good", linked: true};
+      for (const key of [
+        "oidc", "oidc_status", "oidcStatus", "oidc_linked", "oidcLinked",
+        "oidc_error", "oidcError", "oidc_error_description", "oidcErrorDescription"
+      ]) params.delete(key);
+      const query = params.toString();
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+      return oidcCallbackFeedback;
+    }
+    function renderOidcCallbackFeedback(profileTarget = false) {
+      const feedback = readOidcCallbackFeedback();
+      if (!feedback) return;
+      const oidcErrors = {
+        authorization_code_missing: tNext("auth.oidcErrorInvalidResponse", "The identity provider returned an invalid response."),
+        id_token_invalid: tNext("auth.oidcErrorInvalidToken", "The identity provider returned an invalid identity token."),
+        id_token_missing: tNext("auth.oidcErrorInvalidToken", "The identity provider returned an invalid identity token."),
+        identity_already_linked: tNext("auth.oidcErrorAlreadyLinked", "That identity is already linked to another DiscVault account."),
+        invalid_request: tNext("auth.oidcErrorInvalidRequest", "The identity-provider request was invalid."),
+        invalid_state: tNext("auth.oidcErrorExpired", "This identity-provider sign-in has expired or was already used."),
+        issuer_already_linked: tNext("auth.oidcErrorIssuerLinked", "Your account already has an identity from this provider."),
+        login_required: tNext("auth.oidcErrorLoginRequired", "Sign in before linking an identity provider."),
+        oidc_disabled: tNext("auth.oidcErrorDisabled", "Identity-provider sign-in is not enabled."),
+        oidc_misconfigured: tNext("auth.oidcErrorMisconfigured", "Identity-provider sign-in is not configured correctly."),
+        oidc_not_ready: tNext("auth.oidcErrorNotReady", "Identity-provider sign-in is not ready yet."),
+        provider_denied: tNext("auth.oidcErrorDenied", "The identity provider cancelled or denied the request."),
+        provider_invalid: tNext("auth.oidcErrorProviderInvalid", "The identity provider configuration is invalid."),
+        provider_unavailable: tNext("auth.oidcErrorUnavailable", "The identity provider is unavailable. Try again later."),
+        registration_disabled: tNext("auth.oidcErrorRegistrationDisabled", "Registration is disabled for this DiscVault instance."),
+        token_exchange_failed: tNext("auth.oidcErrorUnavailable", "The identity provider is unavailable. Try again later."),
+        user_disabled: tNext("auth.oidcErrorUserDisabled", "This DiscVault account is disabled."),
+        username_unavailable: tNext("auth.oidcErrorUsername", "DiscVault could not create a unique username for this identity.")
+      };
+      const message = feedback.error
+        ? (oidcErrors[feedback.detail] || tNext("auth.oidcSignInFailed", "Identity-provider sign-in could not be completed."))
+        : tNext("profile.oidcLinked", "Identity linked.");
+      if (profileTarget) setProfileOidcMessage(message, feedback.tone);
+      else setLoginMessage(message, feedback.tone);
+    }
     // Whether the last API call actually reached the backend. The service worker
     // answers a read from its cache when the network fails, and a cached read is
     // the same bytes the backend gave when it was still answering -- so an
@@ -21853,6 +22021,7 @@ def ui_preview_html(
       const reviewLoginAvailable = !!currentAuthStatus.legacy_auth_enabled;
       const passkeysAvailable = passkeyProcessAvailable();
       const loginButton = document.getElementById("appLoginButton");
+      const oidcLoginButton = document.getElementById("appOidcLoginButton");
       const toggleButton = document.getElementById("appInviteToggleButton");
       const reviewToggleButton = document.getElementById("appReviewToggleButton");
       const codeLabel = document.getElementById("appInviteCodeLabel");
@@ -21903,6 +22072,11 @@ def ui_preview_html(
           reviewLoginAvailable ? "Sign in with passkey (recommended)" : "Sign in with passkey"
         );
       }
+      if (oidcLoginButton) {
+        oidcLoginButton.textContent = tNext("auth.oidcSignIn", "Sign in with {provider}")
+          .replace("{provider}", oidcProviderName());
+        oidcLoginButton.classList.toggle("hidden", !oidcAvailable());
+      }
       setElementVisible(loginButton, passkeysAvailable);
       setElementVisible(toggleButton, passkeysAvailable);
       if (!passkeysAvailable) document.getElementById("appInviteForm")?.classList.add("hidden");
@@ -21921,6 +22095,8 @@ def ui_preview_html(
       }
       legacyLoginWarning?.classList.toggle("hidden", reviewLoginAvailable);
       document.getElementById("profileLegacySecurity")?.classList.toggle("hidden", !currentAuthStatus.legacy_auth_enabled);
+      const oidcCard = document.getElementById("profileOidcSecurity");
+      oidcCard?.classList.toggle("hidden", !oidcAvailable() && !profileOidcIdentities.length);
       if (codeLabel) codeLabel.classList.toggle("hidden", publicRegistration);
       if (codeInput) {
         codeInput.required = !publicRegistration;
@@ -27055,6 +27231,7 @@ def ui_preview_html(
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
       renderStatsSegmented();
+      renderOidcCallbackFeedback(window.location.pathname === "/profile");
     }
     let lastPersistedLocale = null;
     function persistNextLocale(locale) {
@@ -27069,16 +27246,19 @@ def ui_preview_html(
         body: JSON.stringify({ locale: value })
       }).catch(() => { lastPersistedLocale = null; });
     }
-    async function loadLocale(locale) {
-      const normalized = locale || "nl-NL";
+    async function loadLocale(locale, {explicit = false} = {}) {
+      const normalized = locale || SHELL_FALLBACK_LOCALE;
       try {
         const response = await fetch(`/api/next/i18n/${encodeURIComponent(normalized)}`, {cache: "no-store"});
         if (!response.ok) throw new Error(`i18n ${response.status}`);
         const payload = await response.json();
         localeState.locale = payload.locale || normalized;
         localeState.messages = payload.messages || {};
-        localStorage.setItem("dv_next_locale", localeState.locale);
-        localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        if (explicit) {
+          localStorage.setItem("dv_next_locale", localeState.locale);
+          localStorage.setItem("dv_next_locale_explicit", "1");
+          localStorage.setItem("dv_lang", legacyLocaleForApp(localeState.locale));
+        }
         persistNextLocale(localeState.locale);
       } catch (error) {
         console.warn("Next i18n catalog unavailable", error);
@@ -27151,7 +27331,7 @@ def ui_preview_html(
         `<option value="${escapeHtml(item.locale)}"${item.locale === localeState.locale ? " selected" : ""}>${escapeHtml(localeOptionLabel(item))}</option>`
       )).join("");
       select.value = localeState.locale;
-      select.onchange = () => loadLocale(select.value);
+      select.onchange = () => loadLocale(select.value, {explicit: true});
     }
     function setTheme(preference) {
       const selected = preference || "system";
@@ -32686,6 +32866,125 @@ def ui_preview_html(
         body: JSON.stringify({values})
       });
     }
+    // The same Container picker the Library bulk bar uses: one list of box-sets,
+    // vaults and collections (plus "+ New ..."), one choice. The title belongs to
+    // at most the container chosen here, so picking another moves it and picking
+    // "No container" unlinks it. `movieEditContainerBaseline` is the link read when
+    // the form opened; Save only writes when the choice differs from it.
+    let movieEditContainerBaseline = null;
+    let movieEditContainerPermissions = {};
+    function movieEditContainerCreateAllowed(type) {
+      const perms = movieEditContainerPermissions || {};
+      return type === "collection" ? !!perms.canAddToCollection : !!perms.canCreateContainer;
+    }
+    async function loadMovieEditContainers(movieId) {
+      const field = document.getElementById("movieEditContainerField");
+      const select = document.getElementById("movieEditContainerTarget");
+      if (!field || !select || !movieId) return;
+      movieEditContainerBaseline = null;
+      let payload;
+      try {
+        payload = await authApiJson(`/api/next/movies/${encodeURIComponent(movieId)}/library-actions`);
+      } catch (error) {
+        field.classList.add("hidden");
+        return;
+      }
+      if (String(movieId) !== String(activeDetailMovieId)) return;
+      const actions = (payload && payload.actions) || {};
+      movieEditContainerPermissions = actions.permissions || {};
+      const groups = actions.containers || {};
+      const byType = [
+        ["box_set", groups.boxSets || []],
+        ["vault", groups.vaults || []],
+        ["collection", groups.collections || []]
+      ];
+      let linkedValue = "";
+      let linkedLabel = "";
+      const groupHtml = [];
+      byType.forEach(([type, items]) => {
+        const options = [];
+        items.forEach((item) => {
+          const value = bulkContainerOptionValue({container_type: type, id: item.id});
+          if (item.linked && !linkedValue) { linkedValue = value; linkedLabel = item.title || ""; }
+          if (!item.linked && !item.canAdd) return;
+          options.push(`<option value="${escapeHtml(value)}">${escapeHtml(item.title || item.publicId || item.id)}</option>`);
+        });
+        if (movieEditContainerCreateAllowed(type)) {
+          const config = bulkCreateTargetConfig(type);
+          options.push(`<option value="${escapeHtml(bulkCreateTargetValue(type))}">${escapeHtml(tNext(config.createLabelKey, config.createLabelFallback))}</option>`);
+        }
+        if (options.length) groupHtml.push(`<optgroup label="${escapeHtml(containerTypeLabel(type))}">${options.join("")}</optgroup>`);
+      });
+      select.innerHTML = [`<option value="">${escapeHtml(tNext("movieDetail.containerNone", "No container"))}</option>`].concat(groupHtml).join("");
+      select.value = linkedValue;
+      movieEditContainerBaseline = linkedValue;
+      field.classList.toggle("hidden", !groupHtml.length);
+      syncMovieEditContainerCreate();
+    }
+    function syncMovieEditContainerCreate() {
+      const select = document.getElementById("movieEditContainerTarget");
+      const field = document.getElementById("movieEditContainerCreateField");
+      const input = document.getElementById("movieEditContainerCreateTitle");
+      if (!select || !field || !input) return;
+      const selection = bulkContainerSelection(select.value);
+      field.classList.toggle("hidden", !selection.createType);
+      if (selection.createType) {
+        const config = bulkCreateTargetConfig(selection.createType);
+        input.placeholder = tNext(config.placeholderKey, config.placeholderFallback);
+        const label = document.getElementById("movieEditContainerCreateLabel");
+        if (label) label.textContent = tNext(config.nameLabelKey, config.nameLabelFallback);
+      } else {
+        input.value = "";
+      }
+    }
+    async function setMovieEditContainerLink(selection, operation) {
+      const movieId = encodeURIComponent(activeDetailMovieId);
+      const containerId = encodeURIComponent(selection.containerId);
+      if (selection.targetType === "collection") {
+        await authApiJson(`/api/next/bulk/collections/${containerId}/items`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({movieIds: [activeDetailMovieId], operation})
+        });
+      } else {
+        await authApiJson(`/api/next/movies/${movieId}/containers/${containerId}`, {
+          method: operation === "add" ? "POST" : "DELETE"
+        });
+      }
+    }
+    // Returns true when a link changed. Throws one Error, worded so the title
+    // save is not reported as failed when only the container link was refused.
+    async function saveMovieEditContainers() {
+      const select = document.getElementById("movieEditContainerTarget");
+      if (!select || movieEditContainerBaseline === null || !activeDetailMovieId) return false;
+      if (select.value === movieEditContainerBaseline) return false;
+      const failed = (error) => new Error(
+        `${tNext("movieDetail.containersSaveFailed", "The title was saved, but its box-set and collection changes were not.")} ${error.message || String(error)}`
+      );
+      try {
+        let target = bulkContainerSelection(select.value);
+        if (target.createType) {
+          const title = String(document.getElementById("movieEditContainerCreateTitle")?.value || "").trim();
+          if (!title) throw new Error(tNext("containerManage.titleRequired", "Enter a name first."));
+          const created = await authApiJson("/api/next/containers", {
+            method: "POST",
+            headers: {"Content-Type": "application/json"},
+            body: JSON.stringify({containerType: target.createType, title})
+          });
+          const newId = String(created?.detail?.container?.id || created?.detail?.id || created?.container?.id || "");
+          if (!newId) throw new Error(tNext("bulk.createContainerFailed", "Container was created, but no target id was returned."));
+          target = {targetType: target.createType, containerId: newId, createType: ""};
+        }
+        // Link the new container before unlinking the old one, so a refused
+        // add leaves the title where it was.
+        if (target.containerId) await setMovieEditContainerLink(target, "add");
+        const previous = bulkContainerSelection(movieEditContainerBaseline);
+        if (previous.containerId) await setMovieEditContainerLink(previous, "remove");
+      } catch (error) {
+        throw failed(error);
+      }
+      return true;
+    }
     function fillMovieEditForm(detail) {
       const movie = detail.movie || {};
       const seriesDetail = detail.series || null;
@@ -32700,6 +32999,7 @@ def ui_preview_html(
         (seriesDetail && (seriesDetail.seasons || []).map((season) => season.id)) || []
       ).then(() => renderMovieEditDiscs(collectMovieEditDiscs())).catch(() => {});
       renderMovieEditCustomFields(detail);
+      loadMovieEditContainers(movie.id || activeDetailMovieId);
       const metadata = movie.metadata || {};
       const specs = detail.technicalSpecs || {};
       renderMovieEditFormatOptions(movie.format || "");
@@ -46280,6 +46580,12 @@ def ui_preview_html(
         } catch (error) {
           identifierError = error;
         }
+        let containerError = null;
+        try {
+          await saveMovieEditContainers();
+        } catch (error) {
+          containerError = error;
+        }
         // `payload.detail` was built by the PATCH, before any of the writes
         // above ran, so it still carries the old ids. Re-read rather than
         // render it: the film's own page shows an IMDb and a TMDb chip, and
@@ -46311,6 +46617,11 @@ def ui_preview_html(
             );
             identifierError.focusInput.focus();
           }
+          return;
+        }
+        if (containerError) {
+          setMovieDetailMessage(containerError.message || String(containerError), "bad");
+          activateDetailTab("movieEditSections", "movieEditSectionCollectors");
           return;
         }
         setMovieEditPanelVisible(false);
@@ -49948,6 +50259,7 @@ def ui_preview_html(
       const removeAvatarButton = document.getElementById("profileAvatarRemoveButton");
       if (removeAvatarButton) removeAvatarButton.disabled = !profile.avatarUrl;
       renderProfilePasskeys();
+      renderProfileOidcIdentities();
       renderProfileRecovery();
       renderProfileLegacyMfa();
       renderProfileApiAccess();
@@ -50157,6 +50469,98 @@ def ui_preview_html(
       applyFaqMessage(node, message);
       node.className = `login-message ${tone || ""}`.trim();
     }
+    function setProfileOidcMessage(message, tone) {
+      const node = document.getElementById("profileOidcMessage");
+      if (!node) return;
+      node.textContent = message || "";
+      node.className = `login-message ${tone || ""}`.trim();
+    }
+    function oidcIdentitiesFromProfilePayload(payload) {
+      const body = payload || {};
+      const user = body.user || {};
+      const candidates = body.oidcIdentities
+        ?? body.oidc_identities
+        ?? body.linkedIdentities
+        ?? body.linked_identities
+        ?? user.oidcIdentities
+        ?? user.oidc_identities
+        ?? body.identities
+        ?? user.identities
+        ?? [];
+      if (!Array.isArray(candidates)) return [];
+      return candidates.filter((identity) => {
+        if (!identity || typeof identity !== "object") return false;
+        const kind = String(identity.type || identity.providerType || identity.provider_type || "").toLowerCase();
+        return !kind || kind === "oidc";
+      });
+    }
+    function profileHasPasswordLogin() {
+      return Boolean(profileLegacy.has_credential ?? profileLegacy.hasCredential);
+    }
+    function profileUsableLoginMethodCount() {
+      return profileCredentials.length
+        + profileOidcIdentities.filter((identity) => identity.usable === true).length
+        + (profileHasPasswordLogin() ? 1 : 0);
+    }
+    function canRemoveProfileLoginMethod(kind, identity = null) {
+      const removedUsableMethod = kind === "passkey"
+        || (kind === "oidc" && identity?.usable === true);
+      return profileUsableLoginMethodCount() - (removedUsableMethod ? 1 : 0) >= 1;
+    }
+    function profileOidcIdentityId(identity) {
+      return String(identity.id || identity.identityId || identity.identity_id || "");
+    }
+    function renderProfileOidcIdentities() {
+      const card = document.getElementById("profileOidcSecurity");
+      const list = document.getElementById("profileOidcIdentityList");
+      const linkButton = document.getElementById("profileOidcLinkButton");
+      if (!card || !list) return;
+      card.classList.toggle("hidden", !oidcAvailable() && !profileOidcIdentities.length);
+      if (linkButton) {
+        linkButton.classList.toggle("hidden", !oidcAvailable());
+        linkButton.disabled = !oidcAvailable()
+          || profileOidcIdentities.some((identity) => identity.usable === true);
+        linkButton.textContent = tNext("profile.oidcLink", "Link {provider}")
+          .replace("{provider}", oidcProviderName());
+      }
+      if (!profileOidcIdentities.length) {
+        list.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("profile.oidcNoIdentities", "No identity provider is linked."))}</div>`;
+        return;
+      }
+      list.innerHTML = profileOidcIdentities.map((identity) => {
+        const identityId = profileOidcIdentityId(identity);
+        const provider = String(
+          identity.providerName
+          || identity.provider_name
+          || identity.provider
+          || oidcProviderName()
+        );
+        const email = String(identity.email || identity.preferredUsername || identity.preferred_username || "");
+        const subject = String(identity.subject || identity.sub || "");
+        const linkedAt = identity.linkedAt || identity.linked_at || identity.createdAt || identity.created_at || "";
+        const label = email || identity.displayName || identity.display_name || subject || provider;
+        const details = [
+          provider,
+          email && email !== label ? email : "",
+          subject ? `${tNext("profile.oidcSubject", "Subject")}: ${subject}` : "",
+          linkedAt ? `${tNext("profile.created", "Created")}: ${shortDateTime(linkedAt)}` : ""
+        ].filter(Boolean).map(escapeHtml).join(" &middot; ");
+        const removable = Boolean(identityId) && canRemoveProfileLoginMethod("oidc", identity);
+        const disabled = removable ? "" : `disabled title="${escapeHtml(tNext("profile.lastLoginMethodBlocked", "Add another sign-in method before removing this one."))}"`;
+        return `
+          <article class="profile-passkey security-credential-card" data-profile-oidc-identity="${escapeHtml(identityId)}">
+            <div class="profile-passkey-head">
+              <strong>${escapeHtml(label)}</strong>
+              <span class="tag blue">${escapeHtml(tNext("profile.oidcIdentity", "Identity provider"))}</span>
+            </div>
+            <div class="profile-passkey-meta">${details}</div>
+            <div class="profile-passkey-actions">
+              <button type="button" class="secondary-button" data-profile-oidc-unlink="${escapeHtml(identityId)}" ${disabled}>${escapeHtml(tNext("profile.oidcUnlink", "Unlink"))}</button>
+            </div>
+          </article>
+        `;
+      }).join("");
+    }
     function renderProfilePasskeys() {
       const list = document.getElementById("profilePasskeyList");
       if (!list) return;
@@ -50167,9 +50571,8 @@ def ui_preview_html(
       list.innerHTML = profileCredentials.map((credential) => {
         const id = escapeHtml(credential.id || "");
         const name = credential.credential_name || credential.name || "Passkey";
-        const lastPasskey = profileCredentials.length <= 1;
-        const deleteDisabled = lastPasskey
-          ? `disabled title="${escapeHtml(tNext("profile.lastPasskeyBlocked", "You cannot delete your last passkey."))}"`
+        const deleteDisabled = !canRemoveProfileLoginMethod("passkey")
+          ? `disabled title="${escapeHtml(tNext("profile.lastLoginMethodBlocked", "Add another sign-in method before removing this one."))}"`
           : "";
         return `
           <article class="profile-passkey security-credential-card" data-profile-passkey="${id}">
@@ -50799,8 +51202,11 @@ def ui_preview_html(
         profileCredentials = payload.credentials || [];
         profileRecovery = payload.recovery || {};
         profileApiAccess = payload.apiAccess || profileApiAccess;
+        profileOidcIdentities = oidcIdentitiesFromProfilePayload(payload);
         if (currentAuthStatus.legacy_auth_enabled) {
           profileLegacy = await authApiJson("/api/next/auth/legacy/me").catch(() => ({}));
+        } else {
+          profileLegacy = {};
         }
         renderProfile();
       } catch (error) {
@@ -50913,8 +51319,8 @@ def ui_preview_html(
       }
     }
     async function deleteProfilePasskey(credentialId) {
-      if (profileCredentials.length <= 1) {
-        setProfileSecurityMessage(tNext("profile.lastPasskeyBlocked", "You cannot delete your last passkey."), "bad");
+      if (!canRemoveProfileLoginMethod("passkey")) {
+        setProfileSecurityMessage(tNext("profile.lastLoginMethodBlocked", "Add another sign-in method before removing this one."), "bad");
         return;
       }
       if (!window.confirm(tNext("profile.deletePasskeyConfirm", "Delete this passkey?"))) return;
@@ -50928,6 +51334,38 @@ def ui_preview_html(
         setProfileSecurityMessage(tNext("profile.passkeyDeleted", "Passkey deleted."), "good");
       } catch (error) {
         setProfileSecurityMessage(error.message || String(error), "bad");
+      }
+    }
+    async function unlinkProfileOidcIdentity(identityId) {
+      if (!identityId) return;
+      const identity = profileOidcIdentities.find(
+        (candidate) => profileOidcIdentityId(candidate) === String(identityId)
+      );
+      if (!canRemoveProfileLoginMethod("oidc", identity)) {
+        setProfileOidcMessage(tNext("profile.lastLoginMethodBlocked", "Add another sign-in method before removing this one."), "bad");
+        return;
+      }
+      if (!window.confirm(tNext("profile.oidcUnlinkConfirm", "Unlink this identity provider?"))) return;
+      setProfileOidcMessage(tNext("profile.oidcUnlinking", "Unlinking identity..."));
+      try {
+        const payload = await authApiJson(
+          `/api/next/profile/oidc/identities/${encodeURIComponent(identityId)}`,
+          {method: "DELETE"}
+        );
+        const returned = oidcIdentitiesFromProfilePayload(payload);
+        profileOidcIdentities = returned.length || (
+          "oidcIdentities" in payload
+          || "oidc_identities" in payload
+          || "linkedIdentities" in payload
+          || "linked_identities" in payload
+          || "identities" in payload
+        )
+          ? returned
+          : profileOidcIdentities.filter((identity) => profileOidcIdentityId(identity) !== String(identityId));
+        renderProfile();
+        setProfileOidcMessage(tNext("profile.oidcUnlinked", "Identity unlinked."), "good");
+      } catch (error) {
+        setProfileOidcMessage(error.message || String(error), "bad");
       }
     }
     async function generateRecoveryCodes() {
@@ -51165,6 +51603,7 @@ def ui_preview_html(
       if (auth.auth_enabled && !auth.authenticated) {
         setLoginMessage("");
         setGate("auth");
+        renderOidcCallbackFeedback(false);
         return;
       }
       const startupPayload = await apiJson("/api/next/startup/status", {headers: authHeaders()});
@@ -51196,6 +51635,7 @@ def ui_preview_html(
       else if (route.view === "profile") showProfilePage(false);
       else showLibraryPage(false);
       maybeShowSupportPrompt(route);
+      renderOidcCallbackFeedback(route.view === "profile");
     }
     function movieMeta(movie) {
       return [movie.year, physicalFormatLabel(movie.format), movie.barcode].filter(Boolean);
@@ -51266,7 +51706,7 @@ def ui_preview_html(
       setAccent(preferences.accent || localStorage.getItem("dv_next_accent") || "bluray");
       setProfileMenuStyle(effectiveProfileMenuStyle());
       document.querySelectorAll("#nextLanguageSelect, #authLanguageSelect, #startupLanguageSelect").forEach((select) => {
-        select.addEventListener("change", (event) => loadLocale(event.target.value));
+        select.addEventListener("change", (event) => loadLocale(event.target.value, {explicit: true}));
       });
       document.querySelectorAll("[data-theme-choice]").forEach((button) => {
         button.addEventListener("click", () => {
@@ -51951,6 +52391,11 @@ def ui_preview_html(
       document.getElementById("profileAvatarRemoveButton")?.addEventListener("click", () => removeProfileAvatar());
       document.getElementById("profileRefreshPasskeysButton")?.addEventListener("click", () => loadProfileDetails());
       document.getElementById("profileAddPasskeyButton")?.addEventListener("click", () => addProfilePasskey());
+      document.getElementById("profileOidcLinkButton")?.addEventListener("click", () => startOidcLogin(true));
+      document.getElementById("profileOidcIdentityList")?.addEventListener("click", (event) => {
+        const unlinkButton = event.target.closest("[data-profile-oidc-unlink]");
+        if (unlinkButton) unlinkProfileOidcIdentity(unlinkButton.dataset.profileOidcUnlink);
+      });
       document.getElementById("profileGenerateRecoveryButton")?.addEventListener("click", () => generateRecoveryCodes());
       document.getElementById("profileRevokeRecoveryButton")?.addEventListener("click", () => revokeRecoveryCodes());
       document.getElementById("profileApiTokenForm")?.addEventListener("submit", (event) => {
@@ -52370,6 +52815,7 @@ def ui_preview_html(
         if (event.target.id === "locationQrBackdrop") closeLocationQr();
       });
       document.getElementById("appLoginButton")?.addEventListener("click", () => loginPasskey());
+      document.getElementById("appOidcLoginButton")?.addEventListener("click", () => startOidcLogin(false));
       document.getElementById("appReviewToggleButton")?.addEventListener("click", () => toggleReviewLogin());
       document.getElementById("appReviewForm")?.addEventListener("submit", (event) => loginReviewPassword(event));
       document.getElementById("appLegacyCopyCodes")?.addEventListener("click", () => copyLegacyCodes(legacyRecoveryCodes));
@@ -52568,6 +53014,7 @@ def ui_preview_html(
       document.getElementById("movieEditCancelTopButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditCancelButton")?.addEventListener("click", () => cancelMovieEdit());
       document.getElementById("movieEditForm")?.addEventListener("submit", (event) => saveMovieDetails(event));
+      document.getElementById("movieEditContainerTarget")?.addEventListener("change", syncMovieEditContainerCreate);
       // Native validation may flag a control on an edit section that is not
       // the one on screen; reveal its section so the browser can focus it.
       document.getElementById("movieEditForm")?.addEventListener("invalid", (event) => {
