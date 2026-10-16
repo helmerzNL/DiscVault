@@ -150,6 +150,9 @@ try:
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_scheduled_jobs import load_config as load_scheduled_jobs_config
+    from .next_scheduled_jobs import load_state as load_scheduled_jobs_state
+    from .next_scheduled_jobs import save_config as save_scheduled_jobs_config
     from .next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
     from .next_backup import normalize_scopes as normalize_backup_scopes
     from .next_backup import list_backup_archives
@@ -468,6 +471,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_scheduled_jobs import load_config as load_scheduled_jobs_config
+    from next_scheduled_jobs import load_state as load_scheduled_jobs_state
+    from next_scheduled_jobs import save_config as save_scheduled_jobs_config
     from next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
     from next_backup import normalize_scopes as normalize_backup_scopes
     from next_backup import list_backup_archives
@@ -40220,6 +40226,50 @@ def register_routes(flask_app: Flask) -> None:
         result.headers["X-DiscVault-Backup-Sha256"] = summary["sha256"]
         result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
         return result
+
+    @flask_app.get("/api/next/scheduled-jobs")
+    def scheduled_jobs_get():
+        with connect() as conn:
+            require_any_next_permission(conn, ("admin.backup",))
+            config = load_scheduled_jobs_config(conn)
+            state = load_scheduled_jobs_state(conn)
+        # The Jellyfin schedule remembers who the watched history is attached
+        # to; the client only needs to know whether one is set.
+        config["jellyfin"]["hasRequestedBy"] = bool(config["jellyfin"].pop("requestedBy", None))
+        return response({"status": "ok", "config": config, "state": state})
+
+    @flask_app.put("/api/next/scheduled-jobs")
+    def scheduled_jobs_put():
+        body = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(body, dict):
+            raise NextApiError("A JSON object is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, ("admin.backup",))
+            jellyfin = body.get("jellyfin") if isinstance(body.get("jellyfin"), dict) else {}
+            # The watched-history sync needs a user to attach history to: the
+            # admin saving the schedule.
+            jellyfin["requestedBy"] = {
+                "id": actor.get("id"),
+                "username": actor.get("username"),
+                "role": actor.get("role"),
+            }
+            body = {**body, "jellyfin": jellyfin}
+            config = save_scheduled_jobs_config(conn, body, actor_id=actor.get("id"))
+            audit_event(
+                conn,
+                event_type="scheduled_jobs.updated",
+                category="backup",
+                actor=actor,
+                target_type="scheduled_jobs",
+                target_id="scheduled_jobs",
+                summary="Updated scheduled jobs",
+                metadata={
+                    "backup": {k: v for k, v in config["backup"].items() if k != "scopes"},
+                    "jellyfin": {k: v for k, v in config["jellyfin"].items() if k != "requestedBy"},
+                },
+            )
+        config["jellyfin"]["hasRequestedBy"] = bool(config["jellyfin"].pop("requestedBy", None))
+        return response({"status": "ok", "config": config})
 
     @flask_app.post("/api/next/backup/create")
     def backup_create():
