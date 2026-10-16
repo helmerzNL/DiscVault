@@ -1,11 +1,12 @@
 """Built-in scheduler for recurring background jobs (issue #812).
 
-Two jobs can run on a timer without any external cron:
+Three jobs can run on a timer without any external cron:
 
 * ``backup`` -- a functional collection backup, skipped when nothing changed
   since the last scheduled one, and pruned to the newest ``keep`` archives.
-* ``jellyfin`` -- the Jellyfin library sync, optionally followed by the
-  watched-history sync.
+* ``jellyfin`` and ``plex`` -- the library sync of that media server,
+  optionally followed by its watched-history sync. Both are the same job
+  pointed at a different plugin (:data:`SYNC_PLUGIN_IDS`).
 
 Configuration and run state live in ``app_settings`` (``scheduled_jobs`` and
 ``scheduled_jobs_state``). The worker calls :func:`enqueue_due_jobs` from its
@@ -48,6 +49,12 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
 
 SCHEDULED_BACKUP_JOB_TYPE = "backup.scheduled"
 JELLYFIN_PLUGIN_ID = "jellyfin"
+PLEX_PLUGIN_ID = "plex"
+# Config key -> plugin id, for the jobs that sync a media server's library.
+SYNC_PLUGIN_IDS = {
+    "jellyfin": JELLYFIN_PLUGIN_ID,
+    "plex": PLEX_PLUGIN_ID,
+}
 
 CONFIG_KEY = "scheduled_jobs"
 STATE_KEY = "scheduled_jobs_state"
@@ -76,15 +83,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "keep": 7,
         "scopes": list(DEFAULT_BACKUP_SCOPES),
     },
-    "jellyfin": {
+}
+
+for _sync_key in SYNC_PLUGIN_IDS:
+    DEFAULT_CONFIG[_sync_key] = {
         "enabled": False,
         "intervalHours": 24,
         "includeWatched": True,
         # Who the watched history is attached to. Set from the admin who saved
         # the schedule; the watched-history sync is skipped without one.
         "requestedBy": None,
-    },
-}
+    }
 
 
 def _bool(value: Any, default: bool) -> bool:
@@ -109,17 +118,9 @@ def _clamped_int(value: Any, default: int, low: int, high: int) -> int:
     return min(max(parsed, low), high)
 
 
-def normalize_config(raw: Any) -> dict[str, Any]:
-    """Return a complete, validated config; unknown or malformed input falls back to defaults."""
+def _normalize_sync(raw: Any, defaults: dict[str, Any]) -> dict[str, Any]:
     raw = raw if isinstance(raw, dict) else {}
-    backup_raw = raw.get("backup") if isinstance(raw.get("backup"), dict) else {}
-    jellyfin_raw = raw.get("jellyfin") if isinstance(raw.get("jellyfin"), dict) else {}
-    defaults = DEFAULT_CONFIG
-
-    scopes_raw = backup_raw.get("scopes")
-    scopes = normalize_scopes(scopes_raw) if isinstance(scopes_raw, list) and scopes_raw else list(DEFAULT_BACKUP_SCOPES)
-
-    actor = jellyfin_raw.get("requestedBy")
+    actor = raw.get("requestedBy")
     if isinstance(actor, dict) and actor.get("id"):
         actor = {
             "id": str(actor.get("id")),
@@ -128,8 +129,26 @@ def normalize_config(raw: Any) -> dict[str, Any]:
         }
     else:
         actor = None
-
     return {
+        "enabled": _bool(raw.get("enabled"), defaults["enabled"]),
+        "intervalHours": _clamped_int(
+            raw.get("intervalHours"), defaults["intervalHours"], MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS
+        ),
+        "includeWatched": _bool(raw.get("includeWatched"), defaults["includeWatched"]),
+        "requestedBy": actor,
+    }
+
+
+def normalize_config(raw: Any) -> dict[str, Any]:
+    """Return a complete, validated config; unknown or malformed input falls back to defaults."""
+    raw = raw if isinstance(raw, dict) else {}
+    backup_raw = raw.get("backup") if isinstance(raw.get("backup"), dict) else {}
+    defaults = DEFAULT_CONFIG
+
+    scopes_raw = backup_raw.get("scopes")
+    scopes = normalize_scopes(scopes_raw) if isinstance(scopes_raw, list) and scopes_raw else list(DEFAULT_BACKUP_SCOPES)
+
+    config: dict[str, Any] = {
         "backup": {
             "enabled": _bool(backup_raw.get("enabled"), defaults["backup"]["enabled"]),
             "intervalHours": _clamped_int(
@@ -139,15 +158,10 @@ def normalize_config(raw: Any) -> dict[str, Any]:
             "keep": _clamped_int(backup_raw.get("keep"), defaults["backup"]["keep"], MIN_KEEP, MAX_KEEP),
             "scopes": scopes,
         },
-        "jellyfin": {
-            "enabled": _bool(jellyfin_raw.get("enabled"), defaults["jellyfin"]["enabled"]),
-            "intervalHours": _clamped_int(
-                jellyfin_raw.get("intervalHours"), defaults["jellyfin"]["intervalHours"], MIN_INTERVAL_HOURS, MAX_INTERVAL_HOURS
-            ),
-            "includeWatched": _bool(jellyfin_raw.get("includeWatched"), defaults["jellyfin"]["includeWatched"]),
-            "requestedBy": actor,
-        },
     }
+    for key in SYNC_PLUGIN_IDS:
+        config[key] = _normalize_sync(raw.get(key), defaults[key])
+    return config
 
 
 def _setting(conn, key: str) -> Any:
@@ -179,7 +193,17 @@ def load_config(conn) -> dict[str, Any]:
 
 
 def save_config(conn, raw: Any, *, actor_id: Any = None) -> dict[str, Any]:
-    config = normalize_config(raw)
+    """Store ``raw`` merged onto the saved config, one section at a time.
+
+    The Backup tab and the Scheduled tasks tab each save only their own jobs;
+    without the merge, saving one would reset the other to its defaults.
+    """
+    raw = raw if isinstance(raw, dict) else {}
+    merged = load_config(conn)
+    for key, section in raw.items():
+        if key in merged and isinstance(section, dict):
+            merged[key] = {**merged[key], **section}
+    config = normalize_config(merged)
     _store_setting(conn, CONFIG_KEY, config, actor_id)
     return config
 
@@ -335,10 +359,10 @@ def _job_active(cur, job_type: str, plugin_id: str | None = None, entrypoint: st
     return cur.fetchone() is not None
 
 
-def _jellyfin_ready(cur) -> bool:
+def _plugin_ready(cur, plugin_id: str) -> bool:
     cur.execute(
         "SELECT 1 FROM plugins WHERE id = %s AND installed = true AND enabled = true",
-        (JELLYFIN_PLUGIN_ID,),
+        (plugin_id,),
     )
     return cur.fetchone() is not None
 
@@ -366,34 +390,36 @@ def enqueue_due_jobs(conn, worker_id: str, *, now: datetime | None = None) -> li
             )
             queued.append("backup")
 
-        jellyfin = config["jellyfin"]
-        if (
-            jellyfin["enabled"]
-            and is_due((state.get("jellyfin") or {}).get("lastEnqueuedAt"), jellyfin["intervalHours"], now=now)
-            and table_exists(conn, "plugins")
-            and _jellyfin_ready(cur)
-        ):
+        for job, plugin_id in SYNC_PLUGIN_IDS.items():
+            sync = config[job]
+            if not (
+                sync["enabled"]
+                and is_due((state.get(job) or {}).get("lastEnqueuedAt"), sync["intervalHours"], now=now)
+                and table_exists(conn, "plugins")
+                and _plugin_ready(cur, plugin_id)
+            ):
+                continue
             entrypoints = ["sync_library"]
-            if jellyfin["includeWatched"] and jellyfin["requestedBy"]:
+            if sync["includeWatched"] and sync["requestedBy"]:
                 entrypoints.append("sync_personal_lists")
             for entrypoint in entrypoints:
-                if _job_active(cur, "plugin.execute", JELLYFIN_PLUGIN_ID, entrypoint):
+                if _job_active(cur, "plugin.execute", plugin_id, entrypoint):
                     continue
                 job_payload: dict[str, Any] = {
-                    "pluginId": JELLYFIN_PLUGIN_ID,
+                    "pluginId": plugin_id,
                     "entrypoint": entrypoint,
                     "payload": {},
                     **source,
                 }
                 if entrypoint == "sync_personal_lists":
-                    job_payload["requestedBy"] = jellyfin["requestedBy"]
+                    job_payload["requestedBy"] = sync["requestedBy"]
                 cur.execute(
                     "INSERT INTO background_jobs (job_type, payload) VALUES ('plugin.execute', %s)",
                     (Jsonb(job_payload),),
                 )
-                queued.append(f"jellyfin.{entrypoint}")
+                queued.append(f"{job}.{entrypoint}")
 
-    for job in ("backup", "jellyfin"):
+    for job in ("backup", *SYNC_PLUGIN_IDS):
         if any(item == job or item.startswith(f"{job}.") for item in queued):
             _update_state(conn, job, lastEnqueuedAt=now.isoformat())
     return queued

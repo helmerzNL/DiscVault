@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Fără container",
   "appAdmin.scheduleTab": "Programare",
   "appAdmin.scheduleTitle": "Sarcini programate",
-  "appAdmin.scheduleHelp": "Ruleaza automat, in fundal, o copie de rezerva si o sincronizare Jellyfin. Intervalul se numara de la ultima rulare programata.",
+  "appAdmin.scheduleHelp": "Creeaza automat, in fundal, o copie de rezerva. Intervalul se numara de la ultima rulare programata.",
   "appAdmin.scheduleBackupEnabled": "Creeaza automat o copie de rezerva",
   "appAdmin.scheduleIntervalHours": "La fiecare (ore)",
   "appAdmin.scheduleOnlyIfChanged": "Omite copia daca nu s-a schimbat nimic de la ultima copie programata",
   "appAdmin.scheduleKeep": "Copii programate de pastrat",
   "appAdmin.scheduleIncludePersonal": "Include lista de urmarit si istoricul vizionarilor",
   "appAdmin.scheduleJellyfinEnabled": "Sincronizeaza automat Jellyfin",
-  "appAdmin.scheduleJellyfinWatched": "Sincronizeaza si istoricul vizionarilor (asociat contului tau)",
+  "appAdmin.scheduleWatched": "Sincronizeaza si istoricul vizionarilor (asociat contului tau)",
   "appAdmin.scheduleSave": "Salveaza programarea",
   "appAdmin.scheduleSaved": "Programare salvata.",
   "appAdmin.scheduleLoaded": "Programare incarcata.",
   "appAdmin.scheduleLastRun": "Ultima rulare",
-  "appAdmin.scheduleNeverRun": "Niciodata rulat"
+  "appAdmin.scheduleNeverRun": "Niciodata rulat",
+  "appAdmin.tabScheduledTasks": "Sarcini programate",
+  "appAdmin.scheduledTasksHelp": "Sincronizeaza automat, in fundal, bibliotecile tale Jellyfin si Plex. Intervalul se numara de la ultima rulare programata.",
+  "appAdmin.schedulePlexEnabled": "Sincronizeaza automat Plex"
 }

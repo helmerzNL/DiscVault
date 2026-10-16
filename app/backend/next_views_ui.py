@@ -218,6 +218,7 @@ def ui_preview_html(
         "edit_technical": "M3 17V19H9V17H3M3 5V7H13V5H3M13 21V19H21V17H13V15H11V21H13M7 9V11H3V13H7V15H9V9H7M21 13V11H11V13H21M15 9H17V7H21V5H17V3H15V9Z",
         "edit_discs": "M12 11A1 1 0 0 0 11 12A1 1 0 0 0 12 13A1 1 0 0 0 13 12A1 1 0 0 0 12 11M12 16.5C9.5 16.5 7.5 14.5 7.5 12S9.5 7.5 12 7.5 16.5 9.5 16.5 12 14.5 16.5 12 16.5M12 2A10 10 0 0 0 2 12A10 10 0 0 0 12 22A10 10 0 0 0 22 12A10 10 0 0 0 12 2Z",
         "edit_collectors": "M16 9H19L14 16M10 9H14L12 17M5 9H8L10 16M15 4H17L19 7H16M11 4H13L14 7H10M7 4H9L8 7H5M6 2L2 8L12 22L22 8L18 2H6Z",
+        "schedule": "M12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22C6.47,22 2,17.5 2,12A10,10 0 0,1 12,2M12.5,7V12.25L17,14.92L16.25,16.15L11,13V7H12.5Z",
         "edit_notes": "M14 10H19.5L14 4.5V10M5 3H15L21 9V19A2 2 0 0 1 19 21H5C3.89 21 3 20.1 3 19V5C3 3.89 3.89 3 5 3M5 12V14H19V12H5M5 16V18H14V16H5Z",
         "edit_series": "M8.16 3L6.75 4.41L9.34 7H4C2.89 7 2 7.89 2 9V19C2 20.11 2.89 21 4 21H20C21.11 21 22 20.11 22 19V9C22 7.89 21.11 7 20 7H14.66L17.25 4.41L15.84 3L12 6.84L8.16 3M4 9H20V19H4V9Z",
     }
@@ -18845,6 +18846,7 @@ def ui_preview_html(
             """ + admin_tab("metadata", "appAdmin.tabMetadata", "Metadata", "library_preferences") + """
             """ + admin_tab("custom_fields", "appAdmin.tabCustomFields", "Custom fields", "edit_notes") + """
             """ + admin_tab("backup", "appAdmin.tabBackup", "Backup", "import") + """
+            """ + admin_tab("scheduled_tasks", "appAdmin.tabScheduledTasks", "Scheduled tasks", "schedule") + """
             """ + admin_tab("audit", "appAdmin.tabAudit", "Audit", "lists") + """
           </nav>
         <section class="app-admin-panel active" id="appAdminPanelAccess" role="tabpanel" aria-labelledby="appAdminTabAccess" aria-hidden="false" tabindex="0" data-app-admin-panel="access">
@@ -19716,7 +19718,7 @@ def ui_preview_html(
             <div class="app-admin-backup-panel full" id="appAdminBackupPanelSchedule" role="tabpanel" aria-labelledby="appAdminBackupTabSchedule" aria-hidden="true" data-app-admin-backup-panel="schedule">
               <div class="detail-card profile-card full">
                 <h3 data-next-i18n="appAdmin.scheduleTitle">Scheduled jobs</h3>
-                <p data-next-i18n="appAdmin.scheduleHelp">Run a backup and a Jellyfin sync automatically in the background. The interval counts from the last scheduled run.</p>
+                <p data-next-i18n="appAdmin.scheduleHelp">Create a backup automatically in the background. The interval counts from the last scheduled run.</p>
                 <form class="profile-form" id="appAdminScheduleForm">
                   <fieldset class="profile-scope-fieldset">
                     <legend data-next-i18n="appAdmin.createBackup">Create backup</legend>
@@ -19741,22 +19743,6 @@ def ui_preview_html(
                       <input id="appAdminScheduleBackupKeep" type="number" min="1" max="90" inputmode="numeric">
                     </label>
                     <div class="login-message" id="appAdminScheduleBackupStatus"></div>
-                  </fieldset>
-                  <fieldset class="profile-scope-fieldset">
-                    <legend>Jellyfin</legend>
-                    <label class="profile-checkbox-row" for="appAdminScheduleJellyfinEnabled">
-                      <input id="appAdminScheduleJellyfinEnabled" type="checkbox">
-                      <span data-next-i18n="appAdmin.scheduleJellyfinEnabled">Sync Jellyfin automatically</span>
-                    </label>
-                    <label for="appAdminScheduleJellyfinInterval">
-                      <span data-next-i18n="appAdmin.scheduleIntervalHours">Every (hours)</span>
-                      <input id="appAdminScheduleJellyfinInterval" type="number" min="1" max="720" inputmode="numeric">
-                    </label>
-                    <label class="profile-checkbox-row" for="appAdminScheduleJellyfinWatched">
-                      <input id="appAdminScheduleJellyfinWatched" type="checkbox">
-                      <span data-next-i18n="appAdmin.scheduleJellyfinWatched">Also sync watched history (attached to your account)</span>
-                    </label>
-                    <div class="login-message" id="appAdminScheduleJellyfinStatus"></div>
                   </fieldset>
                   <div class="profile-action-row">
                     <button type="submit" class="secondary-button" id="appAdminScheduleSaveButton" data-next-i18n="appAdmin.scheduleSave">Save schedule</button>
@@ -19835,6 +19821,61 @@ def ui_preview_html(
                 <h3 data-next-i18n="appAdmin.backupJobs">Restore jobs</h3>
                 <div class="profile-passkey-list" id="appAdminBackupJobs"></div>
               </div>
+            </div>
+          </section>
+        </section>
+        <section class="app-admin-panel" id="appAdminPanelScheduledTasks" role="tabpanel" aria-labelledby="appAdminTabScheduledTasks" aria-hidden="true" tabindex="0" data-app-admin-panel="scheduled_tasks">
+          <section class="profile-grid">
+            <section class="profile-dashboard-card primary full">
+              <div class="profile-dashboard-card-head">
+                <div class="profile-dashboard-card-title">
+                  <span class="profile-dashboard-card-icon">""" + nav_icon("schedule") + """</span>
+                  <div>
+                    <h3 data-next-i18n="appAdmin.tabScheduledTasks">Scheduled tasks</h3>
+                    <p data-next-i18n="appAdmin.scheduledTasksHelp">Sync your Jellyfin and Plex libraries automatically in the background. The interval counts from the last scheduled run.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="login-message" id="appAdminScheduledTasksMessage"></div>
+            </section>
+            <div class="detail-card profile-card full">
+              <form class="profile-form" id="appAdminTasksForm">
+                  <fieldset class="profile-scope-fieldset">
+                    <legend>Jellyfin</legend>
+                    <label class="profile-checkbox-row" for="appAdminTasksJellyfinEnabled">
+                      <input id="appAdminTasksJellyfinEnabled" type="checkbox">
+                      <span data-next-i18n="appAdmin.scheduleJellyfinEnabled">Sync Jellyfin automatically</span>
+                    </label>
+                    <label for="appAdminTasksJellyfinInterval">
+                      <span data-next-i18n="appAdmin.scheduleIntervalHours">Every (hours)</span>
+                      <input id="appAdminTasksJellyfinInterval" type="number" min="1" max="720" inputmode="numeric">
+                    </label>
+                    <label class="profile-checkbox-row" for="appAdminTasksJellyfinWatched">
+                      <input id="appAdminTasksJellyfinWatched" type="checkbox">
+                      <span data-next-i18n="appAdmin.scheduleWatched">Also sync watched history (attached to your account)</span>
+                    </label>
+                    <div class="login-message" id="appAdminTasksJellyfinStatus"></div>
+                  </fieldset>
+                  <fieldset class="profile-scope-fieldset">
+                    <legend>Plex</legend>
+                    <label class="profile-checkbox-row" for="appAdminTasksPlexEnabled">
+                      <input id="appAdminTasksPlexEnabled" type="checkbox">
+                      <span data-next-i18n="appAdmin.schedulePlexEnabled">Sync Plex automatically</span>
+                    </label>
+                    <label for="appAdminTasksPlexInterval">
+                      <span data-next-i18n="appAdmin.scheduleIntervalHours">Every (hours)</span>
+                      <input id="appAdminTasksPlexInterval" type="number" min="1" max="720" inputmode="numeric">
+                    </label>
+                    <label class="profile-checkbox-row" for="appAdminTasksPlexWatched">
+                      <input id="appAdminTasksPlexWatched" type="checkbox">
+                      <span data-next-i18n="appAdmin.scheduleWatched">Also sync watched history (attached to your account)</span>
+                    </label>
+                    <div class="login-message" id="appAdminTasksPlexStatus"></div>
+                  </fieldset>
+                <div class="profile-action-row">
+                  <button type="submit" class="secondary-button" id="appAdminTasksSaveButton" data-next-i18n="appAdmin.scheduleSave">Save schedule</button>
+                </div>
+              </form>
             </div>
           </section>
         </section>
@@ -21613,6 +21654,8 @@ def ui_preview_html(
         // administrative surfaces beside it. Same key the routes require.
         custom_fields: ["collection.edit_all"],
         backup: ["admin.backup", "admin.restore_functional", "collection.export_functional"],
+        // Same keys the /api/next/scheduled-jobs routes accept.
+        scheduled_tasks: ["admin.backup", "digital_sources.sync"],
         audit: ["admin.view_audit"]
       },
       importCenter: ["collection.import", "collection.add", "collection.add_own", "metadata.search"],
@@ -21945,7 +21988,7 @@ def ui_preview_html(
       return true;
     }
     function allowedAppAdminTabs() {
-      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "custom_fields", "backup", "audit"].filter(canUseAdminTab);
+      return ["access", "users", "roles", "operations", "plugins", "digital", "metadata", "custom_fields", "backup", "scheduled_tasks", "audit"].filter(canUseAdminTab);
     }
     function canUseAppAdmin() {
       return allowedAppAdminTabs().length > 0;
@@ -22208,6 +22251,7 @@ def ui_preview_html(
       if (appAdmin.activeTab === "metadata") setAppAdminMetadataTab(appAdmin.activeMetadataTab);
       if (appAdmin.activeTab === "backup") setAppAdminBackupTab(appAdmin.activeBackupTab);
       if (appAdmin.activeTab === "custom_fields") loadAppAdminCustomFields();
+      if (appAdmin.activeTab === "scheduled_tasks") refreshAppAdminSchedule();
       if (appAdmin.activeTab === "audit") setAppAdminAuditTab(appAdmin.activeAuditTab);
     }
     function handleAppAdminTabKeydown(button, event) {
@@ -26372,7 +26416,6 @@ def ui_preview_html(
       const config = (payload && payload.config) || {};
       const state = (payload && payload.state) || {};
       const backup = config.backup || {};
-      const jellyfin = config.jellyfin || {};
       const set = (id, fn) => { const node = document.getElementById(id); if (node) fn(node); };
       set("appAdminScheduleBackupEnabled", (node) => { node.checked = !!backup.enabled; });
       set("appAdminScheduleBackupInterval", (node) => { node.value = backup.intervalHours || 24; });
@@ -26380,17 +26423,23 @@ def ui_preview_html(
       set("appAdminScheduleBackupPersonal", (node) => { node.checked = (backup.scopes || []).includes("personal_lists"); });
       set("appAdminScheduleBackupKeep", (node) => { node.value = backup.keep || 7; });
       set("appAdminScheduleBackupStatus", (node) => { node.textContent = appAdminScheduleRunText(state.backup); });
-      set("appAdminScheduleJellyfinEnabled", (node) => { node.checked = !!jellyfin.enabled; });
-      set("appAdminScheduleJellyfinInterval", (node) => { node.value = jellyfin.intervalHours || 24; });
-      set("appAdminScheduleJellyfinWatched", (node) => { node.checked = jellyfin.includeWatched !== false; });
-      set("appAdminScheduleJellyfinStatus", (node) => { node.textContent = appAdminScheduleRunText(state.jellyfin); });
+      [["jellyfin", "Jellyfin"], ["plex", "Plex"]].forEach(([job, key]) => {
+        const sync = config[job] || {};
+        set(`appAdminTasks${key}Enabled`, (node) => { node.checked = !!sync.enabled; });
+        set(`appAdminTasks${key}Interval`, (node) => { node.value = sync.intervalHours || 24; });
+        set(`appAdminTasks${key}Watched`, (node) => { node.checked = sync.includeWatched !== false; });
+        set(`appAdminTasks${key}Status`, (node) => { node.textContent = appAdminScheduleRunText(state[job]); });
+      });
+    }
+    function appAdminScheduleMessageId() {
+      return appAdmin.activeTab === "scheduled_tasks" ? "appAdminScheduledTasksMessage" : "appAdminBackupMessage";
     }
     async function refreshAppAdminSchedule() {
-      if (!hasActualPermission("admin.backup")) return;
+      if (!canUseAdminTab("scheduled_tasks")) return;
       try {
         renderAppAdminSchedule(await authApiJson("/api/next/scheduled-jobs"));
       } catch (error) {
-        setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+        setAppAdminMessage(appAdminScheduleMessageId(), error.message || String(error), "bad");
       }
     }
     async function saveAppAdminSchedule(event) {
@@ -26411,11 +26460,6 @@ def ui_preview_html(
               onlyIfChanged: checked("appAdminScheduleBackupOnlyIfChanged"),
               keep: number("appAdminScheduleBackupKeep"),
               scopes
-            },
-            jellyfin: {
-              enabled: checked("appAdminScheduleJellyfinEnabled"),
-              intervalHours: number("appAdminScheduleJellyfinInterval"),
-              includeWatched: checked("appAdminScheduleJellyfinWatched")
             }
           })
         });
@@ -26423,6 +26467,28 @@ def ui_preview_html(
         setAppAdminMessage("appAdminBackupMessage", tNext("appAdmin.scheduleSaved", "Schedule saved."), "good");
       } catch (error) {
         setAppAdminMessage("appAdminBackupMessage", error.message || String(error), "bad");
+      }
+    }
+    async function saveAppAdminScheduledTasks(event) {
+      if (event) event.preventDefault();
+      if (!canUseAdminTab("scheduled_tasks")) return;
+      const checked = (id) => !!document.getElementById(id)?.checked;
+      const number = (id) => Number(document.getElementById(id)?.value || 0) || undefined;
+      const section = (key) => ({
+        enabled: checked(`appAdminTasks${key}Enabled`),
+        intervalHours: number(`appAdminTasks${key}Interval`),
+        includeWatched: checked(`appAdminTasks${key}Watched`)
+      });
+      try {
+        await authApiJson("/api/next/scheduled-jobs", {
+          method: "PUT",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({jellyfin: section("Jellyfin"), plex: section("Plex")})
+        });
+        await refreshAppAdminSchedule();
+        setAppAdminMessage("appAdminScheduledTasksMessage", tNext("appAdmin.scheduleSaved", "Schedule saved."), "good");
+      } catch (error) {
+        setAppAdminMessage("appAdminScheduledTasksMessage", error.message || String(error), "bad");
       }
     }
     async function refreshAppAdminBackupStatus() {
@@ -52257,6 +52323,7 @@ def ui_preview_html(
         button.addEventListener("keydown", (event) => handleAppAdminBackupTabKeydown(button, event));
       });
       document.getElementById("appAdminScheduleForm")?.addEventListener("submit", saveAppAdminSchedule);
+      document.getElementById("appAdminTasksForm")?.addEventListener("submit", saveAppAdminScheduledTasks);
       document.querySelectorAll("[data-app-admin-audit-tab]").forEach((button) => {
         button.addEventListener("click", () => setAppAdminAuditTab(button.dataset.appAdminAuditTab));
         button.addEventListener("keydown", (event) => handleAppAdminAuditTabKeydown(button, event));

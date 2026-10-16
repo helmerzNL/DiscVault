@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Geen container",
   "appAdmin.scheduleTab": "Planning",
   "appAdmin.scheduleTitle": "Geplande taken",
-  "appAdmin.scheduleHelp": "Voer automatisch een back-up en een Jellyfin-synchronisatie uit op de achtergrond. Het interval telt vanaf de laatste geplande uitvoering.",
+  "appAdmin.scheduleHelp": "Maak automatisch een back-up op de achtergrond. Het interval telt vanaf de laatste geplande uitvoering.",
   "appAdmin.scheduleBackupEnabled": "Automatisch een back-up maken",
   "appAdmin.scheduleIntervalHours": "Elke (uren)",
   "appAdmin.scheduleOnlyIfChanged": "Back-up overslaan als er niets is gewijzigd sinds de vorige geplande back-up",
   "appAdmin.scheduleKeep": "Geplande back-ups om te bewaren",
   "appAdmin.scheduleIncludePersonal": "Kijklijst en kijkgeschiedenis meenemen",
   "appAdmin.scheduleJellyfinEnabled": "Jellyfin automatisch synchroniseren",
-  "appAdmin.scheduleJellyfinWatched": "Ook kijkgeschiedenis synchroniseren (gekoppeld aan jouw account)",
+  "appAdmin.scheduleWatched": "Ook kijkgeschiedenis synchroniseren (gekoppeld aan jouw account)",
   "appAdmin.scheduleSave": "Planning opslaan",
   "appAdmin.scheduleSaved": "Planning opgeslagen.",
   "appAdmin.scheduleLoaded": "Planning geladen.",
   "appAdmin.scheduleLastRun": "Laatst uitgevoerd",
-  "appAdmin.scheduleNeverRun": "Nog niet uitgevoerd"
+  "appAdmin.scheduleNeverRun": "Nog niet uitgevoerd",
+  "appAdmin.tabScheduledTasks": "Geplande taken",
+  "appAdmin.scheduledTasksHelp": "Synchroniseer automatisch je Jellyfin- en Plex-bibliotheken op de achtergrond. Het interval telt vanaf de laatste geplande uitvoering.",
+  "appAdmin.schedulePlexEnabled": "Plex automatisch synchroniseren"
 }

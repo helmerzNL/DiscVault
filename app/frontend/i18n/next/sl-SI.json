@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Brez vsebnika",
   "appAdmin.scheduleTab": "Urnik",
   "appAdmin.scheduleTitle": "Nacrtovana opravila",
-  "appAdmin.scheduleHelp": "V ozadju samodejno izvede varnostno kopijo in sinhronizacijo z Jellyfin. Interval se steje od zadnjega nacrtovanega zagona.",
+  "appAdmin.scheduleHelp": "V ozadju samodejno ustvari varnostno kopijo. Interval se steje od zadnjega nacrtovanega zagona.",
   "appAdmin.scheduleBackupEnabled": "Samodejno ustvari varnostno kopijo",
   "appAdmin.scheduleIntervalHours": "Vsakih (ur)",
   "appAdmin.scheduleOnlyIfChanged": "Preskoci kopijo, ce se od zadnje nacrtovane ni nic spremenilo",
   "appAdmin.scheduleKeep": "Stevilo shranjenih nacrtovanih kopij",
   "appAdmin.scheduleIncludePersonal": "Vkljuci seznam za ogled in zgodovino ogledov",
   "appAdmin.scheduleJellyfinEnabled": "Samodejno sinhroniziraj Jellyfin",
-  "appAdmin.scheduleJellyfinWatched": "Sinhroniziraj tudi zgodovino ogledov (povezano z vasim racunom)",
+  "appAdmin.scheduleWatched": "Sinhroniziraj tudi zgodovino ogledov (povezano z vasim racunom)",
   "appAdmin.scheduleSave": "Shrani urnik",
   "appAdmin.scheduleSaved": "Urnik shranjen.",
   "appAdmin.scheduleLoaded": "Urnik nalozen.",
   "appAdmin.scheduleLastRun": "Zadnji zagon",
-  "appAdmin.scheduleNeverRun": "Nikoli zagnano"
+  "appAdmin.scheduleNeverRun": "Nikoli zagnano",
+  "appAdmin.tabScheduledTasks": "Nacrtovana opravila",
+  "appAdmin.scheduledTasksHelp": "V ozadju samodejno sinhronizira knjiznice Jellyfin in Plex. Interval se steje od zadnjega nacrtovanega zagona.",
+  "appAdmin.schedulePlexEnabled": "Samodejno sinhroniziraj Plex"
 }

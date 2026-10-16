@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Kapsayıcı yok",
   "appAdmin.scheduleTab": "Zamanlama",
   "appAdmin.scheduleTitle": "Zamanlanmis gorevler",
-  "appAdmin.scheduleHelp": "Arka planda otomatik olarak bir yedekleme ve bir Jellyfin senkronizasyonu calistirir. Aralik, son zamanlanmis calistirmadan itibaren sayilir.",
+  "appAdmin.scheduleHelp": "Arka planda otomatik olarak yedekleme olusturur. Aralik, son zamanlanmis calistirmadan itibaren sayilir.",
   "appAdmin.scheduleBackupEnabled": "Otomatik yedek olustur",
   "appAdmin.scheduleIntervalHours": "Her (saat)",
   "appAdmin.scheduleOnlyIfChanged": "Son zamanlanmis yedekten beri hicbir sey degismediyse yedegi atla",
   "appAdmin.scheduleKeep": "Saklanacak zamanlanmis yedek sayisi",
   "appAdmin.scheduleIncludePersonal": "Izleme listesini ve izleme gecmisini dahil et",
   "appAdmin.scheduleJellyfinEnabled": "Jellyfin'i otomatik senkronize et",
-  "appAdmin.scheduleJellyfinWatched": "Izleme gecmisini de senkronize et (hesabiniza baglanir)",
+  "appAdmin.scheduleWatched": "Izleme gecmisini de senkronize et (hesabiniza baglanir)",
   "appAdmin.scheduleSave": "Zamanlamayi kaydet",
   "appAdmin.scheduleSaved": "Zamanlama kaydedildi.",
   "appAdmin.scheduleLoaded": "Zamanlama yuklendi.",
   "appAdmin.scheduleLastRun": "Son calistirma",
-  "appAdmin.scheduleNeverRun": "Hic calistirilmadi"
+  "appAdmin.scheduleNeverRun": "Hic calistirilmadi",
+  "appAdmin.tabScheduledTasks": "Zamanlanmis gorevler",
+  "appAdmin.scheduledTasksHelp": "Arka planda Jellyfin ve Plex kutuphanelerinizi otomatik olarak senkronize eder. Aralik, son zamanlanmis calistirmadan itibaren sayilir.",
+  "appAdmin.schedulePlexEnabled": "Plex'i otomatik senkronize et"
 }

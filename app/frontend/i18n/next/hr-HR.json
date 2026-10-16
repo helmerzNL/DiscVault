@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Nema spremnika",
   "appAdmin.scheduleTab": "Raspored",
   "appAdmin.scheduleTitle": "Zakazani zadaci",
-  "appAdmin.scheduleHelp": "Automatski pokrece sigurnosnu kopiju i Jellyfin sinkronizaciju u pozadini. Razmak se racuna od zadnjeg zakazanog pokretanja.",
+  "appAdmin.scheduleHelp": "Automatski stvara sigurnosnu kopiju u pozadini. Razmak se racuna od zadnjeg zakazanog pokretanja.",
   "appAdmin.scheduleBackupEnabled": "Automatski izradi sigurnosnu kopiju",
   "appAdmin.scheduleIntervalHours": "Svakih (sati)",
   "appAdmin.scheduleOnlyIfChanged": "Preskoci kopiju ako se nista nije promijenilo od zadnje zakazane",
   "appAdmin.scheduleKeep": "Broj zakazanih kopija koje se cuvaju",
   "appAdmin.scheduleIncludePersonal": "Ukljuci popis zelja i povijest gledanja",
   "appAdmin.scheduleJellyfinEnabled": "Automatski sinkroniziraj Jellyfin",
-  "appAdmin.scheduleJellyfinWatched": "Sinkroniziraj i povijest gledanja (povezanu s tvojim racunom)",
+  "appAdmin.scheduleWatched": "Sinkroniziraj i povijest gledanja (povezanu s tvojim racunom)",
   "appAdmin.scheduleSave": "Spremi raspored",
   "appAdmin.scheduleSaved": "Raspored spremljen.",
   "appAdmin.scheduleLoaded": "Raspored ucitan.",
   "appAdmin.scheduleLastRun": "Zadnje pokretanje",
-  "appAdmin.scheduleNeverRun": "Nikad pokrenuto"
+  "appAdmin.scheduleNeverRun": "Nikad pokrenuto",
+  "appAdmin.tabScheduledTasks": "Zakazani zadaci",
+  "appAdmin.scheduledTasksHelp": "Automatski sinkronizira vase Jellyfin i Plex biblioteke u pozadini. Razmak se racuna od zadnjeg zakazanog pokretanja.",
+  "appAdmin.schedulePlexEnabled": "Automatski sinkroniziraj Plex"
 }

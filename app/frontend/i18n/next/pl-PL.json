@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Brak kontenera",
   "appAdmin.scheduleTab": "Harmonogram",
   "appAdmin.scheduleTitle": "Zaplanowane zadania",
-  "appAdmin.scheduleHelp": "Automatycznie uruchamia w tle kopie zapasowa i synchronizacje z Jellyfin. Odstep liczony jest od ostatniego zaplanowanego uruchomienia.",
+  "appAdmin.scheduleHelp": "Automatycznie tworzy w tle kopie zapasowa. Odstep liczony jest od ostatniego zaplanowanego uruchomienia.",
   "appAdmin.scheduleBackupEnabled": "Tworz kopie zapasowa automatycznie",
   "appAdmin.scheduleIntervalHours": "Co (godzin)",
   "appAdmin.scheduleOnlyIfChanged": "Pomin kopie, jesli nic sie nie zmienilo od ostatniej zaplanowanej",
   "appAdmin.scheduleKeep": "Liczba przechowywanych zaplanowanych kopii",
   "appAdmin.scheduleIncludePersonal": "Uwzglednij liste do obejrzenia i historie ogladania",
   "appAdmin.scheduleJellyfinEnabled": "Synchronizuj Jellyfin automatycznie",
-  "appAdmin.scheduleJellyfinWatched": "Synchronizuj tez historie ogladania (przypisana do Twojego konta)",
+  "appAdmin.scheduleWatched": "Synchronizuj tez historie ogladania (przypisana do Twojego konta)",
   "appAdmin.scheduleSave": "Zapisz harmonogram",
   "appAdmin.scheduleSaved": "Harmonogram zapisany.",
   "appAdmin.scheduleLoaded": "Harmonogram wczytany.",
   "appAdmin.scheduleLastRun": "Ostatnie uruchomienie",
-  "appAdmin.scheduleNeverRun": "Nigdy nie uruchomiono"
+  "appAdmin.scheduleNeverRun": "Nigdy nie uruchomiono",
+  "appAdmin.tabScheduledTasks": "Zaplanowane zadania",
+  "appAdmin.scheduledTasksHelp": "Automatycznie synchronizuje w tle biblioteki Jellyfin i Plex. Odstep liczony jest od ostatniego zaplanowanego uruchomienia.",
+  "appAdmin.schedulePlexEnabled": "Synchronizuj Plex automatycznie"
 }

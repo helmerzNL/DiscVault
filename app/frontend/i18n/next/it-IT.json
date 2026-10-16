@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Nessun contenitore",
   "appAdmin.scheduleTab": "Pianificazione",
   "appAdmin.scheduleTitle": "Attivita pianificate",
-  "appAdmin.scheduleHelp": "Esegue automaticamente in background un backup e una sincronizzazione Jellyfin. L'intervallo conta dall'ultima esecuzione pianificata.",
+  "appAdmin.scheduleHelp": "Crea automaticamente un backup in background. L'intervallo conta dall'ultima esecuzione pianificata.",
   "appAdmin.scheduleBackupEnabled": "Crea un backup automaticamente",
   "appAdmin.scheduleIntervalHours": "Ogni (ore)",
   "appAdmin.scheduleOnlyIfChanged": "Salta il backup se nulla e cambiato dall'ultimo backup pianificato",
   "appAdmin.scheduleKeep": "Backup pianificati da conservare",
   "appAdmin.scheduleIncludePersonal": "Includi watchlist e cronologia di visione",
   "appAdmin.scheduleJellyfinEnabled": "Sincronizza Jellyfin automaticamente",
-  "appAdmin.scheduleJellyfinWatched": "Sincronizza anche la cronologia di visione (associata al tuo account)",
+  "appAdmin.scheduleWatched": "Sincronizza anche la cronologia di visione (associata al tuo account)",
   "appAdmin.scheduleSave": "Salva pianificazione",
   "appAdmin.scheduleSaved": "Pianificazione salvata.",
   "appAdmin.scheduleLoaded": "Pianificazione caricata.",
   "appAdmin.scheduleLastRun": "Ultima esecuzione",
-  "appAdmin.scheduleNeverRun": "Mai eseguito"
+  "appAdmin.scheduleNeverRun": "Mai eseguito",
+  "appAdmin.tabScheduledTasks": "Attivita pianificate",
+  "appAdmin.scheduledTasksHelp": "Sincronizza automaticamente in background le tue librerie Jellyfin e Plex. L'intervallo conta dall'ultima esecuzione pianificata.",
+  "appAdmin.schedulePlexEnabled": "Sincronizza Plex automaticamente"
 }

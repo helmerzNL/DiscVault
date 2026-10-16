@@ -153,6 +153,7 @@ try:
     from .next_scheduled_jobs import load_config as load_scheduled_jobs_config
     from .next_scheduled_jobs import load_state as load_scheduled_jobs_state
     from .next_scheduled_jobs import save_config as save_scheduled_jobs_config
+    from .next_scheduled_jobs import SYNC_PLUGIN_IDS as SCHEDULED_SYNC_JOBS
     from .next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
     from .next_backup import normalize_scopes as normalize_backup_scopes
     from .next_backup import list_backup_archives
@@ -474,6 +475,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_scheduled_jobs import load_config as load_scheduled_jobs_config
     from next_scheduled_jobs import load_state as load_scheduled_jobs_state
     from next_scheduled_jobs import save_config as save_scheduled_jobs_config
+    from next_scheduled_jobs import SYNC_PLUGIN_IDS as SCHEDULED_SYNC_JOBS
     from next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
     from next_backup import normalize_scopes as normalize_backup_scopes
     from next_backup import list_backup_archives
@@ -10889,6 +10891,9 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
 # migrations_next/013_plugin_delete_permission.sql); it is reused here rather
 # than inventing a new permission/migration.
 PLUGIN_REGISTRY_INSTALL_PERMISSIONS = ("plugins.delete",)
+# Scheduled jobs: backups need admin.backup; the media-server syncs are also
+# open to whoever may sync digital sources.
+SCHEDULED_JOBS_PERMISSIONS = ("admin.backup", "digital_sources.sync")
 
 
 def require_plugin_registry_install_permission(conn) -> dict[str, Any]:
@@ -40227,16 +40232,20 @@ def register_routes(flask_app: Flask) -> None:
         result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
         return result
 
+    def _scheduled_jobs_client_config(config: dict[str, Any]) -> dict[str, Any]:
+        # A sync schedule remembers who the watched history is attached to; the
+        # client only needs to know whether one is set.
+        for key in SCHEDULED_SYNC_JOBS:
+            config[key]["hasRequestedBy"] = bool(config[key].pop("requestedBy", None))
+        return config
+
     @flask_app.get("/api/next/scheduled-jobs")
     def scheduled_jobs_get():
         with connect() as conn:
-            require_any_next_permission(conn, ("admin.backup",))
+            require_any_next_permission(conn, SCHEDULED_JOBS_PERMISSIONS)
             config = load_scheduled_jobs_config(conn)
             state = load_scheduled_jobs_state(conn)
-        # The Jellyfin schedule remembers who the watched history is attached
-        # to; the client only needs to know whether one is set.
-        config["jellyfin"]["hasRequestedBy"] = bool(config["jellyfin"].pop("requestedBy", None))
-        return response({"status": "ok", "config": config, "state": state})
+        return response({"status": "ok", "config": _scheduled_jobs_client_config(config), "state": state})
 
     @flask_app.put("/api/next/scheduled-jobs")
     def scheduled_jobs_put():
@@ -40244,17 +40253,29 @@ def register_routes(flask_app: Flask) -> None:
         if not isinstance(body, dict):
             raise NextApiError("A JSON object is required", 400)
         with connect() as conn:
-            actor = require_any_next_permission(conn, ("admin.backup",))
-            jellyfin = body.get("jellyfin") if isinstance(body.get("jellyfin"), dict) else {}
-            # The watched-history sync needs a user to attach history to: the
-            # admin saving the schedule.
-            jellyfin["requestedBy"] = {
-                "id": actor.get("id"),
-                "username": actor.get("username"),
-                "role": actor.get("role"),
-            }
-            body = {**body, "jellyfin": jellyfin}
-            config = save_scheduled_jobs_config(conn, body, actor_id=actor.get("id"))
+            actor = require_any_next_permission(conn, SCHEDULED_JOBS_PERMISSIONS)
+            # Backups are an admin.backup matter; the media-server syncs are also
+            # open to whoever may sync digital sources.
+            if isinstance(body.get("backup"), dict):
+                actor = require_any_next_permission(conn, ("admin.backup",))
+            # Only the sections sent are changed (save_config merges), so each
+            # admin tab can save its own jobs without resetting the others.
+            update: dict[str, Any] = {}
+            if isinstance(body.get("backup"), dict):
+                update["backup"] = body["backup"]
+            for key in SCHEDULED_SYNC_JOBS:
+                if isinstance(body.get(key), dict):
+                    # The watched-history sync needs a user to attach history
+                    # to: the admin saving the schedule.
+                    update[key] = {
+                        **body[key],
+                        "requestedBy": {
+                            "id": actor.get("id"),
+                            "username": actor.get("username"),
+                            "role": actor.get("role"),
+                        },
+                    }
+            config = save_scheduled_jobs_config(conn, update, actor_id=actor.get("id"))
             audit_event(
                 conn,
                 event_type="scheduled_jobs.updated",
@@ -40264,12 +40285,15 @@ def register_routes(flask_app: Flask) -> None:
                 target_id="scheduled_jobs",
                 summary="Updated scheduled jobs",
                 metadata={
+                    "sections": sorted(update),
                     "backup": {k: v for k, v in config["backup"].items() if k != "scopes"},
-                    "jellyfin": {k: v for k, v in config["jellyfin"].items() if k != "requestedBy"},
+                    **{
+                        key: {k: v for k, v in config[key].items() if k != "requestedBy"}
+                        for key in SCHEDULED_SYNC_JOBS
+                    },
                 },
             )
-        config["jellyfin"]["hasRequestedBy"] = bool(config["jellyfin"].pop("requestedBy", None))
-        return response({"status": "ok", "config": config})
+        return response({"status": "ok", "config": _scheduled_jobs_client_config(config)})
 
     @flask_app.post("/api/next/backup/create")
     def backup_create():

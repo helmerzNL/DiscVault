@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Konteinerit pole",
   "appAdmin.scheduleTab": "Ajakava",
   "appAdmin.scheduleTitle": "Ajastatud toed",
-  "appAdmin.scheduleHelp": "Kaivitab taustal automaatselt varukoopia ja Jellyfini sunkroonimise. Intervall loetakse viimasest ajastatud kaivitusest.",
+  "appAdmin.scheduleHelp": "Loob taustal automaatselt varukoopia. Intervall loetakse viimasest ajastatud kaivitusest.",
   "appAdmin.scheduleBackupEnabled": "Loo varukoopia automaatselt",
   "appAdmin.scheduleIntervalHours": "Iga (tundi)",
   "appAdmin.scheduleOnlyIfChanged": "Jata varukoopia vahele, kui viimasest ajastatud koopiast pole midagi muutunud",
   "appAdmin.scheduleKeep": "Sailitatavad ajastatud varukoopiad",
   "appAdmin.scheduleIncludePersonal": "Kaasa vaatamislist ja vaatamisajalugu",
   "appAdmin.scheduleJellyfinEnabled": "Sunkrooni Jellyfin automaatselt",
-  "appAdmin.scheduleJellyfinWatched": "Sunkrooni ka vaatamisajalugu (seotud sinu kontoga)",
+  "appAdmin.scheduleWatched": "Sunkrooni ka vaatamisajalugu (seotud sinu kontoga)",
   "appAdmin.scheduleSave": "Salvesta ajakava",
   "appAdmin.scheduleSaved": "Ajakava salvestatud.",
   "appAdmin.scheduleLoaded": "Ajakava laaditud.",
   "appAdmin.scheduleLastRun": "Viimane kaivitus",
-  "appAdmin.scheduleNeverRun": "Pole kunagi kaivitatud"
+  "appAdmin.scheduleNeverRun": "Pole kunagi kaivitatud",
+  "appAdmin.tabScheduledTasks": "Ajastatud toed",
+  "appAdmin.scheduledTasksHelp": "Sunkroonib taustal automaatselt sinu Jellyfini ja Plexi meediakogud. Intervall loetakse viimasest ajastatud kaivitusest.",
+  "appAdmin.schedulePlexEnabled": "Sunkrooni Plex automaatselt"
 }
