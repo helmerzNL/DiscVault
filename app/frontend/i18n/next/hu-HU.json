@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} szavazatszám-feladat ütemezve.",
   "appAdmin.votesBackfillNothing": "Minden film, amelyik kitölthető, már rendelkezik szavazatszámmal.",
   "movieDetail.containersSaveFailed": "A cím mentve lett, de a díszdobozok és gyűjtemények módosításai nem.",
-  "movieDetail.containerNone": "Nincs tároló"
+  "movieDetail.containerNone": "Nincs tároló",
+  "appAdmin.scheduleTab": "Utemezes",
+  "appAdmin.scheduleTitle": "Utemezett feladatok",
+  "appAdmin.scheduleHelp": "Automatikusan futtat egy biztonsagi mentest es egy Jellyfin-szinkronizalast a hatterben. Az intervallum az utolso utemezett futastol szamit.",
+  "appAdmin.scheduleBackupEnabled": "Biztonsagi mentes automatikus keszitese",
+  "appAdmin.scheduleIntervalHours": "Mindig (ora)",
+  "appAdmin.scheduleOnlyIfChanged": "Mentes kihagyasa, ha az utolso utemezett ota semmi sem valtozott",
+  "appAdmin.scheduleKeep": "Megorzott utemezett mentesek szama",
+  "appAdmin.scheduleIncludePersonal": "Megnezendo lista es megtekintesi elozmenyek bevonasa",
+  "appAdmin.scheduleJellyfinEnabled": "Jellyfin automatikus szinkronizalasa",
+  "appAdmin.scheduleJellyfinWatched": "A megtekintesi elozmenyek szinkronizalasa is (a fiokodhoz rendelve)",
+  "appAdmin.scheduleSave": "Utemezes mentese",
+  "appAdmin.scheduleSaved": "Utemezes mentve.",
+  "appAdmin.scheduleLoaded": "Utemezes betoltve.",
+  "appAdmin.scheduleLastRun": "Utolso futas",
+  "appAdmin.scheduleNeverRun": "Meg nem futott"
 }

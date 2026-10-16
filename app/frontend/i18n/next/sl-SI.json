@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "Načrtovanih {count} opravil števila glasov.",
   "appAdmin.votesBackfillNothing": "Vsak film, ki ga je mogoče izpolniti, že ima število glasov.",
   "movieDetail.containersSaveFailed": "Naslov je shranjen, spremembe škatlastih kompletov in zbirk pa ne.",
-  "movieDetail.containerNone": "Brez vsebnika"
+  "movieDetail.containerNone": "Brez vsebnika",
+  "appAdmin.scheduleTab": "Urnik",
+  "appAdmin.scheduleTitle": "Nacrtovana opravila",
+  "appAdmin.scheduleHelp": "V ozadju samodejno izvede varnostno kopijo in sinhronizacijo z Jellyfin. Interval se steje od zadnjega nacrtovanega zagona.",
+  "appAdmin.scheduleBackupEnabled": "Samodejno ustvari varnostno kopijo",
+  "appAdmin.scheduleIntervalHours": "Vsakih (ur)",
+  "appAdmin.scheduleOnlyIfChanged": "Preskoci kopijo, ce se od zadnje nacrtovane ni nic spremenilo",
+  "appAdmin.scheduleKeep": "Stevilo shranjenih nacrtovanih kopij",
+  "appAdmin.scheduleIncludePersonal": "Vkljuci seznam za ogled in zgodovino ogledov",
+  "appAdmin.scheduleJellyfinEnabled": "Samodejno sinhroniziraj Jellyfin",
+  "appAdmin.scheduleJellyfinWatched": "Sinhroniziraj tudi zgodovino ogledov (povezano z vasim racunom)",
+  "appAdmin.scheduleSave": "Shrani urnik",
+  "appAdmin.scheduleSaved": "Urnik shranjen.",
+  "appAdmin.scheduleLoaded": "Urnik nalozen.",
+  "appAdmin.scheduleLastRun": "Zadnji zagon",
+  "appAdmin.scheduleNeverRun": "Nikoli zagnano"
 }

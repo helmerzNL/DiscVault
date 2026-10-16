@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} tareas de recuento de votos programadas.",
   "appAdmin.votesBackfillNothing": "Todas las películas que se pueden rellenar ya tienen recuento de votos.",
   "movieDetail.containersSaveFailed": "El título se guardó, pero no los cambios de box sets y colecciones.",
-  "movieDetail.containerNone": "Sin contenedor"
+  "movieDetail.containerNone": "Sin contenedor",
+  "appAdmin.scheduleTab": "Programacion",
+  "appAdmin.scheduleTitle": "Tareas programadas",
+  "appAdmin.scheduleHelp": "Ejecuta automaticamente una copia de seguridad y una sincronizacion de Jellyfin en segundo plano. El intervalo se cuenta desde la ultima ejecucion programada.",
+  "appAdmin.scheduleBackupEnabled": "Crear una copia de seguridad automaticamente",
+  "appAdmin.scheduleIntervalHours": "Cada (horas)",
+  "appAdmin.scheduleOnlyIfChanged": "Omitir la copia si no ha cambiado nada desde la ultima copia programada",
+  "appAdmin.scheduleKeep": "Copias programadas que se conservan",
+  "appAdmin.scheduleIncludePersonal": "Incluir lista de seguimiento e historial de visionado",
+  "appAdmin.scheduleJellyfinEnabled": "Sincronizar Jellyfin automaticamente",
+  "appAdmin.scheduleJellyfinWatched": "Sincronizar tambien el historial de visionado (asociado a tu cuenta)",
+  "appAdmin.scheduleSave": "Guardar programacion",
+  "appAdmin.scheduleSaved": "Programacion guardada.",
+  "appAdmin.scheduleLoaded": "Programacion cargada.",
+  "appAdmin.scheduleLastRun": "Ultima ejecucion",
+  "appAdmin.scheduleNeverRun": "Nunca ejecutado"
 }

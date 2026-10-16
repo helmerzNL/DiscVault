@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "Planirano {count} zadataka broja glasova.",
   "appAdmin.votesBackfillNothing": "Svaki film koji se može popuniti već ima broj glasova.",
   "movieDetail.containersSaveFailed": "Naslov je spremljen, ali promjene box setova i zbirki nisu.",
-  "movieDetail.containerNone": "Nema spremnika"
+  "movieDetail.containerNone": "Nema spremnika",
+  "appAdmin.scheduleTab": "Raspored",
+  "appAdmin.scheduleTitle": "Zakazani zadaci",
+  "appAdmin.scheduleHelp": "Automatski pokrece sigurnosnu kopiju i Jellyfin sinkronizaciju u pozadini. Razmak se racuna od zadnjeg zakazanog pokretanja.",
+  "appAdmin.scheduleBackupEnabled": "Automatski izradi sigurnosnu kopiju",
+  "appAdmin.scheduleIntervalHours": "Svakih (sati)",
+  "appAdmin.scheduleOnlyIfChanged": "Preskoci kopiju ako se nista nije promijenilo od zadnje zakazane",
+  "appAdmin.scheduleKeep": "Broj zakazanih kopija koje se cuvaju",
+  "appAdmin.scheduleIncludePersonal": "Ukljuci popis zelja i povijest gledanja",
+  "appAdmin.scheduleJellyfinEnabled": "Automatski sinkroniziraj Jellyfin",
+  "appAdmin.scheduleJellyfinWatched": "Sinkroniziraj i povijest gledanja (povezanu s tvojim racunom)",
+  "appAdmin.scheduleSave": "Spremi raspored",
+  "appAdmin.scheduleSaved": "Raspored spremljen.",
+  "appAdmin.scheduleLoaded": "Raspored ucitan.",
+  "appAdmin.scheduleLastRun": "Zadnje pokretanje",
+  "appAdmin.scheduleNeverRun": "Nikad pokrenuto"
 }

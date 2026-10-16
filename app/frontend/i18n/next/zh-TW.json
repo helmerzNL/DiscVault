@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "已排程 {count} 個投票數工作。",
   "appAdmin.votesBackfillNothing": "每部可填入的影片都已有投票數。",
   "movieDetail.containersSaveFailed": "影片已儲存，但套裝和合集的變更未能儲存。",
-  "movieDetail.containerNone": "無容器"
+  "movieDetail.containerNone": "無容器",
+  "appAdmin.scheduleTab": "Schedule",
+  "appAdmin.scheduleTitle": "Scheduled jobs",
+  "appAdmin.scheduleHelp": "Run a backup and a Jellyfin sync automatically in the background. The interval counts from the last scheduled run.",
+  "appAdmin.scheduleBackupEnabled": "Create a backup automatically",
+  "appAdmin.scheduleIntervalHours": "Every (hours)",
+  "appAdmin.scheduleOnlyIfChanged": "Skip the backup when nothing changed since the last scheduled one",
+  "appAdmin.scheduleKeep": "Scheduled backups to keep",
+  "appAdmin.scheduleIncludePersonal": "Include watchlist and watched history",
+  "appAdmin.scheduleJellyfinEnabled": "Sync Jellyfin automatically",
+  "appAdmin.scheduleJellyfinWatched": "Also sync watched history (attached to your account)",
+  "appAdmin.scheduleSave": "Save schedule",
+  "appAdmin.scheduleSaved": "Schedule saved.",
+  "appAdmin.scheduleLoaded": "Schedule loaded.",
+  "appAdmin.scheduleLastRun": "Last run",
+  "appAdmin.scheduleNeverRun": "Never run"
 }

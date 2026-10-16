@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} sarcini pentru numărul de voturi planificate.",
   "appAdmin.votesBackfillNothing": "Fiecare film care poate fi completat are deja număr de voturi.",
   "movieDetail.containersSaveFailed": "Titlul a fost salvat, dar modificările seturilor box și colecțiilor nu.",
-  "movieDetail.containerNone": "Fără container"
+  "movieDetail.containerNone": "Fără container",
+  "appAdmin.scheduleTab": "Programare",
+  "appAdmin.scheduleTitle": "Sarcini programate",
+  "appAdmin.scheduleHelp": "Ruleaza automat, in fundal, o copie de rezerva si o sincronizare Jellyfin. Intervalul se numara de la ultima rulare programata.",
+  "appAdmin.scheduleBackupEnabled": "Creeaza automat o copie de rezerva",
+  "appAdmin.scheduleIntervalHours": "La fiecare (ore)",
+  "appAdmin.scheduleOnlyIfChanged": "Omite copia daca nu s-a schimbat nimic de la ultima copie programata",
+  "appAdmin.scheduleKeep": "Copii programate de pastrat",
+  "appAdmin.scheduleIncludePersonal": "Include lista de urmarit si istoricul vizionarilor",
+  "appAdmin.scheduleJellyfinEnabled": "Sincronizeaza automat Jellyfin",
+  "appAdmin.scheduleJellyfinWatched": "Sincronizeaza si istoricul vizionarilor (asociat contului tau)",
+  "appAdmin.scheduleSave": "Salveaza programarea",
+  "appAdmin.scheduleSaved": "Programare salvata.",
+  "appAdmin.scheduleLoaded": "Programare incarcata.",
+  "appAdmin.scheduleLastRun": "Ultima rulare",
+  "appAdmin.scheduleNeverRun": "Niciodata rulat"
 }

@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} vote count backfill jobs queued.",
   "appAdmin.votesBackfillNothing": "Every film that can be filled already has a vote count.",
   "movieDetail.containersSaveFailed": "The title was saved, but its box-set and collection changes were not.",
-  "movieDetail.containerNone": "No container"
+  "movieDetail.containerNone": "No container",
+  "appAdmin.scheduleTab": "Schedule",
+  "appAdmin.scheduleTitle": "Scheduled jobs",
+  "appAdmin.scheduleHelp": "Run a backup and a Jellyfin sync automatically in the background. The interval counts from the last scheduled run.",
+  "appAdmin.scheduleBackupEnabled": "Create a backup automatically",
+  "appAdmin.scheduleIntervalHours": "Every (hours)",
+  "appAdmin.scheduleOnlyIfChanged": "Skip the backup when nothing changed since the last scheduled one",
+  "appAdmin.scheduleKeep": "Scheduled backups to keep",
+  "appAdmin.scheduleIncludePersonal": "Include watchlist and watched history",
+  "appAdmin.scheduleJellyfinEnabled": "Sync Jellyfin automatically",
+  "appAdmin.scheduleJellyfinWatched": "Also sync watched history (attached to your account)",
+  "appAdmin.scheduleSave": "Save schedule",
+  "appAdmin.scheduleSaved": "Schedule saved.",
+  "appAdmin.scheduleLoaded": "Schedule loaded.",
+  "appAdmin.scheduleLastRun": "Last run",
+  "appAdmin.scheduleNeverRun": "Never run"
 }

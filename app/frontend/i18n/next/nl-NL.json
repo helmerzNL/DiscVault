@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} taken voor stemmenaantallen ingepland.",
   "appAdmin.votesBackfillNothing": "Elke film die ingevuld kan worden heeft al een stemmenaantal.",
   "movieDetail.containersSaveFailed": "De titel is opgeslagen, maar de wijzigingen aan box-sets en collecties niet.",
-  "movieDetail.containerNone": "Geen container"
+  "movieDetail.containerNone": "Geen container",
+  "appAdmin.scheduleTab": "Planning",
+  "appAdmin.scheduleTitle": "Geplande taken",
+  "appAdmin.scheduleHelp": "Voer automatisch een back-up en een Jellyfin-synchronisatie uit op de achtergrond. Het interval telt vanaf de laatste geplande uitvoering.",
+  "appAdmin.scheduleBackupEnabled": "Automatisch een back-up maken",
+  "appAdmin.scheduleIntervalHours": "Elke (uren)",
+  "appAdmin.scheduleOnlyIfChanged": "Back-up overslaan als er niets is gewijzigd sinds de vorige geplande back-up",
+  "appAdmin.scheduleKeep": "Geplande back-ups om te bewaren",
+  "appAdmin.scheduleIncludePersonal": "Kijklijst en kijkgeschiedenis meenemen",
+  "appAdmin.scheduleJellyfinEnabled": "Jellyfin automatisch synchroniseren",
+  "appAdmin.scheduleJellyfinWatched": "Ook kijkgeschiedenis synchroniseren (gekoppeld aan jouw account)",
+  "appAdmin.scheduleSave": "Planning opslaan",
+  "appAdmin.scheduleSaved": "Planning opgeslagen.",
+  "appAdmin.scheduleLoaded": "Planning geladen.",
+  "appAdmin.scheduleLastRun": "Laatst uitgevoerd",
+  "appAdmin.scheduleNeverRun": "Nog niet uitgevoerd"
 }
