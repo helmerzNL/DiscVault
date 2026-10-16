@@ -1,4 +1,4 @@
-"""Built-in scheduler for the daily backup and Jellyfin sync (issue #812)."""
+"""Built-in scheduler for the daily backup and the Jellyfin / Plex syncs (issue #812)."""
 
 import os
 import sys
@@ -36,18 +36,19 @@ class FakeCursor:
         if "FROM background_jobs" in text and "SELECT 1" in text:
             self._rows = [{"?column?": 1}] if self.conn.active_jobs else []
         elif "FROM plugins" in text:
-            self._rows = [{"?column?": 1}] if self.conn.jellyfin_ready else []
+            ready = params[0] in self.conn.ready_plugins if params else False
+            self._rows = [{"?column?": 1}] if ready else []
 
     def fetchone(self):
         return self._rows[0] if self._rows else None
 
 
 class FakeConn:
-    def __init__(self, config=None, state=None, active_jobs=False, jellyfin_ready=True):
+    def __init__(self, config=None, state=None, active_jobs=False, ready_plugins=("jellyfin", "plex")):
         self.config = config
         self.state = state or {}
         self.active_jobs = active_jobs
-        self.jellyfin_ready = jellyfin_ready
+        self.ready_plugins = set(ready_plugins)
         self.executed = []
 
     def cursor(self):
@@ -71,6 +72,8 @@ class ConfigTests(unittest.TestCase):
         config = sj.normalize_config(None)
         self.assertFalse(config["backup"]["enabled"])
         self.assertFalse(config["jellyfin"]["enabled"])
+        self.assertFalse(config["plex"]["enabled"])
+        self.assertEqual(config["plex"]["intervalHours"], 24)
         self.assertEqual(config["backup"]["intervalHours"], 24)
         self.assertEqual(config["backup"]["keep"], 7)
         self.assertTrue(config["backup"]["onlyIfChanged"])
@@ -88,9 +91,34 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["jellyfin"]["intervalHours"], 24)
 
     def test_requested_by_needs_an_id(self):
-        self.assertIsNone(sj.normalize_config({"jellyfin": {"requestedBy": {"username": "x"}}})["jellyfin"]["requestedBy"])
-        kept = sj.normalize_config({"jellyfin": {"requestedBy": {"id": 5, "username": "x"}}})["jellyfin"]["requestedBy"]
-        self.assertEqual(kept["id"], "5")
+        for job in ("jellyfin", "plex"):
+            with self.subTest(job=job):
+                self.assertIsNone(sj.normalize_config({job: {"requestedBy": {"username": "x"}}})[job]["requestedBy"])
+                kept = sj.normalize_config({job: {"requestedBy": {"id": 5, "username": "x"}}})[job]["requestedBy"]
+                self.assertEqual(kept["id"], "5")
+
+    def test_a_section_saved_alone_leaves_the_others_as_stored(self):
+        # The Backup tab and the Scheduled tasks tab each save only their own
+        # jobs; saving one must not reset the other to its defaults.
+        stored = {"backup": {"enabled": True, "keep": 3}, "plex": {"enabled": True, "intervalHours": 6}}
+        saved = {}
+        with patch.object(sj, "load_config", return_value=sj.normalize_config(stored)), \
+                patch.object(sj, "_store_setting", side_effect=lambda c, key, value, actor_id=None: saved.update(value)):
+            config = sj.save_config(None, {"jellyfin": {"enabled": True}})
+        self.assertTrue(config["jellyfin"]["enabled"])
+        self.assertTrue(config["plex"]["enabled"])
+        self.assertEqual(config["plex"]["intervalHours"], 6)
+        self.assertEqual(config["backup"]["keep"], 3)
+        self.assertEqual(saved["plex"]["intervalHours"], 6)
+
+    def test_a_partial_section_keeps_its_other_fields(self):
+        stored = {"plex": {"enabled": True, "intervalHours": 6, "includeWatched": False}}
+        with patch.object(sj, "load_config", return_value=sj.normalize_config(stored)), \
+                patch.object(sj, "_store_setting"):
+            config = sj.save_config(None, {"plex": {"intervalHours": 12}})
+        self.assertEqual(config["plex"]["intervalHours"], 12)
+        self.assertTrue(config["plex"]["enabled"])
+        self.assertFalse(config["plex"]["includeWatched"])
 
     def test_is_due(self):
         self.assertTrue(sj.is_due(None, 24, now=NOW))
@@ -193,8 +221,32 @@ class EnqueueTests(unittest.TestCase):
         self.assertNotIn("backup", conn.state)
 
     def test_jellyfin_not_installed_is_skipped(self):
-        conn = FakeConn(config={"jellyfin": {"enabled": True}}, jellyfin_ready=False)
+        conn = FakeConn(config={"jellyfin": {"enabled": True}}, ready_plugins=("plex",))
         self.assertEqual(self.enqueue(conn), [])
+
+    def test_plex_is_queued_against_the_plex_plugin(self):
+        actor = {"id": "u1", "username": "admin", "role": "owner"}
+        conn = FakeConn(config={"plex": {"enabled": True, "requestedBy": actor}})
+        self.assertEqual(self.enqueue(conn), ["plex.sync_library", "plex.sync_personal_lists"])
+        payloads = [params[0].obj for params in conn.inserted_jobs()]
+        self.assertEqual({p["pluginId"] for p in payloads}, {"plex"})
+        self.assertEqual(payloads[1]["requestedBy"], actor)
+        self.assertNotIn("requestedBy", payloads[0])
+        self.assertIn("lastEnqueuedAt", conn.state["plex"])
+        self.assertNotIn("jellyfin", conn.state)
+
+    def test_plex_not_installed_is_skipped_without_blocking_jellyfin(self):
+        conn = FakeConn(config={"jellyfin": {"enabled": True}, "plex": {"enabled": True}}, ready_plugins=("jellyfin",))
+        self.assertEqual(self.enqueue(conn), ["jellyfin.sync_library"])
+        self.assertNotIn("plex", conn.state)
+
+    def test_each_server_keeps_its_own_interval(self):
+        conn = FakeConn(
+            config={"jellyfin": {"enabled": True}, "plex": {"enabled": True, "intervalHours": 1}},
+            state={"jellyfin": {"lastEnqueuedAt": (NOW - timedelta(hours=2)).isoformat()},
+                   "plex": {"lastEnqueuedAt": (NOW - timedelta(hours=2)).isoformat()}},
+        )
+        self.assertEqual(self.enqueue(conn), ["plex.sync_library"])
 
 
 if __name__ == "__main__":

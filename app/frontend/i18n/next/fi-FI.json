@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Ei säiliötä",
   "appAdmin.scheduleTab": "Aikataulu",
   "appAdmin.scheduleTitle": "Ajastetut tehtavat",
-  "appAdmin.scheduleHelp": "Suorittaa varmuuskopion ja Jellyfin-synkronoinnin automaattisesti taustalla. Aikavali lasketaan viimeisesta ajastetusta suorituksesta.",
+  "appAdmin.scheduleHelp": "Luo varmuuskopion automaattisesti taustalla. Aikavali lasketaan viimeisesta ajastetusta suorituksesta.",
   "appAdmin.scheduleBackupEnabled": "Luo varmuuskopio automaattisesti",
   "appAdmin.scheduleIntervalHours": "Joka (tuntia)",
   "appAdmin.scheduleOnlyIfChanged": "Ohita varmuuskopio, jos mikaan ei ole muuttunut edellisen ajastetun jalkeen",
   "appAdmin.scheduleKeep": "Sailytettavat ajastetut varmuuskopiot",
   "appAdmin.scheduleIncludePersonal": "Sisallyta katselulista ja katseluhistoria",
   "appAdmin.scheduleJellyfinEnabled": "Synkronoi Jellyfin automaattisesti",
-  "appAdmin.scheduleJellyfinWatched": "Synkronoi myos katseluhistoria (liitetaan tiliisi)",
+  "appAdmin.scheduleWatched": "Synkronoi myos katseluhistoria (liitetaan tiliisi)",
   "appAdmin.scheduleSave": "Tallenna aikataulu",
   "appAdmin.scheduleSaved": "Aikataulu tallennettu.",
   "appAdmin.scheduleLoaded": "Aikataulu ladattu.",
   "appAdmin.scheduleLastRun": "Viimeisin suoritus",
-  "appAdmin.scheduleNeverRun": "Ei suoritettu koskaan"
+  "appAdmin.scheduleNeverRun": "Ei suoritettu koskaan",
+  "appAdmin.tabScheduledTasks": "Ajastetut tehtavat",
+  "appAdmin.scheduledTasksHelp": "Synkronoi Jellyfin- ja Plex-kirjastosi automaattisesti taustalla. Aikavali lasketaan viimeisesta ajastetusta suorituksesta.",
+  "appAdmin.schedulePlexEnabled": "Synkronoi Plex automaattisesti"
 }

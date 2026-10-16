@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Ingen behållare",
   "appAdmin.scheduleTab": "Schema",
   "appAdmin.scheduleTitle": "Schemalagda jobb",
-  "appAdmin.scheduleHelp": "Kor automatiskt en sakerhetskopia och en Jellyfin-synkronisering i bakgrunden. Intervallet raknas fran den senaste schemalagda korningen.",
+  "appAdmin.scheduleHelp": "Skapar automatiskt en sakerhetskopia i bakgrunden. Intervallet raknas fran den senaste schemalagda korningen.",
   "appAdmin.scheduleBackupEnabled": "Skapa en sakerhetskopia automatiskt",
   "appAdmin.scheduleIntervalHours": "Var (timme)",
   "appAdmin.scheduleOnlyIfChanged": "Hoppa over sakerhetskopian om inget har andrats sedan den senaste schemalagda",
   "appAdmin.scheduleKeep": "Schemalagda sakerhetskopior att behalla",
   "appAdmin.scheduleIncludePersonal": "Ta med bevakningslista och visningshistorik",
   "appAdmin.scheduleJellyfinEnabled": "Synkronisera Jellyfin automatiskt",
-  "appAdmin.scheduleJellyfinWatched": "Synkronisera aven visningshistorik (kopplad till ditt konto)",
+  "appAdmin.scheduleWatched": "Synkronisera aven visningshistorik (kopplad till ditt konto)",
   "appAdmin.scheduleSave": "Spara schema",
   "appAdmin.scheduleSaved": "Schemat sparades.",
   "appAdmin.scheduleLoaded": "Schemat har laddats.",
   "appAdmin.scheduleLastRun": "Senaste korning",
-  "appAdmin.scheduleNeverRun": "Aldrig kord"
+  "appAdmin.scheduleNeverRun": "Aldrig kord",
+  "appAdmin.tabScheduledTasks": "Schemalagda jobb",
+  "appAdmin.scheduledTasksHelp": "Synkroniserar automatiskt dina Jellyfin- och Plex-bibliotek i bakgrunden. Intervallet raknas fran den senaste schemalagda korningen.",
+  "appAdmin.schedulePlexEnabled": "Synkronisera Plex automatiskt"
 }

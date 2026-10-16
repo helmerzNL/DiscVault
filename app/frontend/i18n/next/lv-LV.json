@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Nav konteinera",
   "appAdmin.scheduleTab": "Grafiks",
   "appAdmin.scheduleTitle": "Ieplanotie darbi",
-  "appAdmin.scheduleHelp": "Automatiski fona izpilda dublejumkopiju un Jellyfin sinhronizaciju. Intervals tiek skaitits no pedejas ieplanotas izpildes.",
+  "appAdmin.scheduleHelp": "Automatiski fona izveido dublejumkopiju. Intervals tiek skaitits no pedejas ieplanotas izpildes.",
   "appAdmin.scheduleBackupEnabled": "Automatiski izveidot dublejumkopiju",
   "appAdmin.scheduleIntervalHours": "Ik pec (stundam)",
   "appAdmin.scheduleOnlyIfChanged": "Izlaist kopiju, ja kops pedejas ieplanotas nekas nav mainijies",
   "appAdmin.scheduleKeep": "Cik ieplanotas kopijas saglabat",
   "appAdmin.scheduleIncludePersonal": "Iekljaut skatisanas sarakstu un skatisanas vesturi",
   "appAdmin.scheduleJellyfinEnabled": "Automatiski sinhronizet Jellyfin",
-  "appAdmin.scheduleJellyfinWatched": "Sinhronizet ari skatisanas vesturi (piesaistitu jusu kontam)",
+  "appAdmin.scheduleWatched": "Sinhronizet ari skatisanas vesturi (piesaistitu jusu kontam)",
   "appAdmin.scheduleSave": "Saglabat grafiku",
   "appAdmin.scheduleSaved": "Grafiks saglabats.",
   "appAdmin.scheduleLoaded": "Grafiks ieladets.",
   "appAdmin.scheduleLastRun": "Pedeja izpilde",
-  "appAdmin.scheduleNeverRun": "Nekad nav izpildits"
+  "appAdmin.scheduleNeverRun": "Nekad nav izpildits",
+  "appAdmin.tabScheduledTasks": "Ieplanotie darbi",
+  "appAdmin.scheduledTasksHelp": "Automatiski fona sinhronize jusu Jellyfin un Plex bibliotekas. Intervals tiek skaitits no pedejas ieplanotas izpildes.",
+  "appAdmin.schedulePlexEnabled": "Automatiski sinhronizet Plex"
 }

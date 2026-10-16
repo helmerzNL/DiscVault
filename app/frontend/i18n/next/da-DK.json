@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Ingen container",
   "appAdmin.scheduleTab": "Tidsplan",
   "appAdmin.scheduleTitle": "Planlagte opgaver",
-  "appAdmin.scheduleHelp": "Koerer automatisk en sikkerhedskopi og en Jellyfin-synkronisering i baggrunden. Intervallet regnes fra den seneste planlagte koersel.",
+  "appAdmin.scheduleHelp": "Opretter automatisk en sikkerhedskopi i baggrunden. Intervallet regnes fra den seneste planlagte koersel.",
   "appAdmin.scheduleBackupEnabled": "Opret en sikkerhedskopi automatisk",
   "appAdmin.scheduleIntervalHours": "Hver (timer)",
   "appAdmin.scheduleOnlyIfChanged": "Spring sikkerhedskopien over, hvis intet er aendret siden den seneste planlagte",
   "appAdmin.scheduleKeep": "Planlagte sikkerhedskopier der gemmes",
   "appAdmin.scheduleIncludePersonal": "Medtag oenskeliste og sete film",
   "appAdmin.scheduleJellyfinEnabled": "Synkroniser Jellyfin automatisk",
-  "appAdmin.scheduleJellyfinWatched": "Synkroniser ogsaa sete film (knyttet til din konto)",
+  "appAdmin.scheduleWatched": "Synkroniser ogsaa sete film (knyttet til din konto)",
   "appAdmin.scheduleSave": "Gem tidsplan",
   "appAdmin.scheduleSaved": "Tidsplanen er gemt.",
   "appAdmin.scheduleLoaded": "Tidsplanen er indlaest.",
   "appAdmin.scheduleLastRun": "Seneste koersel",
-  "appAdmin.scheduleNeverRun": "Aldrig koert"
+  "appAdmin.scheduleNeverRun": "Aldrig koert",
+  "appAdmin.tabScheduledTasks": "Planlagte opgaver",
+  "appAdmin.scheduledTasksHelp": "Synkroniserer automatisk dine Jellyfin- og Plex-biblioteker i baggrunden. Intervallet regnes fra den seneste planlagte koersel.",
+  "appAdmin.schedulePlexEnabled": "Synkroniser Plex automatisk"
 }

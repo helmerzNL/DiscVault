@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Be konteinerio",
   "appAdmin.scheduleTab": "Tvarkarastis",
   "appAdmin.scheduleTitle": "Suplanuotos uzduotys",
-  "appAdmin.scheduleHelp": "Fone automatiskai paleidzia atsargine kopija ir Jellyfin sinchronizavima. Intervalas skaiciuojamas nuo paskutinio suplanuoto paleidimo.",
+  "appAdmin.scheduleHelp": "Fone automatiskai sukuria atsargine kopija. Intervalas skaiciuojamas nuo paskutinio suplanuoto paleidimo.",
   "appAdmin.scheduleBackupEnabled": "Automatiskai kurti atsargine kopija",
   "appAdmin.scheduleIntervalHours": "Kas (valandos)",
   "appAdmin.scheduleOnlyIfChanged": "Praleisti kopija, jei nuo paskutines suplanuotos niekas nepasikeite",
   "appAdmin.scheduleKeep": "Kiek suplanuotu kopiju saugoti",
   "appAdmin.scheduleIncludePersonal": "Itraukti stebejimo sarasa ir perziuru istorija",
   "appAdmin.scheduleJellyfinEnabled": "Automatiskai sinchronizuoti Jellyfin",
-  "appAdmin.scheduleJellyfinWatched": "Sinchronizuoti ir perziuru istorija (susieta su jusu paskyra)",
+  "appAdmin.scheduleWatched": "Sinchronizuoti ir perziuru istorija (susieta su jusu paskyra)",
   "appAdmin.scheduleSave": "Issaugoti tvarkarasti",
   "appAdmin.scheduleSaved": "Tvarkarastis issaugotas.",
   "appAdmin.scheduleLoaded": "Tvarkarastis ikeltas.",
   "appAdmin.scheduleLastRun": "Paskutinis paleidimas",
-  "appAdmin.scheduleNeverRun": "Niekada nepaleista"
+  "appAdmin.scheduleNeverRun": "Niekada nepaleista",
+  "appAdmin.tabScheduledTasks": "Suplanuotos uzduotys",
+  "appAdmin.scheduledTasksHelp": "Fone automatiskai sinchronizuoja jusu Jellyfin ir Plex bibliotekas. Intervalas skaiciuojamas nuo paskutinio suplanuoto paleidimo.",
+  "appAdmin.schedulePlexEnabled": "Automatiskai sinchronizuoti Plex"
 }

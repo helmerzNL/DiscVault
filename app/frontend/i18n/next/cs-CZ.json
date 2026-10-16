@@ -3200,17 +3200,20 @@
   "movieDetail.containerNone": "Žádný kontejner",
   "appAdmin.scheduleTab": "Plan",
   "appAdmin.scheduleTitle": "Naplanovane ulohy",
-  "appAdmin.scheduleHelp": "Automaticky na pozadi spousti zalohu a synchronizaci s Jellyfin. Interval se pocita od posledniho naplanovaneho spusteni.",
+  "appAdmin.scheduleHelp": "Automaticky na pozadi vytvari zalohu. Interval se pocita od posledniho naplanovaneho spusteni.",
   "appAdmin.scheduleBackupEnabled": "Vytvaret zalohu automaticky",
   "appAdmin.scheduleIntervalHours": "Kazdych (hodin)",
   "appAdmin.scheduleOnlyIfChanged": "Preskocit zalohu, pokud se od posledni naplanovane nic nezmenilo",
   "appAdmin.scheduleKeep": "Pocet uchovavanych naplanovanych zaloh",
   "appAdmin.scheduleIncludePersonal": "Zahrnout seznam k videni a historii sledovani",
   "appAdmin.scheduleJellyfinEnabled": "Synchronizovat Jellyfin automaticky",
-  "appAdmin.scheduleJellyfinWatched": "Synchronizovat i historii sledovani (prirazenou k vasemu uctu)",
+  "appAdmin.scheduleWatched": "Synchronizovat i historii sledovani (prirazenou k vasemu uctu)",
   "appAdmin.scheduleSave": "Ulozit plan",
   "appAdmin.scheduleSaved": "Plan ulozen.",
   "appAdmin.scheduleLoaded": "Plan nacten.",
   "appAdmin.scheduleLastRun": "Posledni spusteni",
-  "appAdmin.scheduleNeverRun": "Nikdy nespusteno"
+  "appAdmin.scheduleNeverRun": "Nikdy nespusteno",
+  "appAdmin.tabScheduledTasks": "Naplanovane ulohy",
+  "appAdmin.scheduledTasksHelp": "Automaticky na pozadi synchronizuje knihovny Jellyfin a Plex. Interval se pocita od posledniho naplanovaneho spusteni.",
+  "appAdmin.schedulePlexEnabled": "Synchronizovat Plex automaticky"
 }
