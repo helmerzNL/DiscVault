@@ -22,16 +22,41 @@ def _configured(context):
 
 
 def _headers(context):
-    return {"X-MediaBrowser-Token": _token(context)}
+    # Header auth only: newer Jellyfin servers refuse the legacy ?api_key= query
+    # parameter, and a key in the URL also ends up in proxy and server logs.
+    token = _token(context)
+    return {
+        "Authorization": f'MediaBrowser Token="{token}"',
+        "X-MediaBrowser-Token": token,
+        "X-Emby-Token": token,
+        "Accept": "application/json",
+    }
+
+
+def _get_json(context, url, **kwargs):
+    try:
+        response = requests.get(url, headers=_headers(context), **kwargs)
+        response.raise_for_status()
+    except requests.HTTPError as exc:
+        status = getattr(exc.response, "status_code", "unknown")
+        if status in (401, 403):
+            raise RuntimeError(
+                f"Jellyfin rejected the API key (HTTP {status}). Create a new API key under Dashboard > API Keys."
+            ) from exc
+        raise RuntimeError(f"Jellyfin request to {url.replace(_base_url(context), '') or '/'} failed (HTTP {status}).") from exc
+    try:
+        return response.json()
+    except ValueError as exc:
+        raise RuntimeError(
+            "Jellyfin returned a non-JSON response. Check that the Server URL points at Jellyfin itself, not a login page or proxy."
+        ) from exc
 
 
 def _user_id(context):
     configured = str(_settings(context).get("userId") or "").strip()
     if configured:
         return configured
-    response = requests.get(f"{_base_url(context)}/Users", headers=_headers(context), timeout=15)
-    response.raise_for_status()
-    users = response.json()
+    users = _get_json(context, f"{_base_url(context)}/Users", timeout=15)
     if isinstance(users, list) and users:
         return str((users[0] or {}).get("Id") or "")
     return ""
@@ -128,20 +153,19 @@ def sync_library(payload=None, context=None):
             "deleted": 0,
         }
 
-    response = requests.get(
+    data = _get_json(
+        context,
         f"{_base_url(context)}/Items",
         params={
             "IncludeItemTypes": "Movie",
             "Recursive": "true",
             "Fields": "ProviderIds",
             "Limit": str((payload or {}).get("limit") or 5000),
-            "api_key": _token(context),
         },
         timeout=30,
     )
-    response.raise_for_status()
     items = []
-    for item in response.json().get("Items", []):
+    for item in (data or {}).get("Items", []):
         provider_ids = item.get("ProviderIds") or {}
         external_id = str(item.get("Id", ""))
         items.append(
@@ -194,13 +218,11 @@ def sync_personal_lists(payload=None, context=None):
         "Fields": "ProviderIds,UserData",
         "Filters": "IsPlayed",
         "Limit": str((payload or {}).get("limit") or 5000),
-        "api_key": _token(context),
     }
     url = f"{_base_url(context)}/Users/{user_id}/Items" if user_id else f"{_base_url(context)}/Items"
-    response = requests.get(url, params=params, headers=_headers(context), timeout=30)
-    response.raise_for_status()
+    data = _get_json(context, url, params=params, timeout=30)
     watched = []
-    for item in response.json().get("Items", []):
+    for item in (data or {}).get("Items", []):
         entry = _item_to_watched(context, item)
         if entry:
             watched.append(entry)
