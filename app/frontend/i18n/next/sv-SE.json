@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} röstjobb schemalagda.",
   "appAdmin.votesBackfillNothing": "Alla filmer som kan fyllas i har redan ett röstantal.",
   "movieDetail.containersSaveFailed": "Titeln sparades, men ändringarna av boxset och samlingar sparades inte.",
-  "movieDetail.containerNone": "Ingen behållare"
+  "movieDetail.containerNone": "Ingen behållare",
+  "appAdmin.scheduleTab": "Schema",
+  "appAdmin.scheduleTitle": "Schemalagda jobb",
+  "appAdmin.scheduleHelp": "Kor automatiskt en sakerhetskopia och en Jellyfin-synkronisering i bakgrunden. Intervallet raknas fran den senaste schemalagda korningen.",
+  "appAdmin.scheduleBackupEnabled": "Skapa en sakerhetskopia automatiskt",
+  "appAdmin.scheduleIntervalHours": "Var (timme)",
+  "appAdmin.scheduleOnlyIfChanged": "Hoppa over sakerhetskopian om inget har andrats sedan den senaste schemalagda",
+  "appAdmin.scheduleKeep": "Schemalagda sakerhetskopior att behalla",
+  "appAdmin.scheduleIncludePersonal": "Ta med bevakningslista och visningshistorik",
+  "appAdmin.scheduleJellyfinEnabled": "Synkronisera Jellyfin automatiskt",
+  "appAdmin.scheduleJellyfinWatched": "Synkronisera aven visningshistorik (kopplad till ditt konto)",
+  "appAdmin.scheduleSave": "Spara schema",
+  "appAdmin.scheduleSaved": "Schemat sparades.",
+  "appAdmin.scheduleLoaded": "Schemat har laddats.",
+  "appAdmin.scheduleLastRun": "Senaste korning",
+  "appAdmin.scheduleNeverRun": "Aldrig kord"
 }

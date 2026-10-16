@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} stemmejobber planlagt.",
   "appAdmin.votesBackfillNothing": "Alle filmer som kan fylles ut har allerede et stemmetall.",
   "movieDetail.containersSaveFailed": "Tittelen ble lagret, men endringene i boksett og samlinger ble ikke det.",
-  "movieDetail.containerNone": "Ingen beholder"
+  "movieDetail.containerNone": "Ingen beholder",
+  "appAdmin.scheduleTab": "Tidsplan",
+  "appAdmin.scheduleTitle": "Planlagte oppgaver",
+  "appAdmin.scheduleHelp": "Kjorer automatisk en sikkerhetskopi og en Jellyfin-synkronisering i bakgrunnen. Intervallet telles fra siste planlagte kjoring.",
+  "appAdmin.scheduleBackupEnabled": "Opprett en sikkerhetskopi automatisk",
+  "appAdmin.scheduleIntervalHours": "Hver (timer)",
+  "appAdmin.scheduleOnlyIfChanged": "Hopp over sikkerhetskopien hvis ingenting er endret siden den siste planlagte",
+  "appAdmin.scheduleKeep": "Planlagte sikkerhetskopier som beholdes",
+  "appAdmin.scheduleIncludePersonal": "Ta med onskeliste og visningshistorikk",
+  "appAdmin.scheduleJellyfinEnabled": "Synkroniser Jellyfin automatisk",
+  "appAdmin.scheduleJellyfinWatched": "Synkroniser ogsa visningshistorikk (knyttet til kontoen din)",
+  "appAdmin.scheduleSave": "Lagre tidsplan",
+  "appAdmin.scheduleSaved": "Tidsplanen er lagret.",
+  "appAdmin.scheduleLoaded": "Tidsplanen er lastet.",
+  "appAdmin.scheduleLastRun": "Siste kjoring",
+  "appAdmin.scheduleNeverRun": "Aldri kjort"
 }

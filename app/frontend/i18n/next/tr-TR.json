@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} oy sayısı işi planlandı.",
   "appAdmin.votesBackfillNothing": "Doldurulabilecek her filmin zaten bir oy sayısı var.",
   "movieDetail.containersSaveFailed": "Başlık kaydedildi ancak box set ve koleksiyon değişiklikleri kaydedilmedi.",
-  "movieDetail.containerNone": "Kapsayıcı yok"
+  "movieDetail.containerNone": "Kapsayıcı yok",
+  "appAdmin.scheduleTab": "Zamanlama",
+  "appAdmin.scheduleTitle": "Zamanlanmis gorevler",
+  "appAdmin.scheduleHelp": "Arka planda otomatik olarak bir yedekleme ve bir Jellyfin senkronizasyonu calistirir. Aralik, son zamanlanmis calistirmadan itibaren sayilir.",
+  "appAdmin.scheduleBackupEnabled": "Otomatik yedek olustur",
+  "appAdmin.scheduleIntervalHours": "Her (saat)",
+  "appAdmin.scheduleOnlyIfChanged": "Son zamanlanmis yedekten beri hicbir sey degismediyse yedegi atla",
+  "appAdmin.scheduleKeep": "Saklanacak zamanlanmis yedek sayisi",
+  "appAdmin.scheduleIncludePersonal": "Izleme listesini ve izleme gecmisini dahil et",
+  "appAdmin.scheduleJellyfinEnabled": "Jellyfin'i otomatik senkronize et",
+  "appAdmin.scheduleJellyfinWatched": "Izleme gecmisini de senkronize et (hesabiniza baglanir)",
+  "appAdmin.scheduleSave": "Zamanlamayi kaydet",
+  "appAdmin.scheduleSaved": "Zamanlama kaydedildi.",
+  "appAdmin.scheduleLoaded": "Zamanlama yuklendi.",
+  "appAdmin.scheduleLastRun": "Son calistirma",
+  "appAdmin.scheduleNeverRun": "Hic calistirilmadi"
 }

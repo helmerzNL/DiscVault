@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "Naplánovaných {count} úloh počtu hlasov.",
   "appAdmin.votesBackfillNothing": "Každý film, ktorý sa dá doplniť, už má počet hlasov.",
   "movieDetail.containersSaveFailed": "Titul bol uložený, ale zmeny boxsetov a kolekcií nie.",
-  "movieDetail.containerNone": "Žiadny kontajner"
+  "movieDetail.containerNone": "Žiadny kontajner",
+  "appAdmin.scheduleTab": "Plan",
+  "appAdmin.scheduleTitle": "Naplanovane ulohy",
+  "appAdmin.scheduleHelp": "Automaticky na pozadi spusta zalohu a synchronizaciu s Jellyfin. Interval sa pocita od posledneho naplanovaneho spustenia.",
+  "appAdmin.scheduleBackupEnabled": "Vytvarat zalohu automaticky",
+  "appAdmin.scheduleIntervalHours": "Kazdych (hodin)",
+  "appAdmin.scheduleOnlyIfChanged": "Preskocit zalohu, ak sa od poslednej naplanovanej nic nezmenilo",
+  "appAdmin.scheduleKeep": "Pocet uchovavanych naplanovanych zaloh",
+  "appAdmin.scheduleIncludePersonal": "Zahrnut zoznam na pozretie a historiu sledovania",
+  "appAdmin.scheduleJellyfinEnabled": "Synchronizovat Jellyfin automaticky",
+  "appAdmin.scheduleJellyfinWatched": "Synchronizovat aj historiu sledovania (priradenu k vasmu uctu)",
+  "appAdmin.scheduleSave": "Ulozit plan",
+  "appAdmin.scheduleSaved": "Plan ulozeny.",
+  "appAdmin.scheduleLoaded": "Plan nacitany.",
+  "appAdmin.scheduleLastRun": "Posledne spustenie",
+  "appAdmin.scheduleNeverRun": "Nikdy nespustene"
 }

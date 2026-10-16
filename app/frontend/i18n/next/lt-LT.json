@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "Suplanuota {count} balsų skaičiaus užduočių.",
   "appAdmin.votesBackfillNothing": "Kiekvienas filmas, kurį galima užpildyti, jau turi balsų skaičių.",
   "movieDetail.containersSaveFailed": "Pavadinimas išsaugotas, bet dėžučių rinkinių ir kolekcijų pakeitimai – ne.",
-  "movieDetail.containerNone": "Be konteinerio"
+  "movieDetail.containerNone": "Be konteinerio",
+  "appAdmin.scheduleTab": "Tvarkarastis",
+  "appAdmin.scheduleTitle": "Suplanuotos uzduotys",
+  "appAdmin.scheduleHelp": "Fone automatiskai paleidzia atsargine kopija ir Jellyfin sinchronizavima. Intervalas skaiciuojamas nuo paskutinio suplanuoto paleidimo.",
+  "appAdmin.scheduleBackupEnabled": "Automatiskai kurti atsargine kopija",
+  "appAdmin.scheduleIntervalHours": "Kas (valandos)",
+  "appAdmin.scheduleOnlyIfChanged": "Praleisti kopija, jei nuo paskutines suplanuotos niekas nepasikeite",
+  "appAdmin.scheduleKeep": "Kiek suplanuotu kopiju saugoti",
+  "appAdmin.scheduleIncludePersonal": "Itraukti stebejimo sarasa ir perziuru istorija",
+  "appAdmin.scheduleJellyfinEnabled": "Automatiskai sinchronizuoti Jellyfin",
+  "appAdmin.scheduleJellyfinWatched": "Sinchronizuoti ir perziuru istorija (susieta su jusu paskyra)",
+  "appAdmin.scheduleSave": "Issaugoti tvarkarasti",
+  "appAdmin.scheduleSaved": "Tvarkarastis issaugotas.",
+  "appAdmin.scheduleLoaded": "Tvarkarastis ikeltas.",
+  "appAdmin.scheduleLastRun": "Paskutinis paleidimas",
+  "appAdmin.scheduleNeverRun": "Niekada nepaleista"
 }

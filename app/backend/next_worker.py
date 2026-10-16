@@ -50,7 +50,12 @@ try:
     from .next_product_identifiers import add_movie_identifiers
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
+    from .next_scheduled_jobs import SCHEDULED_BACKUP_JOB_TYPE
+    from .next_scheduled_jobs import enqueue_due_jobs as enqueue_due_scheduled_jobs
+    from .next_scheduled_jobs import run_scheduled_backup
     from .next_backup import BackupError as NextBackupError
+    from .next_backup import backup_storage_dir
+    from .next_audit import audit_event
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
@@ -109,7 +114,12 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_product_identifiers import add_movie_identifiers
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
+    from next_scheduled_jobs import SCHEDULED_BACKUP_JOB_TYPE
+    from next_scheduled_jobs import enqueue_due_jobs as enqueue_due_scheduled_jobs
+    from next_scheduled_jobs import run_scheduled_backup
     from next_backup import BackupError as NextBackupError
+    from next_backup import backup_storage_dir
+    from next_audit import audit_event
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
@@ -564,6 +574,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
+    if job_type == SCHEDULED_BACKUP_JOB_TYPE:
+        return process_scheduled_backup(payload, worker_id)
+
     if job_type == PRICE_ALERT_JOB_TYPE:
         return process_price_alert_sweep(payload, worker_id)
 
@@ -745,6 +758,42 @@ def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[
         },
         "summary": summary,
     }
+
+
+def process_scheduled_backup(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    from pathlib import Path as _Path
+
+    data_dir = _Path(
+        os.environ.get("DISCVAULT_LEGACY_DATA_DIR") or os.environ.get("DISCVAULT_SQLITE_IMPORT_DATA") or "/data"
+    ).expanduser()
+    if not data_dir.is_dir():
+        raise RuntimeError(f"DiscVault data directory not found: {data_dir}")
+    try:
+        from .versioning import build_sha, packaged_version
+    except ImportError:  # pragma: no cover - supports python next_worker.py
+        from versioning import build_sha, packaged_version
+    try:
+        with connect() as conn:
+            result = run_scheduled_backup(
+                conn,
+                backup_dir=backup_storage_dir(data_dir),
+                data_dir=data_dir,
+                generator={"service": "DiscVault Next", "version": packaged_version(), "sha": build_sha()},
+            )
+            if result.get("status") == "created":
+                audit_event(
+                    conn,
+                    event_type="backup.created",
+                    category="backup",
+                    actor={"role": "system"},
+                    target_type="backup",
+                    target_id=result.get("fileName"),
+                    summary="Created scheduled functional collection backup",
+                    metadata={"fileName": result.get("fileName"), "sha256": result.get("sha256"), "scheduled": True},
+                )
+    except NextBackupError as exc:
+        raise RuntimeError(str(exc)) from exc
+    return {"workerId": worker_id, "handled": True, "jobType": SCHEDULED_BACKUP_JOB_TYPE, **result}
 
 
 def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
@@ -3312,6 +3361,11 @@ def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
         _maybe_enqueue_artwork_trash_purge(worker_id)
+        try:
+            with connect() as conn:
+                enqueue_due_scheduled_jobs(conn, worker_id)
+        except Exception as exc:  # noqa: BLE001 - never crash the poll loop
+            print(json.dumps({"status": "error", "source": "scheduled_jobs_scheduler", "error": str(exc)}))
         try:
             _maybe_enqueue_movievault_v2_sync(worker_id)
         except Exception as exc:  # noqa: BLE001 - never crash the poll loop

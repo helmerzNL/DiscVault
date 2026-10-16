@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "Zaplanowano {count} zadań liczby głosów.",
   "appAdmin.votesBackfillNothing": "Każdy film, który można uzupełnić, ma już liczbę głosów.",
   "movieDetail.containersSaveFailed": "Tytuł został zapisany, ale zmiany w box setach i kolekcjach nie.",
-  "movieDetail.containerNone": "Brak kontenera"
+  "movieDetail.containerNone": "Brak kontenera",
+  "appAdmin.scheduleTab": "Harmonogram",
+  "appAdmin.scheduleTitle": "Zaplanowane zadania",
+  "appAdmin.scheduleHelp": "Automatycznie uruchamia w tle kopie zapasowa i synchronizacje z Jellyfin. Odstep liczony jest od ostatniego zaplanowanego uruchomienia.",
+  "appAdmin.scheduleBackupEnabled": "Tworz kopie zapasowa automatycznie",
+  "appAdmin.scheduleIntervalHours": "Co (godzin)",
+  "appAdmin.scheduleOnlyIfChanged": "Pomin kopie, jesli nic sie nie zmienilo od ostatniej zaplanowanej",
+  "appAdmin.scheduleKeep": "Liczba przechowywanych zaplanowanych kopii",
+  "appAdmin.scheduleIncludePersonal": "Uwzglednij liste do obejrzenia i historie ogladania",
+  "appAdmin.scheduleJellyfinEnabled": "Synchronizuj Jellyfin automatycznie",
+  "appAdmin.scheduleJellyfinWatched": "Synchronizuj tez historie ogladania (przypisana do Twojego konta)",
+  "appAdmin.scheduleSave": "Zapisz harmonogram",
+  "appAdmin.scheduleSaved": "Harmonogram zapisany.",
+  "appAdmin.scheduleLoaded": "Harmonogram wczytany.",
+  "appAdmin.scheduleLastRun": "Ostatnie uruchomienie",
+  "appAdmin.scheduleNeverRun": "Nigdy nie uruchomiono"
 }

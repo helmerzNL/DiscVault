@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "투표 수 작업 {count}건을 예약했습니다.",
   "appAdmin.votesBackfillNothing": "채울 수 있는 모든 영화에 이미 투표 수가 있습니다.",
   "movieDetail.containersSaveFailed": "타이틀은 저장되었지만 박스 세트 및 컬렉션 변경 사항은 저장되지 않았습니다.",
-  "movieDetail.containerNone": "컨테이너 없음"
+  "movieDetail.containerNone": "컨테이너 없음",
+  "appAdmin.scheduleTab": "Schedule",
+  "appAdmin.scheduleTitle": "Scheduled jobs",
+  "appAdmin.scheduleHelp": "Run a backup and a Jellyfin sync automatically in the background. The interval counts from the last scheduled run.",
+  "appAdmin.scheduleBackupEnabled": "Create a backup automatically",
+  "appAdmin.scheduleIntervalHours": "Every (hours)",
+  "appAdmin.scheduleOnlyIfChanged": "Skip the backup when nothing changed since the last scheduled one",
+  "appAdmin.scheduleKeep": "Scheduled backups to keep",
+  "appAdmin.scheduleIncludePersonal": "Include watchlist and watched history",
+  "appAdmin.scheduleJellyfinEnabled": "Sync Jellyfin automatically",
+  "appAdmin.scheduleJellyfinWatched": "Also sync watched history (attached to your account)",
+  "appAdmin.scheduleSave": "Save schedule",
+  "appAdmin.scheduleSaved": "Schedule saved.",
+  "appAdmin.scheduleLoaded": "Schedule loaded.",
+  "appAdmin.scheduleLastRun": "Last run",
+  "appAdmin.scheduleNeverRun": "Never run"
 }

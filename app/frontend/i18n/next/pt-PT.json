@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "{count} tarefas de contagem de votos agendadas.",
   "appAdmin.votesBackfillNothing": "Todos os filmes que podem ser preenchidos já têm contagem de votos.",
   "movieDetail.containersSaveFailed": "O título foi guardado, mas as alterações a box sets e coleções não.",
-  "movieDetail.containerNone": "Sem contentor"
+  "movieDetail.containerNone": "Sem contentor",
+  "appAdmin.scheduleTab": "Agendamento",
+  "appAdmin.scheduleTitle": "Tarefas agendadas",
+  "appAdmin.scheduleHelp": "Executa automaticamente uma copia de seguranca e uma sincronizacao do Jellyfin em segundo plano. O intervalo conta a partir da ultima execucao agendada.",
+  "appAdmin.scheduleBackupEnabled": "Criar uma copia de seguranca automaticamente",
+  "appAdmin.scheduleIntervalHours": "A cada (horas)",
+  "appAdmin.scheduleOnlyIfChanged": "Ignorar a copia se nada mudou desde a ultima copia agendada",
+  "appAdmin.scheduleKeep": "Copias agendadas a manter",
+  "appAdmin.scheduleIncludePersonal": "Incluir lista de observacao e historico de visualizacao",
+  "appAdmin.scheduleJellyfinEnabled": "Sincronizar o Jellyfin automaticamente",
+  "appAdmin.scheduleJellyfinWatched": "Sincronizar tambem o historico de visualizacao (associado a sua conta)",
+  "appAdmin.scheduleSave": "Guardar agendamento",
+  "appAdmin.scheduleSaved": "Agendamento guardado.",
+  "appAdmin.scheduleLoaded": "Agendamento carregado.",
+  "appAdmin.scheduleLastRun": "Ultima execucao",
+  "appAdmin.scheduleNeverRun": "Nunca executado"
 }

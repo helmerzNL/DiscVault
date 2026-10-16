@@ -3197,5 +3197,20 @@
   "appAdmin.votesBackfillQueued": "Ajastatud {count} häälte arvu tööd.",
   "appAdmin.votesBackfillNothing": "Igal filmil, mida saab täita, on juba häälte arv.",
   "movieDetail.containersSaveFailed": "Pealkiri salvestati, kuid karbikomplektide ja kogude muudatusi mitte.",
-  "movieDetail.containerNone": "Konteinerit pole"
+  "movieDetail.containerNone": "Konteinerit pole",
+  "appAdmin.scheduleTab": "Ajakava",
+  "appAdmin.scheduleTitle": "Ajastatud toed",
+  "appAdmin.scheduleHelp": "Kaivitab taustal automaatselt varukoopia ja Jellyfini sunkroonimise. Intervall loetakse viimasest ajastatud kaivitusest.",
+  "appAdmin.scheduleBackupEnabled": "Loo varukoopia automaatselt",
+  "appAdmin.scheduleIntervalHours": "Iga (tundi)",
+  "appAdmin.scheduleOnlyIfChanged": "Jata varukoopia vahele, kui viimasest ajastatud koopiast pole midagi muutunud",
+  "appAdmin.scheduleKeep": "Sailitatavad ajastatud varukoopiad",
+  "appAdmin.scheduleIncludePersonal": "Kaasa vaatamislist ja vaatamisajalugu",
+  "appAdmin.scheduleJellyfinEnabled": "Sunkrooni Jellyfin automaatselt",
+  "appAdmin.scheduleJellyfinWatched": "Sunkrooni ka vaatamisajalugu (seotud sinu kontoga)",
+  "appAdmin.scheduleSave": "Salvesta ajakava",
+  "appAdmin.scheduleSaved": "Ajakava salvestatud.",
+  "appAdmin.scheduleLoaded": "Ajakava laaditud.",
+  "appAdmin.scheduleLastRun": "Viimane kaivitus",
+  "appAdmin.scheduleNeverRun": "Pole kunagi kaivitatud"
 }
