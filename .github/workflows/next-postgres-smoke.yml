@@ -959,6 +959,15 @@ jobs:
       - name: Test the container tile's poster resolution
         run: python -m unittest tests.test_next_container_tile_poster
 
+      # The third surface reading the same containers. A container's artwork is
+      # an entity_media row and never a metadata URL, so the collection-items
+      # query -- which read only the metadata -- left a box set filed inside a
+      # collection with an empty tile while its own page showed the cover
+      # (#811). Which columns a query selects is not decidable against a fake
+      # cursor, so these need the schema this job has.
+      - name: Test the poster a collection's nested items resolve
+        run: python -m unittest tests.test_next_collection_item_poster
+
       # The user's own photographs of a release, a box set or a series. These
       # are the only images in the app that no source can supply a second time,
       # and the rules that keep them are all about two devices touching one set:
