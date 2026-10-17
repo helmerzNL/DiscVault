@@ -121,6 +121,14 @@ jobs:
       - name: Test the passkey login ceremony
         run: python -m unittest tests.test_next_passkey_ceremony
 
+      # The other front door, and it had never been listed here at all. This
+      # half reads the module as source -- the callback's wiring rules, which
+      # are checkable no other way -- so it belongs above the migrations. Its
+      # database half is listed below them, because source text is exactly what
+      # could not see #799.
+      - name: Test the OIDC callback wiring
+        run: python -m unittest tests.test_next_oidc
+
       # Reads the routing table out of the source and checks that the token the
       # server hands its own native clients can actually pass every gate the
       # advertised contract sends them through. Tightening a route's permission
@@ -409,6 +417,26 @@ jobs:
       - name: Show migration status
         run: python next_database.py status
 
+      # The database half of the OIDC front door, and the half that matters:
+      # #799 was two `uuid` columns disagreeing. The callback's lookup returned
+      # `oidc_identities.id` under the name `id`, the caller spent it as a user
+      # id, and the upsert's `WHERE oidc_identities.user_id=EXCLUDED.user_id`
+      # guard could not match it -- so an identity row permitted exactly one
+      # login, ever. Nothing type-errored and the source read correctly, which
+      # is why the module above it was blind to this and a real schema is not.
+      - name: Test signing in twice with the same OIDC identity
+        run: python -m unittest tests.test_next_oidc_login_identity
+
+      # #804: a failed callback rolled back oidc_auth_transactions.used_at
+      # along with everything else, because require_tables() issuing a SELECT
+      # before `with conn.transaction():` on the same connection turned that
+      # block into a SAVEPOINT rather than an outer transaction -- so the mark
+      # shared fate with a later failure on that connection. Only a real
+      # database observes this: it is PostgreSQL/psycopg transaction-scoping
+      # behaviour, not something the source text can show.
+      - name: Test the OIDC used_at mark survives a failed callback
+        run: python -m unittest tests.test_next_oidc_used_at
+
       # Below the migrations for the reason the block further down gives, and
       # for a second one specific to this pair: they do not merely read tables,
       # they assert what PostgreSQL *does* -- which index the planner picks, and
@@ -508,6 +536,11 @@ jobs:
       # refused cell instead of ending a run of thousands of rows.
       - name: Test custom fields as import mapping targets
         run: python -m unittest tests.test_next_import_custom_fields
+
+      # Series-level IMDb/TMDb ids must not merge distinct season releases, but
+      # they still identify the same compatible release when title or year alone differs.
+      - name: Test imported movie identity precedence
+        run: python -m unittest tests.test_next_import_identity
 
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
@@ -925,6 +958,15 @@ jobs:
       # cover through the one shared chain.
       - name: Test the container tile's poster resolution
         run: python -m unittest tests.test_next_container_tile_poster
+
+      # The third surface reading the same containers. A container's artwork is
+      # an entity_media row and never a metadata URL, so the collection-items
+      # query -- which read only the metadata -- left a box set filed inside a
+      # collection with an empty tile while its own page showed the cover
+      # (#811). Which columns a query selects is not decidable against a fake
+      # cursor, so these need the schema this job has.
+      - name: Test the poster a collection's nested items resolve
+        run: python -m unittest tests.test_next_collection_item_poster
 
       # The user's own photographs of a release, a box set or a series. These
       # are the only images in the app that no source can supply a second time,

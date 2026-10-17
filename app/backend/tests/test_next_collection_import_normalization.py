@@ -23,6 +23,7 @@ from app.backend.next_plugins._collection_import_base import (
     sum_disc_counts,
 )
 from app.backend.next_plugins.import_bluray_com.plugin import SOURCE as BLURAY_SOURCE
+from app.backend.next_plugins.import_clz_movies.plugin import SOURCE as CLZ_SOURCE
 
 
 SOURCE_FILE = Path("bluray_collection.csv")
@@ -30,6 +31,10 @@ SOURCE_FILE = Path("bluray_collection.csv")
 
 def bluray_plugin() -> CollectionImportPlugin:
     return CollectionImportPlugin(BLURAY_SOURCE)
+
+
+def clz_plugin() -> CollectionImportPlugin:
+    return CollectionImportPlugin(CLZ_SOURCE)
 
 
 def bluray_row(**overrides):
@@ -141,6 +146,56 @@ class DiscCountTests(unittest.TestCase):
 
     def test_missing_disc_columns_read_as_unknown_not_zero(self):
         self.assertIsNone(sum_disc_counts({"Title": "Heat"}, ("Blu-ray discs", "DVD discs")))
+
+
+class ClzNrDiscsAliasTests(unittest.TestCase):
+    """CLZ Movies' export column is "Nr Discs"; #792 tracks that it must not
+    be dropped. The CLZ plugin has no discCount override, so these aliases
+    live in COMMON_ALIASES and are exercised through the CLZ plugin's own
+    field_aliases() to prove the shared list actually reaches it.
+    """
+
+    def test_common_aliases_include_the_clz_column_and_its_of_variant(self):
+        aliases = clz_plugin().field_aliases("discCount")
+        self.assertIn("Nr Discs", aliases)
+        self.assertIn("Nr of Discs", aliases)
+
+    def test_nr_discs_column_is_read_as_the_disc_count(self):
+        aliases = clz_plugin().field_aliases("discCount")
+        self.assertEqual(sum_disc_counts({"Nr Discs": "3"}, aliases), 3)
+
+    def test_nr_of_discs_column_is_also_read(self):
+        aliases = clz_plugin().field_aliases("discCount")
+        self.assertEqual(sum_disc_counts({"Nr of Discs": "4"}, aliases), 4)
+
+    def test_matching_is_case_insensitive_like_every_other_alias(self):
+        aliases = clz_plugin().field_aliases("discCount")
+        self.assertEqual(sum_disc_counts({"nr discs": "2"}, aliases), 2)
+
+    def test_nr_discs_does_not_collide_with_the_bare_nr_external_id_alias(self):
+        # CLZ's own "externalId" alias list already contains the bare "Nr"
+        # (its abbreviation for the row index). "Nr Discs" is a distinct
+        # column name, so a row carrying both must keep them apart rather
+        # than one alias swallowing the other's value.
+        plugin = clz_plugin()
+        row = {"Nr": "12", "Nr Discs": "3", "Title": "Heat"}
+        self.assertEqual(
+            plugin.normalize_row(row, SOURCE_FILE, 1)["externalId"],
+            "12",
+        )
+        self.assertEqual(sum_disc_counts(row, plugin.field_aliases("discCount")), 3)
+
+    def test_clz_row_with_nr_discs_reaches_box_set_detection(self):
+        # End-to-end through normalize_row: a weak "Collection" title phrase
+        # only counts as a box set once the disc count clears the threshold,
+        # so this also proves "Nr Discs" reaches disc_count and not just the
+        # standalone helper.
+        movie = clz_plugin().normalize_row(
+            {"Title": "A Nightmare on Elm Street Collection", "Nr Discs": "7"},
+            SOURCE_FILE,
+            1,
+        )
+        self.assertTrue(movie["isBoxSet"])
 
 
 class BoxSetTitleDetectionTests(unittest.TestCase):

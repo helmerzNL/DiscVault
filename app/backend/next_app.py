@@ -150,6 +150,10 @@ try:
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_scheduled_jobs import load_config as load_scheduled_jobs_config
+    from .next_scheduled_jobs import load_state as load_scheduled_jobs_state
+    from .next_scheduled_jobs import save_config as save_scheduled_jobs_config
+    from .next_scheduled_jobs import SYNC_PLUGIN_IDS as SCHEDULED_SYNC_JOBS
     from .next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
     from .next_backup import normalize_scopes as normalize_backup_scopes
     from .next_backup import list_backup_archives
@@ -174,6 +178,7 @@ try:
     from .next_auth import _rp_id
     from .next_auth import _rp_origins
     from .next_auth import _verify_signature
+    from .next_oidc import validate_oidc_environment
     from .next_runtime_secrets import validate_runtime_secrets
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
@@ -210,6 +215,10 @@ try:
     from .next_common import json_ready
     from .next_common import parse_bool_value
     from .next_common import physical_format_label
+    from .next_common import physical_media_format_key
+    from .next_common import physical_media_formats_compatible
+    from .next_common import import_writer_identifiers
+    from .next_common import resolve_import_identity_match
     from .next_common import parse_int_arg
     from .next_common import parse_uuid
     from .next_common import parse_uuid_list
@@ -463,6 +472,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_scheduled_jobs import load_config as load_scheduled_jobs_config
+    from next_scheduled_jobs import load_state as load_scheduled_jobs_state
+    from next_scheduled_jobs import save_config as save_scheduled_jobs_config
+    from next_scheduled_jobs import SYNC_PLUGIN_IDS as SCHEDULED_SYNC_JOBS
     from next_backup import ALL_SELECTABLE_SCOPES as BACKUP_ALL_SCOPES
     from next_backup import normalize_scopes as normalize_backup_scopes
     from next_backup import list_backup_archives
@@ -487,6 +500,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_auth import _rp_id
     from next_auth import _rp_origins
     from next_auth import _verify_signature
+    from next_oidc import validate_oidc_environment
     from next_runtime_secrets import validate_runtime_secrets
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import ADD_FLOW_RELEASE_DETAILS_POLL_ATTEMPTS
@@ -523,6 +537,10 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_common import json_ready
     from next_common import parse_bool_value
     from next_common import physical_format_label
+    from next_common import physical_media_format_key
+    from next_common import physical_media_formats_compatible
+    from next_common import import_writer_identifiers
+    from next_common import resolve_import_identity_match
     from next_common import parse_int_arg
     from next_common import parse_uuid
     from next_common import parse_uuid_list
@@ -986,6 +1004,7 @@ PRICE_DISPLAY_RATE_RETRY_AFTER = timedelta(minutes=5)
 
 def create_app() -> Flask:
     validate_runtime_secrets()
+    validate_oidc_environment()
     flask_app = Flask(__name__)
     CORS(flask_app, supports_credentials=True)
     register_routes(flask_app)
@@ -1401,30 +1420,12 @@ def perform_update_check(conn, requested_channel: Any = None) -> dict[str, Any]:
         }
 
 
-def physical_media_format_key(value: Any) -> str:
-    text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
-    text = " ".join(text.split())
-    if not text:
-        return ""
-    if "ultra hd" in text or "uhd" in text or "4k" in text:
-        return "ultra_hd_blu_ray"
-    if "blu ray" in text or "bluray" in text or text == "bd":
-        return "blu_ray"
-    if text in {"dvd", "dvd video"}:
-        return "dvd"
-    if "hd dvd" in text or "hddvd" in text:
-        return "hd_dvd"
-    if "laserdisc" in text or "laser disc" in text:
-        return "laserdisc"
-    if "svcd" in text or "vcd" in text:
-        return "vcd_svcd"
-    return text
 
-
-def physical_media_formats_compatible(candidate: Any, expected: Any) -> bool:
-    candidate_key = physical_media_format_key(candidate)
-    expected_key = physical_media_format_key(expected)
-    return not candidate_key or not expected_key or candidate_key == expected_key
+# physical_media_format_key/physical_media_formats_compatible now live in
+# next_common.py so the import writer and the import preview share one
+# definition of "compatible format" instead of two copies drifting apart.
+# They are imported above (see the NextApiError import block for each
+# runtime layout) alongside the rest of the shared import-identity helpers.
 
 
 def should_reuse_box_set_container_for_import(
@@ -2961,82 +2962,141 @@ def merge_selected_import_movie_candidate(
 
 
 def import_source_conflicts(conn, items: list[dict[str, Any]], *, limit: int = 50) -> list[dict[str, Any]]:
+    """Predict, item by item, whether the writer will create or update.
+
+    This shares `resolve_import_identity_match` with `import_movie_existing_id`
+    (the writer) so a "existing" verdict here means the writer really will
+    find that row - same barcode/identifier/title+year precedence, same
+    format-compatibility filter, same tmdb/imdb-only identifier scope.
+
+    The one thing a plain shared query cannot give it for free: the writer
+    processes a batch as a sequence of writes on one connection, so item 7 in
+    a batch can match the row item 3 just inserted. This preview never
+    writes, so it keeps an in-memory pool of every earlier item's own
+    barcode/identifiers/title+year and treats a pool hit as if it were the
+    most-recently-touched real row - which is exactly the role that row would
+    play once the writer had actually created or updated it (see #791).
+    """
     if not table_exists(conn, "movies"):
         return []
     conflicts: list[dict[str, Any]] = []
-    for index, item in enumerate(items[:limit], start=1):
-        if not isinstance(item, dict):
-            continue
-        title = clean_text(item.get("title") or item.get("name"))
-        year = clean_text(item.get("year") or item.get("releaseYear") or item.get("release_year"))
-        barcode = clean_text(item.get("barcode"))
-        match: dict[str, Any] | None = None
-        with conn.cursor() as cur:
-            if barcode:
+    identifiers_available = table_exists(conn, "movie_identifiers")
+
+    pool_by_barcode: dict[str, dict[str, Any]] = {}
+    pool_by_identifier: dict[tuple[str, str], list[dict[str, Any]]] = {}
+    pool_by_title_year: dict[tuple[str, str], list[dict[str, Any]]] = {}
+
+    with conn.cursor() as cur:
+        for index, item in enumerate(items[:limit], start=1):
+            if not isinstance(item, dict):
+                continue
+            title = clean_text(item.get("title") or item.get("name"))
+            year = clean_text(item.get("year") or item.get("releaseYear") or item.get("release_year"))
+            barcode = clean_text(item.get("barcode"))
+            item_format = import_source_item_format(item)
+            identifiers = import_writer_identifiers(item)
+
+            def barcode_candidates(_barcode: str = barcode) -> list[dict[str, Any]]:
+                pooled = pool_by_barcode.get(_barcode)
+                if pooled:
+                    return [pooled]
                 cur.execute(
-                    "SELECT id, title, year, barcode FROM movies WHERE barcode=%s LIMIT 1",
-                    (barcode,),
+                    "SELECT id, title, year, barcode, format FROM movies WHERE barcode=%s LIMIT 1",
+                    (_barcode,),
                 )
-                row = cur.fetchone()
-                if row:
-                    match = {
-                        "id": str(row["id"]),
-                        "title": row.get("title"),
-                        "year": row.get("year"),
-                        "barcode": row.get("barcode"),
-                        "reason": "barcode",
-                    }
-            if not match and table_exists(conn, "movie_identifiers"):
-                for provider, identifier in import_source_item_identifiers(item).items():
-                    cur.execute(
-                        """
-                        SELECT m.id, m.title, m.year, m.barcode
-                        FROM movie_identifiers mi
-                        JOIN movies m ON m.id=mi.movie_id
-                        WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
-                        LIMIT 1
-                        """,
-                        (provider, identifier),
-                    )
-                    row = cur.fetchone()
-                    if row:
-                        match = {
-                            "id": str(row["id"]),
-                            "title": row.get("title"),
-                            "year": row.get("year"),
-                            "barcode": row.get("barcode"),
-                            "reason": provider,
-                        }
-                        break
-            if not match and title and year:
+                return cur.fetchall()
+
+            def identifier_candidates(
+                provider: str,
+                identifier: str,
+                _pool: dict[tuple[str, str], list[dict[str, Any]]] = pool_by_identifier,
+            ) -> list[dict[str, Any]]:
+                pooled = list(reversed(_pool.get((provider, identifier), [])))
+                if not identifiers_available:
+                    return pooled
                 cur.execute(
                     """
-                    SELECT id, title, year, barcode
+                    SELECT m.id, m.title, m.year, m.barcode, m.format
+                    FROM movie_identifiers mi
+                    JOIN movies m ON m.id=mi.movie_id
+                    WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
+                    ORDER BY m.updated_at DESC
+                    """,
+                    (provider, identifier),
+                )
+                return pooled + cur.fetchall()
+
+            def title_year_candidates(
+                match_title: str,
+                match_year: str,
+                _pool: dict[tuple[str, str], list[dict[str, Any]]] = pool_by_title_year,
+            ) -> list[dict[str, Any]]:
+                pooled = list(reversed(_pool.get((match_title.casefold(), match_year), [])))
+                cur.execute(
+                    """
+                    SELECT id, title, year, barcode, format
                     FROM movies
                     WHERE lower(title)=lower(%s) AND year=%s
-                    LIMIT 1
+                    ORDER BY updated_at DESC
                     """,
-                    (title, year),
+                    (match_title, match_year),
                 )
-                row = cur.fetchone()
-                if row:
-                    match = {
-                        "id": str(row["id"]),
-                        "title": row.get("title"),
-                        "year": row.get("year"),
-                        "barcode": row.get("barcode"),
-                        "reason": "title_year",
-                    }
-        conflicts.append(
-            {
-                "index": index,
+                return pooled + cur.fetchall()
+
+            result = resolve_import_identity_match(
+                barcode=barcode,
+                identifiers=identifiers,
+                title=title,
+                year=year,
+                item_format=item_format,
+                barcode_candidates=barcode_candidates,
+                identifier_candidates=identifier_candidates,
+                title_year_candidates=title_year_candidates,
+            )
+
+            match: dict[str, Any] | None = None
+            if result:
+                reason, row = result
+                match = {
+                    "id": str(row["id"]),
+                    "title": row.get("title"),
+                    "year": row.get("year"),
+                    "barcode": row.get("barcode"),
+                    "reason": reason,
+                }
+
+            conflicts.append(
+                {
+                    "index": index,
+                    "title": title,
+                    "year": year,
+                    "barcode": barcode,
+                    "state": "existing" if match else "new",
+                    "match": match,
+                }
+            )
+
+            # This item is about to be created or updated, so a later item in
+            # the same batch that shares its identity must see it - the same
+            # visibility the writer gets for free from processing the batch
+            # sequentially on one connection. A synthetic "pending-N" id is
+            # enough: this pool only ever feeds the classification above, and
+            # a match's `id` is a display fallback, never a navigable link.
+            pool_row = {
+                "id": f"pending-{index}",
                 "title": title,
                 "year": year,
                 "barcode": barcode,
-                "state": "existing" if match else "new",
-                "match": match,
+                "format": item_format,
             }
-        )
+            if barcode:
+                pool_by_barcode[barcode] = pool_row
+            for provider, identifier in identifiers.items():
+                if identifier:
+                    pool_by_identifier.setdefault((provider, identifier), []).append(pool_row)
+            if title and year:
+                pool_by_title_year.setdefault((title.casefold(), year), []).append(pool_row)
+
     return conflicts
 
 
@@ -3391,7 +3451,7 @@ def import_source_metadata_suggestions(
                 "title": candidate_title,
                 "year": candidate_year,
                 "posterUrl": clean_text(candidate.get("posterUrl") or candidate.get("poster_url") or candidate.get("poster")),
-                "overview": clean_text(candidate.get("overview") or candidate.get("plot"))[:500],
+                "overview": (clean_text(candidate.get("overview") or candidate.get("plot")) or "")[:500],
                 "identifiers": candidate_identifiers,
             }
         )
@@ -3424,7 +3484,7 @@ def import_source_metadata_suggestions(
             key = json_lib.dumps(
                 {
                     "provider": provider,
-                    "title": clean_text(proposal.get("title") or proposal.get("name")).casefold(),
+                    "title": (clean_text(proposal.get("title") or proposal.get("name")) or "").casefold(),
                     "barcode": clean_text(proposal.get("barcode")),
                     "members": len(box_set_proposal_member_list(proposal)),
                 },
@@ -3578,7 +3638,7 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
         if proposal_members:
             seen_reviews.add((
                 clean_text(proposal.get("barcode") or container.get("barcode")),
-                clean_text(container.get("title") or proposal.get("title") or proposal.get("name")).casefold(),
+                (clean_text(container.get("title") or proposal.get("title") or proposal.get("name")) or "").casefold(),
             ))
             reviews.append(
                 {
@@ -3634,7 +3694,7 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
                 "members": members,
             }
         )
-        seen_reviews.add((clean_text(container.get("barcode")), clean_text(container.get("title")).casefold()))
+        seen_reviews.add((clean_text(container.get("barcode")), (clean_text(container.get("title")) or "").casefold()))
     for row in review_queue:
         proposal = row.get("detectedBoxSetProposal") if isinstance(row.get("detectedBoxSetProposal"), dict) else {}
         proposal_members = box_set_proposal_member_list(proposal)
@@ -3642,7 +3702,7 @@ def import_source_box_set_reviews(container_preview: list[dict[str, Any]], revie
             continue
         key = (
             clean_text(proposal.get("barcode") or row.get("barcode")),
-            clean_text(proposal.get("title") or proposal.get("name") or row.get("title")).casefold(),
+            (clean_text(proposal.get("title") or proposal.get("name") or row.get("title")) or "").casefold(),
         )
         if key in seen_reviews:
             continue
@@ -4366,16 +4426,13 @@ def import_upload_candidates(
                 }
             )
     if best_plugin_id and best_payload:
-        try:
-            best_preview = inspect_import_source_selection(
-                conn,
-                plugin_id=best_plugin_id,
-                payload=best_payload,
-                actor=actor,
-                include_metadata_suggestions=True,
-            )
-        except Exception:
-            pass
+        best_preview = inspect_import_source_selection(
+            conn,
+            plugin_id=best_plugin_id,
+            payload=best_payload,
+            actor=actor,
+            include_metadata_suggestions=True,
+        )
     candidates.sort(
         key=lambda item: (
             safe_int(((item.get("recognition") or {}).get("score") or 0) if isinstance(item.get("recognition"), dict) else 0),
@@ -10834,6 +10891,9 @@ PLUGIN_REGISTRY_MANAGE_PERMISSIONS = (
 # migrations_next/013_plugin_delete_permission.sql); it is reused here rather
 # than inventing a new permission/migration.
 PLUGIN_REGISTRY_INSTALL_PERMISSIONS = ("plugins.delete",)
+# Scheduled jobs: backups need admin.backup; the media-server syncs are also
+# open to whoever may sync digital sources.
+SCHEDULED_JOBS_PERMISSIONS = ("admin.backup", "digital_sources.sync")
 
 
 def require_plugin_registry_install_permission(conn) -> dict[str, Any]:
@@ -12172,6 +12232,14 @@ def movie_runtime_value(body: dict[str, Any], existing: dict[str, Any]) -> int |
         return None
 
 
+def movie_disc_count_value(body: dict[str, Any], existing: dict[str, Any]) -> int | None:
+    keys = ("discCount", "disc_count")
+    if not any(key in body for key in keys):
+        return existing.get("disc_count")
+    raw = next(body[key] for key in keys if key in body)
+    return clamp_disc_count(raw)
+
+
 def movie_media_type_value(body: dict[str, Any], existing: dict[str, Any]) -> str:
     """Resolve the edited media type, keyed on presence like the runtime helper.
 
@@ -13366,6 +13434,7 @@ def movie_update_payload(body: dict[str, Any], *, existing: dict[str, Any]) -> d
         "location": pick_text("location"),
         "location_id": location_id,
         "runtime_minutes": movie_runtime_value(body, existing),
+        "disc_count": movie_disc_count_value(body, existing),
         "estimated_value": movie_estimated_value(body, existing),
         "estimated_value_currency": movie_estimated_value_currency(body, existing),
         "metadata_edits": movie_metadata_edits(body),
@@ -21054,6 +21123,43 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
             items.extend(cur.fetchall())
     if table_exists(conn, "containers"):
         visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
+        # A container's own cover lives in `entity_media`, not in its metadata:
+        # `link_container_media_option` writes the artwork row and nothing
+        # touches `containers.metadata`, so a box set nested in a collection has
+        # no `metadata->>'poster_url'` to read. Reading only that column left the
+        # item tile empty while the box set's own page showed the cover (#811).
+        # Same lateral and the same fold as the library snapshot in
+        # `collection_container_preview_entities`, so both surfaces answer alike.
+        media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+        poster_columns = (
+            """
+                    poster_asset.id AS poster_asset_id,
+                    poster_asset.storage_backend AS poster_asset_storage_backend,
+                    poster_asset.storage_key AS poster_asset_storage_key,
+                    poster_asset.source_url AS poster_asset_source_url,
+                    poster_asset.provider_id AS poster_asset_provider_id,
+            """
+            if media_join
+            else ""
+        )
+        poster_join = (
+            """
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='container'
+                      AND em.entity_id=c.id
+                      AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+            """
+            if media_join
+            else ""
+        )
         with conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -21072,17 +21178,23 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
                     c.year,
                     c.description,
                     c.metadata,
+{poster_columns}
                     c.metadata->>'poster_url' AS poster_url,
                     c.metadata->>'backdrop_url' AS backdrop_url
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.item_id
+{poster_join}
                 WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
                   AND {visibility_where}
                 ORDER BY ci.sort_order, c.container_type, lower(c.title)
                 """,
                 (container_id, *visibility_params),
             )
-            items.extend(cur.fetchall())
+            rows = cur.fetchall()
+        # `with_preview_media_urls` prefers the joined asset and falls back to
+        # the metadata URL, which is what keeps a container that only carries a
+        # metadata cover rendering exactly as before.
+        items.extend(with_preview_media_urls(row) if media_join else row for row in rows)
     return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
 
 
@@ -23394,6 +23506,7 @@ def apply_movie_upsert(
                 overview,
                 notes,
                 rating,
+                disc_count,
                 purchase_date,
                 purchase_price,
                 estimated_value,
@@ -23413,7 +23526,7 @@ def apply_movie_upsert(
                 -- NULL would defeat the DEFAULT and hit the NOT NULL instead.
                 COALESCE(%s, %s),
                 %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-                %s, %s, %s,
+                %s, %s, %s, %s,
                 now(), now()
             )
             ON CONFLICT (id) DO UPDATE SET
@@ -23447,6 +23560,7 @@ def apply_movie_upsert(
                 overview=COALESCE(EXCLUDED.overview, movies.overview),
                 notes=COALESCE(EXCLUDED.notes, movies.notes),
                 rating=COALESCE(EXCLUDED.rating, movies.rating),
+                disc_count=COALESCE(EXCLUDED.disc_count, movies.disc_count),
                 purchase_date=COALESCE(EXCLUDED.purchase_date, movies.purchase_date),
                 purchase_price=COALESCE(EXCLUDED.purchase_price, movies.purchase_price),
                 estimated_value=COALESCE(EXCLUDED.estimated_value, movies.estimated_value),
@@ -23479,6 +23593,7 @@ def apply_movie_upsert(
                 fields["overview"],
                 fields["notes"],
                 fields["rating"],
+                fields["disc_count"],
                 fields["purchase_date"],
                 fields["purchase_price"],
                 fields["estimated_value"],
@@ -40159,6 +40274,69 @@ def register_routes(flask_app: Flask) -> None:
         result.headers["X-DiscVault-Backup-Sha256"] = summary["sha256"]
         result.headers["X-DiscVault-Backup-Scope"] = "functional_collection"
         return result
+
+    def _scheduled_jobs_client_config(config: dict[str, Any]) -> dict[str, Any]:
+        # A sync schedule remembers who the watched history is attached to; the
+        # client only needs to know whether one is set.
+        for key in SCHEDULED_SYNC_JOBS:
+            config[key]["hasRequestedBy"] = bool(config[key].pop("requestedBy", None))
+        return config
+
+    @flask_app.get("/api/next/scheduled-jobs")
+    def scheduled_jobs_get():
+        with connect() as conn:
+            require_any_next_permission(conn, SCHEDULED_JOBS_PERMISSIONS)
+            config = load_scheduled_jobs_config(conn)
+            state = load_scheduled_jobs_state(conn)
+        return response({"status": "ok", "config": _scheduled_jobs_client_config(config), "state": state})
+
+    @flask_app.put("/api/next/scheduled-jobs")
+    def scheduled_jobs_put():
+        body = request.get_json(silent=True) if request.is_json else None
+        if not isinstance(body, dict):
+            raise NextApiError("A JSON object is required", 400)
+        with connect() as conn:
+            actor = require_any_next_permission(conn, SCHEDULED_JOBS_PERMISSIONS)
+            # Backups are an admin.backup matter; the media-server syncs are also
+            # open to whoever may sync digital sources.
+            if isinstance(body.get("backup"), dict):
+                actor = require_any_next_permission(conn, ("admin.backup",))
+            # Only the sections sent are changed (save_config merges), so each
+            # admin tab can save its own jobs without resetting the others.
+            update: dict[str, Any] = {}
+            if isinstance(body.get("backup"), dict):
+                update["backup"] = body["backup"]
+            for key in SCHEDULED_SYNC_JOBS:
+                if isinstance(body.get(key), dict):
+                    # The watched-history sync needs a user to attach history
+                    # to: the admin saving the schedule.
+                    update[key] = {
+                        **body[key],
+                        "requestedBy": {
+                            "id": actor.get("id"),
+                            "username": actor.get("username"),
+                            "role": actor.get("role"),
+                        },
+                    }
+            config = save_scheduled_jobs_config(conn, update, actor_id=actor.get("id"))
+            audit_event(
+                conn,
+                event_type="scheduled_jobs.updated",
+                category="backup",
+                actor=actor,
+                target_type="scheduled_jobs",
+                target_id="scheduled_jobs",
+                summary="Updated scheduled jobs",
+                metadata={
+                    "sections": sorted(update),
+                    "backup": {k: v for k, v in config["backup"].items() if k != "scopes"},
+                    **{
+                        key: {k: v for k, v in config[key].items() if k != "requestedBy"}
+                        for key in SCHEDULED_SYNC_JOBS
+                    },
+                },
+            )
+        return response({"status": "ok", "config": _scheduled_jobs_client_config(config)})
 
     @flask_app.post("/api/next/backup/create")
     def backup_create():

@@ -29,6 +29,10 @@ try:
     from .next_import import ImportError as NextImportError
     from .next_import import NextImporter
     from .next_import import clean_text
+    from .next_common import physical_media_format_key
+    from .next_common import physical_media_formats_compatible
+    from .next_common import import_writer_identifiers
+    from .next_common import resolve_import_identity_match
     from .next_ownership import actor_or_instance_owner_id
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
@@ -46,7 +50,12 @@ try:
     from .next_product_identifiers import add_movie_identifiers
     from .next_metadata import refresh_movie_metadata
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
+    from .next_scheduled_jobs import SCHEDULED_BACKUP_JOB_TYPE
+    from .next_scheduled_jobs import enqueue_due_jobs as enqueue_due_scheduled_jobs
+    from .next_scheduled_jobs import run_scheduled_backup
     from .next_backup import BackupError as NextBackupError
+    from .next_backup import backup_storage_dir
+    from .next_audit import audit_event
     from .next_backup import restore_functional_backup
     from .next_price_alerts import PRICE_ALERT_JOB_TYPE
     from .next_price_alerts import run_price_alert_sweep
@@ -84,6 +93,10 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
     from next_import import clean_text
+    from next_common import physical_media_format_key
+    from next_common import physical_media_formats_compatible
+    from next_common import import_writer_identifiers
+    from next_common import resolve_import_identity_match
     from next_ownership import actor_or_instance_owner_id
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
@@ -101,7 +114,12 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_product_identifiers import add_movie_identifiers
     from next_metadata import refresh_movie_metadata
     from next_backup import BACKUP_RESTORE_JOB_TYPE
+    from next_scheduled_jobs import SCHEDULED_BACKUP_JOB_TYPE
+    from next_scheduled_jobs import enqueue_due_jobs as enqueue_due_scheduled_jobs
+    from next_scheduled_jobs import run_scheduled_backup
     from next_backup import BackupError as NextBackupError
+    from next_backup import backup_storage_dir
+    from next_audit import audit_event
     from next_backup import restore_functional_backup
     from next_price_alerts import PRICE_ALERT_JOB_TYPE
     from next_price_alerts import run_price_alert_sweep
@@ -253,30 +271,10 @@ def bool_value(value: Any, *, default: bool = False) -> bool:
     return default
 
 
-def physical_media_format_key(value: Any) -> str:
-    text = (clean_text(value) or "").casefold().replace("-", " ").replace("_", " ").replace("/", " ")
-    text = " ".join(text.split())
-    if not text:
-        return ""
-    if "ultra hd" in text or "uhd" in text or "4k" in text:
-        return "ultra_hd_blu_ray"
-    if "blu ray" in text or "bluray" in text or text == "bd":
-        return "blu_ray"
-    if text in {"dvd", "dvd video"}:
-        return "dvd"
-    if "hd dvd" in text or "hddvd" in text:
-        return "hd_dvd"
-    if "laserdisc" in text or "laser disc" in text:
-        return "laserdisc"
-    if "svcd" in text or "vcd" in text:
-        return "vcd_svcd"
-    return text
-
-
-def physical_media_formats_compatible(candidate: Any, expected: Any) -> bool:
-    candidate_key = physical_media_format_key(candidate)
-    expected_key = physical_media_format_key(expected)
-    return not candidate_key or not expected_key or candidate_key == expected_key
+# physical_media_format_key/physical_media_formats_compatible and the shared
+# barcode -> identifier -> title+year precedence live in next_common.py so the
+# writer and the import preview cannot drift back apart - see
+# resolve_import_identity_match for why.
 
 
 def import_container_release_key(
@@ -576,6 +574,9 @@ def process_job(job: dict[str, Any], worker_id: str) -> dict[str, Any]:
     if job_type == BACKUP_RESTORE_JOB_TYPE:
         return process_functional_restore(payload, worker_id)
 
+    if job_type == SCHEDULED_BACKUP_JOB_TYPE:
+        return process_scheduled_backup(payload, worker_id)
+
     if job_type == PRICE_ALERT_JOB_TYPE:
         return process_price_alert_sweep(payload, worker_id)
 
@@ -757,6 +758,42 @@ def process_functional_restore(payload: dict[str, Any], worker_id: str) -> dict[
         },
         "summary": summary,
     }
+
+
+def process_scheduled_backup(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
+    from pathlib import Path as _Path
+
+    data_dir = _Path(
+        os.environ.get("DISCVAULT_LEGACY_DATA_DIR") or os.environ.get("DISCVAULT_SQLITE_IMPORT_DATA") or "/data"
+    ).expanduser()
+    if not data_dir.is_dir():
+        raise RuntimeError(f"DiscVault data directory not found: {data_dir}")
+    try:
+        from .versioning import build_sha, packaged_version
+    except ImportError:  # pragma: no cover - supports python next_worker.py
+        from versioning import build_sha, packaged_version
+    try:
+        with connect() as conn:
+            result = run_scheduled_backup(
+                conn,
+                backup_dir=backup_storage_dir(data_dir),
+                data_dir=data_dir,
+                generator={"service": "DiscVault Next", "version": packaged_version(), "sha": build_sha()},
+            )
+            if result.get("status") == "created":
+                audit_event(
+                    conn,
+                    event_type="backup.created",
+                    category="backup",
+                    actor={"role": "system"},
+                    target_type="backup",
+                    target_id=result.get("fileName"),
+                    summary="Created scheduled functional collection backup",
+                    metadata={"fileName": result.get("fileName"), "sha256": result.get("sha256"), "scheduled": True},
+                )
+    except NextBackupError as exc:
+        raise RuntimeError(str(exc)) from exc
+    return {"workerId": worker_id, "handled": True, "jobType": SCHEDULED_BACKUP_JOB_TYPE, **result}
 
 
 def process_price_alert_sweep(payload: dict[str, Any], worker_id: str) -> dict[str, Any]:
@@ -1348,11 +1385,11 @@ def source_public_id(prefix: str, value: str, *, fallback: str) -> str:
 
 
 def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "") -> UUID | None:
-    barcode = clean_text(item.get("barcode"))
-    item_format = clean_text(item.get("format"))
-
-    def row_format_matches(row: dict[str, Any]) -> bool:
-        return physical_media_formats_compatible(row.get("format"), item_format)
+    barcode = clean_text(item.get("barcode")) or ""
+    item_format = clean_text(item.get("format")) or ""
+    title = clean_text(item.get("title")) or ""
+    year = clean_text(item.get("year")) or ""
+    identifiers = import_writer_identifiers(item)
 
     with conn.cursor() as cur:
         public_id = clean_text(public_id)
@@ -1361,47 +1398,51 @@ def import_movie_existing_id(conn, item: dict[str, Any], *, public_id: str = "")
             row = cur.fetchone()
             if row:
                 return row["id"]
-        if barcode:
+
+        def barcode_candidates() -> list[dict[str, Any]]:
             cur.execute("SELECT id FROM movies WHERE barcode=%s LIMIT 1", (barcode,))
-            row = cur.fetchone()
-            if row:
-                return row["id"]
-        identifiers = {
-            "tmdb": clean_text(item.get("tmdbId") or item.get("tmdb_id")),
-            "imdb": clean_text(item.get("imdbId") or item.get("imdb_id")),
-        }
-        if table_exists(conn, "movie_identifiers"):
-            for provider, identifier in identifiers.items():
-                if not identifier:
-                    continue
-                cur.execute(
-                    """
-                    SELECT m.id AS movie_id, m.format
-                    FROM movie_identifiers mi
-                    JOIN movies m ON m.id = mi.movie_id
-                    WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
-                    ORDER BY m.updated_at DESC
-                    """,
-                    (provider, identifier),
-                )
-                for row in cur.fetchall():
-                    if row_format_matches(row):
-                        return row["movie_id"]
-        title = clean_text(item.get("title"))
-        year = clean_text(item.get("year"))
-        if title and year:
+            return cur.fetchall()
+
+        def identifier_candidates(provider: str, identifier: str) -> list[dict[str, Any]]:
+            if not table_exists(conn, "movie_identifiers"):
+                return []
             cur.execute(
                 """
-                SELECT id, format
+                SELECT m.id AS id, m.title, m.year, m.format
+                FROM movie_identifiers mi
+                JOIN movies m ON m.id = mi.movie_id
+                WHERE mi.provider_id=%s AND mi.identifier_type='movie_id' AND mi.identifier=%s
+                ORDER BY m.updated_at DESC
+                """,
+                (provider, identifier),
+            )
+            return cur.fetchall()
+
+        def title_year_candidates(match_title: str, match_year: str) -> list[dict[str, Any]]:
+            cur.execute(
+                """
+                SELECT id, title, year, format
                 FROM movies
                 WHERE lower(title)=lower(%s) AND year=%s
                 ORDER BY updated_at DESC
                 """,
-                (title, year),
+                (match_title, match_year),
             )
-            for row in cur.fetchall():
-                if row_format_matches(row):
-                    return row["id"]
+            return cur.fetchall()
+
+        match = resolve_import_identity_match(
+            barcode=barcode,
+            identifiers=identifiers,
+            title=title,
+            year=year,
+            item_format=item_format,
+            barcode_candidates=barcode_candidates,
+            identifier_candidates=identifier_candidates,
+            title_year_candidates=title_year_candidates,
+        )
+        if match:
+            _, row = match
+            return row["id"]
     return None
 
 
@@ -1431,6 +1472,7 @@ IMPORT_MOVIE_COLUMNS: tuple[tuple[str, str | None, bool], ...] = (
     ("runtime_minutes", None, False),
     ("overview", "overview", True),
     ("rating", None, True),
+    ("disc_count", None, False),
 )
 
 # Review fields that map onto a metadata key rather than a column.
@@ -1948,6 +1990,8 @@ def import_release_date(value: Any) -> str | None:
 
 
 def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUID, bool]:
+    from next_app import clamp_disc_count
+
     title = clean_text(item.get("title"))
     if not title:
         raise RuntimeError("Import item is missing title")
@@ -1986,11 +2030,12 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 runtime_minutes,
                 overview,
                 rating,
+                disc_count,
                 metadata,
                 created_at,
                 updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now())
             -- An import FILLS a field, it does not OVERWRITE one: the
             -- assignments below read existing-first, so a value already on the
             -- film survives and only a blank one is filled from the file. The
@@ -2031,6 +2076,7 @@ def upsert_import_movie(conn, plugin_id: str, item: dict[str, Any]) -> tuple[UUI
                 item.get("runtimeMinutes") or item.get("runtime_minutes") or None,
                 clean_text(item.get("overview") or item.get("plot")) or None,
                 clean_text(item.get("rating")) or None,
+                clamp_disc_count(item.get("discCount") or item.get("disc_count")),
                 Jsonb(json_ready(metadata)),
                 protected_metadata_keys,
             ),
@@ -3315,6 +3361,11 @@ def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
         _maybe_enqueue_artwork_trash_purge(worker_id)
+        try:
+            with connect() as conn:
+                enqueue_due_scheduled_jobs(conn, worker_id)
+        except Exception as exc:  # noqa: BLE001 - never crash the poll loop
+            print(json.dumps({"status": "error", "source": "scheduled_jobs_scheduler", "error": str(exc)}))
         try:
             _maybe_enqueue_movievault_v2_sync(worker_id)
         except Exception as exc:  # noqa: BLE001 - never crash the poll loop

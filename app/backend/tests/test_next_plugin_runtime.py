@@ -800,6 +800,38 @@ class NextPluginRuntimeTests(unittest.TestCase):
         self.assertEqual(watched[0]["watchedAt"], "2026-05-31T20:15:00.0000000Z")
         self.assertEqual(watched[0]["plays"], 2)
 
+    def test_jellyfin_sync_library_authenticates_with_headers_not_query(self):
+        calls = []
+
+        def fake_get(url, params=None, headers=None, timeout=None):
+            calls.append((url, params, headers))
+            return FakeResponse({"Items": [{"Id": "jf-1", "Name": "Tron", "ProviderIds": {"Imdb": "tt0084827"}}]})
+
+        fake_requests = types.SimpleNamespace(get=Mock(side_effect=fake_get), HTTPError=FakeHTTPError)
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            jellyfin_plugin = importlib.import_module("app.backend.next_plugins.jellyfin.plugin")
+            result = jellyfin_plugin.sync_library(
+                {}, {"settings": {"baseUrl": "https://jellyfin.local"}, "secrets": {"token": "jf-token"}}
+            )
+
+        self.assertEqual(result["status"], "completed")
+        self.assertEqual(result["items"][0]["imdbId"], "tt0084827")
+        _url, params, headers = calls[0]
+        self.assertNotIn("api_key", params)
+        self.assertEqual(headers["Authorization"], 'MediaBrowser Token="jf-token"')
+        self.assertEqual(headers["X-Emby-Token"], "jf-token")
+
+    def test_jellyfin_sync_library_reports_rejected_key_clearly(self):
+        fake_requests = types.SimpleNamespace(
+            get=Mock(return_value=FakeResponse({}, 401)), HTTPError=FakeHTTPError
+        )
+        with patch.dict(sys.modules, {"requests": fake_requests}):
+            jellyfin_plugin = importlib.import_module("app.backend.next_plugins.jellyfin.plugin")
+            with self.assertRaisesRegex(RuntimeError, "rejected the API key"):
+                jellyfin_plugin.sync_library(
+                    {}, {"settings": {"baseUrl": "https://jellyfin.local"}, "secrets": {"token": "bad"}}
+                )
+
     def test_trakt_health_reports_token_status_separately(self):
         def fake_get(url, headers=None, params=None, timeout=None):
             if url.endswith("/movies/tron-legacy-2010"):
