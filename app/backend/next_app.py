@@ -21123,6 +21123,43 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
             items.extend(cur.fetchall())
     if table_exists(conn, "containers"):
         visibility_where, visibility_params = visible_container_where_sql(conn, actor, "c") if actor else ("TRUE", [])
+        # A container's own cover lives in `entity_media`, not in its metadata:
+        # `link_container_media_option` writes the artwork row and nothing
+        # touches `containers.metadata`, so a box set nested in a collection has
+        # no `metadata->>'poster_url'` to read. Reading only that column left the
+        # item tile empty while the box set's own page showed the cover (#811).
+        # Same lateral and the same fold as the library snapshot in
+        # `collection_container_preview_entities`, so both surfaces answer alike.
+        media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
+        poster_columns = (
+            """
+                    poster_asset.id AS poster_asset_id,
+                    poster_asset.storage_backend AS poster_asset_storage_backend,
+                    poster_asset.storage_key AS poster_asset_storage_key,
+                    poster_asset.source_url AS poster_asset_source_url,
+                    poster_asset.provider_id AS poster_asset_provider_id,
+            """
+            if media_join
+            else ""
+        )
+        poster_join = (
+            """
+                LEFT JOIN LATERAL (
+                    SELECT ma.id, ma.storage_backend, ma.storage_key, ma.source_url, ma.provider_id
+                    FROM entity_media em
+                    JOIN media_assets ma ON ma.id = em.media_id
+                    WHERE em.entity_type='container'
+                      AND em.entity_id=c.id
+                      AND em.deleted_at IS NULL
+                      AND em.hidden_at IS NULL
+                      AND ma.kind='poster'
+                    ORDER BY em.is_primary DESC, em.sort_order, ma.created_at
+                    LIMIT 1
+                ) poster_asset ON true
+            """
+            if media_join
+            else ""
+        )
         with conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -21141,17 +21178,23 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
                     c.year,
                     c.description,
                     c.metadata,
+{poster_columns}
                     c.metadata->>'poster_url' AS poster_url,
                     c.metadata->>'backdrop_url' AS backdrop_url
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.item_id
+{poster_join}
                 WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
                   AND {visibility_where}
                 ORDER BY ci.sort_order, c.container_type, lower(c.title)
                 """,
                 (container_id, *visibility_params),
             )
-            items.extend(cur.fetchall())
+            rows = cur.fetchall()
+        # `with_preview_media_urls` prefers the joined asset and falls back to
+        # the metadata URL, which is what keeps a container that only carries a
+        # metadata cover rendering exactly as before.
+        items.extend(with_preview_media_urls(row) if media_join else row for row in rows)
     return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
 
 
