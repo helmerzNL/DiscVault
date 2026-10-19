@@ -29179,7 +29179,13 @@ def ui_preview_html(
       const own = usableImage(container?.poster_url)
         || usableImage(metadata.poster_url)
         || usableImage(metadata.posterUrl)
-        || usableImage(metadata.poster);
+        || usableImage(metadata.poster)
+        // `poster_file` was read by the collection-items renderers and by
+        // nothing else. They resolve through this chain now, so the key has to
+        // survive here or the fix for #811 would take a working cover away from
+        // the very surface it is about. It is last among a container's own
+        // values and still outranks everything borrowed.
+        || usableImage(metadata.poster_file);
       if (own) return own;
       // The server resolves the borrowed cover per container, because `movies`
       // arrives a page at a time: a member outside the loaded page is not there
@@ -31270,11 +31276,25 @@ def ui_preview_html(
         </div>
       `;
     }
+    // A `collection_item_entities` row, not a container row: it names the
+    // container `entity_id` and carries `metadata`, `poster_url` and
+    // `member_poster_url` at the top level. Reshaping it is what lets the
+    // nested tile ask the one resolver every other container surface asks, so a
+    // box set filed in a collection shows the cover its library tile shows.
+    //
+    // Both renderers below resolved the cover inline instead, and read a
+    // container's own value and nothing else -- so a box set that owns no
+    // artwork borrowed a member's poster in the library and rendered the type
+    // label inside the collection (#811). The inline form was also the
+    // short-circuit trap `itemPosterUrl` documents: `usableImage(a || b)`
+    // settles on a truthy-but-unusable `a` and never reaches a good `b`.
+    function containerMemberItemPosterUrl(item) {
+      return containerTilePosterUrl({...(item || {}), id: item?.entity_id || item?.item_id || item?.id || ""});
+    }
     function containerMemberContainerCardHtml(item, index, total, canEdit) {
-      const metadata = item.metadata || {};
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
-      const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
+      const poster = containerMemberItemPosterUrl(item);
       const href = `/containers/${encodeURIComponent(itemId)}`;
       const title = item.title || tNext("common.untitled", "Untitled");
       const subtitle = [containerTypeLabel(itemType), item.year, item.badge_label].filter(Boolean).join(" / ");
@@ -37138,10 +37158,9 @@ def ui_preview_html(
       `;
     }
     function containerMemberContainerListHtml(item, index, total, canEdit) {
-      const metadata = item.metadata || {};
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
-      const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
+      const poster = containerMemberItemPosterUrl(item);
       const title = item.title || tNext("common.untitled", "Untitled");
       return `
         <article class="mode-list-card" data-open-container="${escapeHtml(itemId || "")}" tabindex="0" title="${escapeHtml(title)}">

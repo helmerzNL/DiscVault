@@ -21130,6 +21130,17 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
         # item tile empty while the box set's own page showed the cover (#811).
         # Same lateral and the same fold as the library snapshot in
         # `collection_container_preview_entities`, so both surfaces answer alike.
+        #
+        # Its own cover is only half the question, and the reporter of #811 was
+        # still looking at an empty tile after that half shipped: a box set that
+        # owns no artwork borrows a member film's poster everywhere else, and
+        # most of them own none. The library tile and the library snapshot both
+        # carry `container_member_poster_lateral` for exactly that; this query
+        # did not, so the same box set showed a cover in the library and an
+        # empty tile inside the collection. The borrowed cover stays in its own
+        # column: which cover wins is the one client resolver's decision, and a
+        # caller has to be able to tell a container's own artwork from one it is
+        # only standing in with -- the "missing poster" filter depends on it.
         media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
         poster_columns = (
             """
@@ -21160,6 +21171,10 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
             if media_join
             else ""
         )
+        member_poster_sql, member_poster_params = (
+            container_member_poster_lateral(conn, actor) if media_join else ("", [])
+        )
+        member_poster_columns = CONTAINER_MEMBER_POSTER_COLUMNS if member_poster_sql else ""
         with conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -21178,23 +21193,30 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
                     c.year,
                     c.description,
                     c.metadata,
-{poster_columns}
+{poster_columns}{member_poster_columns}
                     c.metadata->>'poster_url' AS poster_url,
                     c.metadata->>'backdrop_url' AS backdrop_url
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.item_id
 {poster_join}
+{member_poster_sql}
                 WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
                   AND {visibility_where}
                 ORDER BY ci.sort_order, c.container_type, lower(c.title)
                 """,
-                (container_id, *visibility_params),
+                (*member_poster_params, container_id, *visibility_params),
             )
             rows = cur.fetchall()
         # `with_preview_media_urls` prefers the joined asset and falls back to
         # the metadata URL, which is what keeps a container that only carries a
-        # metadata cover rendering exactly as before.
-        items.extend(with_preview_media_urls(row) if media_join else row for row in rows)
+        # metadata cover rendering exactly as before. `fold_container_member_poster`
+        # runs first and only ever adds `member_poster_url`, so it cannot reach
+        # the container's own value either way -- the same order the library
+        # snapshot uses.
+        items.extend(
+            with_preview_media_urls(fold_container_member_poster(row)) if media_join else row
+            for row in rows
+        )
     return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
 
 
