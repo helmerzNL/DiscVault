@@ -37018,7 +37018,7 @@ def ui_preview_html(
         knownForLabel,
         birthdayDisplay,
         deathdayDisplay ? `${tNext("personDetail.died", "Died")} ${deathdayDisplay}` : "",
-        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "mentions")}` : "",
+        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "Mentions").toLowerCase()}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
         extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
         appDebugMode && person.id ? `Person ID ${person.id}` : ""
