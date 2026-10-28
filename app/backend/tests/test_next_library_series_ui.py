@@ -268,19 +268,55 @@ class SeriesLibraryGroupingTests(unittest.TestCase):
             "series grouping must sit behind the merge switch, not in front of it",
         )
 
-    def test_a_series_claims_a_disc_before_a_container_does(self):
-        """Both group the same shelf. The series fills itself from the feed's own
-        television id, so it wins -- and the container keeps whatever is left
-        rather than disappearing when it also holds films."""
+    def test_a_series_claims_a_disc_before_a_box_set_or_vault_does(self):
+        """Both group the same physical set. The series fills itself from the
+        feed's own television id, so it wins -- and the box set keeps whatever is
+        left rather than disappearing when it also holds films."""
         body = self._function_body("libraryDisplayItems")
         series_at = body.index("const seriesItems = visibleSeriesItems(")
-        container_at = body.index("const containerItems = visibleContainerItems(")
-        self.assertLess(series_at, container_at)
+        box_set_at = body.index("const boxSetItems = containerItems")
+        self.assertLess(series_at, box_set_at)
         self.assertIn(
             "visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || \"\")))",
             body,
         )
         self.assertIn(".filter((item) => item.visibleMovies.length > 0)", body)
+
+    def test_a_collection_claims_a_disc_before_the_series_tile_does(self):
+        """A collection is filed by hand and is the one container that holds
+        other containers; a series joins itself from the discs. So the shelf the
+        user built outranks the derived grouping, and a TV show put in a
+        collection leaves the Library's flat list the way a film does.
+
+        While the series won, it kept its tile *and* every disc of the show, so
+        the collection was left with no visible member -- and a container with
+        none is dropped from the Library entirely. Filing a TV show away was the
+        one case where the shelf you had just built was what disappeared (#823).
+        """
+        body = self._function_body("libraryDisplayItems")
+        collection_at = body.index(
+            "const collectionItems = containerItems.filter((item) => containerIsCollection(item.container))"
+        )
+        series_at = body.index("const seriesItems = visibleSeriesItems(")
+        self.assertLess(collection_at, series_at)
+        # The claim only counts if the discs are marked before the series runs.
+        claim_at = body.index("collectionItems.forEach((item) => {", collection_at)
+        self.assertLess(claim_at, series_at)
+        # ... and only if the series then drops what the collection took,
+        # including the tile left with nothing.
+        series_chain = body[series_at:body.index("const boxSetItems = containerItems", series_at)]
+        self.assertIn(
+            "visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || \"\")))",
+            series_chain,
+        )
+        self.assertIn(".filter((item) => item.visibleMovies.length > 0)", series_chain)
+        self.assertIn("...collectionItems", body)
+
+    def test_the_outer_grouping_is_read_off_the_container_row(self):
+        """An empty collection is still a collection, so the precedence cannot be
+        inferred from what has been nested into it."""
+        body = self._function_body("containerIsCollection")
+        self.assertIn('String(container?.container_type || "") === "collection"', body)
 
     def test_every_disc_is_counted_once_whichever_tile_claims_it(self):
         body = self._function_body("libraryDisplayMovieCount")
