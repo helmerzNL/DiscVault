@@ -28762,6 +28762,13 @@ def ui_preview_html(
         return String(row.child_container_id || "") === id && (!visibleContainerIds || visibleContainerIds.has(parentId));
       });
     }
+    // A collection is the only container that holds other containers, which is
+    // what makes it the outer grouping in `libraryDisplayItems`. Read off the
+    // container row rather than inferred from its membership: a collection a
+    // user has not nested anything into yet is still a collection.
+    function containerIsCollection(container) {
+      return String(container?.container_type || "") === "collection";
+    }
     // Same reasoning as the container index above: grouping by series used to
     // mean scanning the whole movie list once per series. Both source arrays are
     // replaced rather than mutated, so identity is a sound cache key.
@@ -29402,27 +29409,51 @@ def ui_preview_html(
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
       const representedMovieIds = new Set();
-      // Series first, and a disc a series claims is gone from the containers as
-      // well as from the flat list. Both group the same shelf; the series is the
-      // one that fills itself, so it wins -- the same move `containerIsNestedChild`
-      // already makes when one container sits inside another.
-      const seriesItems = visibleSeriesItems(eligibleMovieIds, visibleMovieIds);
-      seriesItems.forEach((item) => {
+      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters);
+      // A collection claims its discs first. It is the outermost grouping there
+      // is -- the one container type a user files other containers into -- and
+      // `containerIsNestedChild` already hides a box set that sits inside one.
+      // A series is not filed at all: every disc carrying the show's television
+      // id joins it on its own. So where the two describe the same disc, the
+      // shelf somebody built by hand is the one the Library shows.
+      //
+      // While the series won, a TV show filed into a collection kept its own
+      // tile in the Library and took every disc of the show with it. That left
+      // the collection holding nothing, and a container with no visible member
+      // is dropped -- so the shelf the user had just built was the one thing
+      // the Library did not show (#823), while a film put in the same
+      // collection disappeared from the flat list exactly as expected.
+      const collectionItems = containerItems.filter((item) => containerIsCollection(item.container));
+      collectionItems.forEach((item) => {
         item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
       });
-      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters)
+      // Series next, and a disc a series claims is gone from the remaining
+      // containers as well as from the flat list. Against a box set or a vault
+      // the series still wins: those two group the same physical set it does,
+      // and the series is the one that fills itself.
+      const seriesItems = visibleSeriesItems(eligibleMovieIds, visibleMovieIds)
         .map((item) => ({
           ...item,
           visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || ""))),
         }))
         .filter((item) => item.visibleMovies.length > 0);
-      containerItems.forEach((item) => {
+      seriesItems.forEach((item) => {
+        item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
+      });
+      const boxSetItems = containerItems
+        .filter((item) => !containerIsCollection(item.container))
+        .map((item) => ({
+          ...item,
+          visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || ""))),
+        }))
+        .filter((item) => item.visibleMovies.length > 0);
+      boxSetItems.forEach((item) => {
         item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
       });
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
-      return sortLibraryItems([...seriesItems, ...containerItems, ...movieItems]);
+      return sortLibraryItems([...collectionItems, ...seriesItems, ...boxSetItems, ...movieItems]);
     }
     function libraryDisplayMovieCount(items) {
       const ids = new Set();
