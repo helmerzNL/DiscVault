@@ -198,6 +198,12 @@ branch, which is `main`. Branch from beta and open pull requests into beta.
 2. Open the PR **into `release/v26-beta`**. Test on the beta channel.
 3. **Promote beta → `main` per feature** (or a small batch) once verified.
 
+**Dependabot follows the same route.** Its pull requests go into `release/v26-beta`,
+never `main`: `.github/dependabot.yml` sets `target-branch`, and the
+`dependabot-retarget` workflow moves security updates, which ignore that setting.
+A Dependabot pull request still open against `main` is retargeted, not merged
+there.
+
 > ⚠️ Never open a feature/fix PR directly into `main`, and never push directly to
 > `main`. `main` is production; changes reach it only through a deliberate
 > promotion PR.

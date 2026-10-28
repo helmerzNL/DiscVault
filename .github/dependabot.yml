@@ -1,0 +1,47 @@
+# Dependabot version updates go to the integration branch, not to `main`
+# (AGENTS.md §4). `main` is production and only takes a promotion pull request.
+#
+# This file is only read from GitHub's Default branch (`main`), so it takes effect
+# once it has been promoted there. Security updates ignore `target-branch`; the
+# `dependabot-retarget` workflow moves those pull requests onto beta.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /app/backend
+    target-branch: release/v26-beta
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: pip
+    directory: /app/mcp-server
+    target-branch: release/v26-beta
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: docker
+    directory: /app/backend
+    target-branch: release/v26-beta
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: docker
+    directory: /app/mcp-server
+    target-branch: release/v26-beta
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+
+  - package-ecosystem: github-actions
+    directory: /
+    target-branch: release/v26-beta
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(ci)

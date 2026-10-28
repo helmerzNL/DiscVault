@@ -1,0 +1,27 @@
+name: dependabot-retarget
+
+# Dependabot security updates always open against the Default branch (`main`),
+# whatever `target-branch` says in dependabot.yml. AGENTS.md §4 forbids
+# feature/fix pull requests into `main`, so move them onto the integration branch.
+#
+# `pull_request_target` because a Dependabot-triggered `pull_request` run gets a
+# read-only token. Nothing is checked out and no pull request code runs here.
+on:
+  pull_request_target:
+    branches:
+      - main
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  retarget:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Retarget onto release/v26-beta
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --repo "$GITHUB_REPOSITORY" --base release/v26-beta
