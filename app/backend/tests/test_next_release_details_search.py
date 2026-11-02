@@ -66,10 +66,36 @@ class ReleaseDetailsSearchPayloadTests(unittest.TestCase):
                 "title": "Example Film",
                 "year": 2024,
                 "tmdbMovieId": "123",
+                "tmdbTvId": None,
                 "imdbId": "tt1234567",
             },
         )
         self.assertEqual([item["releaseRef"] for item in payload["releases"]], ["a", "b"])
+
+    def test_a_series_carries_its_television_id_and_work_type(self):
+        """A series is named by `tmdbTvId`, never by `tmdbMovieId` (#826)."""
+        result = candidates_result()
+        result["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "imdbId": "tt0185906"},
+            "links": {"tmdb": "https://www.themoviedb.org/tv/4613"},
+        }
+
+        payload = next_app.release_details_search_payload(result, entrypoint="search")
+
+        self.assertEqual(
+            payload["film"],
+            {
+                "title": "Band of Brothers",
+                "year": 2001,
+                "tmdbMovieId": None,
+                "tmdbTvId": "4613",
+                "imdbId": "tt0185906",
+                "workType": "tv",
+            },
+        )
 
     def test_a_hit_is_expressed_as_a_single_row_in_the_same_shape(self):
         # A confirmed release and a list of pressings are different answers -

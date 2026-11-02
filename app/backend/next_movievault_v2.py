@@ -1644,10 +1644,22 @@ def _release_details_aliases(value: Any, *, maximum: int) -> list[dict[str, Any]
 
 
 def _release_details_identifiers(value: Any) -> dict[str, str]:
+    """Read a film's (or a box-set member's) identifiers.
+
+    TMDB numbers films and series in two separate spaces, so MovieVault names
+    the id after its namespace: `tmdbMovieId` for a film, `tmdbTvId` for a
+    series. A bare number does not say which space issued it -- TMDB's 4613 is
+    the series *Band of Brothers* and also the unrelated film *Scorched* -- so
+    the two are kept apart here and never folded into one `tmdbId`.
+
+    Both on one work is a contradiction rather than an addition: it names two
+    different works, and nothing downstream could tell which one this disc is.
+    It is refused, as MovieVault's own model refuses to produce it.
+    """
     item = _release_details_object(
         value,
         required=set(),
-        optional={"tmdbMovieId", "imdbId"},
+        optional={"tmdbMovieId", "tmdbTvId", "imdbId"},
         label="film identifiers",
     )
     result: dict[str, str] = {}
@@ -1657,6 +1669,14 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
             maximum=20,
             pattern=r"^[0-9]{1,20}$",
         )
+    if item.get("tmdbTvId") is not None:
+        result["tmdbTvId"] = _release_details_text(
+            item["tmdbTvId"],
+            maximum=20,
+            pattern=r"^[0-9]{1,20}$",
+        )
+    if "tmdbMovieId" in result and "tmdbTvId" in result:
+        raise MovieVaultV2Error("release_details_response_invalid")
     if item.get("imdbId") is not None:
         result["imdbId"] = _release_details_text(
             item["imdbId"],
@@ -1666,11 +1686,51 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
     return result
 
 
+RELEASE_DETAILS_WORK_TYPES = frozenset({"movie", "tv"})
+
+
+def _release_details_tmdb_link(identifiers: dict[str, str]) -> str | None:
+    """The TMDB web link a film's identifiers imply, or None.
+
+    Mirrors MovieVault's `tmdb_film_url`: the film namespace when there is a
+    film id, the television one when there is a series id. Deriving the link
+    from the film id alone made every catalogued series -- whose link is
+    `/tv/<id>` since MovieVault 0.40.0 -- read as a link without a matching
+    identifier, and that refused the whole resolve answer (#826).
+    """
+    if "tmdbMovieId" in identifiers:
+        return f"https://www.themoviedb.org/movie/{identifiers['tmdbMovieId']}"
+    if "tmdbTvId" in identifiers:
+        return f"https://www.themoviedb.org/tv/{identifiers['tmdbTvId']}"
+    return None
+
+
+def _release_details_work_type(value: Any) -> str | None:
+    """`movie` or `tv` when the answer states one, otherwise None.
+
+    None is "did not say", which is not "movie": an external answer carries only
+    what its source stated, and most sources cannot tell a series from a film.
+    Only a stated value may set a record's type downstream. An unrecognised
+    value is logged and read as unsaid rather than guessed at -- the same
+    reading the sync feed gives `workType` -- so a future third kind cannot
+    take scanning down, and cannot be mistaken for either of the two.
+    """
+    if value is None:
+        return None
+    if isinstance(value, str) and value in RELEASE_DETAILS_WORK_TYPES:
+        return value
+    logger.warning(
+        "movievault_v2: unrecognized release-details film workType %r - reading it as unstated",
+        value if isinstance(value, str) else type(value).__name__,
+    )
+    return None
+
+
 def _release_details_film(value: Any) -> dict[str, Any]:
     item = _release_details_object(
         value,
         required={"title", "identifiers", "links"},
-        optional={"year"},
+        optional={"year", "workType"},
         label="film",
     )
     identifiers = _release_details_identifiers(item["identifiers"])
@@ -1686,11 +1746,7 @@ def _release_details_film(value: Any) -> dict[str, Any]:
         label="film links",
     )
     expected_links = {
-        "tmdb": (
-            f"https://www.themoviedb.org/movie/{identifiers['tmdbMovieId']}"
-            if "tmdbMovieId" in identifiers
-            else None
-        ),
+        "tmdb": _release_details_tmdb_link(identifiers),
         "imdb": (
             f"https://www.imdb.com/title/{identifiers['imdbId']}/"
             if "imdbId" in identifiers
@@ -1708,6 +1764,9 @@ def _release_details_film(value: Any) -> dict[str, Any]:
     }
     if item.get("year") is not None:
         result["year"] = _release_details_integer(item["year"], minimum=1870, maximum=2200)
+    work_type = _release_details_work_type(item.get("workType"))
+    if work_type is not None:
+        result["workType"] = work_type
     return result
 
 

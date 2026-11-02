@@ -11378,7 +11378,14 @@ def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -
             "title": film.get("title") or "",
             "year": film.get("year"),
             "tmdbMovieId": identifiers.get("tmdbMovieId"),
+            # A series is named by its TMDB television id, never by
+            # `tmdbMovieId`: the two id spaces overlap (#826). Carried
+            # separately so the picker can link it without mistaking it
+            # for a film id.
+            "tmdbTvId": identifiers.get("tmdbTvId"),
             "imdbId": identifiers.get("imdbId"),
+            # Present only when MovieVault stated it; absent is "did not say".
+            **({"workType": film["workType"]} if film.get("workType") else {}),
         }
         if film
         else {},

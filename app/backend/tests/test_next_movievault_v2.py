@@ -830,6 +830,148 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             {"tmdb": "https://www.themoviedb.org/movie/123"},
         )
 
+    def test_release_details_accepts_a_catalogued_series(self):
+        """MovieVault 0.40.0 reports a series by its TMDB television id (#826).
+
+        The answer carries `workType: "tv"`, `tmdbTvId` and a `/tv/` link, and
+        no `tmdbMovieId`. The link check used to derive the expected TMDB link
+        from the film id alone, read the `/tv/` link as one without a matching
+        identifier, and refused the whole answer - so scanning the barcode of
+        any catalogued series returned nothing at all.
+        """
+        payload = release_details_hit()
+        payload["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "imdbId": "tt0185906"},
+            "links": {
+                "tmdb": "https://www.themoviedb.org/tv/4613",
+                "imdb": "https://www.imdb.com/title/tt0185906/",
+            },
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "canonical_hit")
+        self.assertEqual(result["film"]["workType"], "tv")
+        self.assertEqual(
+            result["film"]["identifiers"],
+            {"tmdbTvId": "4613", "imdbId": "tt0185906"},
+        )
+        self.assertNotIn("tmdbMovieId", result["film"]["identifiers"])
+        self.assertEqual(
+            result["film"]["links"]["tmdb"],
+            "https://www.themoviedb.org/tv/4613",
+        )
+
+    def test_release_details_keeps_a_stated_movie_work_type(self):
+        payload = release_details_hit()
+        payload["film"]["workType"] = "movie"
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["film"]["workType"], "movie")
+        self.assertEqual(result["film"]["identifiers"]["tmdbMovieId"], "123")
+
+    def test_release_details_leaves_an_unstated_work_type_out(self):
+        """Absent is "did not say", which must stay distinguishable from movie."""
+        result = next_movievault_v2.validate_release_details_response(release_details_hit())
+
+        self.assertNotIn("workType", result["film"])
+
+    def test_release_details_reads_an_unknown_work_type_as_unstated(self):
+        payload = release_details_hit()
+        payload["film"]["workType"] = "miniseries"
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING"):
+            result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertNotIn("workType", result["film"])
+        self.assertEqual(result["film"]["identifiers"]["tmdbMovieId"], "123")
+
+    def test_release_details_refuses_a_film_and_a_series_id_together(self):
+        """Two TMDB ids name two different works; nothing could tell which."""
+        payload = release_details_hit()
+        payload["film"]["identifiers"]["tmdbTvId"] = "4613"
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_refuses_a_series_id_behind_a_film_link(self):
+        """The namespace in the link has to match the id beside it.
+
+        `/movie/4613` beside `tmdbTvId: 4613` is exactly the confusion #826
+        was: a number from one space presented as the other's.
+        """
+        payload = release_details_hit()
+        payload["film"]["identifiers"] = {"tmdbTvId": "4613"}
+        payload["film"]["links"] = {"tmdb": "https://www.themoviedb.org/movie/4613"}
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_refuses_a_film_id_behind_a_series_link(self):
+        payload = release_details_hit()
+        payload["film"]["identifiers"] = {"tmdbMovieId": "4613"}
+        payload["film"]["links"] = {"tmdb": "https://www.themoviedb.org/tv/4613"}
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_candidates_accept_a_series_film(self):
+        payload = release_details_candidates()
+        payload["film"] = {
+            "title": "Planet Earth",
+            "year": 2006,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "1044", "imdbId": "tt0795176"},
+            "links": {
+                "tmdb": "https://www.themoviedb.org/tv/1044",
+                "imdb": "https://www.imdb.com/title/tt0795176/",
+            },
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(result["film"]["identifiers"]["tmdbTvId"], "1044")
+        self.assertEqual(result["film"]["workType"], "tv")
+
+    def test_release_details_keeps_a_box_set_member_series_id(self):
+        payload = release_details_hit()
+        payload["boxSet"] = {
+            "state": "explicit",
+            "title": "Collection",
+            "members": [
+                {
+                    "position": 1,
+                    "title": "Band of Brothers",
+                    "identifiers": {"tmdbTvId": "4613"},
+                },
+                {
+                    "position": 2,
+                    "title": "Example Film",
+                    "identifiers": {"tmdbMovieId": "123"},
+                },
+            ],
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        members = result["boxSet"]["members"]
+        self.assertEqual(members[0]["identifiers"], {"tmdbTvId": "4613"})
+        self.assertEqual(members[1]["identifiers"], {"tmdbMovieId": "123"})
+
     def test_release_details_rejects_a_hit_carrying_a_candidate_list(self):
         """`release` and `releases` answer the same question incompatibly.
 
