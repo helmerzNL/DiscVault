@@ -41621,8 +41621,13 @@ def ui_preview_html(
       const links = source.links && typeof source.links === "object" ? source.links : {};
       const identifiers = source.identifiers && typeof source.identifiers === "object" ? source.identifiers : {};
       const tmdbId = identifiers.tmdbMovieId || source.tmdbMovieId || "";
+      // A series is named by its TMDB television id; the two id spaces overlap,
+      // so it gets the /tv/ page and never the /movie/ one (#826).
+      const tmdbTvId = identifiers.tmdbTvId || source.tmdbTvId || "";
       const imdbId = identifiers.imdbId || source.imdbId || "";
-      const tmdb = links.tmdb || (tmdbId ? `https://www.themoviedb.org/movie/${encodeURIComponent(tmdbId)}` : "");
+      const tmdb = links.tmdb
+        || (tmdbId ? `https://www.themoviedb.org/movie/${encodeURIComponent(tmdbId)}` : "")
+        || (tmdbTvId ? `https://www.themoviedb.org/tv/${encodeURIComponent(tmdbTvId)}` : "");
       const imdb = links.imdb || (imdbId ? `https://www.imdb.com/title/${encodeURIComponent(imdbId)}/` : "");
       const anchors = [];
       if (tmdb) anchors.push(`<a href="${escapeHtml(tmdb)}" target="_blank" rel="noopener noreferrer">TMDB</a>`);

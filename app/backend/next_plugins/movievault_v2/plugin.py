@@ -274,6 +274,7 @@ def _resolved_release_record(details):
     synced - `_release()` already tolerates a missing one."""
     film = (details or {}).get("film") or {}
     release = (details or {}).get("release") or {}
+    identifiers = film.get("identifiers") or {}
     record = {
         "canonicalTitle": film.get("title"),
         "releaseYear": film.get("year"),
@@ -281,19 +282,35 @@ def _resolved_release_record(details):
         "format": release.get("format"),
         "edition": release.get("edition"),
         # Restated in the sync feed's vocabulary so `_identifiers()` reads one
-        # shape. The resolver names them `tmdbMovieId`/`imdbId` under `film`; the
-        # feed puts the same facts in `providerIds`. A resolver hit has no
-        # `releaseId`, so without this it carried no identity at all -- which is
-        # exactly the disc that most needs one, having never been synced.
+        # shape. The resolver names them `tmdbMovieId`/`tmdbTvId`/`imdbId` under
+        # `film`; the feed puts the same facts in `providerIds`, as `tmdb`,
+        # `tmdb_tv` and `imdb`. A resolver hit has no `releaseId`, so without
+        # this it carried no identity at all -- which is exactly the disc that
+        # most needs one, having never been synced.
+        #
+        # `tmdbTvId` maps to `tmdb_tv` and never to `tmdb`: the two TMDB spaces
+        # overlap, and TMDB's 4613 is both the series *Band of Brothers* and the
+        # film *Scorched* (#826). Read under the wrong key, a series' number
+        # would be looked up as a film's.
         "providerIds": {
             key: value
             for key, value in {
-                "tmdb": (film.get("identifiers") or {}).get("tmdbMovieId"),
-                "imdb": (film.get("identifiers") or {}).get("imdbId"),
+                "tmdb": identifiers.get("tmdbMovieId"),
+                "tmdb_tv": identifiers.get("tmdbTvId"),
+                "imdb": identifiers.get("imdbId"),
             }.items()
             if value not in (None, "")
         },
     }
+    # The resolver states the work type the same way the feed does, so it is
+    # carried under the feed's key and reaches the same three readers: `_release`
+    # proposes SHOW/MOVIE from it, `_identifiers` withholds a film id from a
+    # series, and `_series` links a series by its `tmdb_tv` id. Dropping it here
+    # is what left a barcode resolved live -- a disc the instance never synced --
+    # without either its type or its series. Unstated stays unstated: only
+    # `movie` and `tv` are carried, so silence can never overwrite a type.
+    if film.get("workType") in ("movie", "tv"):
+        record["workType"] = film["workType"]
     record.update(_resolved_technical(details))
     record.update(_resolved_poster(details))
     return record
