@@ -49,6 +49,7 @@ try:
     from .next_metadata import lookup_metadata_sources
     from .next_product_identifiers import add_movie_identifiers
     from .next_metadata import refresh_movie_metadata
+    from .next_metadata import queue_movievault_identity_refreshes
     from .next_backup import BACKUP_RESTORE_JOB_TYPE
     from .next_scheduled_jobs import SCHEDULED_BACKUP_JOB_TYPE
     from .next_scheduled_jobs import enqueue_due_jobs as enqueue_due_scheduled_jobs
@@ -113,6 +114,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_metadata import lookup_metadata_sources
     from next_product_identifiers import add_movie_identifiers
     from next_metadata import refresh_movie_metadata
+    from next_metadata import queue_movievault_identity_refreshes
     from next_backup import BACKUP_RESTORE_JOB_TYPE
     from next_scheduled_jobs import SCHEDULED_BACKUP_JOB_TYPE
     from next_scheduled_jobs import enqueue_due_jobs as enqueue_due_scheduled_jobs
@@ -1181,6 +1183,23 @@ def process_plugin_execute(payload: dict[str, Any], worker_id: str) -> dict[str,
         persist_summary = persist_digital_sync(plugin_id, execution.get("result") or {})
     elif entrypoint == "sync_personal_lists":
         persist_summary = persist_personal_list_sync(plugin_id, execution.get("result") or {}, queued_actor)
+    elif entrypoint == "sync_index" and plugin_id == MOVIEVAULT_V2_PLUGIN_ID:
+        # The sync only updates the local index. Discs already in the
+        # collection whose release changed what it says it is -- a film that
+        # MovieVault now knows is a series, a new TMDB television id, newly
+        # linked seasons -- are refreshed here, or they would keep the old
+        # identity until somebody refreshed them by hand.
+        sync_result = execution.get("result") or {}
+        with connect() as conn:
+            persist_summary = {
+                "identityRefresh": queue_movievault_identity_refreshes(
+                    conn,
+                    sync_result.get("identityChangedReleaseIds")
+                    if isinstance(sync_result, dict)
+                    else None,
+                )
+            }
+            conn.commit()
     elif entrypoint == "import_source":
         reviewed_result = apply_collection_import_review(
             execution.get("result") or {},

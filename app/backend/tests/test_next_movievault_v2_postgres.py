@@ -1291,6 +1291,90 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         self.assertEqual(release_with["packaging"], ["steelbook", "slipcover"])
         self.assertEqual(release_without["packaging"], [])
 
+    RELEASE_ONE = "10000000-0000-0000-0000-000000000001"
+
+    def _identity_delta_record(self, *, revision=44, **overrides):
+        record = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
+        self.assertEqual(record["releaseId"], self.RELEASE_ONE)
+        record["revision"] = revision
+        record.update(overrides)
+        return record
+
+    def _resync_full(self, records: list[dict], *, revision, cursor):
+        """A full snapshot on an instance that already has one: the delta
+        request answers 409, which is what makes run_sync fetch a full feed."""
+        settings = {"origin": "https://movievault.example"}
+        content = ("\n".join(json.dumps(record) for record in records) + "\n").encode("utf-8")
+        digest = hashlib.sha256(content).digest()
+        manifest = _v4_manifest(revision=revision, cursor=cursor)
+        headers = {
+            "x-content-sha256": digest.hex(),
+            "content-digest": f"sha-256=:{base64.b64encode(digest).decode('ascii')}:",
+            "x-next-cursor": manifest["currentCursor"],
+        }
+
+        def fetch(_origin, *, cursor=None, **_kwargs):
+            if cursor is not None:
+                return 409, b"", {}
+            return 200, content, headers
+
+        with (
+            patch.object(next_movievault_v2, "fetch_manifest", return_value=manifest),
+            patch.object(next_movievault_v2, "_fetch_feed", side_effect=fetch),
+        ):
+            return next_movievault_v2.run_sync(self.connect, settings, contract_version="distribution-4")
+
+    def test_a_delta_that_makes_a_release_a_series_reports_it(self):
+        """The sync is what learns that MovieVault now calls a release a
+        series; it has to say so, or discs already in the collection keep the
+        film identity they were added with (#826)."""
+        self._sync_full(V4_FULL_PATH)
+        record = self._identity_delta_record(
+            workType="tv",
+            providerIds={"tmdb_tv": "4613"},
+            seasons=[{"seasonNumber": 2, "title": None, "releaseYear": None, "episodeCount": None}],
+        )
+        result = self._apply_delta_ndjson([record], revision=44, cursor="fixture-distribution-4-r44")
+        self.assertEqual(result["identityChangedReleaseIds"], [self.RELEASE_ONE])
+        self.assertEqual(result["identityChangedReleaseCount"], 1)
+
+    def test_newly_linked_seasons_alone_count_as_a_change(self):
+        self._sync_full(V4_FULL_PATH)
+        first = self._identity_delta_record(workType="tv", providerIds={"tmdb_tv": "4613"})
+        self._apply_delta_ndjson([first], revision=44, cursor="fixture-distribution-4-r44")
+        second = self._identity_delta_record(
+            revision=45,
+            workType="tv",
+            providerIds={"tmdb_tv": "4613"},
+            seasons=[{"seasonNumber": 1, "title": None, "releaseYear": None, "episodeCount": None}],
+        )
+        result = self._apply_delta_ndjson([second], revision=45, cursor="fixture-distribution-4-r45")
+        self.assertEqual(result["identityChangedReleaseIds"], [self.RELEASE_ONE])
+
+    def test_a_delta_that_does_not_touch_identity_reports_nothing(self):
+        """A new poster or packaging is not a reason to refresh every disc."""
+        self._sync_full(V4_FULL_PATH)
+        record = self._identity_delta_record(packaging=["digipak"])
+        result = self._apply_delta_ndjson([record], revision=44, cursor="fixture-distribution-4-r44")
+        self.assertEqual(result["identityChangedReleaseIds"], [])
+
+    def test_the_first_full_sync_reports_nothing(self):
+        """Every disc already in the collection was identified without this
+        index; the first snapshot is not a reason to re-read all of them."""
+        result = self._sync_full(V4_FULL_PATH)
+        self.assertEqual(result["identityChangedReleaseIds"], [])
+
+    def test_a_full_resync_reports_the_releases_whose_identity_changed(self):
+        self._sync_full(V4_FULL_PATH)
+        records = [json.loads(line) for line in V4_FULL_PATH.read_bytes().splitlines()]
+        for record in records:
+            if record.get("releaseId") == self.RELEASE_ONE:
+                record["workType"] = "tv"
+                record["providerIds"] = {"tmdb_tv": "4613"}
+        result = self._resync_full(records, revision=43, cursor="fixture-distribution-4-r43")
+        self.assertEqual(result["mode"], "full")
+        self.assertEqual(result["identityChangedReleaseIds"], [self.RELEASE_ONE])
+
     def test_v4_delta_with_different_packaging_replaces_the_value(self):
         self._sync_full(V4_FULL_PATH)
         base = json.loads(V4_DELTA_PATH.read_bytes().splitlines()[0])
@@ -2105,6 +2189,108 @@ class DiscsMirrorTests(unittest.TestCase):
         self.assertIsNone(rows[1])
 
 
+@unittest.skipUnless(DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured")
+class MovieVaultIdentityRefreshQueuePostgresTests(unittest.TestCase):
+    """A sync that learns a release's new identity refreshes the discs that
+    carry it, once each, and never more than the cap at a time."""
+
+    RELEASE_ID = "10000000-0000-0000-0000-0000000000ab"
+    TITLE = "Identity Refresh Queue Test"
+
+    def connect(self):
+        return psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
+
+    def _clear(self):
+        with self.connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM background_jobs
+                WHERE job_type = %s AND payload ->> 'movieId' IN (
+                    SELECT id::text FROM movies WHERE title LIKE %s
+                )
+                """,
+                (next_metadata.METADATA_REFRESH_JOB_TYPE, f"{self.TITLE}%"),
+            )
+            cur.execute("DELETE FROM movies WHERE title LIKE %s", (f"{self.TITLE}%",))
+
+    def setUp(self):
+        self._clear()
+
+    def tearDown(self):
+        self._clear()
+
+    def _movie(self, conn, *, deleted=False, release_id=None):
+        movie_id = uuid.uuid4()
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO movies (id, public_id, title, media_type, deleted_at)
+                VALUES (%s, %s, %s, 'MOVIE', CASE WHEN %s THEN now() ELSE NULL END)
+                """,
+                (movie_id, f"next-movie-{movie_id.hex[:12]}", f"{self.TITLE} {movie_id.hex[:6]}", deleted),
+            )
+            cur.execute(
+                """
+                INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)
+                VALUES (%s, %s, 'movie_id', %s)
+                """,
+                (movie_id, next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID, release_id or self.RELEASE_ID),
+            )
+        return movie_id
+
+    def _jobs(self, conn, movie_id):
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT payload FROM background_jobs
+                WHERE job_type = %s AND payload ->> 'movieId' = %s
+                """,
+                (next_metadata.METADATA_REFRESH_JOB_TYPE, str(movie_id)),
+            )
+            return [row["payload"] for row in cur.fetchall()]
+
+    def test_a_disc_carrying_a_changed_release_is_refreshed_once(self):
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            first = next_metadata.queue_movievault_identity_refreshes(conn, [self.RELEASE_ID])
+            self.assertEqual(first["queued"], 1)
+            jobs = self._jobs(conn, movie_id)
+            self.assertEqual(len(jobs), 1)
+            self.assertEqual(jobs[0]["reason"], "movievault_identity_changed")
+            self.assertFalse(jobs[0]["dryRun"])
+            # A second sync before the refresh ran does not queue it twice.
+            again = next_metadata.queue_movievault_identity_refreshes(conn, [self.RELEASE_ID])
+            self.assertEqual(again["queued"], 0)
+            self.assertEqual(again["alreadyQueued"], 1)
+            self.assertEqual(len(self._jobs(conn, movie_id)), 1)
+
+    def test_a_deleted_disc_and_an_unrelated_release_are_left_alone(self):
+        with self.connect() as conn:
+            deleted = self._movie(conn, deleted=True)
+            other = self._movie(conn, release_id="10000000-0000-0000-0000-0000000000cd")
+            summary = next_metadata.queue_movievault_identity_refreshes(conn, [self.RELEASE_ID])
+            self.assertEqual(summary["queued"], 0)
+            self.assertEqual(self._jobs(conn, deleted), [])
+            self.assertEqual(self._jobs(conn, other), [])
+
+    def test_the_cap_bounds_one_sync(self):
+        with self.connect() as conn:
+            self._movie(conn)
+            self._movie(conn)
+            summary = next_metadata.queue_movievault_identity_refreshes(
+                conn, [self.RELEASE_ID], limit=1
+            )
+            self.assertEqual(summary["queued"], 1)
+            self.assertTrue(summary["capped"])
+
+    def test_nothing_changed_queues_nothing(self):
+        with self.connect() as conn:
+            self._movie(conn)
+            summary = next_metadata.queue_movievault_identity_refreshes(conn, [])
+            self.assertEqual(summary["queued"], 0)
+            self.assertEqual(summary["movies"], 0)
+
+
 @unittest.skipUnless(
     DATABASE_URL and psycopg is not None, "PostgreSQL test database is not configured"
 )
@@ -2376,6 +2562,22 @@ class SeriesLinkPostgresTests(unittest.TestCase):
             a = next_metadata.apply_movie_series_link(conn, first, merged["series"])
             b = next_metadata.apply_movie_series_link(conn, second, merged["series"])
         self.assertEqual(a["seriesId"], b["seriesId"])
+
+    def test_a_refresh_with_nothing_else_to_change_still_links_the_series(self):
+        """The ordinary case for a disc added before MovieVault knew it was a
+        series: every field already matches, so `apply_metadata_proposal`
+        returned "unchanged" and never reached the link."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            proposal = {"movieUpdates": {}, "series": self._stated()}
+            first = next_metadata.apply_metadata_proposal(conn, movie_id, proposal)
+            self.assertTrue(first["changed"])
+            self.assertIsNotNone(first["applied"]["series"]["seriesId"])
+            self.assertEqual(len(self._links(conn, movie_id)), 2)
+            # Re-stating the same series and seasons is not a change, so a
+            # refresh does not churn the sync wire on every run.
+            again = next_metadata.apply_metadata_proposal(conn, movie_id, proposal)
+            self.assertFalse(again["changed"])
 
     def test_a_soft_deleted_series_is_not_resurrected(self):
         """A deletion is a statement. Reviving it because a feed mentioned the

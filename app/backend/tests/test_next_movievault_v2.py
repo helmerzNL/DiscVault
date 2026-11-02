@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 
@@ -971,6 +972,93 @@ class MovieVaultV2ContractTests(unittest.TestCase):
         members = result["boxSet"]["members"]
         self.assertEqual(members[0]["identifiers"], {"tmdbTvId": "4613"})
         self.assertEqual(members[1]["identifiers"], {"tmdbMovieId": "123"})
+
+    def test_release_details_reads_the_seasons_a_release_covers(self):
+        """A barcode the instance has not synced yet used to get its series and
+        never its season: the live fallback carried no seasons at all."""
+        payload = release_details_hit()
+        payload["release"]["seasons"] = [
+            {"seasonNumber": 2, "title": "Season 2", "releaseYear": 2002, "episodeCount": 10},
+            {"seasonNumber": 3, "title": None, "releaseYear": None, "episodeCount": None},
+        ]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual([season["seasonNumber"] for season in result["release"]["seasons"]], [2, 3])
+        self.assertEqual(result["release"]["seasons"][0]["releaseYear"], 2002)
+
+    def test_release_details_skips_an_unreadable_season_and_keeps_the_answer(self):
+        payload = release_details_hit()
+        payload["release"]["seasons"] = [
+            {"seasonNumber": "two"},
+            "not-an-object",
+            {"seasonNumber": 1},
+        ]
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING"):
+            result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual([season["seasonNumber"] for season in result["release"]["seasons"]], [1])
+
+    def test_release_details_without_seasons_states_none(self):
+        """Absent and empty both mean nothing was said about seasons."""
+        for value in (None, []):
+            with self.subTest(value=value):
+                payload = release_details_hit()
+                if value is not None:
+                    payload["release"]["seasons"] = value
+                result = next_movievault_v2.validate_release_details_response(payload)
+                self.assertNotIn("seasons", result["release"])
+
+    def test_release_details_candidates_read_seasons_too(self):
+        payload = release_details_candidates()
+        payload["releases"][0]["seasons"] = [{"seasonNumber": 4}]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["releases"][0]["seasons"][0]["seasonNumber"], 4)
+        self.assertNotIn("seasons", result["releases"][1])
+
+    def test_identity_changes_are_work_type_tv_id_and_seasons(self):
+        before = {
+            "a": ("movie", None, None),
+            "b": ("tv", "4613", '[{"seasonNumber": 1}]'),
+            "c": ("tv", "1044", None),
+        }
+        after = {
+            "a": ("tv", "4613", None),
+            "b": ("tv", "4613", '[{"seasonNumber": 1}]'),
+            "c": ("tv", "1044", '[{"seasonNumber": 2}]'),
+            "d": ("tv", "99", None),
+        }
+        self.assertEqual(
+            next_movievault_v2.identity_changed_release_ids(before, after),
+            ["a", "c", "d"],
+        )
+
+    def test_a_finished_sync_queues_refreshes_for_changed_releases(self):
+        """Every sync runs as a `sync_index` plugin job, scheduled or manual;
+        that is where discs already in the collection get their refresh."""
+        connection = unittest.mock.MagicMock()
+        connection.__enter__.return_value = connection
+        execution = {
+            "status": "ok",
+            "result": {"status": "completed", "identityChangedReleaseIds": ["r1", "r2"]},
+        }
+        with patch.object(next_worker, "plugin_execution_context_from_db", return_value={}), \
+             patch.object(next_worker, "run_plugin_entrypoint", return_value=execution), \
+             patch.object(next_worker, "connect", return_value=connection), \
+             patch.object(
+                 next_worker,
+                 "queue_movievault_identity_refreshes",
+                 return_value={"queued": 2},
+             ) as queue:
+            result = next_worker.process_plugin_execute(
+                {"pluginId": "movievault_v2", "entrypoint": "sync_index", "payload": {}},
+                "worker-1",
+            )
+        queue.assert_called_once_with(connection, ["r1", "r2"])
+        self.assertEqual(result["persistence"]["identityRefresh"], {"queued": 2})
 
     def test_release_details_rejects_a_hit_carrying_a_candidate_list(self):
         """`release` and `releases` answer the same question incompatibly.
