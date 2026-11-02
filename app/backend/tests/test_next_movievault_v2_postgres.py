@@ -2299,6 +2299,84 @@ class SeriesLinkPostgresTests(unittest.TestCase):
                 cur.execute("SELECT series_id FROM movies WHERE id = %s", (movie_id,))
                 self.assertEqual(cur.fetchone()["series_id"], other)
 
+    def test_a_restatement_without_seasons_keeps_the_owners_season_links(self):
+        """The feed omits `seasons` when nobody curated them. That is silence
+        about seasons, not "this disc holds none", so it must not delete the
+        season links the owner made -- which an empty list reaching the prune
+        did, on every refresh, once this link was actually reached."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            next_metadata.apply_movie_series_link(conn, movie_id, self._stated())
+            self.assertEqual(len(self._links(conn, movie_id)), 2)
+            stated = self._stated(seasons=[])
+            stated.pop("seasons")
+            again = next_metadata.apply_movie_series_link(conn, movie_id, stated)
+            self.assertIsNotNone(again)
+            self.assertEqual(
+                [row["season_number"] for row in self._links(conn, movie_id)], [1, 2]
+            )
+
+    def test_a_series_another_source_named_is_reused(self):
+        """Identity is the id in its namespace, not who reported it.
+
+        A show picked from TMDB in the Add screen is stored under provider
+        `tmdb`; the same show placed by the MovieVault feed arrives as
+        `movievault_v2`. Both carry `tmdb_tv` 1399, and a second release must
+        land on the series the first one created.
+        """
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            picked = next_metadata.apply_movie_series_link(
+                conn,
+                first,
+                {"tmdbTvId": "1399", "providerId": "tmdb", "title": self.SERIES_TITLE, "seasons": []},
+            )
+            second = self._movie(conn, suffix=" 4K")
+            fed = next_metadata.apply_movie_series_link(conn, second, self._stated())
+
+            self.assertEqual(picked["seriesId"], fed["seriesId"])
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT count(*) AS n FROM series WHERE title = %s", (self.SERIES_TITLE,)
+                )
+                self.assertEqual(cur.fetchone()["n"], 1)
+
+    def test_a_scanned_series_reaches_the_link_through_the_pipeline(self):
+        """End to end from what the plugin answers to the row it links.
+
+        The plugin always emitted `series`; `canonicalize_plugin_result` never
+        carried it to the merge, so a television release was typed SHOW and
+        left without a series, and a second release had nothing to join.
+        """
+        from app.backend.next_plugins.movievault_v2 import plugin as movievault_plugin
+
+        record = {
+            "canonicalTitle": self.SERIES_TITLE,
+            "releaseTitle": f"{self.SERIES_TITLE} Blu-ray",
+            "workType": "tv",
+            "providerIds": {"tmdb_tv": "1399"},
+        }
+        item = movievault_plugin._release(record)
+        canonical = next_metadata.canonicalize_plugin_result(
+            next_movievault_v2.MOVIEVAULT_V2_PLUGIN_ID,
+            "search_barcode",
+            {"status": "hit", **item},
+        )
+        merged = next_metadata.merge_metadata_results(
+            current={"media_type": "SHOW"},
+            technical_current={},
+            results=[next_metadata.metadata_source_policy_result(canonical)],
+            overwrite_enabled=False,
+            target_format="",
+        )
+        self.assertEqual(merged["series"]["tmdbTvId"], "1399")
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            second = self._movie(conn, suffix=" 4K")
+            a = next_metadata.apply_movie_series_link(conn, first, merged["series"])
+            b = next_metadata.apply_movie_series_link(conn, second, merged["series"])
+        self.assertEqual(a["seriesId"], b["seriesId"])
+
     def test_a_soft_deleted_series_is_not_resurrected(self):
         """A deletion is a statement. Reviving it because a feed mentioned the
         show again would overrule whoever deleted it, with no trace."""

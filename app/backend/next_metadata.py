@@ -1895,6 +1895,14 @@ def metadata_source_policy_result(result: dict[str, Any]) -> dict[str, Any]:
     movie_updates = dict(result.get("movieUpdates") or {})
     metadata_updates = dict(result.get("metadataUpdates") or {})
 
+    # Series identity is identity, and MovieVault owns identity: its series
+    # block is keyed by a TMDB television id the catalogue holds, not one a
+    # source guessed. Every other source's is dropped. A person choosing a
+    # series in the Add picker is a different path
+    # (`merge_selected_import_movie_candidate`) and is not affected.
+    if not is_movievault_identity_source(plugin_id):
+        constrained["series"] = None
+
     if plugin_id == TMDB_PLUGIN_ID:
         constrained["movieUpdates"] = {
             field: value
@@ -3405,6 +3413,15 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "boxSetEvidence": box_set_evidence,
         "boxSetProposal": box_set_proposal,
         "boxSetProposals": box_set_proposals,
+        # The series this disc is an edition of, as the source stated it. The
+        # merge has always read `series` off each result to pick one for
+        # `apply_movie_series_link` -- but it was never carried across from the
+        # plugin's answer, so the MovieVault `_series` block was dropped here on
+        # every lookup, refresh and barcode add: a television release became a
+        # SHOW and was never given its series, and a second release of the same
+        # show had nothing to be linked to. Who may state one is
+        # `metadata_source_policy_result`'s decision, not this function's.
+        "series": result.get("series") if isinstance(result.get("series"), dict) else None,
         "raw": result,
     }
 
@@ -6314,7 +6331,15 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         # links off these rows, quietly erase which disc holds what every time a
         # metadata job ran. Nothing in the refresh is about discs, so nothing in
         # it should change them.
-        _prune_movie_seasons(cur, movie_uuid, season_ids)
+        #
+        # And a statement with **no** seasons changes none. The feed omits the
+        # list when nobody has curated it -- it cannot tell "the complete
+        # series" from "not recorded yet", and neither is a reason to drop what
+        # the owner linked -- so an empty list reaching `_prune_movie_seasons`
+        # would delete every season and episode link on the disc, on every
+        # refresh, the moment this link started being reached at all.
+        if season_ids:
+            _prune_movie_seasons(cur, movie_uuid, season_ids)
         for index, season_id in enumerate(season_ids):
             cur.execute(
                 """
