@@ -1885,6 +1885,20 @@ def _identification_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
             for key, value in identifiers.items()
             if key in {"tmdb", "tmdbId", "tmdb_id", "imdb", "imdbId", "imdb_id"} and value_present(value)
         }
+    # What makes a MovieVault candidate a series: its stated type and the series
+    # block keyed by the TMDB television id. The PWA card already reads both and
+    # hands them to the import (`selected_import_movie_candidate_from_body`), but
+    # they were stripped here, so a series picked from a title search -- or from
+    # a barcode scan with a title filled in -- was added as a MOVIE with no series.
+    # Only identity sources reach this function, so only MovieVault's survive.
+    series = candidate.get("series")
+    if isinstance(series, dict) and clean_text(series.get("tmdbTvId")):
+        sanitized["series"] = dict(series)
+    for source in sources:
+        media_type = normalize_media_type(source.get("mediaType") or source.get("media_type"))
+        if media_type:
+            sanitized["mediaType"] = media_type
+            break
     return sanitized
 
 

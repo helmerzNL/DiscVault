@@ -11525,6 +11525,68 @@ def release_candidate_movie_payload(candidate: Any) -> dict[str, Any]:
     return payload
 
 
+def release_candidate_identity(
+    film: Any, candidate: Any
+) -> tuple[str | None, dict[str, Any] | None]:
+    """The type and series MovieVault states for a pressing picked from its list.
+
+    A barcode the resolver could pin only to the film, not the pressing, comes
+    back as a candidate list, and the person picks the edition in their hand.
+    The film behind that list states its work type and, for a series, its TMDB
+    television id (`release_details_search_payload`), and a catalogued pressing
+    may name its seasons. None of that reached the disc: the pick carried the
+    edition's own facts only, so a series added this way became a MOVIE with
+    no series -- the same complaint a direct match had before (#826).
+
+    Returns `(media_type, series)` in the shapes the import already uses: the
+    type as DiscVault's MOVIE/SHOW, and the series as the block the MovieVault
+    plugin emits for a synced record, so it goes through the same
+    `apply_movie_series_link`. Unstated stays unstated: no work type gives no
+    type, and a series needs both `tv` and a television id -- the id alone is not
+    enough to establish one, as on the feed.
+    """
+    if not isinstance(film, dict):
+        return None, None
+    work_type = film.get("workType")
+    if work_type == "movie":
+        return MEDIA_TYPE_MOVIE, None
+    if work_type != "tv":
+        return None, None
+    identifiers = film.get("identifiers") if isinstance(film.get("identifiers"), dict) else {}
+    tmdb_tv_id = clean_text(film.get("tmdbTvId") or identifiers.get("tmdbTvId"))
+    title = clean_text(film.get("title"))
+    if not tmdb_tv_id or not tmdb_tv_id.isdigit() or not title:
+        return MEDIA_TYPE_SHOW, None
+    seasons: list[dict[str, Any]] = []
+    raw_seasons = candidate.get("seasons") if isinstance(candidate, dict) else None
+    for season in raw_seasons if isinstance(raw_seasons, list) else []:
+        if not isinstance(season, dict):
+            continue
+        number = season.get("seasonNumber")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        seasons.append(
+            {
+                key: value
+                for key, value in {
+                    "seasonNumber": number,
+                    "title": season.get("title"),
+                    "year": season.get("releaseYear"),
+                    "episodeCount": season.get("episodeCount"),
+                }.items()
+                if value is not None
+            }
+        )
+    series: dict[str, Any] = {
+        "provider": MOVIEVAULT_V2_PLUGIN_ID,
+        "tmdbTvId": tmdb_tv_id,
+        "title": title,
+    }
+    if seasons:
+        series["seasons"] = seasons
+    return MEDIA_TYPE_SHOW, series
+
+
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
     if entrypoint in {"health_check", "discover_library", "playback_deeplink", "describe_payload", "activity_summary"}:
         return False
@@ -38374,6 +38436,18 @@ def register_routes(flask_app: Flask) -> None:
                 # the transaction opened.
                 payload = dict(movie_updates)
                 payload["title"] = import_title
+                # A pressing picked from MovieVault's candidate list: the film
+                # behind the list states the work type and the series, which
+                # the edition's own facts below never carried. Stated values
+                # already in the proposal still win.
+                if release_candidate:
+                    candidate_type, candidate_series = release_candidate_identity(
+                        release_fallback_film, release_candidate
+                    )
+                    if candidate_type and not payload.get("media_type") and not payload.get("mediaType"):
+                        payload["media_type"] = candidate_type
+                    if candidate_series and not isinstance(proposal.get("series"), dict):
+                        proposal = {**proposal, "series": candidate_series}
                 # Last resort only. A stated type -- the user's, or MovieVault's
                 # workType carried on the feed -- is already in movie_updates and
                 # outranks this. The title heuristic exists for the case that has

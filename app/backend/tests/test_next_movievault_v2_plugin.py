@@ -350,6 +350,42 @@ class SeriesReachesTheMergeTests(unittest.TestCase):
                 self.assertIsNone(merged.get("series"))
 
 
+class TitleSearchCandidatesKeepTheirSeriesTests(unittest.TestCase):
+    """A MovieVault candidate is a series by its type and its series block.
+
+    The PWA card reads both and hands them to the import, but
+    `_identification_candidate` stripped them, so a series picked from a title
+    search -- or from a barcode scan with a title filled in -- was added as a
+    MOVIE with no series.
+    """
+
+    def _candidates(self, plugin_id, items):
+        canonical = next_metadata.canonicalize_plugin_result(
+            plugin_id, "search_title", {"status": "hit", "items": items}
+        )
+        return next_metadata.metadata_source_policy_result(canonical)["candidates"]
+
+    def test_a_series_candidate_keeps_its_type_and_series(self):
+        item = movievault_v2._release(
+            _synced_release(workType="tv", providerIds={"tmdb_tv": "4613"})
+        )
+        candidates = self._candidates("movievault_v2", [item])
+        self.assertEqual(candidates[0]["mediaType"], "SHOW")
+        self.assertEqual(candidates[0]["series"]["tmdbTvId"], "4613")
+
+    def test_a_film_candidate_states_movie_and_no_series(self):
+        item = movievault_v2._release(_synced_release(workType="movie"))
+        candidates = self._candidates("movievault_v2", [item])
+        self.assertEqual(candidates[0]["mediaType"], "MOVIE")
+        self.assertNotIn("series", candidates[0])
+
+    def test_a_series_block_without_a_television_id_is_not_kept(self):
+        item = movievault_v2._release(_synced_release(workType="tv"))
+        item["series"] = {"title": "No Id"}
+        candidates = self._candidates("movievault_v2", [item])
+        self.assertNotIn("series", candidates[0])
+
+
 class BoxSetProposalTests(unittest.TestCase):
     """A box-set proposal has to name each member's release.
 
