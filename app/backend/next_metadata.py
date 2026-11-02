@@ -1544,6 +1544,12 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
         "externalBarcode": external_metadata_barcode(movie.get("barcode")),
         "format": movie.get("format") or "",
         "normalizedFormat": normalize_media_format(movie.get("format")),
+        # The stored classification, which decides whether a source's *film*
+        # namespace may be asked about this record at all. It was selected
+        # above for the merge's demotion rule and stopped there, so the query
+        # that reaches the sources described a confirmed television release in
+        # exactly the same words as a film -- see `query_is_confirmed_series`.
+        "mediaType": normalize_media_type(movie.get("media_type")) or "",
         "tmdbId": identifiers.get("tmdbId") or metadata.get("tmdb_id") or metadata.get("tmdbId") or "",
         "imdbId": identifiers.get("imdbId") or metadata.get("imdb_id") or metadata.get("imdbId") or "",
         "movieVaultId": (
@@ -1587,6 +1593,9 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "externalBarcode": external_metadata_barcode(barcode),
         "format": media_format,
         "normalizedFormat": normalize_media_format(media_format),
+        "mediaType": normalize_media_type(
+            payload.get("mediaType") or payload.get("media_type") or payload.get("workType")
+        ) or "",
         "tmdbId": clean_text(payload.get("tmdbId") or payload.get("tmdb_id")),
         "imdbId": clean_text(payload.get("imdbId") or payload.get("imdb_id")),
         "movieVaultId": clean_text(
@@ -1610,6 +1619,40 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def query_is_confirmed_series(query: dict[str, Any]) -> bool:
+    """True when this record is already known to be a television release.
+
+    The stored ``media_type`` is not a hint. Nothing infers it -- a refresh may
+    promote a film to a SHOW and may never demote one
+    (``should_apply_media_type``) -- so a SHOW on the row was stated, either by
+    a source that recognised the show or by the person who corrected it by
+    hand. That makes it the one thing in the query that can settle a namespace.
+
+    It has to, because an id cannot. An id is issued *by* a namespace and a
+    bare number does not say which: TMDB's 4613 is the series *Band of
+    Brothers* and the film *Scorched*, 1044 is *Planet Earth* and a 1974 film
+    of the same name is 54805. A film title search is no safer -- a series and
+    an unrelated film share a title often enough that the fallback resolved
+    one for the other. So the film namespace was asked about confirmed shows
+    with whatever number the row happened to hold and whatever title it
+    happened to carry, and the answer it gave -- another work's synopsis,
+    runtime, rating, cast, genres, studios and artwork -- was merged onto the
+    show and shown as its current metadata (#826).
+
+    The demotion guard did not catch it: it protects the *classification*, so
+    the record stayed a SHOW while describing a film, which is the shape that
+    made the report hard to read. Provenance needs its own rule, and this is
+    it.
+
+    Only the film namespace is withheld. A barcode lookup, technical specs and
+    box-set detection are not keyed to a namespace and still run, and the
+    show's own metadata comes from the television namespace through
+    ``refresh_series_metadata`` and ``series_details``, where the id is a
+    ``tmdb_tv`` one and cannot be confused with a film's.
+    """
+    return normalize_media_type(query.get("mediaType")) == MEDIA_TYPE_SHOW
+
+
 def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
     capabilities = set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
     plan: list[dict[str, Any]] = []
@@ -1618,6 +1661,10 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     fallback = clean_text(query.get("fallbackTitle"))
     tmdb_id = clean_text(query.get("tmdbId"))
     imdb_id = clean_text(query.get("imdbId"))
+    # A preview is a person choosing and asks both namespaces deliberately
+    # (see the branch below); this governs the refresh of a stored record,
+    # where nobody is there to tell a film from a show.
+    film_namespace = not query_is_confirmed_series(query)
 
     def add(entrypoint: str, payload: dict[str, Any]) -> None:
         if entrypoint in capabilities and not any(item["entrypoint"] == entrypoint for item in plan):
@@ -1681,12 +1728,15 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             return plan
     if external_barcode:
         add("search_barcode", {**base_payload, "barcode": external_barcode})
-    if tmdb_id or imdb_id:
+    if (tmdb_id or imdb_id) and film_namespace:
         add("lookup_external_id", base_payload)
     has_external_lookup = bool(tmdb_id or imdb_id) and "lookup_external_id" in capabilities
     if "technical_specs" in capabilities and (title or external_barcode):
         add("technical_specs", base_payload)
-    elif (title or external_barcode) and not has_external_lookup:
+    elif (title or external_barcode) and not has_external_lookup and film_namespace:
+        # Without `film_namespace` this is the second half of #826: a show with
+        # no film id of its own still reached `movie_details`, which falls back
+        # to a film title search, and *Planet Earth* came back as the 1974 film.
         add("movie_details", base_payload)
     if title and "movie_details" not in capabilities:
         add("search_title", base_payload)
@@ -5061,6 +5111,17 @@ def run_metadata_source_pipeline(
             if query.get("detectBoxSets") and has_box_set_preview:
                 execution_item["state"] = "box_set_identification"
                 tmdb_enrichment["state"] = "box_set_identification"
+            elif not query.get("previewMode") and query_is_confirmed_series(query):
+                # The refresh of a confirmed show. This block is the film
+                # namespace by name -- `movie_details` is `/movie/{id}` with a
+                # film title search behind it -- so it is the one place that
+                # asked TMDB about a television release as though it were a
+                # film, with the row's own number and title, and merged the
+                # unrelated film it found (#826). The show is described through
+                # the television namespace instead, by
+                # `refresh_series_metadata`.
+                execution_item["state"] = "series_identity"
+                tmdb_enrichment["state"] = "series_identity"
             elif not (
                 enrichment_payload.get("title")
                 or enrichment_payload.get("tmdbId")

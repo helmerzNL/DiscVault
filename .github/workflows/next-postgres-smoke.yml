@@ -786,6 +786,17 @@ jobs:
       - name: Test adding a series from the title search
         run: python -m unittest tests.test_next_series_add_flow
 
+      # The other direction of the same distinction, and named here for the
+      # same reason: a module nobody lists is a module CI never runs. The one
+      # above is about reaching the television namespace at all; this one is
+      # about the film namespace staying away from a release already known to
+      # be television. #826 is what it costs when it does not -- two confirmed
+      # series wearing an unrelated film's synopsis, runtime, rating, cast and
+      # artwork, shown as their current metadata. No database: the claims are
+      # which questions get planned and what the merge does with the answers.
+      - name: Test that a confirmed show is not described by the film namespace
+        run: python -m unittest tests.test_next_show_identity_namespace
+
       # Named here for the same reason as the module above it. The database ids
       # a record is known by live in two different tables -- a film's in
       # `movie_identifiers`, a show's on the series -- and the edit surface has
