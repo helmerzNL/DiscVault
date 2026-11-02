@@ -6316,6 +6316,17 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         if current_series is not None and current_series != series_uuid:
             return None
         season_ids = ensure_seasons(cur, series_uuid, payload["seasons"])
+        # What the disc was linked to before, so the caller can tell a link
+        # that changed something from one that re-stated what was already
+        # there. A refresh re-states the same series on every run; reporting
+        # each of those as a change would churn the sync wire for nothing.
+        cur.execute(
+            "SELECT season_id FROM movie_seasons WHERE movie_id = %s ORDER BY sort_order, season_id",
+            (movie_uuid,),
+        )
+        previous_season_ids = [
+            (row["season_id"] if isinstance(row, dict) else row[0]) for row in cur.fetchall()
+        ]
         cur.execute(
             "UPDATE movies SET series_id = %s WHERE id = %s",
             (series_uuid, movie_uuid),
@@ -6361,6 +6372,11 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         "seriesId": str(series_uuid),
         "created": current_series is None,
         "seasonCount": len(season_ids),
+        # True when the disc's series or its season links are now different
+        # from before. An empty season statement changes no seasons (see the
+        # prune above), so only a non-empty one is compared.
+        "changed": current_series is None
+        or (bool(season_ids) and list(season_ids) != previous_season_ids),
     }
 
 
@@ -6466,6 +6482,35 @@ def apply_metadata_proposal(
     )
 
     if not changed:
+        # The series link is not a field, so the check above never sees it. A
+        # refresh whose fields all match -- the ordinary case for a disc that
+        # was added before MovieVault knew it was television -- returned here
+        # and never linked the series it had just been told about. The link is
+        # idempotent and keeps its own rules (the SHOW gate, a disc on another
+        # series is left alone, a deleted series is not revived), so it runs
+        # regardless; only a link that actually changed something is a change.
+        applied_series = apply_movie_series_link(conn, movie_uuid, proposal.get("series"))
+        if applied_series and applied_series.get("changed"):
+            revision = record_sync_change(
+                conn,
+                movie_uuid,
+                {
+                    "movieId": str(movie_uuid),
+                    "series": applied_series,
+                    "fieldDecisions": proposal.get("fieldDecisions") or [],
+                },
+            )
+            applied_payload = {"series": applied_series}
+            return {
+                "changed": True,
+                "revision": revision,
+                "applied": applied_payload,
+                "fieldDecisions": metadata_field_decisions_with_write_state(
+                    proposal.get("fieldDecisions") or [],
+                    applied={"changed": True, "applied": applied_payload},
+                    dry_run=False,
+                ),
+            }
         return {
             "changed": False,
             "revision": 0,
@@ -6788,6 +6833,115 @@ def enqueue_series_metadata_refresh(conn, series_id: UUID | str) -> None:
         logger.warning(
             "series metadata refresh could not be queued for %s", series_id, exc_info=True
         )
+
+
+# Upper bound on the refreshes one MovieVault sync may queue for discs already
+# in the collection. A catalogue-wide reclassification would otherwise put the
+# whole library on the queue at once; what is left over is picked up by the next
+# sync's comparison only if it changes again, so the cap is generous and the
+# shortfall is logged rather than silent.
+MOVIEVAULT_IDENTITY_REFRESH_LIMIT = 500
+
+
+def queue_movievault_identity_refreshes(
+    conn,
+    release_ids: list[str] | None,
+    *,
+    limit: int = MOVIEVAULT_IDENTITY_REFRESH_LIMIT,
+) -> dict[str, Any]:
+    """Refresh the discs whose MovieVault release changed what it says it is.
+
+    A sync updates the local index and nothing else, so a disc added while
+    MovieVault still called its release a film -- or before it had a TMDB
+    television id, or before its seasons were linked -- stayed that way until
+    somebody refreshed it by hand. The sync now reports which releases changed
+    their work type, television id or seasons
+    (`next_movievault_v2.identity_changed_release_ids`); this queues an ordinary
+    metadata refresh for every live disc that carries one of those release ids,
+    and the refresh applies the type and the series link through the same path
+    an add does.
+
+    A disc that already has a refresh pending or running is skipped rather than
+    queued twice. Best effort, like `enqueue_series_metadata_refresh`: the sync
+    has already succeeded, and a queue that cannot be written must not undo it.
+    """
+    ids = sorted({str(item) for item in (release_ids or []) if str(item)})
+    summary: dict[str, Any] = {
+        "releases": len(ids),
+        "movies": 0,
+        "queued": 0,
+        "alreadyQueued": 0,
+        "capped": False,
+    }
+    if not ids or not table_exists(conn, "background_jobs") or not table_exists(conn, "movie_identifiers"):
+        return summary
+    try:
+        try:
+            from .next_app import create_background_job
+        except ImportError:  # pragma: no cover - supports direct module execution
+            from next_app import create_background_job
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT m.id::text AS movie_id,
+                       EXISTS (
+                           SELECT 1 FROM background_jobs j
+                           WHERE j.job_type = %s
+                             AND j.status IN ('pending', 'running')
+                             AND j.payload ->> 'movieId' = m.id::text
+                       ) AS pending
+                FROM movie_identifiers mi
+                JOIN movies m ON m.id = mi.movie_id AND m.deleted_at IS NULL
+                WHERE mi.provider_id = %s
+                  AND mi.identifier_type = 'movie_id'
+                  AND mi.identifier = ANY(%s)
+                ORDER BY 1
+                """,
+                (METADATA_REFRESH_JOB_TYPE, MOVIEVAULT_V2_PLUGIN_ID, ids),
+            )
+            rows = cur.fetchall()
+        summary["movies"] = len(rows)
+        for row in rows:
+            if row["pending"]:
+                summary["alreadyQueued"] += 1
+                continue
+            if summary["queued"] >= limit:
+                summary["capped"] = True
+                break
+            create_background_job(
+                conn,
+                job_type=METADATA_REFRESH_JOB_TYPE,
+                payload={
+                    "movieId": row["movie_id"],
+                    "dryRun": False,
+                    "reason": "movievault_identity_changed",
+                    "source": f"{MOVIEVAULT_V2_PLUGIN_ID}.sync_index",
+                },
+            )
+            summary["queued"] += 1
+    except Exception:
+        logger.warning(
+            "MovieVault identity refreshes could not be queued for %d release(s)",
+            len(ids),
+            exc_info=True,
+        )
+        # Nothing half-queued is kept, and the caller's connection is left
+        # usable rather than in an aborted transaction.
+        try:
+            conn.rollback()
+        except Exception:  # pragma: no cover - a rollback failure has nothing left to undo
+            pass
+        summary["error"] = "queue_unavailable"
+        summary["queued"] = 0
+        return summary
+    if summary["capped"]:
+        logger.warning(
+            "MovieVault identity refreshes capped at %d of %d disc(s)",
+            limit,
+            summary["movies"] - summary["alreadyQueued"],
+        )
+    return summary
 
 
 SERIES_DETAILS_CAPABILITY = "series_details"

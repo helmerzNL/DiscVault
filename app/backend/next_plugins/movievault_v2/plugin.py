@@ -311,6 +311,12 @@ def _resolved_release_record(details):
     # `movie` and `tv` are carried, so silence can never overwrite a type.
     if film.get("workType") in ("movie", "tv"):
         record["workType"] = film["workType"]
+    # The seasons the release covers, already in the feed's shape (the reader
+    # parses them with the feed's own parser), so `_series` hangs them under the
+    # series exactly as it does for a synced record. Only a non-empty list is
+    # carried: absent and empty both mean "nothing said about seasons" here.
+    if isinstance(release.get("seasons"), list) and release["seasons"]:
+        record["seasons"] = release["seasons"]
     record.update(_resolved_technical(details))
     record.update(_resolved_poster(details))
     return record

@@ -258,6 +258,23 @@ class FilmIdentifierTests(unittest.TestCase):
         self.assertNotIn("workType", record)
 
 
+    def test_a_resolver_hit_carries_the_seasons_its_release_covers(self):
+        record = movievault_v2._resolved_release_record({
+            "film": {
+                "title": "Band of Brothers",
+                "workType": "tv",
+                "identifiers": {"tmdbTvId": "4613"},
+            },
+            "release": {
+                "title": "Band of Brothers",
+                "seasons": [{"seasonNumber": 1, "title": None, "releaseYear": 2001, "episodeCount": 10}],
+            },
+        })
+        series = movievault_v2._release(record)["series"]
+        self.assertEqual(series["tmdbTvId"], "4613")
+        self.assertEqual(series["seasons"], [{"seasonNumber": 1, "year": 2001, "episodeCount": 10}])
+
+
 class ResolverSeriesTests(unittest.TestCase):
     """A barcode resolved live gets the same type and series a synced one does."""
 

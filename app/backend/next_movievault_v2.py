@@ -1988,6 +1988,10 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             # drops what it does not know - it decides whether the field is
             # *read*. See App-Guidance `docs/apps/discvault/movievault-route-parity.md` §4.
             "finishes",
+            # The seasons a catalogued television release covers, in the
+            # distribution feed's shape. Without them a barcode the instance had
+            # not synced could be given its series but never its season.
+            "seasons",
         },
         label="release",
     )
@@ -2059,7 +2063,24 @@ def _release_details_release(value: Any) -> dict[str, Any]:
             raise MovieVaultV2Error("release_details_response_invalid")
         result["subtitles"] = [_release_details_subtitle_track(track) for track in tracks]
         result.pop("subtitleLanguages", None)
+    _release_details_read_seasons(item, result)
     return result
+
+
+def _release_details_read_seasons(item: dict[str, Any], result: dict[str, Any]) -> None:
+    """Carry a release-details `seasons` list, in the feed's shape, or nothing.
+
+    Read with the feed's own `_seasons` parser, which never raises: a malformed
+    entry is skipped and logged, never a reason to lose the whole answer. Absent
+    stays absent -- "MovieVault did not say" -- and so does an empty list, which
+    upstream means "the complete series, or unspecified" and is not a reason to
+    touch a disc's seasons either (`apply_movie_series_link`).
+    """
+    if item.get("seasons") is None:
+        return
+    seasons = _seasons(item["seasons"], release_id="release-details")
+    if seasons:
+        result["seasons"] = seasons
 
 
 def _release_details_release_summary(value: Any) -> dict[str, Any]:
@@ -2096,6 +2117,7 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             "audioTracks",
             "subtitles",
             "subtitleLanguages",
+            "seasons",
         },
         label="release summary",
     )
@@ -2196,6 +2218,7 @@ def _release_details_release_summary(value: Any) -> dict[str, Any]:
             raise MovieVaultV2Error("release_details_response_invalid")
         result["subtitles"] = [_release_details_subtitle_track(track) for track in tracks]
         result.pop("subtitleLanguages", None)
+    _release_details_read_seasons(item, result)
     return result
 
 
@@ -3501,6 +3524,76 @@ def _apply_record(cur: Any, generation: str, record: dict[str, Any], origin: str
     )
 
 
+# How many changed release ids a sync result carries at most. The list feeds
+# the refresh of discs already in the collection (see
+# `identity_changed_release_ids` and `next_metadata.
+# queue_movievault_identity_refreshes`), which is itself bounded; this only keeps
+# a whole-catalogue change from writing an enormous job result.
+IDENTITY_CHANGE_REPORT_LIMIT = 2000
+
+
+def _identity_snapshot(
+    cur: Any, generation: str, release_ids: list[str]
+) -> dict[str, tuple[Any, Any, Any]]:
+    """What a release says about the work behind it, per release id.
+
+    Three facts decide whether a disc is a series and which one: the work type,
+    the TMDB television id, and the seasons the release covers. Anything else
+    MovieVault republishes -- a poster, an audio track -- is not identity and
+    is left to the ordinary refresh cadence.
+    """
+    if not release_ids:
+        return {}
+    cur.execute(
+        """
+        SELECT release_id::text AS release_id,
+               work_type,
+               provider_ids ->> 'tmdb_tv' AS tmdb_tv,
+               seasons::text AS seasons
+        FROM movievault_v2_releases
+        WHERE generation = %s AND release_id::text = ANY(%s)
+        """,
+        (generation, release_ids),
+    )
+    snapshot: dict[str, tuple[Any, Any, Any]] = {}
+    for row in cur.fetchall():
+        release_id = str(_row_value(row, "release_id", 0))
+        snapshot[release_id] = (
+            _row_value(row, "work_type", 1),
+            _row_value(row, "tmdb_tv", 2),
+            _row_value(row, "seasons", 3),
+        )
+    return snapshot
+
+
+def identity_changed_release_ids(
+    before: dict[str, tuple[Any, Any, Any]],
+    after: dict[str, tuple[Any, Any, Any]],
+) -> list[str]:
+    """Release ids whose work type, TMDB television id or seasons changed.
+
+    A release that only appears in `after` counts: a disc may already carry its
+    id from a bucket lookup before the release reached the synced index. One
+    that disappeared does not -- a withdrawn release has nothing to apply.
+    """
+    return sorted(
+        release_id
+        for release_id, facts in after.items()
+        if before.get(release_id) != facts
+    )
+
+
+def _release_ids_in(records: list[dict[str, Any]]) -> list[str]:
+    ids: list[str] = []
+    for record in records:
+        if record.get("recordType") != "release":
+            continue
+        release_id = record.get("releaseId") or record.get("entityId")
+        if release_id:
+            ids.append(str(release_id))
+    return ids
+
+
 def _apply_full(
     conn: Any,
     *,
@@ -3513,15 +3606,42 @@ def _apply_full(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT plugin_id
+            SELECT plugin_id, active_generation
             FROM movievault_v2_sync_state
             WHERE plugin_id = %s
             FOR UPDATE
             """,
             (MOVIEVAULT_V2_PLUGIN_ID,),
         )
+        previous_generation = _row_value(cur.fetchone(), "active_generation", 1)
         for record in records:
             _apply_record(cur, generation, record, origin)
+        # Compared against the generation this snapshot replaces, before its
+        # rows are deleted below. With no previous generation -- the very first
+        # sync -- nothing has changed: every disc already in the collection was
+        # identified without this index, and re-reading all of them at once is
+        # not this function's job.
+        changed_release_ids: list[str] = []
+        if previous_generation:
+            cur.execute(
+                """
+                SELECT n.release_id::text AS release_id
+                FROM movievault_v2_releases n
+                JOIN movievault_v2_releases o
+                  ON o.generation = %s AND o.release_id = n.release_id
+                WHERE n.generation = %s
+                  AND (
+                      o.work_type IS DISTINCT FROM n.work_type
+                      OR (o.provider_ids ->> 'tmdb_tv') IS DISTINCT FROM (n.provider_ids ->> 'tmdb_tv')
+                      OR o.seasons IS DISTINCT FROM n.seasons
+                  )
+                ORDER BY n.release_id
+                """,
+                (str(previous_generation), generation),
+            )
+            changed_release_ids = [
+                str(_row_value(row, "release_id")) for row in cur.fetchall()
+            ]
         cur.execute(
             """
             UPDATE movievault_v2_sync_state
@@ -3570,6 +3690,8 @@ def _apply_full(
         "mode": "full",
         "revision": manifest["currentRevision"],
         "recordsApplied": len(records),
+        "identityChangedReleaseIds": changed_release_ids[:IDENTITY_CHANGE_REPORT_LIMIT],
+        "identityChangedReleaseCount": len(changed_release_ids),
     }
 
 
@@ -3597,10 +3719,16 @@ def _apply_delta(
     if not generation:
         raise MovieVaultV2Error("full_sync_required")
     with conn.cursor() as cur:
+        segment_release_ids = _release_ids_in(records)
+        identity_before = _identity_snapshot(cur, str(generation), segment_release_ids)
         for record in records:
             if record["revision"] <= int(state["revision"]):
                 raise MovieVaultV2Error("revision_invalid")
             _apply_record(cur, str(generation), record, origin)
+        changed_release_ids = identity_changed_release_ids(
+            identity_before,
+            _identity_snapshot(cur, str(generation), segment_release_ids),
+        )
         cur.execute(
             """
             UPDATE movievault_v2_sync_state
@@ -3627,6 +3755,7 @@ def _apply_delta(
         "mode": "delta",
         "revision": reached_revision,
         "recordsApplied": len(records),
+        "identityChangedReleaseIds": changed_release_ids,
     }
 
 
@@ -3748,6 +3877,10 @@ def run_sync(
             cursor = str(state["cursor"])
             hops = 0
             records_applied = 0
+            # Accumulated across hops: each segment reports the releases whose
+            # identity it changed, and the caller refreshes the discs that carry
+            # them once the whole sync has landed.
+            identity_changed: set[str] = set()
             while True:
                 status, content, headers = _fetch_feed(
                     origin,
@@ -3840,6 +3973,11 @@ def run_sync(
                 conn.commit()
                 records_applied += len(records)
                 result["recordsApplied"] = records_applied
+                identity_changed.update(result.get("identityChangedReleaseIds") or [])
+                result["identityChangedReleaseIds"] = sorted(identity_changed)[
+                    :IDENTITY_CHANGE_REPORT_LIMIT
+                ]
+                result["identityChangedReleaseCount"] = len(identity_changed)
                 if at_head:
                     return result
                 cursor = next_cursor
