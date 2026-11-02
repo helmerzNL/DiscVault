@@ -297,6 +297,42 @@ class ResolverSeriesTests(unittest.TestCase):
         self.assertFalse(any(row["provider_id"] == "tmdb" for row in item.get("identifiers") or []))
 
 
+class SeriesReachesTheMergeTests(unittest.TestCase):
+    """The plugin always emitted `series`; the pipeline dropped it.
+
+    `canonicalize_plugin_result` built its result key by key and `series` was
+    not one of them, so `merge_metadata_results` read `None` for every source:
+    a television release was typed SHOW and never given its series.
+    """
+
+    def _merged(self, plugin_id, result):
+        canonical = next_metadata.canonicalize_plugin_result(plugin_id, "search_barcode", result)
+        return next_metadata.merge_metadata_results(
+            current={"media_type": "SHOW"},
+            technical_current={},
+            results=[next_metadata.metadata_source_policy_result(canonical)],
+            overwrite_enabled=False,
+            target_format="",
+        )
+
+    def test_movievault_names_the_series(self):
+        item = movievault_v2._release(
+            _synced_release(workType="tv", providerIds={"tmdb_tv": "4613"})
+        )
+        merged = self._merged("movievault_v2", {"status": "hit", **item})
+        self.assertEqual(merged["series"]["tmdbTvId"], "4613")
+
+    def test_no_other_source_may_name_one(self):
+        """Series identity is identity, and MovieVault owns identity."""
+        for plugin_id in ("tmdb", "omdb", "tvdb"):
+            with self.subTest(plugin_id=plugin_id):
+                merged = self._merged(
+                    plugin_id,
+                    {"status": "hit", "movie": {"title": "X"}, "series": {"tmdbTvId": "4613", "title": "X"}},
+                )
+                self.assertIsNone(merged.get("series"))
+
+
 class BoxSetProposalTests(unittest.TestCase):
     """A box-set proposal has to name each member's release.
 

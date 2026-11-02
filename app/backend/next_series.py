@@ -217,7 +217,11 @@ def series_id_for_identifier(
     identifier: str,
     identifier_type: str = SERIES_IDENTIFIER_TYPE,
 ) -> UUID | None:
-    """The live series carrying this provider identifier, if one already does.
+    """The live series carrying this identifier, if one already does.
+
+    ``provider_id`` is accepted for the callers' sake and deliberately not part
+    of the match (see the query below): it says which source reported the id,
+    which is not part of what the id names.
 
     Soft-deleted series are ignored rather than resurrected. A deleted series is
     a statement by whoever deleted it, and quietly reviving it because a feed
@@ -228,18 +232,26 @@ def series_id_for_identifier(
     and TMDB's 305288 are different shows, and matching on the number alone
     would hand one series' row to the other.
     """
+    # Matched on the namespace and the id, not on which source reported it.
+    # `provider_id` records who said so; the identity is the id in its own
+    # namespace. A show picked from TMDB in the Add screen is stored under
+    # provider `tmdb`, the same show placed by the MovieVault feed under
+    # `movievault_v2`, and both carry `tmdb_tv` 4613 -- matching on the
+    # provider too made them two series, so a second release of the show was
+    # never linked to the first. The identifier editor's clash check
+    # (`set_series_identity`) already treats identity this way.
     cur.execute(
         """
         SELECT s.id
         FROM series_identifiers si
         JOIN series s ON s.id = si.series_id
-        WHERE si.provider_id = %s
-          AND si.identifier_type = %s
+        WHERE si.identifier_type = %s
           AND si.identifier = %s
           AND s.deleted_at IS NULL
+        ORDER BY s.created_at, s.id
         LIMIT 1
         """,
-        (provider_id, identifier_type or SERIES_IDENTIFIER_TYPE, identifier),
+        (identifier_type or SERIES_IDENTIFIER_TYPE, identifier),
     )
     row = cur.fetchone()
     if not row:
