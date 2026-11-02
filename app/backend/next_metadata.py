@@ -1535,6 +1535,13 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
     movie_row = dict(movie)
     movie_row["genres"] = current_genres
     box_sets = [item for item in containers if item.get("container_type") == "box_set"]
+    # A show's television id lives on its series, not on the disc: it names the
+    # show, which every release of it shares (`series_identifiers`, migration
+    # 063). Read only for a linked series; a disc's own `tmdb` row is the film
+    # namespace and is never consulted for this (#826).
+    series_identifiers = (
+        series_identifier_map(conn, movie["series_id"]) if movie.get("series_id") else {}
+    )
     query = {
         "movieId": str(movie_id),
         "title": movie.get("original_title") or movie.get("title") or "",
@@ -1550,6 +1557,11 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
         # that reaches the sources described a confirmed television release in
         # exactly the same words as a film -- see `query_is_confirmed_series`.
         "mediaType": normalize_media_type(movie.get("media_type")) or "",
+        # The series' TMDB television id, when one is known. Kept apart from
+        # `tmdbId` below, which is the film namespace: the two spaces overlap
+        # (TMDB's 4613 is a series and an unrelated film), so the key says which
+        # space the number came from. `show_details` reads this one.
+        "tmdbTvId": series_identifiers.get(SERIES_IDENTIFIER_TYPE, ""),
         "tmdbId": identifiers.get("tmdbId") or metadata.get("tmdb_id") or metadata.get("tmdbId") or "",
         "imdbId": identifiers.get("imdbId") or metadata.get("imdb_id") or metadata.get("imdbId") or "",
         "movieVaultId": (
@@ -1646,11 +1658,42 @@ def query_is_confirmed_series(query: dict[str, Any]) -> bool:
 
     Only the film namespace is withheld. A barcode lookup, technical specs and
     box-set detection are not keyed to a namespace and still run, and the
-    show's own metadata comes from the television namespace through
-    ``refresh_series_metadata`` and ``series_details``, where the id is a
+    title record of the show is described from the television namespace by
+    TMDB's ``show_details`` (see ``show_details_payload``), where the id is a
     ``tmdb_tv`` one and cannot be confused with a film's.
+
+    ``refresh_series_metadata`` is a different act: it describes the *series*
+    record -- its own overview, seasons and artwork -- and never the title
+    record a disc is filed under. Before ``show_details`` existed, nothing
+    described that title record at all once the film namespace was withheld.
     """
     return normalize_media_type(query.get("mediaType")) == MEDIA_TYPE_SHOW
+
+
+SHOW_DETAILS_CAPABILITY = "show_details"
+
+
+def show_details_payload(query: dict[str, Any]) -> dict[str, Any]:
+    """What TMDB's ``show_details`` is asked about a confirmed show, or {}.
+
+    Only identity that cannot name a film travels:
+
+    * ``tmdbTvId`` -- the series' own television id;
+    * ``imdbId`` -- an IMDb id names exactly one title of either kind, and the
+      plugin resolves it through TMDB's ``/find`` reading television results
+      only, so a film's IMDb id there finds nothing rather than the film.
+
+    ``tmdbId`` is left out on purpose. On a title record it is the film
+    namespace, and a number from it read as a series is #826 again. So is a
+    title, which is why none is sent: with neither id, this is {} and nothing is
+    asked.
+    """
+    payload = {
+        "tmdbTvId": clean_text(query.get("tmdbTvId")),
+        "imdbId": clean_text(query.get("imdbId")),
+    }
+    payload = {key: value for key, value in payload.items() if value}
+    return payload
 
 
 def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
@@ -4570,6 +4613,7 @@ CACHEABLE_LOOKUP_ENTRYPOINTS = frozenset(
         "lookup_external_id",
         "movie_details",
         "series_details",
+        "show_details",
         "search_series",
         "lookup_external_series_id",
         "season_episodes",
@@ -5103,6 +5147,43 @@ def run_metadata_source_pipeline(
             "tmdbEnrichment": True,
         }
         executions.append(execution_item)
+
+        def run_tmdb_details(entrypoint: str, payload: dict[str, Any]) -> None:
+            """Ask TMDB one detail entrypoint and merge what it answers.
+
+            One body for the film and the television call, so the two cannot
+            drift in how an answer is normalised, policed or reported.
+            """
+            execution_item["entrypoint"] = entrypoint
+            execution = run_cached_plugin_entrypoint(
+                conn, TMDB_PLUGIN_ID, entrypoint, payload, context, force=force
+            )
+            execution_item.update(
+                {
+                    "status": execution.get("status"),
+                    "state": execution.get("state") or "tmdb_enrichment",
+                    "elapsedMs": execution.get("elapsedMs"),
+                    "error": execution.get("error"),
+                }
+            )
+            if execution.get("status") == "ok":
+                normalized = canonicalize_plugin_result(
+                    TMDB_PLUGIN_ID,
+                    entrypoint,
+                    execution.get("result") or {},
+                )
+                normalized = metadata_source_policy_result(normalized)
+                execution_item["resultStatus"] = normalized.get("status")
+                execution_item["candidateCount"] = len(normalized.get("candidates") or [])
+                execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
+                if normalized.get("status") not in {"miss", "not_found", "needs_configuration"}:
+                    normalized_results.append(normalized)
+                    tmdb_enrichment["state"] = "enriched"
+                else:
+                    tmdb_enrichment["state"] = "no_match"
+            else:
+                tmdb_enrichment["state"] = execution_item.get("state") or "error"
+
         if plugin_requires_config(tmdb_plugin, config, "movie_details"):
             execution_item["state"] = "needs_configuration"
             execution_item["configured"] = False
@@ -5112,16 +5193,26 @@ def run_metadata_source_pipeline(
                 execution_item["state"] = "box_set_identification"
                 tmdb_enrichment["state"] = "box_set_identification"
             elif not query.get("previewMode") and query_is_confirmed_series(query):
-                # The refresh of a confirmed show. This block is the film
-                # namespace by name -- `movie_details` is `/movie/{id}` with a
-                # film title search behind it -- so it is the one place that
-                # asked TMDB about a television release as though it were a
-                # film, with the row's own number and title, and merged the
-                # unrelated film it found (#826). The show is described through
-                # the television namespace instead, by
-                # `refresh_series_metadata`.
-                execution_item["state"] = "series_identity"
-                tmdb_enrichment["state"] = "series_identity"
+                # The refresh of a confirmed show. `movie_details` is the film
+                # namespace by name -- `/movie/{id}` with a film title search
+                # behind it -- and asking it about a television release merged
+                # an unrelated film onto the show (#826), so it is never asked
+                # here. The show is described from the television namespace
+                # instead, by `show_details`, which answers in the shape this
+                # merge reads and establishes identity only from an id: the
+                # series' `tmdb_tv`, or an IMDb id resolved to a television
+                # result. Never the row's `tmdbId` (that is the film namespace)
+                # and never a title.
+                #
+                # Without either id, or on a TMDB plugin older than the
+                # capability, nothing is asked and the state says why.
+                show_payload = show_details_payload(query)
+                if SHOW_DETAILS_CAPABILITY in plugin_capabilities(tmdb_plugin) and show_payload:
+                    tmdb_enrichment["enabled"] = True
+                    run_tmdb_details(SHOW_DETAILS_CAPABILITY, show_payload)
+                else:
+                    execution_item["state"] = "series_identity"
+                    tmdb_enrichment["state"] = "series_identity"
             elif not (
                 enrichment_payload.get("title")
                 or enrichment_payload.get("tmdbId")
@@ -5230,34 +5321,7 @@ def run_metadata_source_pipeline(
                     execution_item["candidateCount"] = preview_candidate_total
                     tmdb_enrichment["state"] = "enriched" if appended else "no_match"
                 else:
-                    execution = run_cached_plugin_entrypoint(
-                        conn, TMDB_PLUGIN_ID, "movie_details", enrichment_payload, context, force=force
-                    )
-                    execution_item.update(
-                        {
-                            "status": execution.get("status"),
-                            "state": execution.get("state") or "tmdb_enrichment",
-                            "elapsedMs": execution.get("elapsedMs"),
-                            "error": execution.get("error"),
-                        }
-                    )
-                    if execution.get("status") == "ok":
-                        normalized = canonicalize_plugin_result(
-                            TMDB_PLUGIN_ID,
-                            "movie_details",
-                            execution.get("result") or {},
-                        )
-                        normalized = metadata_source_policy_result(normalized)
-                        execution_item["resultStatus"] = normalized.get("status")
-                        execution_item["candidateCount"] = len(normalized.get("candidates") or [])
-                        execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
-                        if normalized.get("status") not in {"miss", "not_found", "needs_configuration"}:
-                            normalized_results.append(normalized)
-                            tmdb_enrichment["state"] = "enriched"
-                        else:
-                            tmdb_enrichment["state"] = "no_match"
-                    else:
-                        tmdb_enrichment["state"] = execution_item.get("state") or "error"
+                    run_tmdb_details("movie_details", enrichment_payload)
 
     # Every other source that can answer a typed title. Without this the Add
     # screen's search was TMDB and nothing else: the preview pass above runs only

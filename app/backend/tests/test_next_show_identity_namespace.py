@@ -88,19 +88,36 @@ class TheStoredMediaTypeReachesTheQueryTests(unittest.TestCase):
         "metadata": {},
     }
 
-    def _query(self, row):
+    def _query(self, row, series_identifiers=None):
         cursor = mock.MagicMock()
         cursor.__enter__ = lambda _self: cursor
         cursor.__exit__ = lambda *_args: False
         cursor.fetchone.return_value = dict(row)
         conn = mock.MagicMock()
         conn.cursor.return_value = cursor
+        series_lookup = mock.MagicMock(return_value=dict(series_identifiers or {}))
         with mock.patch("app.backend.next_metadata.movie_identifiers", return_value={"tmdbId": "4613"}), \
              mock.patch("app.backend.next_metadata.movie_technical_specs", return_value={}), \
              mock.patch("app.backend.next_metadata.movie_container_context", return_value=[]), \
-             mock.patch("app.backend.next_metadata.movie_genre_keys", return_value=[]):
+             mock.patch("app.backend.next_metadata.movie_genre_keys", return_value=[]), \
+             mock.patch("app.backend.next_metadata.series_identifier_map", series_lookup):
             context = movie_lookup_context(conn, self.MOVIE_ROW["id"])
+        self.series_lookup = series_lookup
         return context["query"]
+
+    def test_the_series_television_id_travels_beside_the_film_id(self):
+        """The show's id lives on its series and names the show; `tmdbId` is
+        the film namespace. Both reach the query, under keys that say which
+        space each number came from."""
+        query = self._query(self.MOVIE_ROW, {"tmdb_tv": "4613", "tvdb": "74205"})
+        self.assertEqual(query["tmdbTvId"], "4613")
+        self.assertEqual(query["tmdbId"], "4613")
+        self.series_lookup.assert_called_once()
+
+    def test_a_disc_with_no_series_states_no_television_id(self):
+        query = self._query({**self.MOVIE_ROW, "series_id": None})
+        self.assertEqual(query["tmdbTvId"], "")
+        self.series_lookup.assert_not_called()
 
     def test_a_show_says_so(self):
         self.assertEqual(self._query(self.MOVIE_ROW)["mediaType"], "SHOW")
@@ -333,6 +350,143 @@ class TheRefreshDoesNotMergeAFilmOntoAShowTests(unittest.TestCase):
             "Bank robbery at Desert Savings Bank",
         )
         self.assertEqual(result["enrichment"]["tmdb"]["state"], "enriched")
+
+
+
+SHOW_CAPABILITIES = [*TMDB_CAPABILITIES, "show_details"]
+
+
+class TheShowIsDescribedFromTheTelevisionNamespaceTests(TheRefreshDoesNotMergeAFilmOntoAShowTests):
+    """The other half of #826: withholding the film namespace left a confirmed
+    show's title record with no source at all for its overview, rating, cast,
+    genres, studios or artwork. `show_details` is that source.
+
+    Inherits the film-namespace tests above on purpose: with the television
+    capability installed, every one of them must still hold.
+    """
+
+    PLUGINS = [
+        {
+            **TheRefreshDoesNotMergeAFilmOntoAShowTests.PLUGINS[0],
+            "capabilities": SHOW_CAPABILITIES,
+            "manifest": {"capabilities": SHOW_CAPABILITIES},
+        }
+    ]
+
+    BAND_OF_BROTHERS = {
+        "status": "hit",
+        "provider": "tmdb",
+        "sourceRef": "tmdb:tv:4613",
+        "movie": {
+            "title": "Band of Brothers",
+            "year": "2001",
+            "overview": "Easy Company, from Toccoa to Berchtesgaden.",
+            "rating": "8.6",
+            "studios": "DreamWorks Television, Playtone",
+        },
+        "credits": [{"name": "Damian Lewis", "role": "actor", "character": "Richard Winters"}],
+        "genreIds": [18, 10752],
+        "tmdbTvId": 4613,
+        "imdbId": "tt0185906",
+    }
+
+    def _run(self, query):
+        calls = []
+        payloads = []
+
+        def execute(plugin_id, entrypoint, payload, _context):
+            calls.append((plugin_id, entrypoint))
+            payloads.append(dict(payload))
+            answer = self.BAND_OF_BROTHERS if entrypoint == "show_details" else self.SCORCHED
+            return {"status": "ok", "state": "available", "elapsedMs": 1, "result": dict(answer)}
+
+        with mock.patch("app.backend.next_metadata.metadata_source_plugins", return_value=self.PLUGINS), \
+             mock.patch("app.backend.next_metadata.plugin_config_from_db", return_value={"apiKey": "configured"}), \
+             mock.patch("app.backend.next_metadata.plugin_execution_context", return_value={}), \
+             mock.patch("app.backend.next_metadata.plugin_requires_config", return_value=False), \
+             mock.patch("app.backend.next_metadata.preferred_provider_overwrite", return_value=False), \
+             mock.patch("app.backend.next_metadata.run_plugin_entrypoint", side_effect=execute):
+            result = run_metadata_source_pipeline(
+                object(),
+                query=query,
+                current={"metadata": {}, "media_type": query.get("mediaType") or ""},
+                technical_current={},
+            )
+        self.payloads = payloads
+        return result, calls
+
+    SERIES_QUERY = {**TheRefreshDoesNotMergeAFilmOntoAShowTests.SHOW_QUERY, "tmdbTvId": "4613"}
+
+    def test_the_show_is_asked_by_its_television_id_and_nothing_else(self):
+        result, calls = self._run(dict(self.SERIES_QUERY))
+        self.assertEqual(calls, [("tmdb", "show_details")])
+        self.assertEqual(self.payloads, [{"tmdbTvId": "4613"}])
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "enriched")
+        self.assertTrue(result["enrichment"]["tmdb"]["enabled"])
+
+    def test_the_film_number_and_the_title_never_reach_the_television_call(self):
+        """`tmdbId` 4613 is *Scorched*. Neither it nor a title may be what the
+        show is identified by -- those were the two doors #826 came through."""
+        self._run(dict(self.SERIES_QUERY))
+        for payload in self.payloads:
+            self.assertNotIn("tmdbId", payload)
+            self.assertNotIn("title", payload)
+
+    def test_the_show_describes_its_own_title_record(self):
+        result, _calls = self._run(dict(self.SERIES_QUERY))
+        movie_updates = result["proposal"]["movieUpdates"]
+        self.assertEqual(movie_updates["overview"], "Easy Company, from Toccoa to Berchtesgaden.")
+        self.assertEqual(movie_updates["rating"], "8.6")
+        self.assertNotIn("Scorched", str(result["proposal"]))
+
+    def test_its_number_is_never_filed_as_a_film_id(self):
+        result, _calls = self._run(dict(self.SERIES_QUERY))
+        self.assertNotIn("tmdb", result["proposal"].get("identifiers") or {})
+
+    def test_an_imdb_id_alone_is_enough_to_ask(self):
+        query = {key: value for key, value in self.SHOW_QUERY.items() if key != "tmdbId"}
+        result, calls = self._run({**query, "imdbId": "tt0185906"})
+        self.assertEqual(calls, [("tmdb", "show_details")])
+        self.assertEqual(self.payloads, [{"imdbId": "tt0185906"}])
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "enriched")
+
+    def test_with_neither_id_nothing_is_asked_and_the_state_says_why(self):
+        result, calls = self._run(dict(self.SHOW_QUERY))
+        self.assertEqual(calls, [])
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "series_identity")
+
+    def test_an_older_tmdb_plugin_without_the_capability_asks_nothing(self):
+        """An installed copy is replaced only by a newer bundled one, so an
+        instance can run the old plugin for a while. It must get the #827
+        behaviour, not a call its plugin cannot answer."""
+        self.PLUGINS = TheRefreshDoesNotMergeAFilmOntoAShowTests.PLUGINS
+        result, calls = self._run(dict(self.SERIES_QUERY))
+        self.assertEqual(calls, [])
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "series_identity")
+
+    def test_a_film_is_never_sent_to_the_television_call(self):
+        _result, calls = self._run({**self.SERIES_QUERY, "mediaType": "MOVIE", "title": "Scorched"})
+        self.assertIn(("tmdb", "movie_details"), calls)
+        self.assertNotIn(("tmdb", "show_details"), calls)
+
+    def test_a_preview_still_offers_both_namespaces_and_not_this_call(self):
+        """Preview is a person choosing between a film and a show; the
+        confirmed-show rule is about refreshing a stored record."""
+        _result, calls = self._run({**self.SERIES_QUERY, "previewMode": True})
+        self.assertNotIn(("tmdb", "show_details"), calls)
+
+    # The inherited tests are restated for the television plugin where their
+    # expectation is different, and kept where it is the same.
+    def test_tmdb_is_not_asked_about_the_show_as_a_film(self):
+        _result, calls = self._run(dict(self.SERIES_QUERY))
+        self.assertNotIn(("tmdb", "movie_details"), calls)
+        self.assertNotIn(("tmdb", "lookup_external_id"), calls)
+        self.assertNotIn(("tmdb", "search_title"), calls)
+
+    def test_the_comparison_says_why_rather_than_going_quiet(self):
+        result, _calls = self._run(dict(self.SHOW_QUERY))
+        self.assertEqual(result["enrichment"]["tmdb"]["state"], "series_identity")
+        self.assertTrue(result["enrichment"]["tmdb"]["configured"])
 
 
 if __name__ == "__main__":

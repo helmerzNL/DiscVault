@@ -745,6 +745,30 @@ class MediaTypeDemotionPostgresTests(unittest.TestCase):
         self.assertEqual(context["movie"]["media_type"], "SHOW")
         self.assertEqual(context["movie"]["series_id"], series_id)
 
+    def test_the_lookup_context_carries_the_series_television_id(self):
+        """A show's TMDB television id lives on its series, and the refresh of
+        the disc asks TMDB's `show_details` by it (#826). It has to reach the
+        query from the real tables, under a key that is not the film `tmdbId`.
+        """
+        with self.connect() as conn:
+            movie_id, series_id = self._linked_show(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
+                    VALUES (%s, 'tmdb', 'tmdb_tv', '4613'), (%s, 'tvdb', 'tvdb', '74205')
+                    """,
+                    (series_id, series_id),
+                )
+            conn.commit()
+            query = next_metadata.movie_lookup_context(conn, movie_id)["query"]
+        self.assertEqual(query["tmdbTvId"], "4613")
+        self.assertEqual(query["mediaType"], "SHOW")
+        self.assertEqual(
+            next_metadata.show_details_payload(query),
+            {"tmdbTvId": "4613"},
+        )
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
