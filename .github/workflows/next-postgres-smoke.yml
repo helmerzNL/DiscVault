@@ -545,6 +545,11 @@ jobs:
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
+      # A series pressing picked from MovieVault's candidate list is added as a
+      # series in its season, through the real import route (#826).
+      - name: Test a picked series pressing imports as a series
+        run: python -m unittest tests.test_next_import_release_candidate_series
+
       # Needs the real PostgreSQL, because the property is about what the
       # database returns across page boundaries rather than about the shape of
       # the response. The assertion that matters is the negative one: a page
