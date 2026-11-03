@@ -3323,5 +3323,16 @@
   "profile.online": "Çevrimiçi",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Kullanılabilir",
-  "profile.serviceWorkerUnavailable": "Kullanılamıyor"
+  "profile.serviceWorkerUnavailable": "Kullanılamıyor",
+  "contribute.field.seasons": "Sezonlar",
+  "contribute.seasonSpecials": "Özel bölümler",
+  "contribute.withheld.catalogueFilm": "MovieVault bu başlığı film olarak kaydediyor, bu yüzden bağlanacak sezonu yok. Sezon bağlantıları MovieVault onu dizi olarak kaydettiğinde gönderilebilir.",
+  "seriesContribute.button": "Sezon bağlantılarını MovieVault'a gönder",
+  "seriesContribute.title": "Sezon bağlantılarını MovieVault'a gönder",
+  "seriesContribute.lead": "Bu dizinin her sürümünün hangi sezonları kapsadığı, MovieVault ile karşılaştırmalı. İşaretlediğiniz her sürüm ayrı bir düzeltme olarak gönderilir ve bir moderatör tarafından incelenir.",
+  "seriesContribute.inSync": "MovieVault'ta bu sezonlar zaten var.",
+  "seriesContribute.noSeasons": "Burada hiçbir sezona bağlı değil, bu yüzden gönderilecek bir şey yok.",
+  "seriesContribute.notInCatalogue": "Bu sunucudaki MovieVault kataloğu kopyasında yok.",
+  "seriesContribute.nothingToSend": "Gönderilecek bir şey yok: her sürüm MovieVault ile eşleşiyor ya da henüz gönderilemiyor.",
+  "seriesContribute.queued": "Moderasyona gönderilen sezon düzeltmesi: {count}."
 }

@@ -3323,5 +3323,16 @@
   "profile.online": "Συνδεδεμένο",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Διαθέσιμο",
-  "profile.serviceWorkerUnavailable": "Μη διαθέσιμο"
+  "profile.serviceWorkerUnavailable": "Μη διαθέσιμο",
+  "contribute.field.seasons": "Κύκλοι",
+  "contribute.seasonSpecials": "Ειδικά επεισόδια",
+  "contribute.withheld.catalogueFilm": "Το MovieVault καταγράφει αυτόν τον τίτλο ως ταινία, οπότε δεν έχει κύκλους για σύνδεση. Οι συνδέσεις κύκλων μπορούν να σταλούν όταν το MovieVault τον καταγράψει ως σειρά.",
+  "seriesContribute.button": "Αποστολή συνδέσεων κύκλων στο MovieVault",
+  "seriesContribute.title": "Αποστολή συνδέσεων κύκλων στο MovieVault",
+  "seriesContribute.lead": "Ποιους κύκλους περιέχει κάθε έκδοση αυτής της σειράς, σε σύγκριση με το MovieVault. Κάθε έκδοση που επιλέγετε στέλνεται ως ξεχωριστή διόρθωση και ελέγχεται από έναν συντονιστή.",
+  "seriesContribute.inSync": "Το MovieVault έχει ήδη αυτούς τους κύκλους.",
+  "seriesContribute.noSeasons": "Δεν συνδέεται εδώ με κανέναν κύκλο, οπότε δεν υπάρχει τίποτα για αποστολή.",
+  "seriesContribute.notInCatalogue": "Δεν υπάρχει στο αντίγραφο του καταλόγου MovieVault σε αυτόν τον διακομιστή.",
+  "seriesContribute.nothingToSend": "Τίποτα για αποστολή: κάθε έκδοση ταιριάζει με το MovieVault ή δεν μπορεί να σταλεί ακόμη.",
+  "seriesContribute.queued": "Διορθώσεις κύκλων που στάλθηκαν για έλεγχο: {count}."
 }

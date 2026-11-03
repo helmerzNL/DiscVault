@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Tilgængelig",
-  "profile.serviceWorkerUnavailable": "Ikke tilgængelig"
+  "profile.serviceWorkerUnavailable": "Ikke tilgængelig",
+  "contribute.field.seasons": "Sæsoner",
+  "contribute.seasonSpecials": "Specialafsnit",
+  "contribute.withheld.catalogueFilm": "MovieVault registrerer denne titel som en film, så der er ingen sæsoner at knytte. Sæsonkoblinger kan sendes, når MovieVault registrerer den som en serie.",
+  "seriesContribute.button": "Send sæsonkoblinger til MovieVault",
+  "seriesContribute.title": "Send sæsonkoblinger til MovieVault",
+  "seriesContribute.lead": "Hvilke sæsoner hver udgivelse i denne serie dækker, sammenlignet med MovieVault. Hver udgivelse, du markerer, sendes som sin egen rettelse og gennemgås af en moderator.",
+  "seriesContribute.inSync": "MovieVault har allerede disse sæsoner.",
+  "seriesContribute.noSeasons": "Ikke knyttet til en sæson her, så der er intet at sende.",
+  "seriesContribute.notInCatalogue": "Ikke i denne servers kopi af MovieVault-kataloget.",
+  "seriesContribute.nothingToSend": "Intet at sende: hver udgivelse stemmer med MovieVault eller kan ikke sendes endnu.",
+  "seriesContribute.queued": "{count} sæsonrettelser sendt til moderering."
 }

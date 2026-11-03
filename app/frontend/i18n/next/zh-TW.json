@@ -3323,5 +3323,16 @@
   "profile.online": "線上",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "可用",
-  "profile.serviceWorkerUnavailable": "不可用"
+  "profile.serviceWorkerUnavailable": "不可用",
+  "contribute.field.seasons": "季",
+  "contribute.seasonSpecials": "特別篇",
+  "contribute.withheld.catalogueFilm": "MovieVault 將此標題記錄為電影，因此沒有可連結的季。待 MovieVault 將其記錄為影集後即可傳送季連結。",
+  "seriesContribute.button": "向 MovieVault 傳送季連結",
+  "seriesContribute.title": "向 MovieVault 傳送季連結",
+  "seriesContribute.lead": "此影集每個發行版包含哪些季，與 MovieVault 比較。勾選的每個發行版都會作為個別的更正傳送，並由審核員審核。",
+  "seriesContribute.inSync": "MovieVault 已有這些季。",
+  "seriesContribute.noSeasons": "此處未連結任何季，因此沒有可傳送的內容。",
+  "seriesContribute.notInCatalogue": "不在此伺服器的 MovieVault 目錄副本中。",
+  "seriesContribute.nothingToSend": "沒有可傳送的內容：每個發行版都與 MovieVault 一致，或暫時無法傳送。",
+  "seriesContribute.queued": "已傳送 {count} 項季更正待審核。"
 }

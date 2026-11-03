@@ -197,6 +197,8 @@ try:
     from .next_movievault_v2_field_corrections import contribution_history
     from .next_movievault_v2_field_corrections import latest_contribution
     from .next_movievault_v2_field_corrections import record_contribution
+    from .next_movievault_v2_field_corrections import series_season_item
+    from .next_movievault_v2_field_corrections import catalogue_synced_at
     from .next_product_identifiers import IDENTIFIER_TYPES as PRODUCT_IDENTIFIER_TYPES
     from .next_product_identifiers import SCANNABLE_TYPES as PRODUCT_SCANNABLE_TYPES
     from .next_product_identifiers import movie_identifiers_by_type
@@ -519,6 +521,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2_field_corrections import contribution_history
     from next_movievault_v2_field_corrections import latest_contribution
     from next_movievault_v2_field_corrections import record_contribution
+    from next_movievault_v2_field_corrections import series_season_item
+    from next_movievault_v2_field_corrections import catalogue_synced_at
     from next_product_identifiers import IDENTIFIER_TYPES as PRODUCT_IDENTIFIER_TYPES
     from next_product_identifiers import SCANNABLE_TYPES as PRODUCT_SCANNABLE_TYPES
     from next_product_identifiers import movie_identifiers_by_type
@@ -29751,6 +29755,134 @@ def register_routes(flask_app: Flask) -> None:
                     "queued": bool(job),
                     "jobId": (job or {}).get("id"),
                     "changes": preview["changes"],
+                }
+            )
+
+    # ---- A series' season links, every release at once -------------------
+    #
+    # The series screen's half of the season correction. The release sheet
+    # already sends `seasons` for one release; this asks about every release
+    # filed under a series and sends the ones that differ, one seasons-only
+    # correction each. Same gate, same queue and same log as the sheet, and the
+    # diff is recomputed here for the same reason the sheet's is: `expected` is
+    # the conflict check upstream, so the client never supplies it.
+
+    def _series_season_records(conn, actor, series_value: Any):
+        """The releases of a series this actor may correct, with their metadata.
+
+        Visibility first (`series_disc_entities` answers only what the actor can
+        see), then the editing gate the release sheet applies, per release: a
+        release someone may look at but not change is left out rather than
+        failing the whole series.
+        """
+        series_uuid = parse_uuid(str(series_value or ""), "seriesId")
+        if not series_uuid:
+            raise NextApiError("seriesId is required", 400)
+        if not series_tables_available(conn):
+            raise NextApiError("Series tables are not available", 503)
+        if not series_entity(conn, series_uuid):
+            raise NextApiError("Series not found", 404)
+        records = []
+        for disc in series_disc_entities(conn, series_uuid, actor=actor):
+            try:
+                records.append(_correction_record(conn, actor, "movie", str(disc.get("id") or "")))
+            except NextApiError as exc:
+                if exc.status_code in (403, 404):
+                    continue
+                raise
+        return records
+
+    @flask_app.get("/api/next/movievault/contributions/series-seasons")
+    def movievault_series_seasons():
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            gate = field_correction_gate(conn, actor.get("id") if actor else None)
+            records = _series_season_records(conn, actor, request.args.get("seriesId"))
+            # One live read per film rather than per release, which is what
+            # makes a pre-flight affordable here at all: every release of a
+            # series is normally one film upstream.
+            live_cache: dict[str, Any] = {}
+            items = [
+                series_season_item(conn, record, metadata, live_cache=live_cache)
+                for record, metadata in records
+            ]
+            return response(
+                {
+                    "status": "ok",
+                    "enabled": gate["owner"] and gate["user"],
+                    "ownerEnabled": gate["owner"],
+                    "userEnabled": gate["user"],
+                    "catalogueSyncedAt": catalogue_synced_at(conn),
+                    "releases": items,
+                    "changedCount": sum(1 for item in items if item["state"] == "changed"),
+                }
+            )
+
+    @flask_app.post("/api/next/movievault/contributions/series-seasons/submit")
+    def movievault_series_seasons_submit():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        wanted = body.get("movieIds")
+        if wanted is not None and (
+            not isinstance(wanted, list) or not all(isinstance(item, str) for item in wanted)
+        ):
+            raise NextApiError("movieIds must be a list of ids", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not field_correction_enabled(conn, actor.get("id") if actor else None):
+                raise NextApiError("Field corrections are not enabled", 403)
+            records = _series_season_records(conn, actor, body.get("seriesId"))
+            selected = {item.strip() for item in wanted} if wanted is not None else None
+            live_cache: dict[str, Any] = {}
+            results = []
+            for record, metadata in records:
+                movie_id = str(record.get("id"))
+                if selected is not None and movie_id not in selected:
+                    continue
+                item = series_season_item(conn, record, metadata, live_cache=live_cache)
+                if item["state"] != "changed":
+                    # Named rather than skipped silently: a release the user
+                    # ticked that has nothing to send (any more) is an answer
+                    # they should see, not a row that quietly did nothing.
+                    results.append({"movieId": movie_id, "queued": False, "state": item["state"], "withheld": item["withheld"]})
+                    continue
+                changes = [item["change"]]
+                job = queue_field_correction_job(
+                    conn,
+                    {"target": item["target"], "changes": changes},
+                    actor=actor,
+                    reason="series_season_correction",
+                )
+                if job:
+                    record_contribution(
+                        conn,
+                        entity="movie",
+                        record=record,
+                        target=item["target"],
+                        changes=changes,
+                        job_id=job.get("id"),
+                        actor_id=actor.get("id") if actor else None,
+                    )
+                results.append(
+                    {
+                        "movieId": movie_id,
+                        "queued": bool(job),
+                        "jobId": (job or {}).get("id"),
+                        "state": item["state"],
+                        "change": item["change"],
+                    }
+                )
+            if selected is not None:
+                known = {str(record.get("id")) for record, _ in records}
+                for movie_id in sorted(selected - known):
+                    # Not under this series, or not this actor's to change.
+                    results.append({"movieId": movie_id, "queued": False, "state": "not_found", "withheld": None})
+            return response(
+                {
+                    "status": "ok",
+                    "queued": sum(1 for item in results if item.get("queued")),
+                    "results": results,
                 }
             )
 

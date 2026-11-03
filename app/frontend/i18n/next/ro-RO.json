@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Disponibil",
-  "profile.serviceWorkerUnavailable": "Indisponibil"
+  "profile.serviceWorkerUnavailable": "Indisponibil",
+  "contribute.field.seasons": "Sezoane",
+  "contribute.seasonSpecials": "Episoade speciale",
+  "contribute.withheld.catalogueFilm": "MovieVault înregistrează acest titlu ca film, așa că nu are sezoane de asociat. Asocierile de sezoane pot fi trimise după ce MovieVault îl înregistrează ca serial.",
+  "seriesContribute.button": "Trimite asocierile de sezoane către MovieVault",
+  "seriesContribute.title": "Trimite asocierile de sezoane către MovieVault",
+  "seriesContribute.lead": "Ce sezoane conține fiecare ediție a acestui serial, comparat cu MovieVault. Fiecare ediție bifată este trimisă ca o corectură separată și verificată de un moderator.",
+  "seriesContribute.inSync": "MovieVault are deja aceste sezoane.",
+  "seriesContribute.noSeasons": "Nu este asociată cu niciun sezon aici, deci nu există nimic de trimis.",
+  "seriesContribute.notInCatalogue": "Nu se află în copia catalogului MovieVault de pe acest server.",
+  "seriesContribute.nothingToSend": "Nimic de trimis: fiecare ediție corespunde cu MovieVault sau nu poate fi trimisă încă.",
+  "seriesContribute.queued": "Corecturi de sezoane trimise spre moderare: {count}."
 }

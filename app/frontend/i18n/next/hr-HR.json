@@ -3323,5 +3323,16 @@
   "profile.online": "Na mreži",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Dostupno",
-  "profile.serviceWorkerUnavailable": "Nedostupno"
+  "profile.serviceWorkerUnavailable": "Nedostupno",
+  "contribute.field.seasons": "Sezone",
+  "contribute.seasonSpecials": "Specijali",
+  "contribute.withheld.catalogueFilm": "MovieVault ovaj naslov vodi kao film, pa nema sezona za povezivanje. Veze sezona moći će se poslati kada ga MovieVault bude vodio kao seriju.",
+  "seriesContribute.button": "Pošalji veze sezona u MovieVault",
+  "seriesContribute.title": "Pošalji veze sezona u MovieVault",
+  "seriesContribute.lead": "Koje sezone obuhvaća svako izdanje ove serije, u usporedbi s MovieVaultom. Svako označeno izdanje šalje se kao zasebna ispravka i pregledava ga moderator.",
+  "seriesContribute.inSync": "MovieVault već ima ove sezone.",
+  "seriesContribute.noSeasons": "Ovdje nije povezano ni s jednom sezonom, pa nema ništa za slanje.",
+  "seriesContribute.notInCatalogue": "Nije u kopiji kataloga MovieVaulta na ovom poslužitelju.",
+  "seriesContribute.nothingToSend": "Nema ništa za slanje: svako izdanje odgovara MovieVaultu ili se još ne može poslati.",
+  "seriesContribute.queued": "Ispravke sezona poslane na moderiranje: {count}."
 }

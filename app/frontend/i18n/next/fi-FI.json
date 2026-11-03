@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Käytettävissä",
-  "profile.serviceWorkerUnavailable": "Ei käytettävissä"
+  "profile.serviceWorkerUnavailable": "Ei käytettävissä",
+  "contribute.field.seasons": "Kaudet",
+  "contribute.seasonSpecials": "Erikoisjaksot",
+  "contribute.withheld.catalogueFilm": "MovieVault tuntee tämän nimikkeen elokuvana, joten sillä ei ole kausia yhdistettäväksi. Kausiyhteydet voi lähettää, kun MovieVault tuntee sen sarjana.",
+  "seriesContribute.button": "Lähetä kausiyhteydet MovieVaultiin",
+  "seriesContribute.title": "Lähetä kausiyhteydet MovieVaultiin",
+  "seriesContribute.lead": "Mitkä kaudet kukin tämän sarjan julkaisu sisältää verrattuna MovieVaultiin. Jokainen valitsemasi julkaisu lähetetään omana korjauksenaan ja moderaattori tarkistaa sen.",
+  "seriesContribute.inSync": "MovieVaultissa on jo nämä kaudet.",
+  "seriesContribute.noSeasons": "Ei yhdistetty mihinkään kauteen täällä, joten lähetettävää ei ole.",
+  "seriesContribute.notInCatalogue": "Ei tämän palvelimen kopiossa MovieVault-luettelosta.",
+  "seriesContribute.nothingToSend": "Ei lähetettävää: jokainen julkaisu vastaa MovieVaultia tai sitä ei voi vielä lähettää.",
+  "seriesContribute.queued": "{count} kausikorjausta lähetetty moderoitavaksi."
 }

@@ -3323,5 +3323,16 @@
   "profile.online": "En ligne",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Disponible",
-  "profile.serviceWorkerUnavailable": "Indisponible"
+  "profile.serviceWorkerUnavailable": "Indisponible",
+  "contribute.field.seasons": "Saisons",
+  "contribute.seasonSpecials": "Épisodes spéciaux",
+  "contribute.withheld.catalogueFilm": "MovieVault enregistre ce titre comme un film, il n'a donc aucune saison à associer. Les associations de saisons pourront être envoyées dès que MovieVault l'enregistrera comme une série.",
+  "seriesContribute.button": "Envoyer les associations de saisons à MovieVault",
+  "seriesContribute.title": "Envoyer les associations de saisons à MovieVault",
+  "seriesContribute.lead": "Les saisons couvertes par chaque édition de cette série, comparées à MovieVault. Chaque édition cochée est envoyée comme une correction distincte et examinée par un modérateur.",
+  "seriesContribute.inSync": "MovieVault a déjà ces saisons.",
+  "seriesContribute.noSeasons": "Associée à aucune saison ici, il n'y a donc rien à envoyer.",
+  "seriesContribute.notInCatalogue": "Absent de la copie du catalogue MovieVault sur ce serveur.",
+  "seriesContribute.nothingToSend": "Rien à envoyer : chaque édition correspond à MovieVault ou ne peut pas encore être envoyée.",
+  "seriesContribute.queued": "{count} corrections de saisons envoyées en modération."
 }

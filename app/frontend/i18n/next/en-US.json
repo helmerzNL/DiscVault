@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Available",
-  "profile.serviceWorkerUnavailable": "Unavailable"
+  "profile.serviceWorkerUnavailable": "Unavailable",
+  "contribute.field.seasons": "Seasons",
+  "contribute.seasonSpecials": "Specials",
+  "contribute.withheld.catalogueFilm": "MovieVault records this title as a film, so it has no seasons to link. Season links can be sent once MovieVault records it as a series.",
+  "seriesContribute.button": "Send season links to MovieVault",
+  "seriesContribute.title": "Send season links to MovieVault",
+  "seriesContribute.lead": "Which seasons each release of this series covers, compared with MovieVault. Every release you tick is sent as its own correction and reviewed by a moderator.",
+  "seriesContribute.inSync": "MovieVault already has these seasons.",
+  "seriesContribute.noSeasons": "Not linked to a season here, so there is nothing to send.",
+  "seriesContribute.notInCatalogue": "Not in this server's copy of the MovieVault catalogue.",
+  "seriesContribute.nothingToSend": "Nothing to send: every release either matches MovieVault or cannot be sent yet.",
+  "seriesContribute.queued": "{count} season corrections sent for moderation."
 }

@@ -3323,5 +3323,16 @@
   "profile.online": "Онлайн",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Наличен",
-  "profile.serviceWorkerUnavailable": "Недостъпен"
+  "profile.serviceWorkerUnavailable": "Недостъпен",
+  "contribute.field.seasons": "Сезони",
+  "contribute.seasonSpecials": "Специални епизоди",
+  "contribute.withheld.catalogueFilm": "MovieVault води това заглавие като филм, затова няма сезони за свързване. Връзките към сезони могат да се изпратят, след като MovieVault го води като сериал.",
+  "seriesContribute.button": "Изпращане на връзките към сезони към MovieVault",
+  "seriesContribute.title": "Изпращане на връзките към сезони към MovieVault",
+  "seriesContribute.lead": "Кои сезони съдържа всяко издание на този сериал, в сравнение с MovieVault. Всяко отметнато издание се изпраща като отделна корекция и се преглежда от модератор.",
+  "seriesContribute.inSync": "MovieVault вече има тези сезони.",
+  "seriesContribute.noSeasons": "Тук не е свързано с нито един сезон, затова няма какво да се изпрати.",
+  "seriesContribute.notInCatalogue": "Липсва в копието на каталога на MovieVault на този сървър.",
+  "seriesContribute.nothingToSend": "Няма какво да се изпрати: всяко издание съвпада с MovieVault или все още не може да бъде изпратено.",
+  "seriesContribute.queued": "Корекции на сезони, изпратени за модерация: {count}."
 }

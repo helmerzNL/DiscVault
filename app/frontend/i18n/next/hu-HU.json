@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Elérhető",
-  "profile.serviceWorkerUnavailable": "Nem elérhető"
+  "profile.serviceWorkerUnavailable": "Nem elérhető",
+  "contribute.field.seasons": "Évadok",
+  "contribute.seasonSpecials": "Különkiadások",
+  "contribute.withheld.catalogueFilm": "A MovieVault ezt a címet filmként tartja nyilván, ezért nincsenek összekapcsolható évadjai. Az évadkapcsolatok akkor küldhetők el, amikor a MovieVault sorozatként tartja nyilván.",
+  "seriesContribute.button": "Évadkapcsolatok küldése a MovieVaultnak",
+  "seriesContribute.title": "Évadkapcsolatok küldése a MovieVaultnak",
+  "seriesContribute.lead": "A sorozat egyes kiadásai mely évadokat tartalmazzák, a MovieVaulthoz viszonyítva. Minden bejelölt kiadás külön javításként kerül elküldésre, és egy moderátor bírálja el.",
+  "seriesContribute.inSync": "A MovieVaultban már megvannak ezek az évadok.",
+  "seriesContribute.noSeasons": "Itt nincs évadhoz kapcsolva, így nincs mit elküldeni.",
+  "seriesContribute.notInCatalogue": "Nem szerepel a MovieVault-katalógus e szerveren tárolt másolatában.",
+  "seriesContribute.nothingToSend": "Nincs mit elküldeni: minden kiadás egyezik a MovieVaulttal, vagy még nem küldhető el.",
+  "seriesContribute.queued": "Moderálásra elküldött évadjavítások: {count}."
 }

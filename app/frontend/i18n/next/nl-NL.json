@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Beschikbaar",
-  "profile.serviceWorkerUnavailable": "Niet beschikbaar"
+  "profile.serviceWorkerUnavailable": "Niet beschikbaar",
+  "contribute.field.seasons": "Seizoenen",
+  "contribute.seasonSpecials": "Specials",
+  "contribute.withheld.catalogueFilm": "MovieVault kent deze titel als film, dus er zijn geen seizoenen om te koppelen. Seizoenskoppelingen kunnen worden verstuurd zodra MovieVault de titel als serie kent.",
+  "seriesContribute.button": "Seizoenskoppelingen naar MovieVault sturen",
+  "seriesContribute.title": "Seizoenskoppelingen naar MovieVault sturen",
+  "seriesContribute.lead": "Welke seizoenen elke release van deze serie bevat, vergeleken met MovieVault. Elke release die je aanvinkt, wordt als eigen correctie verstuurd en door een moderator beoordeeld.",
+  "seriesContribute.inSync": "MovieVault heeft deze seizoenen al.",
+  "seriesContribute.noSeasons": "Hier aan geen seizoen gekoppeld, dus er is niets te versturen.",
+  "seriesContribute.notInCatalogue": "Niet in de kopie van de MovieVault-catalogus op deze server.",
+  "seriesContribute.nothingToSend": "Niets te versturen: elke release komt overeen met MovieVault of kan nog niet worden verstuurd.",
+  "seriesContribute.queued": "{count} seizoenscorrecties ter moderatie verstuurd."
 }
