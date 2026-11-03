@@ -3323,5 +3323,16 @@
   "profile.online": "オンライン",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "利用可能",
-  "profile.serviceWorkerUnavailable": "利用不可"
+  "profile.serviceWorkerUnavailable": "利用不可",
+  "contribute.field.seasons": "シーズン",
+  "contribute.seasonSpecials": "スペシャル",
+  "contribute.withheld.catalogueFilm": "MovieVault はこのタイトルを映画として登録しているため、関連付けるシーズンがありません。MovieVault がシリーズとして登録すると、シーズンの関連付けを送信できます。",
+  "seriesContribute.button": "シーズンの関連付けを MovieVault に送信",
+  "seriesContribute.title": "シーズンの関連付けを MovieVault に送信",
+  "seriesContribute.lead": "このシリーズの各リリースに含まれるシーズンを MovieVault と比較します。チェックした各リリースは個別の修正として送信され、モデレーターが確認します。",
+  "seriesContribute.inSync": "MovieVault にはすでにこれらのシーズンがあります。",
+  "seriesContribute.noSeasons": "ここではどのシーズンにも関連付けられていないため、送信するものはありません。",
+  "seriesContribute.notInCatalogue": "このサーバーにある MovieVault カタログのコピーにありません。",
+  "seriesContribute.nothingToSend": "送信するものはありません。すべてのリリースが MovieVault と一致しているか、まだ送信できません。",
+  "seriesContribute.queued": "{count} 件のシーズン修正をモデレーションに送信しました。"
 }

@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Tillgänglig",
-  "profile.serviceWorkerUnavailable": "Otillgänglig"
+  "profile.serviceWorkerUnavailable": "Otillgänglig",
+  "contribute.field.seasons": "Säsonger",
+  "contribute.seasonSpecials": "Specialavsnitt",
+  "contribute.withheld.catalogueFilm": "MovieVault registrerar den här titeln som en film, så det finns inga säsonger att koppla. Säsongskopplingar kan skickas när MovieVault registrerar den som en serie.",
+  "seriesContribute.button": "Skicka säsongskopplingar till MovieVault",
+  "seriesContribute.title": "Skicka säsongskopplingar till MovieVault",
+  "seriesContribute.lead": "Vilka säsonger varje utgåva i den här serien täcker, jämfört med MovieVault. Varje utgåva du bockar för skickas som en egen rättelse och granskas av en moderator.",
+  "seriesContribute.inSync": "MovieVault har redan de här säsongerna.",
+  "seriesContribute.noSeasons": "Inte kopplad till någon säsong här, så det finns inget att skicka.",
+  "seriesContribute.notInCatalogue": "Finns inte i den här serverns kopia av MovieVault-katalogen.",
+  "seriesContribute.nothingToSend": "Inget att skicka: varje utgåva stämmer med MovieVault eller kan inte skickas än.",
+  "seriesContribute.queued": "{count} säsongsrättelser skickade för moderering."
 }

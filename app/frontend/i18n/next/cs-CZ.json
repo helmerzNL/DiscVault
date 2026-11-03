@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Dostupný",
-  "profile.serviceWorkerUnavailable": "Nedostupný"
+  "profile.serviceWorkerUnavailable": "Nedostupný",
+  "contribute.field.seasons": "Sezóny",
+  "contribute.seasonSpecials": "Speciály",
+  "contribute.withheld.catalogueFilm": "MovieVault vede tento titul jako film, takže nemá žádné sezóny k propojení. Propojení sezón lze odeslat, jakmile jej MovieVault povede jako seriál.",
+  "seriesContribute.button": "Odeslat propojení sezón do MovieVault",
+  "seriesContribute.title": "Odeslat propojení sezón do MovieVault",
+  "seriesContribute.lead": "Které sezóny obsahuje každé vydání tohoto seriálu, ve srovnání s MovieVault. Každé zaškrtnuté vydání se odešle jako samostatná oprava a posoudí ho moderátor.",
+  "seriesContribute.inSync": "MovieVault už tyto sezóny má.",
+  "seriesContribute.noSeasons": "Zde není propojeno s žádnou sezónou, takže není co odeslat.",
+  "seriesContribute.notInCatalogue": "Není v kopii katalogu MovieVault na tomto serveru.",
+  "seriesContribute.nothingToSend": "Není co odeslat: každé vydání odpovídá MovieVault, nebo ho zatím nelze odeslat.",
+  "seriesContribute.queued": "Opravy sezón odeslané k moderaci: {count}."
 }

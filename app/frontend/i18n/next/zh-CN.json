@@ -3323,5 +3323,16 @@
   "profile.online": "在线",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "可用",
-  "profile.serviceWorkerUnavailable": "不可用"
+  "profile.serviceWorkerUnavailable": "不可用",
+  "contribute.field.seasons": "季",
+  "contribute.seasonSpecials": "特别篇",
+  "contribute.withheld.catalogueFilm": "MovieVault 将此标题记录为电影，因此没有可关联的季。待 MovieVault 将其记录为剧集后即可发送季关联。",
+  "seriesContribute.button": "向 MovieVault 发送季关联",
+  "seriesContribute.title": "向 MovieVault 发送季关联",
+  "seriesContribute.lead": "此剧集每个发行版包含哪些季，与 MovieVault 对比。勾选的每个发行版都会作为单独的更正发送，并由审核员审核。",
+  "seriesContribute.inSync": "MovieVault 已有这些季。",
+  "seriesContribute.noSeasons": "此处未关联任何季，因此没有可发送的内容。",
+  "seriesContribute.notInCatalogue": "不在此服务器的 MovieVault 目录副本中。",
+  "seriesContribute.nothingToSend": "没有可发送的内容：每个发行版都与 MovieVault 一致，或暂时无法发送。",
+  "seriesContribute.queued": "已发送 {count} 项季更正待审核。"
 }

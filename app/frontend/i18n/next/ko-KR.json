@@ -3323,5 +3323,16 @@
   "profile.online": "온라인",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "사용 가능",
-  "profile.serviceWorkerUnavailable": "사용 불가"
+  "profile.serviceWorkerUnavailable": "사용 불가",
+  "contribute.field.seasons": "시즌",
+  "contribute.seasonSpecials": "스페셜",
+  "contribute.withheld.catalogueFilm": "MovieVault는 이 타이틀을 영화로 기록하고 있어 연결할 시즌이 없습니다. MovieVault가 시리즈로 기록하면 시즌 연결을 보낼 수 있습니다.",
+  "seriesContribute.button": "MovieVault에 시즌 연결 보내기",
+  "seriesContribute.title": "MovieVault에 시즌 연결 보내기",
+  "seriesContribute.lead": "이 시리즈의 각 릴리스에 포함된 시즌을 MovieVault와 비교합니다. 선택한 각 릴리스는 별도의 수정 사항으로 전송되며 모더레이터가 검토합니다.",
+  "seriesContribute.inSync": "MovieVault에 이미 이 시즌이 있습니다.",
+  "seriesContribute.noSeasons": "여기서는 어떤 시즌에도 연결되어 있지 않아 보낼 것이 없습니다.",
+  "seriesContribute.notInCatalogue": "이 서버의 MovieVault 카탈로그 사본에 없습니다.",
+  "seriesContribute.nothingToSend": "보낼 것이 없습니다. 모든 릴리스가 MovieVault와 일치하거나 아직 보낼 수 없습니다.",
+  "seriesContribute.queued": "시즌 수정 사항 {count}건을 검토 대기열로 보냈습니다."
 }

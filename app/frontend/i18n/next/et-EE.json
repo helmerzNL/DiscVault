@@ -3323,5 +3323,16 @@
   "profile.online": "Võrgus",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Saadaval",
-  "profile.serviceWorkerUnavailable": "Pole saadaval"
+  "profile.serviceWorkerUnavailable": "Pole saadaval",
+  "contribute.field.seasons": "Hooajad",
+  "contribute.seasonSpecials": "Eriosad",
+  "contribute.withheld.catalogueFilm": "MovieVault peab seda pealkirja filmiks, seega pole sellel hooaegu, mida siduda. Hooajaseoseid saab saata, kui MovieVault peab seda sarjaks.",
+  "seriesContribute.button": "Saada hooajaseosed MovieVaulti",
+  "seriesContribute.title": "Saada hooajaseosed MovieVaulti",
+  "seriesContribute.lead": "Milliseid hooaegu iga selle sarja väljaanne sisaldab, võrreldes MovieVaultiga. Iga märgitud väljaanne saadetakse eraldi parandusena ja moderaator vaatab selle üle.",
+  "seriesContribute.inSync": "MovieVaultis on need hooajad juba olemas.",
+  "seriesContribute.noSeasons": "Siin pole seotud ühegi hooajaga, seega pole midagi saata.",
+  "seriesContribute.notInCatalogue": "Pole selle serveri MovieVaulti kataloogi koopias.",
+  "seriesContribute.nothingToSend": "Pole midagi saata: iga väljaanne vastab MovieVaultile või seda ei saa veel saata.",
+  "seriesContribute.queued": "{count} hooajaparandust saadeti modereerimiseks."
 }

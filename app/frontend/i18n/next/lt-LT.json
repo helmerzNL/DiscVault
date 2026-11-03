@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Prieinama",
-  "profile.serviceWorkerUnavailable": "Neprieinama"
+  "profile.serviceWorkerUnavailable": "Neprieinama",
+  "contribute.field.seasons": "Sezonai",
+  "contribute.seasonSpecials": "Specialios serijos",
+  "contribute.withheld.catalogueFilm": "MovieVault šį pavadinimą laiko filmu, todėl jis neturi sezonų, kuriuos būtų galima susieti. Sezonų sąsajas bus galima siųsti, kai MovieVault jį laikys serialu.",
+  "seriesContribute.button": "Siųsti sezonų sąsajas į MovieVault",
+  "seriesContribute.title": "Siųsti sezonų sąsajas į MovieVault",
+  "seriesContribute.lead": "Kuriuos sezonus apima kiekvienas šio serialo leidimas, palyginti su MovieVault. Kiekvienas pažymėtas leidimas siunčiamas kaip atskiras pataisymas, o jį peržiūri moderatorius.",
+  "seriesContribute.inSync": "MovieVault jau turi šiuos sezonus.",
+  "seriesContribute.noSeasons": "Čia nesusieta su jokiu sezonu, todėl nėra ko siųsti.",
+  "seriesContribute.notInCatalogue": "Nėra šio serverio MovieVault katalogo kopijoje.",
+  "seriesContribute.nothingToSend": "Nėra ko siųsti: kiekvienas leidimas atitinka MovieVault arba dar negali būti išsiųstas.",
+  "seriesContribute.queued": "Moderuoti išsiųsta sezonų pataisymų: {count}."
 }

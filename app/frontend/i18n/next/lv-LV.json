@@ -3323,5 +3323,16 @@
   "profile.online": "Online",
   "profile.serviceWorker": "Service worker",
   "profile.serviceWorkerAvailable": "Pieejams",
-  "profile.serviceWorkerUnavailable": "Nepieejams"
+  "profile.serviceWorkerUnavailable": "Nepieejams",
+  "contribute.field.seasons": "Sezonas",
+  "contribute.seasonSpecials": "Speciālās sērijas",
+  "contribute.withheld.catalogueFilm": "MovieVault šo nosaukumu uzskata par filmu, tāpēc tai nav sezonu, ko piesaistīt. Sezonu saites varēs nosūtīt, kad MovieVault to uzskatīs par seriālu.",
+  "seriesContribute.button": "Nosūtīt sezonu saites uz MovieVault",
+  "seriesContribute.title": "Nosūtīt sezonu saites uz MovieVault",
+  "seriesContribute.lead": "Kuras sezonas ietver katrs šī seriāla izdevums, salīdzinot ar MovieVault. Katrs atzīmētais izdevums tiek nosūtīts kā atsevišķs labojums, un to pārskata moderators.",
+  "seriesContribute.inSync": "MovieVault jau ir šīs sezonas.",
+  "seriesContribute.noSeasons": "Šeit nav piesaistīts nevienai sezonai, tāpēc nav ko sūtīt.",
+  "seriesContribute.notInCatalogue": "Nav šī servera MovieVault kataloga kopijā.",
+  "seriesContribute.nothingToSend": "Nav ko sūtīt: katrs izdevums atbilst MovieVault vai to vēl nevar nosūtīt.",
+  "seriesContribute.queued": "Nosūtīti {count} sezonu labojumi moderēšanai."
 }
