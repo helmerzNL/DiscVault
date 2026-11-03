@@ -96,6 +96,14 @@ MERGE_PROTOCOL = "contribution-merge-1"
 #: cannot forge the proof and cannot merge without the device's half.
 MERGE_PROOF_PREFIX = b"movievault-merge-v1."
 
+#: The code a client branches on to stop offering the merge: the configured
+#: MovieVault has no merge operation (see `merge_instance`). Terminal -- an
+#: older MovieVault does not grow the route because the request is repeated.
+MERGE_UNSUPPORTED_CODE = "merge_unsupported"
+#: What an unmatched route answers: 404, or 405 where the path matches a route
+#: for another method.
+MERGE_UNSUPPORTED_STATUSES = frozenset({404, 405})
+
 #: Admin gate. Off by default: a self-hosted instance does not start sending
 #: anything outward because it was upgraded.
 CONTRIBUTION_ENABLED_KEY = "movievault_v2_contribution_enabled"
@@ -513,6 +521,10 @@ def merge_instance(
     is why a timed-out attempt is safe to repeat — the ``retryable`` transport
     errors carry through unchanged from the submit path.
 
+    A MovieVault without the merge operation raises ``merge_unsupported``
+    (terminal) rather than a bare ``http_404``/``http_405``, so the caller can
+    stop offering the merge; nothing is changed on either side in that case.
+
     Returns MovieVault's ``{"status", "reassociatedCount", "retiredInPlaceCount"}``.
     """
     state = registration_state(conn)
@@ -565,6 +577,19 @@ def merge_instance(
         headers=headers,
         timeout_seconds=timeout_seconds,
     )
+    if status in MERGE_UNSUPPORTED_STATUSES and _error_code(status, content) == f"http_{status}":
+        # A MovieVault from before the merge operation has no route for this
+        # POST: FastAPI answers 405 (the path still matches the read-back
+        # `GET /v2/contributions/{id}`) or 404, with its default `{"detail": ...}`
+        # body rather than the contract envelope. Nothing was merged and nothing
+        # was written here, so both identities are intact -- and the client has
+        # to be able to tell that apart from a refusal, so it stops offering the
+        # merge instead of showing "try again" for something no retry can fix.
+        #
+        # Only a body *without* a contract code qualifies. A 404/405 that
+        # carries one (`retired_instance_not_found`, or any code MovieVault adds
+        # later) is MovieVault answering the merge, and keeps its own code.
+        raise MovieVaultContributionError(MERGE_UNSUPPORTED_CODE, retryable=False, status=status)
     return _raise_for_status(status, content)
 
 
