@@ -14,6 +14,7 @@ server and use it in the browser, or keep your collection on your iPhone, iPad o
 
 [![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android%20%7C%20Web-blue)](#getting-started)
 [![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white)](#installation-self-hosted)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-app-41BDF5?logo=homeassistant&logoColor=white)](#home-assistant)
 [![Languages](https://img.shields.io/badge/languages-29-lightgrey)](#features)
 
 [![Last commit](https://img.shields.io/github/last-commit/helmerzNL/DiscVault/release%2Fv26-beta)](https://github.com/helmerzNL/DiscVault/commits/release/v26-beta)
@@ -114,7 +115,7 @@ current data, confirms what can be imported, runs the migration, and then opens 
 - 🌐 **Web:** open the address of your own installation, and [install it as an app](#install-as-an-app) if you like.
 - 📱 **iPhone and iPad:** [download DiscVault on the App Store](https://apps.apple.com/app/discvault/id6788772918). It runs entirely on the device: scan, enrich, filter and search without a server. Prerelease builds are on the [TestFlight beta](https://testflight.apple.com/join/6bJetcyy).
 - 🤖 **Android:** in beta. [Request access on Discord](https://discord.gg/zdc88VB8mJ); approved testers install through Google Play.
-- 🐳 **Self-hosted:** see [Installation](#installation-self-hosted).
+- 🐳 **Self-hosted:** see [Installation](#installation-self-hosted), or install it on [Unraid](#unraid) or as a [Home Assistant app](#home-assistant).
 
 The iPhone, iPad and Android apps keep your collection on the device. Connecting them to a
 self-hosted installation is planned for a later stage.
@@ -152,9 +153,30 @@ stack itself, its preflight check and its troubleshooting are in
 
 ### Unraid
 
-- Unraid template repository: <https://github.com/helmerzNL/unraid-templates>
+The Community Applications templates for DiscVault and DiscVault (beta) are in
+[helmerzNL/unraid-community-apps](https://github.com/helmerzNL/unraid-community-apps). Unraid cannot
+declare a PostgreSQL dependency, so the template installs the
+[DiscVault launcher](https://github.com/helmerzNL/DiscVault-Launcher): one container that creates and
+updates the whole stack (PostgreSQL, API, worker, MCP) through the Docker socket and serves it on one
+port. Stable and beta each have their own folders and port, so they run side by side.
+
 - Support thread: <https://forums.unraid.net/topic/198808-support-discvault-physical-disc-collection-manager/>
 - Guide: [Install on Unraid](https://docs.discvault.eu/install/unraid/)
+
+### Home Assistant
+
+DiscVault and DiscVault (beta) are also available as Home Assistant apps (add-ons), from
+[helmerzNL/home-assistant-addons](https://github.com/helmerzNL/home-assistant-addons):
+
+[![Add this repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FhelmerzNL%2Fhome-assistant-addons)
+
+1. In Home Assistant open **Settings → Apps → Install app** (older versions: **Settings → Add-ons → Add-on store**), then the menu (⋮) → **Repositories**, and add `https://github.com/helmerzNL/home-assistant-addons`, or use the button above.
+2. Choose **DiscVault** (port 6180) or **DiscVault (beta)** (port 6181), install it, and follow its *Documentation* tab.
+
+The app, its worker, the MCP endpoint and PostgreSQL run in one container, and everything they store
+lives in the app's data folder, which Home Assistant includes in its backups. Passkeys need an https
+address with a domain name in front of the app's port; without one, the app's `password_login`
+option offers a password with TOTP instead.
 
 ## Configuration
 
