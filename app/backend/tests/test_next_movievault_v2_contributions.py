@@ -543,3 +543,57 @@ class MergeTransportTests(unittest.TestCase):
         with self.assertRaises(contributions.MovieVaultContributionError) as cm:
             self._call(http=fake_http)
         self.assertTrue(cm.exception.retryable)
+
+    # --- a MovieVault without the merge operation (#699) ---------------------
+
+    def _refused_with(self, status, content):
+        def fake_http(url, *, body, headers, timeout_seconds):
+            return status, content
+
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            self._call(http=fake_http)
+        return cm.exception
+
+    def test_a_missing_merge_route_is_merge_unsupported_and_terminal(self):
+        """An unmatched route answers FastAPI's default body, which carries no
+        contract code. The client must be able to tell that apart from a
+        refusal -- and must not retry it, because an older MovieVault does not
+        grow the route on a second attempt."""
+        exc = self._refused_with(404, b'{"detail":"Not Found"}')
+        self.assertEqual(exc.code, "merge_unsupported")
+        self.assertFalse(exc.retryable)
+        self.assertEqual(exc.status, 404)
+
+    def test_a_405_on_the_merge_path_is_merge_unsupported(self):
+        """The realistic shape of an older MovieVault: `/v2/contributions/merge`
+        still matches the read-back `GET /v2/contributions/{id}`, so the POST
+        answers 405 rather than 404."""
+        exc = self._refused_with(405, b'{"detail":"Method Not Allowed"}')
+        self.assertEqual(exc.code, "merge_unsupported")
+        self.assertFalse(exc.retryable)
+
+    def test_a_non_json_404_from_in_front_is_merge_unsupported(self):
+        """A proxy's HTML 404 carries no contract code either."""
+        exc = self._refused_with(404, b"<html><body>404 Not Found</body></html>")
+        self.assertEqual(exc.code, "merge_unsupported")
+
+    def test_a_404_carrying_a_contract_code_keeps_that_code(self):
+        """MovieVault answering the merge itself is not a missing route. A
+        retired identity it does not know is a different answer for the client
+        -- the device identity is gone, not the operation -- so its code must
+        survive the 404/405 mapping."""
+        exc = self._refused_with(
+            404, b'{"error":{"code":"retired_instance_not_found","message":"x"}}'
+        )
+        self.assertEqual(exc.code, "retired_instance_not_found")
+        self.assertFalse(exc.retryable)
+
+    def test_the_mapping_is_merge_only(self):
+        """Every other path keeps the generic fallback code: a 404 from submit
+        or read-back is not evidence that anything is unsupported."""
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            contributions._raise_for_status(404, b'{"detail":"Not Found"}')
+        self.assertEqual(cm.exception.code, "http_404")
+        with self.assertRaises(contributions.MovieVaultContributionError) as cm:
+            contributions._raise_for_status(405, b"")
+        self.assertEqual(cm.exception.code, "http_405")

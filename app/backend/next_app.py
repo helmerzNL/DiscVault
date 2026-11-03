@@ -30085,6 +30085,12 @@ def register_routes(flask_app: Flask) -> None:
         rejected proof, an unregistered server, a bad id) answers 400 with the
         precise `errorCode` and must not be retried, because a repeat signs
         identically.
+
+        One terminal code means "not here, not now" rather than "refused":
+        `merge_unsupported` -- the configured MovieVault has no merge operation
+        yet. Nothing was changed on either side, both identities stay intact,
+        and the client should stop offering the merge instead of inviting a
+        retry that cannot succeed until that MovieVault is upgraded.
         """
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
@@ -30124,6 +30130,10 @@ def register_routes(flask_app: Flask) -> None:
                 "The device identity is not known to MovieVault"
             ),
             "payload_invalid": "The merge request was rejected as invalid",
+            "merge_unsupported": (
+                "This server's MovieVault cannot merge contributor identities yet;"
+                " nothing was changed"
+            ),
         }
         with connect() as conn:
             require_next_permission(conn, "collection.edit_all")
