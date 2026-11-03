@@ -50,7 +50,8 @@ try:
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
     from .next_series import ensure_seasons, ensure_series, provider_series_payload
-    from .next_series import series_id_for_identifier
+    from .next_series import series_id_for_identifiers
+    from .next_series import TVDB_IDENTIFIER_TYPE, add_missing_series_identifiers
 except ImportError:  # pragma: no cover - supports direct module execution
     from dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from dedup_identity import extract_identity_identifiers
@@ -70,7 +71,8 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
     from next_series import ensure_seasons, ensure_series, provider_series_payload
-    from next_series import series_id_for_identifier
+    from next_series import series_id_for_identifiers
+    from next_series import TVDB_IDENTIFIER_TYPE, add_missing_series_identifiers
 
 
 logger = logging.getLogger(__name__)
@@ -1891,8 +1893,11 @@ def _identification_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     # they were stripped here, so a series picked from a title search -- or from
     # a barcode scan with a title filled in -- was added as a MOVIE with no series.
     # Only identity sources reach this function, so only MovieVault's survive.
+    # Keyed by either series id: a TMDB television id or TheTVDB's (§7r).
     series = candidate.get("series")
-    if isinstance(series, dict) and clean_text(series.get("tmdbTvId")):
+    if isinstance(series, dict) and (
+        clean_text(series.get("tmdbTvId")) or clean_text(series.get("tvdbId"))
+    ):
         sanitized["series"] = dict(series)
     for source in sources:
         media_type = normalize_media_type(source.get("mediaType") or source.get("media_type"))
@@ -4011,13 +4016,21 @@ def merge_metadata_results(
             if accepted_identifier:
                 identifiers[provider] = identifier
         candidate_series = result.get("series")
-        if isinstance(candidate_series, dict) and clean_text(candidate_series.get("tmdbTvId")):
+        # A series is keyed by its TMDB television id, TheTVDB's id, or both
+        # (App-Guidance media-type-and-series-hierarchy §7r); either one is
+        # enough to find or create it.
+        series_key_field = (
+            "tmdbTvId"
+            if isinstance(candidate_series, dict) and clean_text(candidate_series.get("tmdbTvId"))
+            else "tvdbId"
+        )
+        if isinstance(candidate_series, dict) and clean_text(candidate_series.get(series_key_field)):
             accepted_series = series is None
             add_decision_candidate(
                 target="series",
-                field="tmdbTvId",
+                field=series_key_field,
                 result=result,
-                value=clean_text(candidate_series.get("tmdbTvId")) or "",
+                value=clean_text(candidate_series.get(series_key_field)) or "",
                 accepted=accepted_series,
                 reason=(
                     "series identity selected"
@@ -6314,21 +6327,24 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         current_series = row["series_id"] if isinstance(row, dict) else row[1]
         if media_type != MEDIA_TYPE_SHOW:
             return None
-        existing_series = series_id_for_identifier(
-            cur,
-            provider_id=payload["provider_id"],
-            identifier=payload["identifier"],
-            identifier_type=payload["identifier_type"],
-        )
+        # Found by any id the source stated -- the TMDB television id first,
+        # then TheTVDB's (App-Guidance media-type-and-series-hierarchy §7r) -- so
+        # a series created under one namespace is the one the other reaches.
+        existing_series = series_id_for_identifiers(cur, payload["identifiers"])
+        if current_series is not None and existing_series != current_series:
+            # Linked to a series none of these ids names. That link is somebody's
+            # decision and is left alone -- and checked before `ensure_series`,
+            # which would otherwise mint a series only to refuse it here, leaving
+            # an empty row behind on every refresh.
+            return None
         series_uuid = ensure_series(
             cur,
             provider_id=payload["provider_id"],
             identifier=payload["identifier"],
             title=payload["title"],
             identifier_type=payload["identifier_type"],
+            identifiers=payload["identifiers"],
         )
-        if current_series is not None and current_series != series_uuid:
-            return None
         season_ids = ensure_seasons(cur, series_uuid, payload["seasons"])
         # What the disc was linked to before, so the caller can tell a link
         # that changed something from one that re-stated what was already
@@ -7220,8 +7236,19 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
     overview_source = ""
     artwork: dict[str, dict[str, Any]] = {}
     seasons: dict[int, dict[str, Any]] = {}
+    identifiers: dict[str, dict[str, str]] = {}
     for plugin_id, result in results:
         stated = result.get("series") if isinstance(result.get("series"), dict) else {}
+        # Other namespaces a source says this series is known by -- TMDB's
+        # `external_ids` names TheTVDB's id. First source wins per namespace,
+        # like everything else here; the refresh files it only on a series
+        # that has none (App-Guidance media-type-and-series-hierarchy §7r).
+        stated_ids = result.get("seriesIdentifiers")
+        if isinstance(stated_ids, dict):
+            for identifier_type in SERIES_FILLABLE_IDENTIFIER_TYPES:
+                value = clean_text(stated_ids.get(identifier_type))
+                if value and value.isdigit() and identifier_type not in identifiers:
+                    identifiers[identifier_type] = {"identifier": value, "source": plugin_id}
         candidate = clean_text(stated.get("overview"))
         if candidate and not overview:
             overview = candidate
@@ -7279,7 +7306,14 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
         "overviewSource": overview_source,
         "artwork": artwork,
         "seasons": seasons,
+        "identifiers": identifiers,
     }
+
+
+# The series namespaces a describing source may *add* to a series. Only
+# TheTVDB's: a TMDB television id is what a TMDB source was asked by, and an
+# IMDb id is stored on discs, not on series (§7n).
+SERIES_FILLABLE_IDENTIFIER_TYPES = (TVDB_IDENTIFIER_TYPE,)
 
 
 SEASON_EPISODES_CAPABILITY = "season_episodes"
@@ -7622,7 +7656,22 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     merged = merge_series_details(results)
     updated_series = False
     season_sources: dict[str, str] = {}
+    identifiers_added: list[dict[str, str]] = []
     with conn.cursor() as cur:
+        # A TheTVDB id a source names for this series, filed only when the series
+        # has none and no other series holds it -- the clash check the manual
+        # route applies (App-Guidance media-type-and-series-hierarchy §7r). This
+        # describes the series; it never decides which series a disc is.
+        for identifier_type, stated in merged["identifiers"].items():
+            added = add_missing_series_identifiers(
+                cur,
+                series_uuid,
+                [{"identifier_type": identifier_type, "identifier": stated["identifier"]}],
+                provider_id=stated["source"],
+            )
+            identifiers_added.extend(
+                {**entry, "source": stated["source"]} for entry in added
+            )
         if merged["overview"] and not clean_text(row.get("overview")):
             cur.execute(
                 "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
@@ -7683,6 +7732,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         "artwork": applied_artwork["series"],
         "seasonArtwork": applied_artwork["seasons"],
         "discPostersInherited": inherited_posters,
+        "identifiersAdded": identifiers_added,
         "sources": {
             "consulted": [plugin_id for plugin_id, _ in results],
             "series": merged["overviewSource"] if updated_series else "",

@@ -495,15 +495,50 @@ class SeriesIdentityTests(unittest.TestCase):
         # tell apart from "nobody has curated them".
         self.assertNotIn("seasons", series)
 
-    def test_a_tvdb_identifier_never_appears(self):
-        """It cannot reach us -- MovieVault filters `tvdb` out of providerIds
-        while its licence question is open -- and nothing here would read it if
-        it did."""
+    def test_the_tvdb_identifier_travels_beside_the_television_id(self):
+        """MovieVault publishes `tvdb` since it made the namespace
+        redistributable. Both ids go out, because the host finds a series by
+        any of them and adds the ones it lacks (App-Guidance
+        media-type-and-series-hierarchy §7r)."""
         record = self._tv(providerIds={"tmdb_tv": "1399", "tvdb": "121361"})
         series = movievault_v2._release(record)["series"]
         self.assertEqual(series["tmdbTvId"], "1399")
+        self.assertEqual(series["tvdbId"], "121361")
+
+    def test_a_series_known_only_by_its_tvdb_id_still_links(self):
+        """MovieVault may know TheTVDB's id before TMDB's. That is still an id
+        to find a series by, so it is not a reason to link nothing."""
+        series = movievault_v2._release(self._tv(providerIds={"tvdb": "121361"}))["series"]
+        self.assertEqual(series["tvdbId"], "121361")
+        self.assertNotIn("tmdbTvId", series)
+
+    def test_a_tvdb_identifier_that_is_not_a_number_is_not_an_id(self):
+        record = self._tv(providerIds={"tmdb_tv": "1399", "tvdb": "game-of-thrones"})
+        series = movievault_v2._release(record)["series"]
         self.assertNotIn("tvdbId", series)
-        self.assertNotIn("121361", json.dumps(series))
+        self.assertIsNone(
+            movievault_v2._release(self._tv(providerIds={"tvdb": "game-of-thrones"})).get("series")
+        )
+
+    def test_a_film_with_a_tvdb_id_proposes_no_series(self):
+        """The type decides first: a film never gets a series, whatever stray
+        series id rides along."""
+        record = self._tv(workType="movie", providerIds={"tmdb": "1399", "tvdb": "121361"})
+        self.assertIsNone(movievault_v2._release(record).get("series"))
+
+    def test_a_resolver_hit_carries_the_tvdb_identifier_into_the_series(self):
+        """A barcode resolved live reaches the same series a synced one does."""
+        record = movievault_v2._resolved_release_record({
+            "film": {
+                "title": "Game of Thrones",
+                "workType": "tv",
+                "identifiers": {"tmdbTvId": "1399", "tvdbId": "121361"},
+            },
+            "release": {"format": "BLURAY"},
+        })
+        self.assertEqual(record["providerIds"], {"tmdb_tv": "1399", "tvdb": "121361"})
+        series = movievault_v2._release(record)["series"]
+        self.assertEqual((series["tmdbTvId"], series["tvdbId"]), ("1399", "121361"))
 
 
 class SearchBarcodeResolverFallbackTests(unittest.TestCase):

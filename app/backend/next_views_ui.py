@@ -40428,6 +40428,8 @@ def ui_preview_html(
         series?.identifierType
         || series?.identifier_type
         || (series?.tmdbTvId || series?.tmdb_tv_id ? "tmdb_tv" : "")
+        // TheTVDB's id when that is the only one MovieVault knows (§7r).
+        || (series?.tvdbId ? "tvdb" : "")
         // A loose identifier is only a series reference when the candidate says
         // it is one; `tmdb_tv` names the television namespace by itself.
         || ((mediaType === "SHOW" || candidateIdentifierType === "tmdb_tv") ? candidateIdentifierType : "")
@@ -40435,6 +40437,7 @@ def ui_preview_html(
       const seriesRef = String(
         series?.tmdbTvId
         || series?.tmdb_tv_id
+        || series?.tvdbId
         || series?.identifier
         || (seriesRefType ? candidate.identifier : "")
         || ""

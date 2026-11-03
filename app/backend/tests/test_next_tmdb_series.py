@@ -156,6 +156,23 @@ class NormalizeSeriesTests(unittest.TestCase):
         path, params = calls[0]
         self.assertEqual(path, "/tv/1399")
         self.assertIn("images", params["append_to_response"])
+        # TheTVDB's id rides along on the same call (§7r).
+        self.assertIn("external_ids", params["append_to_response"])
+
+    def test_the_tvdb_id_tmdb_names_is_reported_under_the_hosts_type(self):
+        """The host files it on a series that has none (App-Guidance
+        media-type-and-series-hierarchy §7r)."""
+        result = tmdb._normalize_series(
+            {"id": 1399, "external_ids": {"tvdb_id": 121361, "imdb_id": "tt0944947"}}
+        )
+        self.assertEqual(result["seriesIdentifiers"], {"tvdb": "121361", "imdb": "tt0944947"})
+
+    def test_an_absent_or_unusable_external_id_is_not_an_id(self):
+        for external in ({}, {"tvdb_id": None}, {"tvdb_id": 0}, {"tvdb_id": True}, {"tvdb_id": "abc"}):
+            with self.subTest(external=external):
+                result = tmdb._normalize_series({"id": 1399, "external_ids": external})
+                self.assertNotIn("tvdb", result["seriesIdentifiers"])
+        self.assertEqual(tmdb._normalize_series({"id": 1399})["seriesIdentifiers"], {})
 
     def test_an_empty_payload_yields_empty_strings_not_none(self):
         """The caller writes these into text columns and skips empties, so `""`
@@ -164,6 +181,39 @@ class NormalizeSeriesTests(unittest.TestCase):
         self.assertEqual(result["series"]["overview"], "")
         self.assertEqual(result["series"]["title"], "")
         self.assertEqual(result["seasons"], [])
+
+
+class ProviderSeriesPayloadIdentifiersTests(unittest.TestCase):
+    """A series block may state several ids; every one of them travels
+    (App-Guidance media-type-and-series-hierarchy §7r)."""
+
+    def test_both_ids_are_returned_television_first(self):
+        payload = provider_series_payload(
+            {"provider": "movievault_v2", "title": "Show", "tvdbId": "121361", "tmdbTvId": "1399"}
+        )
+        self.assertEqual(
+            payload["identifiers"],
+            [
+                {"identifier_type": "tmdb_tv", "identifier": "1399"},
+                {"identifier_type": "tvdb", "identifier": "121361"},
+            ],
+        )
+        self.assertEqual((payload["identifier_type"], payload["identifier"]), ("tmdb_tv", "1399"))
+
+    def test_a_tvdb_id_alone_is_the_primary(self):
+        payload = provider_series_payload(
+            {"provider": "movievault_v2", "title": "Show", "tvdbId": "121361"}
+        )
+        self.assertEqual((payload["identifier_type"], payload["identifier"]), ("tvdb", "121361"))
+
+    def test_a_named_identifier_in_its_own_namespace_still_works(self):
+        payload = provider_series_payload(
+            {"providerId": "tvdb", "title": "Show", "identifier": "121361", "identifierType": "tvdb"}
+        )
+        self.assertEqual(payload["identifiers"], [{"identifier_type": "tvdb", "identifier": "121361"}])
+
+    def test_no_id_at_all_is_no_series(self):
+        self.assertIsNone(provider_series_payload({"provider": "movievault_v2", "title": "Show"}))
 
 
 class SeriesDetailsEntrypointTests(unittest.TestCase):

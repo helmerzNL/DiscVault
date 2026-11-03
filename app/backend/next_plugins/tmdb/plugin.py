@@ -674,9 +674,34 @@ def _series_details_request(context, tmdb_tv_id):
         # argument above is against extra *requests*, not against extra fields,
         # and `append_to_response` costs neither a round trip nor a rate-limit
         # slot -- the same reason `_details` asks this way for a movie.
-        append_to_response="images",
+        #
+        # `external_ids` likewise: it carries TheTVDB's series id, which the host
+        # files on the series when it has none (App-Guidance
+        # media-type-and-series-hierarchy §7r), so a show picked from TMDB is
+        # found again when MovieVault later names it by its TheTVDB id.
+        append_to_response="images,external_ids",
         include_image_language="null,en",
     )
+
+
+def _series_external_ids(data):
+    """The other namespaces TMDB says this series is known by.
+
+    Only TheTVDB's id and IMDb's are read, each shape-checked: TMDB returns
+    `null` for an id it does not know, and an id that does not look like one is
+    no id at all.
+    """
+    external = data.get("external_ids") if isinstance(data.get("external_ids"), dict) else {}
+    result = {}
+    tvdb_id = external.get("tvdb_id")
+    if isinstance(tvdb_id, int) and not isinstance(tvdb_id, bool) and tvdb_id > 0:
+        result["tvdb"] = str(tvdb_id)
+    elif isinstance(tvdb_id, str) and tvdb_id.strip().isdigit():
+        result["tvdb"] = tvdb_id.strip()
+    imdb_id = str(external.get("imdb_id") or "").strip()
+    if imdb_id.startswith("tt") and imdb_id[2:].isdigit():
+        result["imdb"] = imdb_id
+    return result
 
 
 def _normalize_series(data):
@@ -737,6 +762,9 @@ def _normalize_series(data):
         },
         "seasons": seasons,
         "tmdbTvId": data.get("id"),
+        # Keyed by the host's identifier types. The host files a missing `tvdb`
+        # on the series; it never replaces one (§7r).
+        "seriesIdentifiers": _series_external_ids(data),
     }
 
 

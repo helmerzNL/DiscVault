@@ -419,6 +419,73 @@ class SeriesMetadataRefreshPostgresTests(unittest.TestCase):
         self.assertEqual(series_overview, "Fetched overview.")
         self.assertEqual(seasons[1], "Fetched season one.")
 
+    def _identifiers(self, conn, series_id):
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT provider_id, identifier_type, identifier FROM series_identifiers "
+                "WHERE series_id = %s ORDER BY identifier_type",
+                (series_id,),
+            )
+            return [
+                (row["provider_id"], row["identifier_type"], row["identifier"])
+                for row in cur.fetchall()
+            ]
+
+    def test_the_tvdb_id_a_source_names_is_filed_on_the_series(self):
+        """TMDB's `external_ids` names TheTVDB's id. Filing it is what lets the
+        show be found again when MovieVault later names it that way
+        (App-Guidance media-type-and-series-hierarchy §7r)."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            result = self._run(
+                conn, series_id, self._hit(seriesIdentifiers={"tvdb": "121361"})
+            )
+            identifiers = self._identifiers(conn, series_id)
+
+        self.assertIn(("tmdb", "tvdb", "121361"), identifiers)
+        self.assertEqual(
+            result["identifiersAdded"],
+            [{"identifier_type": "tvdb", "identifier": "121361", "source": "tmdb"}],
+        )
+
+    def test_a_tvdb_id_the_series_already_has_is_never_replaced(self):
+        """Fill-only. Correcting an id is a person's act, through the
+        identifier route; a refresh that swapped it would re-point the series at
+        another show with no trace."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier) "
+                    "VALUES (%s, 'tvdb', 'tvdb', '999')",
+                    (series_id,),
+                )
+            result = self._run(
+                conn, series_id, self._hit(seriesIdentifiers={"tvdb": "121361"})
+            )
+            identifiers = self._identifiers(conn, series_id)
+
+        self.assertIn(("tvdb", "tvdb", "999"), identifiers)
+        self.assertNotIn(("tmdb", "tvdb", "121361"), identifiers)
+        self.assertEqual(result["identifiersAdded"], [])
+
+    def test_a_tvdb_id_another_series_holds_is_refused(self):
+        """One id may not name two series, the rule the manual identifier
+        route enforces with a 409. A filled id obeys the same check."""
+        with self.connect() as conn:
+            series_id = self._series(conn)
+            holder = self._series(conn, identifier="1400")
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier) "
+                    "VALUES (%s, 'tvdb', 'tvdb', '121361')",
+                    (holder,),
+                )
+            self._run(conn, series_id, self._hit(seriesIdentifiers={"tvdb": "121361"}))
+            identifiers = self._identifiers(conn, series_id)
+
+        self.assertEqual(identifiers, [("movievault_v2", "tmdb_tv", "1399")])
+
     def test_a_series_without_an_identifier_is_skipped(self):
         """There is nothing to look it up by. Falling back to the title is the
         mistake the whole identity design refuses to make."""

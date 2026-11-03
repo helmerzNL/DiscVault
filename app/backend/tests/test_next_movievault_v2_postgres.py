@@ -1351,6 +1351,30 @@ class MovieVaultV2PostgresTests(unittest.TestCase):
         result = self._apply_delta_ndjson([second], revision=45, cursor="fixture-distribution-4-r45")
         self.assertEqual(result["identityChangedReleaseIds"], [self.RELEASE_ONE])
 
+    def test_a_tvdb_id_that_appears_later_counts_as_a_change(self):
+        """A TheTVDB id MovieVault learns later is what lets the series be
+        found from that namespace too (§7r). A disc added before it was known
+        is only handed it on a refresh, so the sync has to report it."""
+        self._sync_full(V4_FULL_PATH)
+        first = self._identity_delta_record(workType="tv", providerIds={"tmdb_tv": "4613"})
+        self._apply_delta_ndjson([first], revision=44, cursor="fixture-distribution-4-r44")
+        second = self._identity_delta_record(
+            revision=45,
+            workType="tv",
+            providerIds={"tmdb_tv": "4613", "tvdb": "74205"},
+        )
+        result = self._apply_delta_ndjson([second], revision=45, cursor="fixture-distribution-4-r45")
+        self.assertEqual(result["identityChangedReleaseIds"], [self.RELEASE_ONE])
+
+    def test_a_full_resync_reports_a_tvdb_id_that_appeared(self):
+        self._sync_full(V4_FULL_PATH)
+        records = [json.loads(line) for line in V4_FULL_PATH.read_bytes().splitlines()]
+        for record in records:
+            if record.get("releaseId") == self.RELEASE_ONE:
+                record["providerIds"] = {**(record.get("providerIds") or {}), "tvdb": "74205"}
+        result = self._resync_full(records, revision=43, cursor="fixture-distribution-4-r43")
+        self.assertEqual(result["identityChangedReleaseIds"], [self.RELEASE_ONE])
+
     def test_a_delta_that_does_not_touch_identity_reports_nothing(self):
         """A new poster or packaging is not a reason to refresh every disc."""
         self._sync_full(V4_FULL_PATH)
@@ -2526,6 +2550,129 @@ class SeriesLinkPostgresTests(unittest.TestCase):
                     "SELECT count(*) AS n FROM series WHERE title = %s", (self.SERIES_TITLE,)
                 )
                 self.assertEqual(cur.fetchone()["n"], 1)
+
+    def _identifiers(self, conn, series_id) -> list[tuple[str, str]]:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT identifier_type, identifier FROM series_identifiers "
+                "WHERE series_id = %s ORDER BY identifier_type",
+                (series_id,),
+            )
+            return [(row["identifier_type"], row["identifier"]) for row in cur.fetchall()]
+
+    def _series_count(self, conn) -> int:
+        with conn.cursor() as cur:
+            cur.execute("SELECT count(*) AS n FROM series WHERE title = %s", (self.SERIES_TITLE,))
+            return cur.fetchone()["n"]
+
+    def test_a_series_picked_from_tvdb_is_found_by_the_feed(self):
+        """A show picked from TheTVDB in the Add screen, then the same show
+        arriving from MovieVault with both ids: one series, which gains the
+        TMDB television id it lacked (App-Guidance
+        media-type-and-series-hierarchy §7r). Before, the two namespaces could
+        not find each other's row and the show became two series."""
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            picked = next_metadata.apply_movie_series_link(
+                conn,
+                first,
+                {
+                    "identifier": "121361",
+                    "identifierType": "tvdb",
+                    "providerId": "tvdb",
+                    "title": self.SERIES_TITLE,
+                    "seasons": [],
+                },
+            )
+            second = self._movie(conn, suffix=" 4K")
+            fed = next_metadata.apply_movie_series_link(
+                conn, second, {**self._stated(), "tvdbId": "121361"}
+            )
+
+            self.assertEqual(picked["seriesId"], fed["seriesId"])
+            self.assertEqual(self._series_count(conn), 1)
+            self.assertEqual(
+                self._identifiers(conn, uuid.UUID(fed["seriesId"])),
+                [("tmdb_tv", "1399"), ("tvdb", "121361")],
+            )
+
+    def test_an_existing_series_gains_the_tvdb_id_it_lacks(self):
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            a = next_metadata.apply_movie_series_link(conn, first, self._stated())
+            second = self._movie(conn, suffix=" 4K")
+            b = next_metadata.apply_movie_series_link(
+                conn, second, {**self._stated(), "tvdbId": "121361"}
+            )
+
+            self.assertEqual(a["seriesId"], b["seriesId"])
+            self.assertEqual(
+                self._identifiers(conn, uuid.UUID(a["seriesId"])),
+                [("tmdb_tv", "1399"), ("tvdb", "121361")],
+            )
+
+    def test_a_series_known_only_by_its_tvdb_id_is_created_under_it(self):
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            stated = {**self._stated(), "tvdbId": "121361"}
+            stated.pop("tmdbTvId")
+            applied = next_metadata.apply_movie_series_link(conn, movie_id, stated)
+
+            self.assertEqual(
+                self._identifiers(conn, uuid.UUID(applied["seriesId"])),
+                [("tvdb", "121361")],
+            )
+
+    def test_two_ids_naming_two_series_link_the_television_one(self):
+        """The TMDB television id is asked first. The TheTVDB id another series
+        holds is not added -- two series sharing one id would make the lookup
+        pick by age -- and nothing is merged: that is a duplicate for a person
+        to resolve, and merging here would move discs."""
+        with self.connect() as conn:
+            first = self._movie(conn, suffix=" Blu-ray")
+            television = next_metadata.apply_movie_series_link(conn, first, self._stated())
+            other = self._movie(conn, suffix=" DVD")
+            stated_tvdb = {
+                "identifier": "121361",
+                "identifierType": "tvdb",
+                "providerId": "tvdb",
+                "title": self.SERIES_TITLE,
+            }
+            tvdb_series = next_metadata.apply_movie_series_link(conn, other, stated_tvdb)
+            self.assertNotEqual(television["seriesId"], tvdb_series["seriesId"])
+
+            third = self._movie(conn, suffix=" 4K")
+            fed = next_metadata.apply_movie_series_link(
+                conn, third, {**self._stated(), "tvdbId": "121361"}
+            )
+
+            self.assertEqual(fed["seriesId"], television["seriesId"])
+            self.assertEqual(
+                self._identifiers(conn, uuid.UUID(television["seriesId"])),
+                [("tmdb_tv", "1399")],
+            )
+            self.assertEqual(
+                self._identifiers(conn, uuid.UUID(tvdb_series["seriesId"])),
+                [("tvdb", "121361")],
+            )
+
+    def test_a_disc_on_a_series_no_stated_id_names_mints_no_series(self):
+        """The disc keeps its link, and no empty series is left behind: the
+        lookup used to create the stated series before noticing the disc was
+        on another one, once per refresh."""
+        with self.connect() as conn:
+            movie_id = self._movie(conn)
+            other = uuid.uuid4()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO series (id, public_id, title) VALUES (%s, %s, %s)",
+                    (other, f"next-series-{other.hex[:12]}", self.SERIES_TITLE),
+                )
+                cur.execute("UPDATE movies SET series_id = %s WHERE id = %s", (other, movie_id))
+            self.assertIsNone(
+                next_metadata.apply_movie_series_link(conn, movie_id, self._stated())
+            )
+            self.assertEqual(self._series_count(conn), 1)
 
     def test_a_scanned_series_reaches_the_link_through_the_pipeline(self):
         """End to end from what the plugin answers to the row it links.
