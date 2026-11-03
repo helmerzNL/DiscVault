@@ -7321,6 +7321,19 @@ SEASON_EPISODES_CAPABILITY = "season_episodes"
 EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20, "still_url": 1000}
 
 
+def _episode_text(value: Any, field: str) -> str | None:
+    """One text field of a fetched episode, trimmed to its column, or None.
+
+    `clean_text` answers None for nothing, and a source routinely sends nothing:
+    no still or summary for an episode that has not aired, no air date for one
+    only announced. Slicing that answer raised "'NoneType' object is not
+    subscriptable", which failed the whole season fetch -- and with it the
+    Seasons tab, which asks for the episodes the first time it is opened.
+    """
+    text = clean_text(value)
+    return text[: EPISODE_TEXT_LIMITS[field]] if text else None
+
+
 def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
     """Fill one season's episode list from whichever sources can supply it.
 
@@ -7416,11 +7429,11 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     series_uuid,
                     season_uuid,
                     number,
-                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
-                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
-                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    _episode_text(episode.get("title"), "title"),
+                    _episode_text(episode.get("overview"), "overview"),
+                    _episode_text(episode.get("airDate"), "air_date"),
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
-                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
+                    _episode_text(episode.get("stillUrl"), "still_url"),
                 ),
             )
             if cur.rowcount:
@@ -7441,11 +7454,11 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                 WHERE season_id = %s AND episode_number = %s AND deleted_at IS NULL
                 """,
                 (
-                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
-                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
-                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    _episode_text(episode.get("title"), "title"),
+                    _episode_text(episode.get("overview"), "overview"),
+                    _episode_text(episode.get("airDate"), "air_date"),
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
-                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
+                    _episode_text(episode.get("stillUrl"), "still_url"),
                     season_uuid,
                     number,
                 ),
