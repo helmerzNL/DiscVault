@@ -1,315 +1,343 @@
+<div align="center">
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="app/frontend/pwa-icon-512.png">
+  <img src="app/frontend/pwa-icon-512.png" alt="DiscVault logo" width="128">
+</picture>
+
 # DiscVault
 
-DiscVault is a self-hosted physical media collection manager for 4K UHD, Blu-ray, and DVD.
+**A catalogue for the films you own on disc: 4K UHD, Blu-ray and DVD.**
 
-DiscVault 26 is the next-generation app experience. It is available as a beta
-today and will become the production channel when promoted to stable.
+Scan a barcode and DiscVault fills in the title, edition, format and artwork. Run it on your own
+server and use it in the browser, or keep your collection on your iPhone, iPad or Android phone.
 
-It includes:
-- DiscVault 26 library with poster, list, and detail views
-- Rich movie, container, box-set, poster, backdrop, video, and metadata pages
-- PostgreSQL-backed v26 foundation with a guided migration path
-- Plugin runtime for metadata, import sources, receivers, digital sources, API, and MCP
-- Plex/Jellyfin digital media matching and MovieVault metadata integration
-- Barcode scanning and manual entry
-- Metadata lookup through configurable plugins
-- Collection filtering, search, and format-aware browsing
-- Backup and restore tools
-- User management, groups, owner/admin tooling, and RBAC
-- MemberGroups — user-created collaboration groups with invite system
-- Watchlist & watch history
-- Passkey authentication and recovery
-- Invite-only registration — admin issues one-time passwords, open sign-up can be disabled
-- Multilingual UI
-- URL routing and deep links — share direct links to movies or views
-- MCP endpoint integration for AI workflows
-- PWA — works offline after adding to homescreen
-- Push notifications — group members are notified when a new disc is added to a shared group
-- User-scoped MCP access — personal API keys connect your AI assistant to your own collection only
+[![Platform](https://img.shields.io/badge/platform-iOS%20%7C%20Android%20%7C%20Web-blue)](#getting-started)
+[![Self-hosted](https://img.shields.io/badge/self--hosted-Docker-2496ED?logo=docker&logoColor=white)](#installation-self-hosted)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-app-41BDF5?logo=homeassistant&logoColor=white)](#home-assistant)
+[![Languages](https://img.shields.io/badge/languages-29-lightgrey)](#features)
 
-## Live Website
+[![Last commit](https://img.shields.io/github/last-commit/helmerzNL/DiscVault/release%2Fv26-beta)](https://github.com/helmerzNL/DiscVault/commits/release/v26-beta)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/helmerzNL/DiscVault/release%2Fv26-beta)](https://github.com/helmerzNL/DiscVault/graphs/commit-activity)
+[![License](https://img.shields.io/github/license/helmerzNL/DiscVault)](LICENSE)
+[![Forks](https://img.shields.io/github/forks/helmerzNL/DiscVault?style=social)](https://github.com/helmerzNL/DiscVault/forks)
+[![Stars](https://img.shields.io/github/stars/helmerzNL/DiscVault?style=social)](https://github.com/helmerzNL/DiscVault/stargazers)
+[![Issues](https://img.shields.io/github/issues/helmerzNL/DiscVault)](https://github.com/helmerzNL/DiscVault/issues)
+[![Contributors](https://img.shields.io/github/contributors/helmerzNL/DiscVault)](https://github.com/helmerzNL/DiscVault/graphs/contributors)
 
-- https://discvault.eu
+[![Release](https://img.shields.io/github/v/release/helmerzNL/DiscVault)](https://github.com/helmerzNL/DiscVault/releases/latest)
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/zdc88VB8mJ)
+[![Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-flux76-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/flux76)
+[![Ko-fi](https://img.shields.io/badge/Ko--fi-flux76-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/flux76)
 
-## Docker Images
+[Website](https://discvault.eu) · [Documentation](https://docs.discvault.eu) · [Changelog](https://github.com/helmerzNL/DiscVault/releases) · [Report a bug](https://github.com/helmerzNL/DiscVault/issues/new/choose)
 
-```
-ghcr.io/helmerznl/discvault:latest   # production / stable
-ghcr.io/helmerznl/discvault:beta     # DiscVault 26 beta
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="screenshots/v26-desktop/DisccVault%2026%20-%2001%20-%20Library%20Posters.png">
+  <img src="screenshots/v26-desktop/DisccVault%2026%20-%2001%20-%20Library%20Posters.png" alt="The DiscVault library: a grid of film posters, each marked 4K UHD or box set, with filters for format and a search field above it" width="900">
+</picture>
 
-> Docker image references are lowercase. GitHub may show the repository name as
-> `helmerzNL/DiscVault`, but Docker pulls should use
-> `ghcr.io/helmerznl/discvault`.
+</div>
 
-## Troubleshooting
+---
 
-- [Library shows too few movies, or the app freezes](docs/troubleshooting/library-count-and-app-freeze.md)
-  — step-by-step check for a library counter that stops short (for example `200 / 228`)
-  or an app that becomes unresponsive after a few minutes or a PDF export.
-- [Stack-level troubleshooting](app/deploy/next/README.md) — PostgreSQL health,
-  preflight checks and log commands.
-- FAQ: https://discvault.eu/faq
+## Contents
 
-## Unraid
+- [Why DiscVault?](#why-discvault)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [Running it](#running-it)
+- [Data and backups](#data-and-backups)
+- [Architecture](#architecture)
+- [Stable and beta](#stable-and-beta)
+- [Contributing](#contributing)
+- [Privacy and security](#privacy-and-security)
+- [Support DiscVault](#support-discvault)
+- [License](#license)
 
-- Unraid template repo: https://github.com/helmerzNL/unraid-templates
-- Support thread: https://forums.unraid.net/topic/198808-support-discvault-physical-disc-collection-manager/
+## Why DiscVault?
+
+A disc collection outgrows memory and spreadsheets quickly: which edition is on the shelf, is the
+4K inside that box set, did you already buy this one? Streaming apps only know what you stream,
+and collection websites keep your list on their servers. DiscVault catalogues the films you own on
+disc, edition by edition, and keeps that catalogue where you want it: on a server you run, or on
+your own phone. No account with us, no analytics, no advertising and no trackers.
+
+## Features
+
+- **Your whole shelf at a glance**: browse posters, a list or detail cards, filter by format (4K UHD, Blu-ray, DVD), search by title, barcode, format or crew, and open box sets and containers to see what is inside.
+- **Scan to add**: scan a barcode to fill in title, year, format and cover art, search by name, or enter a disc by hand.
+- **Rich detail pages**: posters, backdrops, videos and metadata per film and per edition, Steelbooks and box sets included.
+- **Metadata from plugins**: a plugin runtime for metadata sources, import sources and digital libraries, with MovieVault v2 as the first source. Plex and Jellyfin matching shows which discs you also own digitally.
+- **Watchlist and watch history**: keep track of what you want to see and what you have seen.
+- **Share it with your household**: users, invite-only registration, groups with invitations, roles and permissions, and a push notification when someone adds a disc to a shared group.
+- **Sign in with a passkey**: passkeys first, with recovery; optionally a password with TOTP, or single sign-on through OpenID Connect.
+- **Import and migrate**: bring a collection in from a file, or move an existing DiscVault Legacy installation across with a guided migration.
+- **Ready for your AI assistant**: an MCP endpoint, and personal API keys that connect an assistant to your own collection only.
+- **Your data, your server**: everything runs in your own containers, with backup and restore built in, 29 languages, and an installable web app that keeps working offline.
+
+The full description of every feature is in the [documentation](https://docs.discvault.eu).
 
 ## Screenshots
 
-### DiscVault 26 desktop preview
+| Library posters | Library list | Detail |
+|:---:|:---:|:---:|
+| <img src="screenshots/v26-desktop/DisccVault%2026%20-%2001%20-%20Library%20Posters.png" width="290" alt="Library as a poster grid"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2002%20-%20Library%20List.png" width="290" alt="Library as a list"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2003%20-%20Detail.png" width="290" alt="Detail page of a film"> |
 
-| | |
+| Backdrops | Watchlist | Watched history |
+|:---:|:---:|:---:|
+| <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Detail-%20Backdrops.png" width="290" alt="Backdrops on a detail page"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Watchlist%20-%20Detailed.png" width="290" alt="Watchlist with details"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Watched%20List.png" width="290" alt="Watched history"> |
+
+| Roles and permissions | Plugins | Preferences |
+|:---:|:---:|:---:|
+| <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Admin%20-%20RBAC.png" width="290" alt="Admin: roles and permissions"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Admin%20-%20Plugins.png" width="290" alt="Admin: plugins"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Preferences%2001.png" width="290" alt="Preferences"> |
+
+<details>
+<summary><strong>Migrating from DiscVault Legacy</strong></summary>
+
+DiscVault 26 includes a guided migration for existing installations. The wizard checks your
+current data, confirms what can be imported, runs the migration, and then opens the new app.
+
+| Start migration | Authenticate with your passkey | Review the wizard | Confirm the scope |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2001%20-%20Migration%20Start%20.png" width="200" alt="Start migration"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2002%20-%20Authenticate%20with%20current%20Passkey.png" width="200" alt="Authenticate with the current passkey"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2003%20-%20Migration%20Wizard%2001.png" width="200" alt="Migration wizard, first step"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2004%20-%20Migration%20Wizard%2002.png" width="200" alt="Migration wizard, confirming the scope"> |
+
+| Ready to start | In progress | Finished | Start DiscVault 26 |
+|:---:|:---:|:---:|:---:|
+| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2005%20-%20Ready%20to%20start%20migration.png" width="200" alt="Ready to start the migration"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2006%20-%20Migration%20in%20progress.png" width="200" alt="Migration in progress"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2007%20-%20Migraiton%20finished.png" width="200" alt="Migration finished"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2008%20-%20Start%20DiscVault%2026.png" width="200" alt="Start DiscVault 26"> |
+
+</details>
+
+## Getting started
+
+- 🌐 **Web:** open the address of your own installation, and [install it as an app](#install-as-an-app) if you like.
+- 📱 **iPhone and iPad:** [download DiscVault on the App Store](https://apps.apple.com/app/discvault/id6788772918). It runs entirely on the device: scan, enrich, filter and search without a server. Prerelease builds are on the [TestFlight beta](https://testflight.apple.com/join/6bJetcyy).
+- 🤖 **Android:** in beta. [Request access on Discord](https://discord.gg/zdc88VB8mJ); approved testers install through Google Play.
+- 🐳 **Self-hosted:** see [Installation](#installation-self-hosted), or install it on [Unraid](#unraid) or as a [Home Assistant app](#home-assistant).
+
+The iPhone, iPad and Android apps keep your collection on the device. Connecting them to a
+self-hosted installation is planned for a later stage.
+
+### Install as an app
+
+- **Android and desktop (Chrome, Edge):** open the https address and choose *Install app*.
+- **iPhone / iPad:** open the https address in **Safari → Share → Add to Home Screen**.
+
+Once installed, the web app keeps working offline.
+
+### Installation (self-hosted)
+
+DiscVault 26 runs as a small Docker Compose stack with PostgreSQL 17. The quickest route uses the
+Compose file and environment template from the beta branch:
+
+```bash
+install -d -m 0700 /opt/discvault-next && cd /opt/discvault-next
+curl -fLO https://raw.githubusercontent.com/helmerzNL/DiscVault/release/v26-beta/app/deploy/next/docker-compose.yml
+curl -fL -o .env https://raw.githubusercontent.com/helmerzNL/DiscVault/release/v26-beta/app/deploy/next/.env.example
+# edit .env: DISCVAULT_NEXT_IMAGE=ghcr.io/helmerznl/discvault:beta (never the template's :dev),
+# POSTGRES_PASSWORD, JWT_SECRET (openssl rand -base64 48), DISCVAULT_DATA_DIR and
+# DISCVAULT_NEXT_POSTGRES_DATA (absolute host folders), RP_ID and RP_ORIGINS
+docker compose -p discvault_next_deploy up -d
+```
+
+Then open `http://<host>:6180` and follow the first-run setup. The first start applies every
+database migration and can take a couple of minutes. Passkeys need a secure context, so anything
+other than `localhost` belongs behind a reverse proxy with HTTPS.
+
+The stable channel (`:latest`), the equivalent `docker run` setup, reverse proxy and passkeys, and
+storage are covered step by step in the [server guide](https://docs.discvault.eu/install/). The
+stack itself, its preflight check and its troubleshooting are in
+[`app/deploy/next/README.md`](app/deploy/next/README.md).
+
+### Unraid
+
+The Community Applications templates for DiscVault and DiscVault (beta) are in
+[helmerzNL/unraid-community-apps](https://github.com/helmerzNL/unraid-community-apps). Unraid cannot
+declare a PostgreSQL dependency, so the template installs the
+[DiscVault launcher](https://github.com/helmerzNL/DiscVault-Launcher): one container that creates and
+updates the whole stack (PostgreSQL, API, worker, MCP) through the Docker socket and serves it on one
+port. Stable and beta each have their own folders and port, so they run side by side.
+
+- Support thread: <https://forums.unraid.net/topic/198808-support-discvault-physical-disc-collection-manager/>
+- Guide: [Install on Unraid](https://docs.discvault.eu/install/unraid/)
+
+### Home Assistant
+
+DiscVault and DiscVault (beta) are also available as Home Assistant apps (add-ons), from
+[helmerzNL/home-assistant-addons](https://github.com/helmerzNL/home-assistant-addons):
+
+[![Add this repository to your Home Assistant](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2FhelmerzNL%2Fhome-assistant-addons)
+
+1. In Home Assistant open **Settings → Apps → Install app** (older versions: **Settings → Add-ons → Add-on store**), then the menu (⋮) → **Repositories**, and add `https://github.com/helmerzNL/home-assistant-addons`, or use the button above.
+2. Choose **DiscVault** (port 6180) or **DiscVault (beta)** (port 6181), install it, and follow its *Documentation* tab.
+
+The app, its worker, the MCP endpoint and PostgreSQL run in one container, and everything they store
+lives in the app's data folder, which Home Assistant includes in its backups. Passkeys need an https
+address with a domain name in front of the app's port; without one, the app's `password_login`
+option offers a password with TOTP instead.
+
+## Configuration
+
+Set in `.env`; [`app/deploy/next/.env.example`](app/deploy/next/.env.example) documents every
+value, and the [environment reference](https://docs.discvault.eu/configure/environment/) explains
+them at length. Never commit `.env`.
+
+| Variable | Required | Default | Description |
+|---|:---:|---|---|
+| `DISCVAULT_NEXT_IMAGE` | ✅ | `:dev` in the template | Which build runs: `ghcr.io/helmerznl/discvault:latest` (stable), `:beta`, or a version such as `:v26.10.17`. Never the engineering `:dev` image |
+| `DISCVAULT_DATA_DIR` | ✅ | - | Host folder mounted as `/data`: artwork, backups, plugins. An absolute path on a local disk (the template suggests `/mnt/user/appdata/discvault`) |
+| `DISCVAULT_NEXT_POSTGRES_DATA` | ❌ | `./postgres-data` | Host folder for the PostgreSQL data. Set an absolute path on the same storage as `DISCVAULT_DATA_DIR`, so both are backed up together |
+| `POSTGRES_PASSWORD` | ✅ | - | Database password. Applied only when the database is first created |
+| `POSTGRES_DB`, `POSTGRES_USER` | ✅ | `discvault_next` | Database name and user. On an existing stack, `POSTGRES_DB` must match the database that already exists |
+| `JWT_SECRET` | ✅ | - | Signs sessions and protects stored credentials. Generate it once with `openssl rand -base64 48` and never change it: DiscVault refuses to start without it, and a new value signs everyone out and disconnects integrations |
+| `RP_ID` | ❌ | - | The hostname people open, without scheme or port, such as `discvault.example.com`; passkeys are bound to it. Leave it empty for a direct private or loopback IP |
+| `RP_ORIGINS` | ❌ | - | Allowed origins, comma-separated, matching `RP_ID`, such as `https://discvault.example.com`. Put the canonical public origin first |
+| `DISCVAULT_NEXT_API_PORT` | ❌ | `6180` | Host port for the web app and API. Unique per stack on one host |
+| `DISCVAULT_NEXT_MCP_PORT` | ❌ | `6090` | Host port for the MCP server. Unique per stack on one host |
+| `DISCVAULT_NEXT_NETWORK_NAME` | ❌ | `discvault-next` | Docker network name. Unique per stack, or two stacks reach each other's database |
+| `DISCVAULT_TRUSTED_PROXIES` | ❌ | empty | Which hops may state a client address. Behind a reverse proxy on your own network: `private`, as the template sets it |
+| `LEGACY_AUTH_ENABLED` | ❌ | `false` | Offers password + TOTP sign-in besides passkeys |
+| `DISCVAULT_OIDC_*` | ❌ | empty | OpenID Connect sign-in: `_ISSUER`, `_CLIENT_ID` and `_CLIENT_SECRET` all three, or none. See [OIDC](https://docs.discvault.eu/configure/oidc/) |
+| `DISCVAULT_BLOCK_CRAWLERS` | ❌ | `true` | Keeps the instance out of search engines and AI training corpora. See [Privacy and security](#privacy-and-security) |
+| `DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED` | ❌ | `false` | Safety gate for the destructive duplicate merge. Leave it off |
+
+**Password and TOTP.** Passkeys remain the preferred sign-in. `LEGACY_AUTH_ENABLED=true` only
+exposes password sign-in: on an existing installation an owner or admin must then turn it on in
+**Users & roles** and confirm the warning with a fresh passkey. On a completely fresh installation
+(no users or credentials), the setup wizard may instead create the first owner with a password of
+15 or more characters and mandatory TOTP; that bootstrap is atomic and single-use. TOTP secrets and
+recovery codes are never included in backups, so restored password users with MFA enrol TOTP again.
+
+## Running it
+
+From the folder that holds `docker-compose.yml` and `.env`:
+
+| Task | Command |
 |---|---|
-| <img src="screenshots/v26-desktop/DisccVault%2026%20-%2001%20-%20Library%20Posters.png" width="420"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2002%20-%20Library%20List.png" width="420"> |
-| Library posters | Library list |
-| <img src="screenshots/v26-desktop/DiscVault%2026%20-%2003%20-%20Detail.png" width="420"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Detail-%20Backdrops.png" width="420"> |
-| Rich detail page | Backdrops |
-| <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Watchlist%20-%20Detailed.png" width="420"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Watched%20List.png" width="420"> |
-| Watchlist detail | Watched history |
-| <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Admin%20-%20RBAC.png" width="420"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Admin%20-%20Plugins.png" width="420"> |
-| RBAC admin | Plugin admin |
-| <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Admin%20-%20Operations.png" width="420"> | <img src="screenshots/v26-desktop/DiscVault%2026%20-%2004%20-%20Preferences%2001.png" width="420"> |
-| Operations | Preferences |
+| Start | `docker compose -p discvault_next_deploy up -d` |
+| Stop | `docker compose -p discvault_next_deploy down` |
+| Update | `docker compose -p discvault_next_deploy pull && docker compose -p discvault_next_deploy up -d` |
+| Roll back | stop the stack, restore the backup taken before the update (the `DISCVAULT_DATA_DIR` folder and the PostgreSQL dump), set `DISCVAULT_NEXT_IMAGE` back to the previous version, then `docker compose -p discvault_next_deploy up -d`; step by step in [Rollback](https://docs.discvault.eu/update/rollback/) |
+| Logs | `docker compose -p discvault_next_deploy logs -f next-api` (or `next-worker`, `postgres`) |
 
-### Migration to DiscVault 26
+- **Health check:** `GET /api/next/health` answers `200` with `"status": "ok"` once the API reaches a fully migrated database, and `503` with `"status": "degraded"` while migrations are not ready.
+- **Largest upload:** 60 MB, for artwork and your own images. Whatever runs in front of DiscVault (a reverse proxy, a CDN) must allow at least that much, and at least 500 MB on `/api/next/backup/validate` and `/api/next/backup/restore`, where a backup archive is sent. A refusal with no matching line in the DiscVault log came from something in front.
+- **Update check:** DiscVault tells owners and admins when a newer version exists on the chosen channel (stable, beta, or auto); it never updates itself.
 
-DiscVault 26 includes a guided migration flow for existing installations. The
-wizard checks your current data, confirms what can be imported, runs the
-migration, and then opens the new DiscVault 26 app.
+Before updating:
 
-| | |
+- Create a backup in the app, or stop the stack and copy the data folders (see [Data and backups](#data-and-backups)).
+- Keep the same `DISCVAULT_DATA_DIR` and `DISCVAULT_NEXT_POSTGRES_DATA`, so artwork, uploads, users, passkeys and settings stay available.
+- Read the [release notes](https://github.com/helmerzNL/DiscVault/releases), especially before moving between stable and beta.
+
+### Troubleshooting
+
+- [Library shows too few movies, or the app freezes](docs/troubleshooting/library-count-and-app-freeze.md): a library counter that stops short (for example `200 / 228`), or an app that becomes unresponsive after a few minutes or a PDF export.
+- [Stack-level troubleshooting](app/deploy/next/README.md#troubleshooting): PostgreSQL health, the preflight check and log commands.
+- [Troubleshooting on docs.discvault.eu](https://docs.discvault.eu/troubleshooting/) and the [FAQ](https://discvault.eu/faq).
+
+## Data and backups
+
+Everything DiscVault keeps lives in two host folders. `DISCVAULT_DATA_DIR`, mounted as `/data`:
+
+| Folder | What is in it |
 |---|---|
-| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2001%20-%20Migration%20Start%20.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2002%20-%20Authenticate%20with%20current%20Passkey.png" width="420"> |
-| Start migration | Authenticate with current passkey |
-| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2003%20-%20Migration%20Wizard%2001.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2004%20-%20Migration%20Wizard%2002.png" width="420"> |
-| Review migration wizard | Confirm migration scope |
-| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2005%20-%20Ready%20to%20start%20migration.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2006%20-%20Migration%20in%20progress.png" width="420"> |
-| Ready to start | Migration in progress |
-| <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2007%20-%20Migraiton%20finished.png" width="420"> | <img src="screenshots/Migrate%20to%20DiscVault%2026/DiscVault%2026%20-%2008%20-%20Start%20DiscVault%2026.png" width="420"> |
-| Migration finished | Start DiscVault 26 |
+| `media/` | The artwork DiscVault stores: posters, backdrops, your own images, profile pictures, cached MovieVault posters |
+| `backups/` | Backup archives created in the app (`DISCVAULT_NEXT_BACKUP_DIR` moves them elsewhere) |
+| `plugins/` | Installed plugins (`DISCVAULT_PLUGIN_INSTALL_DIR` moves them elsewhere) |
+| `discvault.db`, `posters/`, `profiles/`, `avatars/` | Only after a move from DiscVault Legacy: read by the migration and left in place |
 
-### Current stable desktop
+and `DISCVAULT_NEXT_POSTGRES_DATA`, which holds the PostgreSQL database: the collection, users,
+settings and jobs.
 
-| | | |
+Back up from within the app (**Admin → Operations → Backup & restore**), or stop the stack and copy
+both folders. A backup never contains passkeys, TOTP secrets, recovery codes, invite codes or
+plugin secrets; user accounts are an optional part of it. Restoring: choose the backup ZIP under
+**Backup & restore** in the app, or restore a full copy of both folders as described in
+[Backup](https://docs.discvault.eu/update/backup/) and
+[Restore](https://docs.discvault.eu/update/restore/).
+
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Browser or installed web app] -->|https| P[Reverse proxy<br/>TLS]
+    P --> API[next-api<br/>web app and API]
+    AI[AI assistant] -->|MCP| MCP[next-mcp]
+    MCP --> API
+    API --> DB[(PostgreSQL 17)]
+    W[next-worker<br/>background jobs] --> DB
+    API -->|plugins| S[Metadata and media sources<br/>MovieVault v2, Plex, Jellyfin]
+    W -->|plugins| S
+```
+
+| Component | Purpose | Data |
 |---|---|---|
-| ![Sign in](screenshots/desktop_signin.png) | ![Collection](screenshots/desktop_collection.png) | ![Import](screenshots/desktop_import.png) |
-| Sign in | Collection | Import |
-| ![Backup & Restore](screenshots/desktop_backup.png) | ![User Management](screenshots/desktop_user_mgmt.png) | ![Logfiles](screenshots/desktop_log.png) |
-| Backup & Restore | User Management | Logfiles |
-| ![Advanced & MCP](screenshots/desktop_advanced-mcp.png) | | |
-| Advanced & MCP | | |
+| `postgres` | PostgreSQL 17: the collection, users, settings and the job queue | `DISCVAULT_NEXT_POSTGRES_DATA` |
+| `next-api` | The web app and the API (Flask + Gunicorn on container port 5000); applies pending migrations on start and serves `/mcp` as a proxy | `DISCVAULT_DATA_DIR` → `/data` |
+| `next-worker` | Background jobs: metadata, imports, synchronization, plugin jobs | `DISCVAULT_DATA_DIR` → `/data` |
+| `next-mcp` | The MCP server for AI assistants, on port 6090; it calls the API | - |
 
-### Mobile
+Plugins are loaded from manifest folders: the bundled ones from the image, installed ones from
+`/data/plugins`. The highest-priority metadata source is the standalone MovieVault v2 plugin, which
+works through an anonymous bridge in DiscVault itself:
+[`docs/movievault-v2-plugin.md`](docs/movievault-v2-plugin.md).
 
-| | | | |
-|---|---|---|---|
-| <img src="screenshots/Mobile_screenshot%20%282%29.jpeg" width="150"> | <img src="screenshots/Mobile_screenshot%20%281%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%284%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%285%29.PNG" width="150"> |
-| Sign in | Search | Add movie | Profile |
-| <img src="screenshots/Mobile_screenshot%20%286%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%287%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%288%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%289%29.PNG" width="150"> |
-| Metadata | Authentication | User management | Backup & Restore |
-| <img src="screenshots/Mobile_screenshot%20%2810%29.PNG" width="150"> | <img src="screenshots/Mobile_screenshot%20%2811%29.PNG" width="150"> | <img src="screenshots/mobile_collection.jpeg" width="150"> | |
-| Logfiles | Advanced | Collection | |
+DiscVault Core in this repository is the server, the web app, the MCP server and the plugin
+runtime. The iPhone, iPad and Android apps are separate apps, and the marketing website
+<https://discvault.eu> lives in its own repository. Developing and running from source:
+[`app/README.md`](app/README.md).
 
-## Install DiscVault 26 Beta
+## Stable and beta
 
-Use the beta channel to try DiscVault 26 while it is still being finalized.
-Create a backup before moving an existing library between stable and beta.
-Generate `JWT_SECRET` once, store it securely, and reuse the same value for every
-container recreation:
+| | Stable | Beta |
+|---|---|---|
+| Branch | `main` | `release/v26-beta` |
+| Image | `ghcr.io/helmerznl/discvault:latest` (also `:stable`, `:v26`, and `:v26.X.Y` per release) | `ghcr.io/helmerznl/discvault:beta` (also `:v26-beta`) |
+| GitHub release | `v26.X.Y` | none: every merge builds a new image |
 
-```bash
-export JWT_SECRET="$(openssl rand -base64 48)"
-```
+Every change lands in `release/v26-beta` first, and reaches `main` through a deliberate
+promotion. To try the beta, use the `:beta` image with its own data folders, and create a backup
+before moving an existing library between stable and beta. Image references are lowercase: GitHub
+shows the repository as `helmerzNL/DiscVault`, but Docker pulls `ghcr.io/helmerznl/discvault`.
+The branch and image model in full: [`docs/BRANCHING.md`](docs/BRANCHING.md).
 
-```bash
-docker run -d \
-  --name discvault \
-  -p 6080:80 \
-  -p 6090:6090 \
-  -e TZ=Europe/Amsterdam \
-  -e RP_ID=localhost \
-  -e RP_ORIGIN=http://localhost:6080 \
-  -e JWT_SECRET="$JWT_SECRET" \
-  -v /mnt/user/appdata/discvault:/data \
-  ghcr.io/helmerznl/discvault:beta
-```
+## Contributing
 
-Open: `http://localhost:6080`
-
-For a reverse-proxy production-like beta host, set passkey values to the public
-hostname:
-
-```text
-RP_ID=discvault.example.com
-RP_ORIGIN=https://discvault.example.com
-JWT_SECRET=<stable value generated with: openssl rand -base64 48>
-```
-
-`JWT_SECRET` is required for every deployment and must remain unchanged across
-container restarts. DiscVault stops during startup when it is missing rather than
-deriving a predictable value from the database configuration.
-
-### Optional password + TOTP authentication
-
-Passkeys remain the preferred sign-in method. To expose Legacy password
-authentication, set `LEGACY_AUTH_ENABLED=true`. Existing installations must then
-enable password login in
-**Users & roles** and confirm the warning with a fresh passkey assertion.
-
-On a completely fresh installation (no users or credentials), the setup wizard
-may instead create the first Owner with a 15+ character password and mandatory
-TOTP. This no-passkey bootstrap is atomic and single-use. TOTP secrets and
-recovery codes are never included in backups; restored MFA-enabled password
-users are prompted to enroll TOTP again.
-
-## Install DiscVault 26 Production / Stable
-
-Use the production channel for stable deployments. When DiscVault 26 is promoted
-from beta to production, this is the channel to run.
-Set `JWT_SECRET` to the same securely stored value used by the existing instance.
+Contributions are welcome. Pull requests go to the `release/v26-beta` branch, never to `main`. The
+working conventions for people and AI assistants alike are in [`AGENTS.md`](AGENTS.md). For bugs
+and ideas, open an [issue](https://github.com/helmerzNL/DiscVault/issues/new/choose); for questions,
+use [Discussions](https://github.com/helmerzNL/DiscVault/discussions).
 
 ```bash
-docker run -d \
-  --name discvault \
-  -p 6080:80 \
-  -p 6090:6090 \
-  -e TZ=Europe/Amsterdam \
-  -e RP_ID=localhost \
-  -e RP_ORIGIN=http://localhost:6080 \
-  -e JWT_SECRET="$JWT_SECRET" \
-  -v /mnt/user/appdata/discvault:/data \
-  ghcr.io/helmerznl/discvault:latest
+git config core.hooksPath .githooks
+cd app && cp .env.example .env   # set JWT_SECRET, RP_ID and RP_ORIGIN
+docker compose -f docker-compose.next.yml up -d --build
+cd backend && python -m unittest discover -s tests -t . -p "test_*.py"
 ```
 
-Open: `http://localhost:6080`
+## Privacy and security
 
-Before updating production:
+- Everything is stored on your own server, or on your own device: no account with us, no analytics, no advertising, no tracking.
+- Metadata lookups go to the metadata plugins that are enabled. MovieVault v2, on by default, is reached through an anonymous bridge in DiscVault itself; contributing corrections back to MovieVault is a separate setting that only the owner can change.
+- An instance keeps itself out of search engines and AI training corpora without any configuration: `/robots.txt` disallows every crawler, every response carries `X-Robots-Tag: noindex`, and known crawlers are refused. A reverse proxy in front must pass this through. This is not a security control: an instance that must not be reachable belongs behind authentication, a VPN, or off the public internet. The details: [`docs/search-engines-and-ai-crawlers.md`](docs/search-engines-and-ai-crawlers.md).
+- Report a vulnerability privately, as described in [`SECURITY.md`](.github/SECURITY.md), never in a public issue.
 
-- Create a backup from the admin tools or copy the persistent data directory while the container is stopped.
-- Keep the same `/data` volume mapping so posters, backdrops, uploads, users, passkeys, and settings remain available.
-- Review release notes before moving between beta and production channels.
+## Support DiscVault
 
-## Search engines and AI crawlers
+DiscVault is free. If it is useful to you, a coffee keeps the development going.
 
-A DiscVault instance is a private collection manager, and it keeps itself out of
-search results and out of AI training corpora without any configuration:
-
-- `/robots.txt` disallows every crawler on every path, and names the search
-  engines, AI crawlers, SEO bots and link-preview fetchers individually.
-- Every response carries `X-Robots-Tag: noindex, nofollow, noarchive, nosnippet,
-  noimageindex`, and every rendered page repeats it as a `<meta name="robots">`
-  tag — this is the part that clears an instance already in an index, since a
-  `Disallow` alone stops a crawler from ever seeing the `noindex`.
-- Known crawler user agents are refused with `403`. `/robots.txt` and
-  `/api/next/health` always answer, so container health checks and uptime
-  monitors are unaffected.
-
-Set `DISCVAULT_BLOCK_CRAWLERS=false` only if you deliberately want an instance to
-be findable. Nothing has to be misconfigured for the opposite to happen: a
-reachable host with a public DNS record gets crawled on its own, which is how two
-self-hosted instances ended up in Google.
-
-All three layers are served by DiscVault itself, so a reverse proxy in front of it
-must pass them through: a proxy that answers `/robots.txt` from its own
-configuration, or strips response headers, replaces DiscVault's answer with its
-own. Cloudflare's own "Block AI bots" setting is complementary, not a substitute —
-it never sees a request that does not go through Cloudflare.
-
-None of this is a security control — a user agent is self-reported, so a scraper
-that wants in can simply claim to be a browser. An instance that must not be
-*reachable* still belongs behind authentication, a VPN, or off the public
-internet.
-
-## Install the standalone MovieVault v2 plugin
-
-DiscVault `26.4.44` and newer provide the local anonymous synchronization
-bridge used by the separately released `movievault_v2` plugin. Download the
-plugin ZIP and checksum from
-[helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins),
-verify the SHA-256 checksum, and extract its `movievault_v2/` root folder into
-`DISCVAULT_PLUGIN_INSTALL_DIR` (normally `/data/plugins` in the persistent
-volume).
-
-Restart DiscVault or refresh its plugin registry. The plugin is **enabled by
-default** and is DiscVault's highest-priority metadata source (order 5, above
-every other bundled source including `tmdb` at 10). DiscVault queues the first
-synchronization automatically, and normal barcode, title, release, and box-set
-queries then use the derived PostgreSQL index.
-
-Two settings are **enforced by DiscVault and not editable in the plugin-settings
-UI**:
-
-- **Endpoint.** DiscVault always uses the enforced origin
-  `https://movies2.vaultstack.eu`. Self-hosted operators who need a different
-  instance can override it out-of-band with the `MOVIEVAULT_V2_ORIGIN`
-  environment variable (an invalid or empty value falls back to the default).
-- **Anonymous bucket fallback.** Always on. It is what resolves a disc the
-  locally synced index does not carry yet, so a barcode lookup without it
-  silently misses every title MovieVault has not distributed into this
-  instance's index. Override out-of-band with
-  `MOVIEVAULT_V2_BUCKET_FALLBACK=0` only if you have a reason to. The fallback
-  applies to barcode and box-set lookups; title queries cannot use it, because
-  buckets are keyed by the hash of the EAN.
-
-`movievault_26` has been **removed from DiscVault and uninstalled** from
-existing installations. It was DiscVault's only `metadata_receiver`, so the v1
-receiver route that contributed back to MovieVault is gone with it, along with
-its stored connection (instance keypair, API tokens, handshake state) and the
-`MOVIEVAULT_SEARCH_URL` / `MOVIEVAULT_INGEST_URL` /
-`MOVIEVAULT_DISCVAULT_HANDSHAKE_SECRET` / `MOVIEVAULT_SHARING_MODE` settings
-that configured it. What continues to work is the separate `movievault_v2`
-release-contribution and field-correction path, gated by
-`movievault_v2_contribution_enabled` in App Admin — that one is untouched.
-
-DiscVault `26.4.57` adds negotiated `distribution-3` support. The matching
-deterministic `movievault_v2` feature package (currently 1.5.0) ships as a
-bundled default plugin and is also available under `dist/plugins/` for staged
-installation. Older plugins continue to use `distribution-2`; v3 is selected
-only when both the plugin manifest and core declare support.
-
-DiscVault no longer bundles or distributes a local `bluray_com` metadata
-provider. Blu-ray.com release-detail fallback is owned by MovieVault v2 and is
-reached only through the standalone `movievault_v2` plugin and DiscVault's
-anonymous core bridge. Existing installations must disable and uninstall the
-old `bluray_com` metadata provider before enabling this route. The separate
-`import_bluray_com` collection-import plugin remains available and unchanged.
-
-DiscVault `26.4.61` adds core consumer support for `distribution-4` (a
-strict `distribution-3` superset that adds a required-nullable primary
-`poster` on release and box-set upserts, with bounded anonymous background
-caching and authenticated local poster URLs). Distribution-4 is negotiated
-only when both the installed plugin manifest and DiscVault core declare
-support, so it stays **inactive by default** until the matching
-`movievault_v2` plugin release advertises `distribution-4` in its
-`distributionContractRange`; that plugin change ships separately from
-[helmerzNL/DiscVault-Plugins](https://github.com/helmerzNL/DiscVault-Plugins)
-and is not part of this repository. Existing `distribution-2`/`distribution-3`
-installations are unaffected.
-
-DiscVault `26.5.10` adds a bounded, anonymous `release-technical-1` bridge for
-the existing barcode scanner and manual barcode entry. Matching
-`movievault_v2` plugin releases keep this technical fallback disabled by
-default. When an operator enables it, DiscVault still checks the synchronized
-local index and optional hash bucket first. Only a genuine miss sends the
-normalized barcode and bounded release hints to MovieVault; no account,
-instance, collection, contribution credential, cookie, or client address is
-sent. Pending results are polled only by their opaque resolution ID. External
-results remain visibly unreviewed and require confirmation.
-
-The same DiscVault server-side bridge is used by PWA, Android, and iOS clients.
-Client scanners only submit a barcode to DiscVault and never contact
-MovieVault or a metadata provider directly.
-
-## Repository Structure
-
-- `app/` - Main application code (backend, frontend, mcp-server, deployment files)
-- `.github/workflows/` - CI/CD workflows
-
-The marketing website (https://discvault.eu) lives in its own repository:
-[helmerzNL/DiscVault.EU](https://github.com/helmerzNL/DiscVault.EU).
+<a href="https://buymeacoffee.com/flux76"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy me a coffee" height="40"></a>
+<a href="https://ko-fi.com/flux76"><img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="Support me on Ko-fi" height="40"></a>
 
 ## License
 
-MIT
+[MIT](LICENSE) © 2026 Helmer Zandbergen
+
+---
+
+<div align="center">
+<sub>Made with ❤️ in the Netherlands by <a href="https://flux76.com">Flux76</a></sub>
+</div>
