@@ -156,6 +156,23 @@ class NormalizeSeriesTests(unittest.TestCase):
         path, params = calls[0]
         self.assertEqual(path, "/tv/1399")
         self.assertIn("images", params["append_to_response"])
+        # TheTVDB's id rides along on the same call (§7r).
+        self.assertIn("external_ids", params["append_to_response"])
+
+    def test_the_tvdb_id_tmdb_names_is_reported_under_the_hosts_type(self):
+        """The host files it on a series that has none (App-Guidance
+        media-type-and-series-hierarchy §7r)."""
+        result = tmdb._normalize_series(
+            {"id": 1399, "external_ids": {"tvdb_id": 121361, "imdb_id": "tt0944947"}}
+        )
+        self.assertEqual(result["seriesIdentifiers"], {"tvdb": "121361", "imdb": "tt0944947"})
+
+    def test_an_absent_or_unusable_external_id_is_not_an_id(self):
+        for external in ({}, {"tvdb_id": None}, {"tvdb_id": 0}, {"tvdb_id": True}, {"tvdb_id": "abc"}):
+            with self.subTest(external=external):
+                result = tmdb._normalize_series({"id": 1399, "external_ids": external})
+                self.assertNotIn("tvdb", result["seriesIdentifiers"])
+        self.assertEqual(tmdb._normalize_series({"id": 1399})["seriesIdentifiers"], {})
 
     def test_an_empty_payload_yields_empty_strings_not_none(self):
         """The caller writes these into text columns and skips empties, so `""`
@@ -164,6 +181,39 @@ class NormalizeSeriesTests(unittest.TestCase):
         self.assertEqual(result["series"]["overview"], "")
         self.assertEqual(result["series"]["title"], "")
         self.assertEqual(result["seasons"], [])
+
+
+class ProviderSeriesPayloadIdentifiersTests(unittest.TestCase):
+    """A series block may state several ids; every one of them travels
+    (App-Guidance media-type-and-series-hierarchy §7r)."""
+
+    def test_both_ids_are_returned_television_first(self):
+        payload = provider_series_payload(
+            {"provider": "movievault_v2", "title": "Show", "tvdbId": "121361", "tmdbTvId": "1399"}
+        )
+        self.assertEqual(
+            payload["identifiers"],
+            [
+                {"identifier_type": "tmdb_tv", "identifier": "1399"},
+                {"identifier_type": "tvdb", "identifier": "121361"},
+            ],
+        )
+        self.assertEqual((payload["identifier_type"], payload["identifier"]), ("tmdb_tv", "1399"))
+
+    def test_a_tvdb_id_alone_is_the_primary(self):
+        payload = provider_series_payload(
+            {"provider": "movievault_v2", "title": "Show", "tvdbId": "121361"}
+        )
+        self.assertEqual((payload["identifier_type"], payload["identifier"]), ("tvdb", "121361"))
+
+    def test_a_named_identifier_in_its_own_namespace_still_works(self):
+        payload = provider_series_payload(
+            {"providerId": "tvdb", "title": "Show", "identifier": "121361", "identifierType": "tvdb"}
+        )
+        self.assertEqual(payload["identifiers"], [{"identifier_type": "tvdb", "identifier": "121361"}])
+
+    def test_no_id_at_all_is_no_series(self):
+        self.assertIsNone(provider_series_payload({"provider": "movievault_v2", "title": "Show"}))
 
 
 class SeriesDetailsEntrypointTests(unittest.TestCase):
@@ -359,6 +409,166 @@ class LookupExternalSeriesIdTests(unittest.TestCase):
             )
         finally:
             tmdb._request = original
+
+
+
+def _show_payload(**overrides):
+    """What `/tv/4613` answers with everything `show_details` appends."""
+    data = {
+        "id": 4613,
+        "name": "Band of Brothers",
+        "original_name": "Band of Brothers",
+        "overview": "Easy Company, from Toccoa to Berchtesgaden.",
+        "first_air_date": "2001-09-09",
+        "vote_average": 8.6,
+        "vote_count": 4321,
+        "episode_run_time": [60],
+        "genres": [{"id": 18, "name": "Drama"}, {"id": 10768, "name": "War & Politics"}],
+        "production_companies": [{"name": "DreamWorks Television"}, {"name": "Playtone"}],
+        "origin_country": ["US"],
+        "original_language": "en",
+        "poster_path": "/bob.jpg",
+        "external_ids": {"imdb_id": "tt0185906"},
+        "content_ratings": {"results": [{"iso_3166_1": "US", "rating": "TV-MA"}]},
+        "aggregate_credits": {
+            "cast": [
+                {"id": 1, "name": "Damian Lewis", "roles": [{"character": "Richard Winters"}]},
+                {"id": 2, "name": "Ron Livingston", "roles": [{"character": "Lewis Nixon"}]},
+            ],
+            "crew": [
+                {"id": 10, "name": "David Frankel", "jobs": [{"job": "Director", "episode_count": 2}]},
+                {"id": 11, "name": "Tom Hanks", "jobs": [{"job": "Director", "episode_count": 1}]},
+            ],
+        },
+        "translations": {
+            "translations": [
+                {"iso_639_1": "nl", "iso_3166_1": "NL", "data": {"name": "Band of Brothers", "overview": "Easy Company."}},
+            ]
+        },
+    }
+    data.update(overrides)
+    return data
+
+
+class ShowDetailsTests(unittest.TestCase):
+    """A show's title record, described from the television namespace (#826).
+
+    The refresh of a confirmed show no longer asks the film namespace, and until
+    this entrypoint nothing else described the title record at all: the series
+    path fills the *series* record, in a shape the title merge cannot read.
+    """
+
+    def _call(self, payload, responses):
+        paths = []
+
+        def fake_request(context, path, **params):
+            paths.append(path)
+            return responses.get(path)
+
+        def fake_optional(context, path, **params):
+            paths.append(path)
+            return responses.get(path)
+
+        original = (tmdb._request, tmdb._request_optional)
+        tmdb._request, tmdb._request_optional = fake_request, fake_optional
+        try:
+            return tmdb.show_details(payload, {}), paths
+        finally:
+            tmdb._request, tmdb._request_optional = original
+
+    def test_a_series_id_is_described_from_the_television_namespace(self):
+        result, paths = self._call(
+            {"seriesIdentifiers": {"tmdb_tv": "4613"}},
+            {"/tv/4613": _show_payload()},
+        )
+        self.assertEqual(paths, ["/tv/4613"])
+        self.assertEqual(result["status"], "hit")
+        self.assertEqual(result["sourceRef"], "tmdb:tv:4613")
+        self.assertEqual(result["movie"]["overview"], "Easy Company, from Toccoa to Berchtesgaden.")
+        self.assertEqual(result["movie"]["rating"], "8.6")
+        self.assertEqual(result["movie"]["ratingVotes"], 4321)
+        self.assertEqual(result["movie"]["studios"], "DreamWorks Television, Playtone")
+        self.assertEqual(result["movie"]["director"], "David Frankel, Tom Hanks")
+        self.assertEqual(result["movie"]["audienceRating"], "TV-MA")
+        self.assertEqual(result["movie"]["posterUrl"], "https://image.tmdb.org/t/p/original/bob.jpg")
+        self.assertEqual(result["credits"][0]["character"], "Richard Winters")
+        self.assertEqual(result["localizations"][0]["title"], "Band of Brothers")
+        self.assertEqual(result["imdbId"], "tt0185906")
+
+    def test_the_television_id_is_never_stated_as_a_film_id(self):
+        """`tmdbId` is the film id on every other answer and is filed as
+        `tmdb`/`movie_id`. TMDB's 4613 is also the film *Scorched*."""
+        result, _ = self._call({"tmdbTvId": "4613"}, {"/tv/4613": _show_payload()})
+        self.assertNotIn("tmdbId", result)
+        self.assertEqual(result["tmdbTvId"], 4613)
+
+    def test_an_episode_length_is_not_offered_as_the_disc_runtime(self):
+        result, _ = self._call({"tmdbTvId": "4613"}, {"/tv/4613": _show_payload()})
+        self.assertNotIn("runtimeMinutes", result["movie"])
+
+    def test_television_genres_land_in_the_film_catalogue(self):
+        result, _ = self._call(
+            {"tmdbTvId": "4613"},
+            {"/tv/4613": _show_payload(genres=[
+                {"id": 18}, {"id": 10768}, {"id": 10759}, {"id": 10765}, {"id": 10764},
+            ])},
+        )
+        # Drama passes through; War & Politics -> War; Action & Adventure ->
+        # Action, Adventure; Sci-Fi & Fantasy -> Science Fiction, Fantasy;
+        # Reality has no film genre and is dropped.
+        self.assertEqual(result["genreIds"], [18, 10752, 28, 12, 878, 14])
+
+    def test_an_imdb_id_is_resolved_to_a_television_result_only(self):
+        result, paths = self._call(
+            {"imdbId": "tt0795176"},
+            {
+                "/find/tt0795176": {"movie_results": [{"id": 54805}], "tv_results": [{"id": 1044}]},
+                "/tv/1044": _show_payload(id=1044, name="Planet Earth"),
+            },
+        )
+        self.assertEqual(paths, ["/find/tt0795176", "/tv/1044"])
+        self.assertEqual(result["movie"]["title"], "Planet Earth")
+
+    def test_a_film_imdb_id_finds_nothing_rather_than_the_film(self):
+        """A contaminated record may carry the film's IMDb id. Reading
+        `movie_results` here would describe the show with the film again."""
+        result, paths = self._call(
+            {"imdbId": "tt0286947"},
+            {"/find/tt0286947": {"movie_results": [{"id": 4613}], "tv_results": []}},
+        )
+        self.assertEqual(result, {"status": "miss", "provider": "tmdb"})
+        self.assertEqual(paths, ["/find/tt0286947"])
+
+    def test_a_film_id_or_a_title_is_never_used(self):
+        """The two doors #826 came through."""
+        result, paths = self._call(
+            {"tmdbId": "4613", "title": "Band of Brothers", "year": "2001"},
+            {"/movie/4613": {"id": 4613, "title": "Scorched"}},
+        )
+        self.assertEqual(result, {"status": "miss", "provider": "tmdb"})
+        self.assertEqual(paths, [])
+
+    def test_the_series_id_wins_over_an_imdb_id(self):
+        _, paths = self._call(
+            {"seriesIdentifiers": {"tmdb_tv": "4613"}, "imdbId": "tt0185906"},
+            {"/tv/4613": _show_payload()},
+        )
+        self.assertEqual(paths, ["/tv/4613"])
+
+    def test_a_withdrawn_series_is_a_miss(self):
+        result, _ = self._call({"tmdbTvId": "4613"}, {})
+        self.assertEqual(result, {"status": "miss", "provider": "tmdb"})
+
+    def test_the_manifest_declares_it_and_the_runtime_may_run_it(self):
+        import json
+
+        from app.backend import next_plugin_runtime
+
+        manifest_path = os.path.join(os.path.dirname(tmdb.__file__), "manifest.json")
+        with open(manifest_path, encoding="utf-8") as handle:
+            manifest = json.load(handle)
+        self.assertIn("show_details", manifest["capabilities"])
+        self.assertIn("show_details", next_plugin_runtime.PLUGIN_ENTRYPOINTS)
 
 
 if __name__ == "__main__":

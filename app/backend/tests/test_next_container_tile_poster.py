@@ -13,6 +13,13 @@ source-text assertions, the idiom the other inline-script tests here use: the
 PWA is one large inline `<script>` with no JS test harness in this repository,
 so what can be pinned is that both tile renderers go through the resolver and
 that its rungs stay in the order the reasoning requires.
+
+The collection-items renderers were a fourth surface that never learned. They
+resolved the cover inline from a container's own value and nothing else, so a
+box set filed in a collection rendered the type label while its library tile
+showed a member film's poster -- the same two-surfaces-disagree defect, reported
+again on #811 after the own-artwork half had shipped. Going through the resolver
+is what stops a fifth surface being written the same way.
 """
 
 from __future__ import annotations
@@ -78,6 +85,71 @@ class ContainerTilePosterTests(unittest.TestCase):
             "usableImage(item.container?.poster_url || item.container?.backdrop_url)",
             self.source,
         )
+
+    def test_the_collection_item_tiles_use_the_resolver(self):
+        """The grid card and the list row inside a collection's item list. Both
+        read `item.poster_url` and nothing else before #811's second half."""
+        self.assertEqual(
+            self.source.count("const poster = containerMemberItemPosterUrl(item);"),
+            2,
+        )
+
+    def test_the_collection_item_adapter_names_the_container_id(self):
+        """A `collection_item_entities` row calls the container `entity_id`;
+        the resolver's member and child rungs read `container.id`, so without
+        the rename those two rungs silently answer for no container at all."""
+        match = re.search(
+            r"function containerMemberItemPosterUrl\(item\) \{(.*?)\n    \}",
+            self.source,
+            re.S,
+        )
+        self.assertIsNotNone(match, "containerMemberItemPosterUrl is missing")
+        body = match.group(1)
+        self.assertIn("containerTilePosterUrl(", body)
+        self.assertIn("id: item?.entity_id", body)
+
+    def test_no_collection_item_renderer_resolves_the_cover_inline(self):
+        """The shape that caused it: a container's own value, read inline, with
+        no borrowed rung behind it -- and `usableImage(a || b)` on top of that,
+        which settles on a truthy-but-unusable `a`."""
+        self.assertNotIn(
+            "usableImage(item.poster_url || metadata.poster_url",
+            self.source,
+        )
+
+    def test_the_poster_file_key_survived_the_move(self):
+        """`metadata.poster_file` was read by the collection-items renderers and
+        by nothing else. Routing them through the resolver would have taken a
+        working cover away from the very surface the fix is about."""
+        self.assertIn("usableImage(metadata.poster_file)", self.resolver)
+        own = self.resolver.index("usableImage(container?.poster_url)")
+        poster_file = self.resolver.index("usableImage(metadata.poster_file)")
+        member = self.resolver.index("usableImage(container?.member_poster_url)")
+        self.assertLess(own, poster_file)
+        self.assertLess(poster_file, member)
+
+    def test_the_server_resolves_the_borrowed_cover_for_a_collections_items(self):
+        """The third query to grow the join. The client rung is only as good as
+        the column behind it, and a collection's item list is served by its own
+        statement."""
+        with open(
+            os.path.join(os.path.dirname(NEXT_VIEWS_UI_PATH), "next_app.py"),
+            encoding="utf-8",
+        ) as handle:
+            app_source = handle.read()
+        match = re.search(
+            r"def collection_item_entities\(.*?\n    return sorted\(items",
+            app_source,
+            re.S,
+        )
+        self.assertIsNotNone(match, "collection_item_entities is missing")
+        body = match.group(0)
+        self.assertIn("container_member_poster_lateral(conn, actor)", body)
+        self.assertIn("CONTAINER_MEMBER_POSTER_COLUMNS", body)
+        self.assertIn("fold_container_member_poster(row)", body)
+        # The lateral's parameters are bound before the WHERE clause's, because
+        # the join it emits is written above them.
+        self.assertIn("(*member_poster_params, container_id, *visibility_params)", body)
 
     def test_the_resolver_is_declared_once(self):
         self.assertEqual(self.source.count("function containerTilePosterUrl("), 1)

@@ -50,7 +50,8 @@ try:
     from .next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from .next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
     from .next_series import ensure_seasons, ensure_series, provider_series_payload
-    from .next_series import series_id_for_identifier
+    from .next_series import series_id_for_identifiers
+    from .next_series import TVDB_IDENTIFIER_TYPE, add_missing_series_identifiers
 except ImportError:  # pragma: no cover - supports direct module execution
     from dedup_identity import MOVIEVAULT_IDENTIFIER_PROVIDERS
     from dedup_identity import extract_identity_identifiers
@@ -70,7 +71,8 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_plugin_runtime import plugin_config_payload as resolved_plugin_config_payload
     from next_series import SEASON_TEXT_LIMITS, SERIES_IDENTIFIER_TYPE, SERIES_TEXT_LIMITS
     from next_series import ensure_seasons, ensure_series, provider_series_payload
-    from next_series import series_id_for_identifier
+    from next_series import series_id_for_identifiers
+    from next_series import TVDB_IDENTIFIER_TYPE, add_missing_series_identifiers
 
 
 logger = logging.getLogger(__name__)
@@ -1535,6 +1537,13 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
     movie_row = dict(movie)
     movie_row["genres"] = current_genres
     box_sets = [item for item in containers if item.get("container_type") == "box_set"]
+    # A show's television id lives on its series, not on the disc: it names the
+    # show, which every release of it shares (`series_identifiers`, migration
+    # 063). Read only for a linked series; a disc's own `tmdb` row is the film
+    # namespace and is never consulted for this (#826).
+    series_identifiers = (
+        series_identifier_map(conn, movie["series_id"]) if movie.get("series_id") else {}
+    )
     query = {
         "movieId": str(movie_id),
         "title": movie.get("original_title") or movie.get("title") or "",
@@ -1544,6 +1553,17 @@ def movie_lookup_context(conn, movie_id: UUID) -> dict[str, Any]:
         "externalBarcode": external_metadata_barcode(movie.get("barcode")),
         "format": movie.get("format") or "",
         "normalizedFormat": normalize_media_format(movie.get("format")),
+        # The stored classification, which decides whether a source's *film*
+        # namespace may be asked about this record at all. It was selected
+        # above for the merge's demotion rule and stopped there, so the query
+        # that reaches the sources described a confirmed television release in
+        # exactly the same words as a film -- see `query_is_confirmed_series`.
+        "mediaType": normalize_media_type(movie.get("media_type")) or "",
+        # The series' TMDB television id, when one is known. Kept apart from
+        # `tmdbId` below, which is the film namespace: the two spaces overlap
+        # (TMDB's 4613 is a series and an unrelated film), so the key says which
+        # space the number came from. `show_details` reads this one.
+        "tmdbTvId": series_identifiers.get(SERIES_IDENTIFIER_TYPE, ""),
         "tmdbId": identifiers.get("tmdbId") or metadata.get("tmdb_id") or metadata.get("tmdbId") or "",
         "imdbId": identifiers.get("imdbId") or metadata.get("imdb_id") or metadata.get("imdbId") or "",
         "movieVaultId": (
@@ -1587,6 +1607,9 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "externalBarcode": external_metadata_barcode(barcode),
         "format": media_format,
         "normalizedFormat": normalize_media_format(media_format),
+        "mediaType": normalize_media_type(
+            payload.get("mediaType") or payload.get("media_type") or payload.get("workType")
+        ) or "",
         "tmdbId": clean_text(payload.get("tmdbId") or payload.get("tmdb_id")),
         "imdbId": clean_text(payload.get("imdbId") or payload.get("imdb_id")),
         "movieVaultId": clean_text(
@@ -1610,6 +1633,71 @@ def query_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def query_is_confirmed_series(query: dict[str, Any]) -> bool:
+    """True when this record is already known to be a television release.
+
+    The stored ``media_type`` is not a hint. Nothing infers it -- a refresh may
+    promote a film to a SHOW and may never demote one
+    (``should_apply_media_type``) -- so a SHOW on the row was stated, either by
+    a source that recognised the show or by the person who corrected it by
+    hand. That makes it the one thing in the query that can settle a namespace.
+
+    It has to, because an id cannot. An id is issued *by* a namespace and a
+    bare number does not say which: TMDB's 4613 is the series *Band of
+    Brothers* and the film *Scorched*, 1044 is *Planet Earth* and a 1974 film
+    of the same name is 54805. A film title search is no safer -- a series and
+    an unrelated film share a title often enough that the fallback resolved
+    one for the other. So the film namespace was asked about confirmed shows
+    with whatever number the row happened to hold and whatever title it
+    happened to carry, and the answer it gave -- another work's synopsis,
+    runtime, rating, cast, genres, studios and artwork -- was merged onto the
+    show and shown as its current metadata (#826).
+
+    The demotion guard did not catch it: it protects the *classification*, so
+    the record stayed a SHOW while describing a film, which is the shape that
+    made the report hard to read. Provenance needs its own rule, and this is
+    it.
+
+    Only the film namespace is withheld. A barcode lookup, technical specs and
+    box-set detection are not keyed to a namespace and still run, and the
+    title record of the show is described from the television namespace by
+    TMDB's ``show_details`` (see ``show_details_payload``), where the id is a
+    ``tmdb_tv`` one and cannot be confused with a film's.
+
+    ``refresh_series_metadata`` is a different act: it describes the *series*
+    record -- its own overview, seasons and artwork -- and never the title
+    record a disc is filed under. Before ``show_details`` existed, nothing
+    described that title record at all once the film namespace was withheld.
+    """
+    return normalize_media_type(query.get("mediaType")) == MEDIA_TYPE_SHOW
+
+
+SHOW_DETAILS_CAPABILITY = "show_details"
+
+
+def show_details_payload(query: dict[str, Any]) -> dict[str, Any]:
+    """What TMDB's ``show_details`` is asked about a confirmed show, or {}.
+
+    Only identity that cannot name a film travels:
+
+    * ``tmdbTvId`` -- the series' own television id;
+    * ``imdbId`` -- an IMDb id names exactly one title of either kind, and the
+      plugin resolves it through TMDB's ``/find`` reading television results
+      only, so a film's IMDb id there finds nothing rather than the film.
+
+    ``tmdbId`` is left out on purpose. On a title record it is the film
+    namespace, and a number from it read as a series is #826 again. So is a
+    title, which is why none is sent: with neither id, this is {} and nothing is
+    asked.
+    """
+    payload = {
+        "tmdbTvId": clean_text(query.get("tmdbTvId")),
+        "imdbId": clean_text(query.get("imdbId")),
+    }
+    payload = {key: value for key, value in payload.items() if value}
+    return payload
+
+
 def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list[dict[str, Any]]:
     capabilities = set(plugin.get("capabilities") or (plugin.get("manifest") or {}).get("capabilities") or [])
     plan: list[dict[str, Any]] = []
@@ -1618,6 +1706,10 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
     fallback = clean_text(query.get("fallbackTitle"))
     tmdb_id = clean_text(query.get("tmdbId"))
     imdb_id = clean_text(query.get("imdbId"))
+    # A preview is a person choosing and asks both namespaces deliberately
+    # (see the branch below); this governs the refresh of a stored record,
+    # where nobody is there to tell a film from a show.
+    film_namespace = not query_is_confirmed_series(query)
 
     def add(entrypoint: str, payload: dict[str, Any]) -> None:
         if entrypoint in capabilities and not any(item["entrypoint"] == entrypoint for item in plan):
@@ -1681,12 +1773,15 @@ def plugin_execution_plan(plugin: dict[str, Any], query: dict[str, Any]) -> list
             return plan
     if external_barcode:
         add("search_barcode", {**base_payload, "barcode": external_barcode})
-    if tmdb_id or imdb_id:
+    if (tmdb_id or imdb_id) and film_namespace:
         add("lookup_external_id", base_payload)
     has_external_lookup = bool(tmdb_id or imdb_id) and "lookup_external_id" in capabilities
     if "technical_specs" in capabilities and (title or external_barcode):
         add("technical_specs", base_payload)
-    elif (title or external_barcode) and not has_external_lookup:
+    elif (title or external_barcode) and not has_external_lookup and film_namespace:
+        # Without `film_namespace` this is the second half of #826: a show with
+        # no film id of its own still reached `movie_details`, which falls back
+        # to a film title search, and *Planet Earth* came back as the 1974 film.
         add("movie_details", base_payload)
     if title and "movie_details" not in capabilities:
         add("search_title", base_payload)
@@ -1792,6 +1887,23 @@ def _identification_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
             for key, value in identifiers.items()
             if key in {"tmdb", "tmdbId", "tmdb_id", "imdb", "imdbId", "imdb_id"} and value_present(value)
         }
+    # What makes a MovieVault candidate a series: its stated type and the series
+    # block keyed by the TMDB television id. The PWA card already reads both and
+    # hands them to the import (`selected_import_movie_candidate_from_body`), but
+    # they were stripped here, so a series picked from a title search -- or from
+    # a barcode scan with a title filled in -- was added as a MOVIE with no series.
+    # Only identity sources reach this function, so only MovieVault's survive.
+    # Keyed by either series id: a TMDB television id or TheTVDB's (§7r).
+    series = candidate.get("series")
+    if isinstance(series, dict) and (
+        clean_text(series.get("tmdbTvId")) or clean_text(series.get("tvdbId"))
+    ):
+        sanitized["series"] = dict(series)
+    for source in sources:
+        media_type = normalize_media_type(source.get("mediaType") or source.get("media_type"))
+        if media_type:
+            sanitized["mediaType"] = media_type
+            break
     return sanitized
 
 
@@ -1801,6 +1913,14 @@ def metadata_source_policy_result(result: dict[str, Any]) -> dict[str, Any]:
     plugin_id = str(result.get("pluginId") or "")
     movie_updates = dict(result.get("movieUpdates") or {})
     metadata_updates = dict(result.get("metadataUpdates") or {})
+
+    # Series identity is identity, and MovieVault owns identity: its series
+    # block is keyed by a TMDB television id the catalogue holds, not one a
+    # source guessed. Every other source's is dropped. A person choosing a
+    # series in the Add picker is a different path
+    # (`merge_selected_import_movie_candidate`) and is not affected.
+    if not is_movievault_identity_source(plugin_id):
+        constrained["series"] = None
 
     if plugin_id == TMDB_PLUGIN_ID:
         constrained["movieUpdates"] = {
@@ -3312,6 +3432,15 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         "boxSetEvidence": box_set_evidence,
         "boxSetProposal": box_set_proposal,
         "boxSetProposals": box_set_proposals,
+        # The series this disc is an edition of, as the source stated it. The
+        # merge has always read `series` off each result to pick one for
+        # `apply_movie_series_link` -- but it was never carried across from the
+        # plugin's answer, so the MovieVault `_series` block was dropped here on
+        # every lookup, refresh and barcode add: a television release became a
+        # SHOW and was never given its series, and a second release of the same
+        # show had nothing to be linked to. Who may state one is
+        # `metadata_source_policy_result`'s decision, not this function's.
+        "series": result.get("series") if isinstance(result.get("series"), dict) else None,
         "raw": result,
     }
 
@@ -3887,13 +4016,21 @@ def merge_metadata_results(
             if accepted_identifier:
                 identifiers[provider] = identifier
         candidate_series = result.get("series")
-        if isinstance(candidate_series, dict) and clean_text(candidate_series.get("tmdbTvId")):
+        # A series is keyed by its TMDB television id, TheTVDB's id, or both
+        # (App-Guidance media-type-and-series-hierarchy §7r); either one is
+        # enough to find or create it.
+        series_key_field = (
+            "tmdbTvId"
+            if isinstance(candidate_series, dict) and clean_text(candidate_series.get("tmdbTvId"))
+            else "tvdbId"
+        )
+        if isinstance(candidate_series, dict) and clean_text(candidate_series.get(series_key_field)):
             accepted_series = series is None
             add_decision_candidate(
                 target="series",
-                field="tmdbTvId",
+                field=series_key_field,
                 result=result,
-                value=clean_text(candidate_series.get("tmdbTvId")) or "",
+                value=clean_text(candidate_series.get(series_key_field)) or "",
                 accepted=accepted_series,
                 reason=(
                     "series identity selected"
@@ -4520,6 +4657,7 @@ CACHEABLE_LOOKUP_ENTRYPOINTS = frozenset(
         "lookup_external_id",
         "movie_details",
         "series_details",
+        "show_details",
         "search_series",
         "lookup_external_series_id",
         "season_episodes",
@@ -5053,6 +5191,43 @@ def run_metadata_source_pipeline(
             "tmdbEnrichment": True,
         }
         executions.append(execution_item)
+
+        def run_tmdb_details(entrypoint: str, payload: dict[str, Any]) -> None:
+            """Ask TMDB one detail entrypoint and merge what it answers.
+
+            One body for the film and the television call, so the two cannot
+            drift in how an answer is normalised, policed or reported.
+            """
+            execution_item["entrypoint"] = entrypoint
+            execution = run_cached_plugin_entrypoint(
+                conn, TMDB_PLUGIN_ID, entrypoint, payload, context, force=force
+            )
+            execution_item.update(
+                {
+                    "status": execution.get("status"),
+                    "state": execution.get("state") or "tmdb_enrichment",
+                    "elapsedMs": execution.get("elapsedMs"),
+                    "error": execution.get("error"),
+                }
+            )
+            if execution.get("status") == "ok":
+                normalized = canonicalize_plugin_result(
+                    TMDB_PLUGIN_ID,
+                    entrypoint,
+                    execution.get("result") or {},
+                )
+                normalized = metadata_source_policy_result(normalized)
+                execution_item["resultStatus"] = normalized.get("status")
+                execution_item["candidateCount"] = len(normalized.get("candidates") or [])
+                execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
+                if normalized.get("status") not in {"miss", "not_found", "needs_configuration"}:
+                    normalized_results.append(normalized)
+                    tmdb_enrichment["state"] = "enriched"
+                else:
+                    tmdb_enrichment["state"] = "no_match"
+            else:
+                tmdb_enrichment["state"] = execution_item.get("state") or "error"
+
         if plugin_requires_config(tmdb_plugin, config, "movie_details"):
             execution_item["state"] = "needs_configuration"
             execution_item["configured"] = False
@@ -5061,6 +5236,27 @@ def run_metadata_source_pipeline(
             if query.get("detectBoxSets") and has_box_set_preview:
                 execution_item["state"] = "box_set_identification"
                 tmdb_enrichment["state"] = "box_set_identification"
+            elif not query.get("previewMode") and query_is_confirmed_series(query):
+                # The refresh of a confirmed show. `movie_details` is the film
+                # namespace by name -- `/movie/{id}` with a film title search
+                # behind it -- and asking it about a television release merged
+                # an unrelated film onto the show (#826), so it is never asked
+                # here. The show is described from the television namespace
+                # instead, by `show_details`, which answers in the shape this
+                # merge reads and establishes identity only from an id: the
+                # series' `tmdb_tv`, or an IMDb id resolved to a television
+                # result. Never the row's `tmdbId` (that is the film namespace)
+                # and never a title.
+                #
+                # Without either id, or on a TMDB plugin older than the
+                # capability, nothing is asked and the state says why.
+                show_payload = show_details_payload(query)
+                if SHOW_DETAILS_CAPABILITY in plugin_capabilities(tmdb_plugin) and show_payload:
+                    tmdb_enrichment["enabled"] = True
+                    run_tmdb_details(SHOW_DETAILS_CAPABILITY, show_payload)
+                else:
+                    execution_item["state"] = "series_identity"
+                    tmdb_enrichment["state"] = "series_identity"
             elif not (
                 enrichment_payload.get("title")
                 or enrichment_payload.get("tmdbId")
@@ -5169,34 +5365,7 @@ def run_metadata_source_pipeline(
                     execution_item["candidateCount"] = preview_candidate_total
                     tmdb_enrichment["state"] = "enriched" if appended else "no_match"
                 else:
-                    execution = run_cached_plugin_entrypoint(
-                        conn, TMDB_PLUGIN_ID, "movie_details", enrichment_payload, context, force=force
-                    )
-                    execution_item.update(
-                        {
-                            "status": execution.get("status"),
-                            "state": execution.get("state") or "tmdb_enrichment",
-                            "elapsedMs": execution.get("elapsedMs"),
-                            "error": execution.get("error"),
-                        }
-                    )
-                    if execution.get("status") == "ok":
-                        normalized = canonicalize_plugin_result(
-                            TMDB_PLUGIN_ID,
-                            "movie_details",
-                            execution.get("result") or {},
-                        )
-                        normalized = metadata_source_policy_result(normalized)
-                        execution_item["resultStatus"] = normalized.get("status")
-                        execution_item["candidateCount"] = len(normalized.get("candidates") or [])
-                        execution_item["normalizedSourceFormat"] = normalized.get("normalizedSourceFormat") or ""
-                        if normalized.get("status") not in {"miss", "not_found", "needs_configuration"}:
-                            normalized_results.append(normalized)
-                            tmdb_enrichment["state"] = "enriched"
-                        else:
-                            tmdb_enrichment["state"] = "no_match"
-                    else:
-                        tmdb_enrichment["state"] = execution_item.get("state") or "error"
+                    run_tmdb_details("movie_details", enrichment_payload)
 
     # Every other source that can answer a typed title. Without this the Add
     # screen's search was TMDB and nothing else: the preview pass above runs only
@@ -6158,22 +6327,36 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         current_series = row["series_id"] if isinstance(row, dict) else row[1]
         if media_type != MEDIA_TYPE_SHOW:
             return None
-        existing_series = series_id_for_identifier(
-            cur,
-            provider_id=payload["provider_id"],
-            identifier=payload["identifier"],
-            identifier_type=payload["identifier_type"],
-        )
+        # Found by any id the source stated -- the TMDB television id first,
+        # then TheTVDB's (App-Guidance media-type-and-series-hierarchy §7r) -- so
+        # a series created under one namespace is the one the other reaches.
+        existing_series = series_id_for_identifiers(cur, payload["identifiers"])
+        if current_series is not None and existing_series != current_series:
+            # Linked to a series none of these ids names. That link is somebody's
+            # decision and is left alone -- and checked before `ensure_series`,
+            # which would otherwise mint a series only to refuse it here, leaving
+            # an empty row behind on every refresh.
+            return None
         series_uuid = ensure_series(
             cur,
             provider_id=payload["provider_id"],
             identifier=payload["identifier"],
             title=payload["title"],
             identifier_type=payload["identifier_type"],
+            identifiers=payload["identifiers"],
         )
-        if current_series is not None and current_series != series_uuid:
-            return None
         season_ids = ensure_seasons(cur, series_uuid, payload["seasons"])
+        # What the disc was linked to before, so the caller can tell a link
+        # that changed something from one that re-stated what was already
+        # there. A refresh re-states the same series on every run; reporting
+        # each of those as a change would churn the sync wire for nothing.
+        cur.execute(
+            "SELECT season_id FROM movie_seasons WHERE movie_id = %s ORDER BY sort_order, season_id",
+            (movie_uuid,),
+        )
+        previous_season_ids = [
+            (row["season_id"] if isinstance(row, dict) else row[0]) for row in cur.fetchall()
+        ]
         cur.execute(
             "UPDATE movies SET series_id = %s WHERE id = %s",
             (series_uuid, movie_uuid),
@@ -6189,7 +6372,15 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         # links off these rows, quietly erase which disc holds what every time a
         # metadata job ran. Nothing in the refresh is about discs, so nothing in
         # it should change them.
-        _prune_movie_seasons(cur, movie_uuid, season_ids)
+        #
+        # And a statement with **no** seasons changes none. The feed omits the
+        # list when nobody has curated it -- it cannot tell "the complete
+        # series" from "not recorded yet", and neither is a reason to drop what
+        # the owner linked -- so an empty list reaching `_prune_movie_seasons`
+        # would delete every season and episode link on the disc, on every
+        # refresh, the moment this link started being reached at all.
+        if season_ids:
+            _prune_movie_seasons(cur, movie_uuid, season_ids)
         for index, season_id in enumerate(season_ids):
             cur.execute(
                 """
@@ -6211,6 +6402,11 @@ def apply_movie_series_link(conn, movie_uuid: UUID, stated: Any) -> dict[str, An
         "seriesId": str(series_uuid),
         "created": current_series is None,
         "seasonCount": len(season_ids),
+        # True when the disc's series or its season links are now different
+        # from before. An empty season statement changes no seasons (see the
+        # prune above), so only a non-empty one is compared.
+        "changed": current_series is None
+        or (bool(season_ids) and list(season_ids) != previous_season_ids),
     }
 
 
@@ -6316,6 +6512,35 @@ def apply_metadata_proposal(
     )
 
     if not changed:
+        # The series link is not a field, so the check above never sees it. A
+        # refresh whose fields all match -- the ordinary case for a disc that
+        # was added before MovieVault knew it was television -- returned here
+        # and never linked the series it had just been told about. The link is
+        # idempotent and keeps its own rules (the SHOW gate, a disc on another
+        # series is left alone, a deleted series is not revived), so it runs
+        # regardless; only a link that actually changed something is a change.
+        applied_series = apply_movie_series_link(conn, movie_uuid, proposal.get("series"))
+        if applied_series and applied_series.get("changed"):
+            revision = record_sync_change(
+                conn,
+                movie_uuid,
+                {
+                    "movieId": str(movie_uuid),
+                    "series": applied_series,
+                    "fieldDecisions": proposal.get("fieldDecisions") or [],
+                },
+            )
+            applied_payload = {"series": applied_series}
+            return {
+                "changed": True,
+                "revision": revision,
+                "applied": applied_payload,
+                "fieldDecisions": metadata_field_decisions_with_write_state(
+                    proposal.get("fieldDecisions") or [],
+                    applied={"changed": True, "applied": applied_payload},
+                    dry_run=False,
+                ),
+            }
         return {
             "changed": False,
             "revision": 0,
@@ -6640,6 +6865,115 @@ def enqueue_series_metadata_refresh(conn, series_id: UUID | str) -> None:
         )
 
 
+# Upper bound on the refreshes one MovieVault sync may queue for discs already
+# in the collection. A catalogue-wide reclassification would otherwise put the
+# whole library on the queue at once; what is left over is picked up by the next
+# sync's comparison only if it changes again, so the cap is generous and the
+# shortfall is logged rather than silent.
+MOVIEVAULT_IDENTITY_REFRESH_LIMIT = 500
+
+
+def queue_movievault_identity_refreshes(
+    conn,
+    release_ids: list[str] | None,
+    *,
+    limit: int = MOVIEVAULT_IDENTITY_REFRESH_LIMIT,
+) -> dict[str, Any]:
+    """Refresh the discs whose MovieVault release changed what it says it is.
+
+    A sync updates the local index and nothing else, so a disc added while
+    MovieVault still called its release a film -- or before it had a TMDB
+    television id, or before its seasons were linked -- stayed that way until
+    somebody refreshed it by hand. The sync now reports which releases changed
+    their work type, television id or seasons
+    (`next_movievault_v2.identity_changed_release_ids`); this queues an ordinary
+    metadata refresh for every live disc that carries one of those release ids,
+    and the refresh applies the type and the series link through the same path
+    an add does.
+
+    A disc that already has a refresh pending or running is skipped rather than
+    queued twice. Best effort, like `enqueue_series_metadata_refresh`: the sync
+    has already succeeded, and a queue that cannot be written must not undo it.
+    """
+    ids = sorted({str(item) for item in (release_ids or []) if str(item)})
+    summary: dict[str, Any] = {
+        "releases": len(ids),
+        "movies": 0,
+        "queued": 0,
+        "alreadyQueued": 0,
+        "capped": False,
+    }
+    if not ids or not table_exists(conn, "background_jobs") or not table_exists(conn, "movie_identifiers"):
+        return summary
+    try:
+        try:
+            from .next_app import create_background_job
+        except ImportError:  # pragma: no cover - supports direct module execution
+            from next_app import create_background_job
+
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT DISTINCT m.id::text AS movie_id,
+                       EXISTS (
+                           SELECT 1 FROM background_jobs j
+                           WHERE j.job_type = %s
+                             AND j.status IN ('pending', 'running')
+                             AND j.payload ->> 'movieId' = m.id::text
+                       ) AS pending
+                FROM movie_identifiers mi
+                JOIN movies m ON m.id = mi.movie_id AND m.deleted_at IS NULL
+                WHERE mi.provider_id = %s
+                  AND mi.identifier_type = 'movie_id'
+                  AND mi.identifier = ANY(%s)
+                ORDER BY 1
+                """,
+                (METADATA_REFRESH_JOB_TYPE, MOVIEVAULT_V2_PLUGIN_ID, ids),
+            )
+            rows = cur.fetchall()
+        summary["movies"] = len(rows)
+        for row in rows:
+            if row["pending"]:
+                summary["alreadyQueued"] += 1
+                continue
+            if summary["queued"] >= limit:
+                summary["capped"] = True
+                break
+            create_background_job(
+                conn,
+                job_type=METADATA_REFRESH_JOB_TYPE,
+                payload={
+                    "movieId": row["movie_id"],
+                    "dryRun": False,
+                    "reason": "movievault_identity_changed",
+                    "source": f"{MOVIEVAULT_V2_PLUGIN_ID}.sync_index",
+                },
+            )
+            summary["queued"] += 1
+    except Exception:
+        logger.warning(
+            "MovieVault identity refreshes could not be queued for %d release(s)",
+            len(ids),
+            exc_info=True,
+        )
+        # Nothing half-queued is kept, and the caller's connection is left
+        # usable rather than in an aborted transaction.
+        try:
+            conn.rollback()
+        except Exception:  # pragma: no cover - a rollback failure has nothing left to undo
+            pass
+        summary["error"] = "queue_unavailable"
+        summary["queued"] = 0
+        return summary
+    if summary["capped"]:
+        logger.warning(
+            "MovieVault identity refreshes capped at %d of %d disc(s)",
+            limit,
+            summary["movies"] - summary["alreadyQueued"],
+        )
+    return summary
+
+
 SERIES_DETAILS_CAPABILITY = "series_details"
 SERIES_SEARCH_CAPABILITY = "search_series"
 
@@ -6902,8 +7236,19 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
     overview_source = ""
     artwork: dict[str, dict[str, Any]] = {}
     seasons: dict[int, dict[str, Any]] = {}
+    identifiers: dict[str, dict[str, str]] = {}
     for plugin_id, result in results:
         stated = result.get("series") if isinstance(result.get("series"), dict) else {}
+        # Other namespaces a source says this series is known by -- TMDB's
+        # `external_ids` names TheTVDB's id. First source wins per namespace,
+        # like everything else here; the refresh files it only on a series
+        # that has none (App-Guidance media-type-and-series-hierarchy §7r).
+        stated_ids = result.get("seriesIdentifiers")
+        if isinstance(stated_ids, dict):
+            for identifier_type in SERIES_FILLABLE_IDENTIFIER_TYPES:
+                value = clean_text(stated_ids.get(identifier_type))
+                if value and value.isdigit() and identifier_type not in identifiers:
+                    identifiers[identifier_type] = {"identifier": value, "source": plugin_id}
         candidate = clean_text(stated.get("overview"))
         if candidate and not overview:
             overview = candidate
@@ -6961,12 +7306,32 @@ def merge_series_details(results: list[tuple[str, dict[str, Any]]]) -> dict[str,
         "overviewSource": overview_source,
         "artwork": artwork,
         "seasons": seasons,
+        "identifiers": identifiers,
     }
+
+
+# The series namespaces a describing source may *add* to a series. Only
+# TheTVDB's: a TMDB television id is what a TMDB source was asked by, and an
+# IMDb id is stored on discs, not on series (§7n).
+SERIES_FILLABLE_IDENTIFIER_TYPES = (TVDB_IDENTIFIER_TYPE,)
 
 
 SEASON_EPISODES_CAPABILITY = "season_episodes"
 
 EPISODE_TEXT_LIMITS = {"title": 400, "overview": 4000, "air_date": 20, "still_url": 1000}
+
+
+def _episode_text(value: Any, field: str) -> str | None:
+    """One text field of a fetched episode, trimmed to its column, or None.
+
+    `clean_text` answers None for nothing, and a source routinely sends nothing:
+    no still or summary for an episode that has not aired, no air date for one
+    only announced. Slicing that answer raised "'NoneType' object is not
+    subscriptable", which failed the whole season fetch -- and with it the
+    Seasons tab, which asks for the episodes the first time it is opened.
+    """
+    text = clean_text(value)
+    return text[: EPISODE_TEXT_LIMITS[field]] if text else None
 
 
 def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
@@ -7064,11 +7429,11 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                     series_uuid,
                     season_uuid,
                     number,
-                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
-                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
-                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    _episode_text(episode.get("title"), "title"),
+                    _episode_text(episode.get("overview"), "overview"),
+                    _episode_text(episode.get("airDate"), "air_date"),
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
-                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
+                    _episode_text(episode.get("stillUrl"), "still_url"),
                 ),
             )
             if cur.rowcount:
@@ -7089,11 +7454,11 @@ def refresh_season_episodes(conn, season_id: UUID | str) -> dict[str, Any]:
                 WHERE season_id = %s AND episode_number = %s AND deleted_at IS NULL
                 """,
                 (
-                    clean_text(episode.get("title"))[: EPISODE_TEXT_LIMITS["title"]] or None,
-                    clean_text(episode.get("overview"))[: EPISODE_TEXT_LIMITS["overview"]] or None,
-                    clean_text(episode.get("airDate"))[: EPISODE_TEXT_LIMITS["air_date"]] or None,
+                    _episode_text(episode.get("title"), "title"),
+                    _episode_text(episode.get("overview"), "overview"),
+                    _episode_text(episode.get("airDate"), "air_date"),
                     episode.get("runtimeMinutes") if isinstance(episode.get("runtimeMinutes"), int) else None,
-                    clean_text(episode.get("stillUrl"))[: EPISODE_TEXT_LIMITS["still_url"]] or None,
+                    _episode_text(episode.get("stillUrl"), "still_url"),
                     season_uuid,
                     number,
                 ),
@@ -7304,7 +7669,22 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
     merged = merge_series_details(results)
     updated_series = False
     season_sources: dict[str, str] = {}
+    identifiers_added: list[dict[str, str]] = []
     with conn.cursor() as cur:
+        # A TheTVDB id a source names for this series, filed only when the series
+        # has none and no other series holds it -- the clash check the manual
+        # route applies (App-Guidance media-type-and-series-hierarchy §7r). This
+        # describes the series; it never decides which series a disc is.
+        for identifier_type, stated in merged["identifiers"].items():
+            added = add_missing_series_identifiers(
+                cur,
+                series_uuid,
+                [{"identifier_type": identifier_type, "identifier": stated["identifier"]}],
+                provider_id=stated["source"],
+            )
+            identifiers_added.extend(
+                {**entry, "source": stated["source"]} for entry in added
+            )
         if merged["overview"] and not clean_text(row.get("overview")):
             cur.execute(
                 "UPDATE series SET overview = %s, updated_at = now() WHERE id = %s",
@@ -7365,6 +7745,7 @@ def refresh_series_metadata(conn, series_id: UUID | str) -> dict[str, Any]:
         "artwork": applied_artwork["series"],
         "seasonArtwork": applied_artwork["seasons"],
         "discPostersInherited": inherited_posters,
+        "identifiersAdded": identifiers_added,
         "sources": {
             "consulted": [plugin_id for plugin_id, _ in results],
             "series": merged["overviewSource"] if updated_series else "",

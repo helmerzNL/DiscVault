@@ -66,6 +66,11 @@ def _read(path):
         return handle.read()
 
 
+def _version(value):
+    """`1.10.0` -> (1, 10, 0), so versions compare as numbers, not text."""
+    return tuple(int(part) for part in str(value).split("."))
+
+
 def _function_source(source: str, name: str) -> str:
     """The whole of ``function name(...) { ... }``, by brace matching."""
     start = source.index("function %s(" % name)
@@ -331,15 +336,23 @@ class StorageAndPluginTests(unittest.TestCase):
         # that adds a field without bumping the version never reaches an
         # existing install -- and the backfill then runs, succeeds and writes
         # nothing.
+        #
+        # At least the version that first emitted the field, rather than equal
+        # to it: a later release of the plugin still emits it, and pinning the
+        # exact number made every later TMDB bump fail this test.
         tmdb = json.loads(_read(os.path.join(PLUGINS_DIR, "tmdb", "manifest.json")))
         omdb = json.loads(_read(os.path.join(PLUGINS_DIR, "omdb", "manifest.json")))
-        self.assertEqual(tmdb["version"], "1.9.0")
+        self.assertGreaterEqual(_version(tmdb["version"]), (1, 9, 0))
         self.assertNotEqual(omdb["version"], "1.0.0")
 
     def test_the_admin_card_requires_the_version_that_emits_the_field(self):
+        # The admin card names the version that *first* emitted `ratingVotes`
+        # (1.9.0), and the bundled plugin must be at least that -- otherwise the
+        # card would ask for a version no installation can be given.
         source = _read(NEXT_APP_PATH)
         tmdb = json.loads(_read(os.path.join(PLUGINS_DIR, "tmdb", "manifest.json")))
-        self.assertIn('VOTES_CAPABLE_TMDB_PLUGIN_VERSION = "%s"' % tmdb["version"], source)
+        self.assertIn('VOTES_CAPABLE_TMDB_PLUGIN_VERSION = "1.9.0"', source)
+        self.assertGreaterEqual(_version(tmdb["version"]), (1, 9, 0))
 
 
 class BackendWiringTests(unittest.TestCase):

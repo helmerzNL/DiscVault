@@ -122,6 +122,10 @@ PLUGIN_ENTRYPOINTS = (
     # this answers a number a *person* typed, in `items` so the answer can sit
     # beside the film namespace's in one list to choose from.
     "lookup_external_series_id",
+    # The television sibling of `movie_details`: a title record already known
+    # to be a show, described from the television namespace in the shape the
+    # title merge reads (#826).
+    "show_details",
     "season_episodes",
     "box_set_candidates",
     "people_for_movie",

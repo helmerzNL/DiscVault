@@ -274,6 +274,7 @@ def _resolved_release_record(details):
     synced - `_release()` already tolerates a missing one."""
     film = (details or {}).get("film") or {}
     release = (details or {}).get("release") or {}
+    identifiers = film.get("identifiers") or {}
     record = {
         "canonicalTitle": film.get("title"),
         "releaseYear": film.get("year"),
@@ -281,19 +282,46 @@ def _resolved_release_record(details):
         "format": release.get("format"),
         "edition": release.get("edition"),
         # Restated in the sync feed's vocabulary so `_identifiers()` reads one
-        # shape. The resolver names them `tmdbMovieId`/`imdbId` under `film`; the
-        # feed puts the same facts in `providerIds`. A resolver hit has no
-        # `releaseId`, so without this it carried no identity at all -- which is
-        # exactly the disc that most needs one, having never been synced.
+        # shape. The resolver names them `tmdbMovieId`/`tmdbTvId`/`imdbId` under
+        # `film`; the feed puts the same facts in `providerIds`, as `tmdb`,
+        # `tmdb_tv` and `imdb`. A resolver hit has no `releaseId`, so without
+        # this it carried no identity at all -- which is exactly the disc that
+        # most needs one, having never been synced.
+        #
+        # `tmdbTvId` maps to `tmdb_tv` and never to `tmdb`: the two TMDB spaces
+        # overlap, and TMDB's 4613 is both the series *Band of Brothers* and the
+        # film *Scorched* (#826). Read under the wrong key, a series' number
+        # would be looked up as a film's.
+        #
+        # `tvdbId` maps to the feed's `tvdb`, TheTVDB's series id. MovieVault
+        # publishes it since it made that namespace redistributable, so a disc
+        # resolved live reaches the same series a synced one does.
         "providerIds": {
             key: value
             for key, value in {
-                "tmdb": (film.get("identifiers") or {}).get("tmdbMovieId"),
-                "imdb": (film.get("identifiers") or {}).get("imdbId"),
+                "tmdb": identifiers.get("tmdbMovieId"),
+                "tmdb_tv": identifiers.get("tmdbTvId"),
+                "tvdb": identifiers.get("tvdbId"),
+                "imdb": identifiers.get("imdbId"),
             }.items()
             if value not in (None, "")
         },
     }
+    # The resolver states the work type the same way the feed does, so it is
+    # carried under the feed's key and reaches the same three readers: `_release`
+    # proposes SHOW/MOVIE from it, `_identifiers` withholds a film id from a
+    # series, and `_series` links a series by its `tmdb_tv` id. Dropping it here
+    # is what left a barcode resolved live -- a disc the instance never synced --
+    # without either its type or its series. Unstated stays unstated: only
+    # `movie` and `tv` are carried, so silence can never overwrite a type.
+    if film.get("workType") in ("movie", "tv"):
+        record["workType"] = film["workType"]
+    # The seasons the release covers, already in the feed's shape (the reader
+    # parses them with the feed's own parser), so `_series` hangs them under the
+    # series exactly as it does for a synced record. Only a non-empty list is
+    # carried: absent and empty both mean "nothing said about seasons" here.
+    if isinstance(release.get("seasons"), list) and release["seasons"]:
+        record["seasons"] = release["seasons"]
     record.update(_resolved_technical(details))
     record.update(_resolved_poster(details))
     return record
@@ -369,19 +397,23 @@ def _identifiers(record):
 
 
 def _series(record):
-    """The series a television release belongs to, keyed by its TMDB tv id.
+    """The series a television release belongs to, keyed by its series ids.
 
-    Emitted only for a release the feed calls `tv` and only when that id is
-    present. Both halves matter. Without the type, a film with a stray id would
-    propose a series link the schema forbids on a MOVIE; without the id there is
-    nothing to resolve a series *by*, and matching on the title instead would
-    mint a fresh series for every release of the same show.
+    Emitted only for a release the feed calls `tv` and only when at least one
+    series id is present: the TMDB television id (`tmdb_tv`), TheTVDB's series
+    id (`tvdb`), or both. Both halves matter. Without the type, a film with a
+    stray id would propose a series link the schema forbids on a MOVIE; without
+    an id there is nothing to resolve a series *by*, and matching on the title
+    instead would mint a fresh series for every release of the same show.
 
-    `tmdb_tv` is its own namespace upstream, separate from the movie id space,
-    which is what lets a work carry both without either being ambiguous. It
-    survives MovieVault's redistribution filter (`content.providers.
-    redistributable`); `tvdb` deliberately does not, so it never arrives here and
-    this plugin never has to decide what to do with it.
+    Each id is its own namespace upstream, separate from the movie id space,
+    which is what lets a work carry several without any being ambiguous. Both
+    are sent when both are known, because the host finds a series by *any* of
+    its ids and adds the ones it lacks (App-Guidance
+    media-type-and-series-hierarchy §7r): a series somebody picked from TheTVDB
+    and the same show arriving here as `tmdb_tv` are then one series, not two.
+    `tvdb` reaches this plugin since MovieVault made the namespace
+    redistributable; before that it was withheld upstream.
 
     Seasons ride along rather than sitting beside this, because they are only
     meaningful under a series: `movie_seasons` carries a `series_id` and the
@@ -391,9 +423,17 @@ def _series(record):
         return None
     provider_ids = record.get("providerIds")
     tmdb_tv_id = ""
+    tvdb_id = ""
     if isinstance(provider_ids, dict):
         tmdb_tv_id = str(provider_ids.get("tmdb_tv") or "").strip()
-    if not tmdb_tv_id:
+        tvdb_id = str(provider_ids.get("tvdb") or "").strip()
+    # Shape-checked like `_identifiers`: an open map upstream is not a promise
+    # that a key holds the id it is named after.
+    if not tmdb_tv_id.isdigit():
+        tmdb_tv_id = ""
+    if not tvdb_id.isdigit():
+        tvdb_id = ""
+    if not tmdb_tv_id and not tvdb_id:
         return None
     seasons = [
         {key: value for key, value in {
@@ -408,6 +448,7 @@ def _series(record):
     return {key: value for key, value in {
         "provider": PROVIDER_ID,
         "tmdbTvId": tmdb_tv_id,
+        "tvdbId": tvdb_id,
         # The work's title, not the edition's: a series is named once and the
         # box it came in is named separately.
         "title": record.get("canonicalTitle"),

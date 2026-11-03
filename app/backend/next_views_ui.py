@@ -17771,7 +17771,10 @@ def ui_preview_html(
                   <h3 data-next-i18n="movieDetail.seasons">Seasons</h3>
                   <p data-next-i18n="seriesDetail.seasonsHelp">Every season the series has, and whether a disc in your collection covers it.</p>
                 </div>
-                <button type="button" class="secondary-button" id="seriesSeasonPickerButton" data-next-i18n="seriesDetail.chooseSeasons">Choose seasons</button>
+                <div class="detail-card-actions">
+                  <button type="button" class="secondary-button hidden" id="seriesContributeSeasonsButton" data-next-i18n="seriesContribute.button">Send season links to MovieVault</button>
+                  <button type="button" class="secondary-button" id="seriesSeasonPickerButton" data-next-i18n="seriesDetail.chooseSeasons">Choose seasons</button>
+                </div>
               </div>
               <div class="detail-fields" id="seriesDetailSeasons"></div>
               <div id="seriesSeasonPicker"></div>
@@ -28762,6 +28765,13 @@ def ui_preview_html(
         return String(row.child_container_id || "") === id && (!visibleContainerIds || visibleContainerIds.has(parentId));
       });
     }
+    // A collection is the only container that holds other containers, which is
+    // what makes it the outer grouping in `libraryDisplayItems`. Read off the
+    // container row rather than inferred from its membership: a collection a
+    // user has not nested anything into yet is still a collection.
+    function containerIsCollection(container) {
+      return String(container?.container_type || "") === "collection";
+    }
     // Same reasoning as the container index above: grouping by series used to
     // mean scanning the whole movie list once per series. Both source arrays are
     // replaced rather than mutated, so identity is a sound cache key.
@@ -29179,7 +29189,13 @@ def ui_preview_html(
       const own = usableImage(container?.poster_url)
         || usableImage(metadata.poster_url)
         || usableImage(metadata.posterUrl)
-        || usableImage(metadata.poster);
+        || usableImage(metadata.poster)
+        // `poster_file` was read by the collection-items renderers and by
+        // nothing else. They resolve through this chain now, so the key has to
+        // survive here or the fix for #811 would take a working cover away from
+        // the very surface it is about. It is last among a container's own
+        // values and still outranks everything borrowed.
+        || usableImage(metadata.poster_file);
       if (own) return own;
       // The server resolves the borrowed cover per container, because `movies`
       // arrives a page at a time: a member outside the loaded page is not there
@@ -29396,27 +29412,51 @@ def ui_preview_html(
         return sortLibraryItems(visibleMovies.map((movie) => ({kind: "movie", movie, title: movie.title || ""})));
       }
       const representedMovieIds = new Set();
-      // Series first, and a disc a series claims is gone from the containers as
-      // well as from the flat list. Both group the same shelf; the series is the
-      // one that fills itself, so it wins -- the same move `containerIsNestedChild`
-      // already makes when one container sits inside another.
-      const seriesItems = visibleSeriesItems(eligibleMovieIds, visibleMovieIds);
-      seriesItems.forEach((item) => {
+      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters);
+      // A collection claims its discs first. It is the outermost grouping there
+      // is -- the one container type a user files other containers into -- and
+      // `containerIsNestedChild` already hides a box set that sits inside one.
+      // A series is not filed at all: every disc carrying the show's television
+      // id joins it on its own. So where the two describe the same disc, the
+      // shelf somebody built by hand is the one the Library shows.
+      //
+      // While the series won, a TV show filed into a collection kept its own
+      // tile in the Library and took every disc of the show with it. That left
+      // the collection holding nothing, and a container with no visible member
+      // is dropped -- so the shelf the user had just built was the one thing
+      // the Library did not show (#823), while a film put in the same
+      // collection disappeared from the flat list exactly as expected.
+      const collectionItems = containerItems.filter((item) => containerIsCollection(item.container));
+      collectionItems.forEach((item) => {
         item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
       });
-      const containerItems = visibleContainerItems(eligibleMovieIds, visibleMovieIds, filters)
+      // Series next, and a disc a series claims is gone from the remaining
+      // containers as well as from the flat list. Against a box set or a vault
+      // the series still wins: those two group the same physical set it does,
+      // and the series is the one that fills itself.
+      const seriesItems = visibleSeriesItems(eligibleMovieIds, visibleMovieIds)
         .map((item) => ({
           ...item,
           visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || ""))),
         }))
         .filter((item) => item.visibleMovies.length > 0);
-      containerItems.forEach((item) => {
+      seriesItems.forEach((item) => {
+        item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
+      });
+      const boxSetItems = containerItems
+        .filter((item) => !containerIsCollection(item.container))
+        .map((item) => ({
+          ...item,
+          visibleMovies: item.visibleMovies.filter((movie) => !representedMovieIds.has(String(movie.id || ""))),
+        }))
+        .filter((item) => item.visibleMovies.length > 0);
+      boxSetItems.forEach((item) => {
         item.visibleMovies.forEach((movie) => representedMovieIds.add(String(movie.id || "")));
       });
       const movieItems = visibleMovies
         .filter((movie) => !representedMovieIds.has(String(movie.id || "")))
         .map((movie) => ({kind: "movie", movie, title: movie.title || ""}));
-      return sortLibraryItems([...seriesItems, ...containerItems, ...movieItems]);
+      return sortLibraryItems([...collectionItems, ...seriesItems, ...boxSetItems, ...movieItems]);
     }
     function libraryDisplayMovieCount(items) {
       const ids = new Set();
@@ -31270,11 +31310,25 @@ def ui_preview_html(
         </div>
       `;
     }
+    // A `collection_item_entities` row, not a container row: it names the
+    // container `entity_id` and carries `metadata`, `poster_url` and
+    // `member_poster_url` at the top level. Reshaping it is what lets the
+    // nested tile ask the one resolver every other container surface asks, so a
+    // box set filed in a collection shows the cover its library tile shows.
+    //
+    // Both renderers below resolved the cover inline instead, and read a
+    // container's own value and nothing else -- so a box set that owns no
+    // artwork borrowed a member's poster in the library and rendered the type
+    // label inside the collection (#811). The inline form was also the
+    // short-circuit trap `itemPosterUrl` documents: `usableImage(a || b)`
+    // settles on a truthy-but-unusable `a` and never reaches a good `b`.
+    function containerMemberItemPosterUrl(item) {
+      return containerTilePosterUrl({...(item || {}), id: item?.entity_id || item?.item_id || item?.id || ""});
+    }
     function containerMemberContainerCardHtml(item, index, total, canEdit) {
-      const metadata = item.metadata || {};
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
-      const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
+      const poster = containerMemberItemPosterUrl(item);
       const href = `/containers/${encodeURIComponent(itemId)}`;
       const title = item.title || tNext("common.untitled", "Untitled");
       const subtitle = [containerTypeLabel(itemType), item.year, item.badge_label].filter(Boolean).join(" / ");
@@ -34288,7 +34342,10 @@ def ui_preview_html(
       audioTracks: ["contribute.field.audioTracks", "Audio tracks"],
       subtitles: ["contribute.field.subtitles", "Subtitles"],
       alternateTitles: ["contribute.field.alternateTitles", "Alternate titles"],
-      discs: ["contribute.field.discs", "Discs"]
+      discs: ["contribute.field.discs", "Discs"],
+      // Which seasons of its series the release covers, by number -- the
+      // links the release form and the series screen make.
+      seasons: ["contribute.field.seasons", "Seasons"]
     };
     const CONTRIBUTE_WITHHELD_REASONS = {
       discvault_holds_one_barcode: ["contribute.withheld.oneBarcode", "MovieVault keeps a list of barcodes and DiscVault keeps one, so sending it would delete the others."],
@@ -34312,7 +34369,10 @@ def ui_preview_html(
       // delete what it could not express. Until now it withheld it silently,
       // which read as "nothing to correct here".
       local_tracks_are_free_text: ["contribute.withheld.freeTextTracks", "One track is stored as free text rather than as a language and a codec, so the whole list stays here. Give that track a language and a codec to contribute it."],
-      disc_tracks_are_free_text: ["contribute.withheld.freeTextDiscTracks", "One disc has a track stored as free text rather than as a language and a codec, so the whole disc breakdown stays here. Give that track a language and a codec to contribute it."]
+      disc_tracks_are_free_text: ["contribute.withheld.freeTextDiscTracks", "One disc has a track stored as free text rather than as a language and a codec, so the whole disc breakdown stays here. Give that track a language and a codec to contribute it."],
+      // MovieVault refuses to link seasons to a work it holds as a film, so
+      // the field is not offered rather than sent to a refusal.
+      catalogue_records_a_film: ["contribute.withheld.catalogueFilm", "MovieVault records this title as a film, so it has no seasons to link. Season links can be sent once MovieVault records it as a series."]
     };
     const contributeState = {movie: null, container: null};
     function contributeFieldLabel(field) {
@@ -34328,12 +34388,19 @@ def ui_preview_html(
     // editor and the detail screen. The correction sheet reuses them rather
     // than spelling values out itself: a moderator's diff showing "uhd_bluray"
     // beside an editor showing "4K UHD Blu-ray" is the same fact typed twice.
+    // Season 0 is the specials; any other number reads the way the season
+    // rail and the disc editor already name it.
+    function contributeSeasonLabel(number) {
+      if (number === 0) return tNext("contribute.seasonSpecials", "Specials");
+      return tNext("collection.seasonNumber", "Season {number}").replace("{number}", number);
+    }
     const CONTRIBUTE_VALUE_LABELS = {
       packaging: packagingLabel,
       finishes: finishLabel,
       hdrFormats: hdrFormatLabel,
       videoCodecs: videoCodecLabel,
       discRegions: discRegionLabel,
+      seasons: contributeSeasonLabel,
     };
     // The release screen's own renderers, deliberately, rather than a second
     // set beside them. A correction is read by comparing two values, and the
@@ -34865,6 +34932,219 @@ def ui_preview_html(
       actions.appendChild(send);
       panel.appendChild(actions);
       send.focus();
+    }
+    // ---- A series' season links, every release at once ----------------
+    //
+    // The series screen's half of the season correction. The release sheet
+    // already sends `seasons` for one release; somebody sorting a series links
+    // several boxes in one sitting, so this asks about every release filed under
+    // the series and sends the ticked ones -- each as its own seasons-only
+    // correction, because a moderator judges one box at a time. As with the
+    // sheet, the server owns every judgement: which releases, what MovieVault
+    // holds, and why one cannot be sent.
+    function seriesContributeSeasonsText(numbers) {
+      if (!Array.isArray(numbers) || !numbers.length) return tNext("contribute.empty", "(empty)");
+      return numbers.map(contributeSeasonLabel).join(", ");
+    }
+    function seriesContributeStateText(item) {
+      if (item.state === "in_sync") return tNext("seriesContribute.inSync", "MovieVault already has these seasons.");
+      if (item.state === "no_seasons") return tNext("seriesContribute.noSeasons", "Not linked to a season here, so there is nothing to send.");
+      if (item.state === "not_in_catalogue") return tNext("seriesContribute.notInCatalogue", "Not in this server's copy of the MovieVault catalogue.");
+      if (item.state === "withheld") {
+        const reason = CONTRIBUTE_WITHHELD_REASONS[item.withheld];
+        return reason ? tNext(reason[0], reason[1]) : String(item.withheld || "");
+      }
+      return "";
+    }
+    function syncSeriesContributeButton() {
+      const button = document.getElementById("seriesContributeSeasonsButton");
+      if (!button) return;
+      const discs = (activeSeriesPayload && activeSeriesPayload.discs) || [];
+      // Only for somebody who may change the releases, and only when there is
+      // a release to ask about. Whether anything differs costs a MovieVault
+      // round trip per film, so it is answered when the dialog opens rather
+      // than on every render of the series page.
+      button.classList.toggle("hidden", !hasPermission("collection.edit_all") || !discs.length);
+    }
+    async function openSeriesContributeDialog() {
+      if (!activeSeriesId) return;
+      const seriesId = activeSeriesId;
+      let overview;
+      setSeriesDetailMessage(tNext("collection.loading", "Loading..."));
+      try {
+        overview = await apiJson(
+          `/api/next/movievault/contributions/series-seasons?seriesId=${encodeURIComponent(seriesId)}`,
+          {headers: authHeaders()}
+        );
+      } catch (error) {
+        setSeriesDetailMessage(error.message || String(error), "bad");
+        return;
+      }
+      setSeriesDetailMessage("");
+      if (!overview.ownerEnabled) {
+        openContributeDisabledDialog();
+        return;
+      }
+      const releases = overview.releases || [];
+      const sendable = releases.filter((item) => item.state === "changed");
+      const {overlay, panel} = listsCreateOverlay("contribute-modal");
+      const heading = document.createElement("h3");
+      heading.textContent = tNext("seriesContribute.title", "Send season links to MovieVault");
+      panel.appendChild(heading);
+      const lead = document.createElement("p");
+      lead.className = "contribute-intro";
+      lead.textContent = tNext(
+        "seriesContribute.lead",
+        "Which seasons each release of this series covers, compared with MovieVault. Every release you tick is sent as its own correction and reviewed by a moderator."
+      );
+      panel.appendChild(lead);
+      let enabled = !!overview.userEnabled;
+      if (sendable.length && (!enabled || preferences.confirm_every_upload)) {
+        const intro = document.createElement("div");
+        intro.className = "contribute-intro";
+        [
+          tNext("contribute.introLead", "Corrections you send are reviewed by a MovieVault moderator before anything changes for anyone else."),
+          tNext("contribute.introNever", "Your collection, viewing history, notes, location, purchase details and artwork are never sent."),
+        ].forEach((text) => {
+          const line = document.createElement("p");
+          line.textContent = text;
+          intro.appendChild(line);
+        });
+        panel.appendChild(intro);
+      }
+      if (sendable.some((item) => item.comparedAgainst === "mirror")) {
+        const stale = document.createElement("p");
+        stale.className = "contribute-stale";
+        stale.textContent = tNext(
+          "contribute.comparedAgainstMirror",
+          "Compared against this DiscVault's copy of the catalogue, which may be behind. A value that has moved since is refused at review rather than applied."
+        );
+        panel.appendChild(stale);
+      }
+      const selected = new Set(sendable.map((item) => item.movieId));
+      const list = document.createElement("div");
+      list.className = "contribute-changes";
+      releases.forEach((item) => {
+        const changed = item.state === "changed";
+        const row = document.createElement(changed ? "label" : "div");
+        row.className = "contribute-change";
+        const box = document.createElement("input");
+        box.type = "checkbox";
+        box.checked = changed;
+        box.disabled = !changed;
+        box.addEventListener("change", () => {
+          if (box.checked) selected.add(item.movieId);
+          else selected.delete(item.movieId);
+          send.disabled = selected.size === 0;
+        });
+        const body = document.createElement("span");
+        body.className = "contribute-change-body";
+        const name = document.createElement("strong");
+        name.textContent = [item.title || tNext("common.untitled", "Untitled"), item.format, item.edition]
+          .filter(Boolean).join(" - ");
+        body.appendChild(name);
+        if (changed) {
+          const compare = document.createElement("span");
+          compare.className = "contribute-change-compare";
+          [
+            ["from", tNext("contribute.currently", "MovieVault has"), item.catalogueSeasons],
+            ["to", tNext("contribute.proposed", "You propose"), item.localSeasons],
+          ].forEach(([side, label, value]) => {
+            const key = document.createElement("span");
+            key.className = `contribute-change-key contribute-change-key-${side}`;
+            key.textContent = label;
+            const cell = document.createElement("span");
+            cell.className = `contribute-change-${side}`;
+            cell.textContent = seriesContributeSeasonsText(value);
+            compare.appendChild(key);
+            compare.appendChild(cell);
+          });
+          body.appendChild(compare);
+        } else {
+          const state = document.createElement("span");
+          state.className = "contribute-change-line";
+          const seasons = (item.localSeasons || []).length
+            ? `${seriesContributeSeasonsText(item.localSeasons)}. `
+            : "";
+          state.textContent = `${seasons}${seriesContributeStateText(item)}`;
+          body.appendChild(state);
+        }
+        // What became of the last correction sent for this release, so a
+        // second visit can tell "already sent" apart from "never sent".
+        const last = item.lastContribution;
+        if (last && last.status) {
+          const entry = CONTRIBUTE_STATUS_LABELS[last.status];
+          const status = document.createElement("span");
+          status.className = `contribute-change-line ${contributeStatusTone(last.status)}`.trim();
+          status.textContent = `${tNext("contribute.statusPrefix", "Your correction")}: ${entry ? tNext(entry[0], entry[1]) : last.status}`;
+          body.appendChild(status);
+        }
+        row.appendChild(box);
+        row.appendChild(body);
+        list.appendChild(row);
+      });
+      panel.appendChild(list);
+      const message = document.createElement("p");
+      message.className = "contribute-message";
+      if (!sendable.length) {
+        message.textContent = tNext(
+          "seriesContribute.nothingToSend",
+          "Nothing to send: every release either matches MovieVault or cannot be sent yet."
+        );
+      }
+      panel.appendChild(message);
+      const actions = document.createElement("div");
+      actions.className = "lists-modal-actions";
+      const cancel = document.createElement("button");
+      cancel.type = "button";
+      cancel.className = "action secondary";
+      cancel.textContent = tNext(sendable.length ? "common.cancel" : "common.close", sendable.length ? "Cancel" : "Close");
+      cancel.addEventListener("click", () => listsCloseOverlay(overlay));
+      actions.appendChild(cancel);
+      const send = document.createElement("button");
+      send.type = "button";
+      send.className = "action";
+      send.textContent = enabled
+        ? tNext("contribute.send", "Send")
+        : tNext("contribute.agreeAndSend", "Agree and send");
+      send.disabled = !sendable.length;
+      send.addEventListener("click", async () => {
+        send.disabled = true;
+        message.textContent = tNext("contribute.sending", "Sending...");
+        try {
+          if (!enabled) {
+            // Consent precedes the send and is stored, exactly as on the
+            // release sheet; it is one preference for both.
+            await apiJson("/api/next/preferences", {
+              method: "PATCH",
+              headers: authHeaders({"Content-Type": "application/json"}),
+              body: JSON.stringify({preferences: {share_field_corrections: true}})
+            });
+            preferences = Object.assign({}, preferences, {share_field_corrections: true});
+            enabled = true;
+            renderPreferences();
+          }
+          const result = await apiJson("/api/next/movievault/contributions/series-seasons/submit", {
+            method: "POST",
+            headers: authHeaders({"Content-Type": "application/json"}),
+            body: JSON.stringify({seriesId, movieIds: Array.from(selected)})
+          });
+          listsCloseOverlay(overlay);
+          const count = Number(result.queued || 0);
+          setSeriesDetailMessage(
+            count
+              ? tNext("seriesContribute.queued", "{count} season corrections sent for moderation.").replace("{count}", count)
+              : tNext("contribute.notQueued", "Nothing was sent."),
+            count ? "good" : ""
+          );
+        } catch (error) {
+          send.disabled = false;
+          message.textContent = error.message || String(error);
+        }
+      });
+      if (sendable.length) actions.appendChild(send);
+      panel.appendChild(actions);
+      (sendable.length ? send : cancel).focus();
     }
     function renderMovieDetail(detail) {
       activeDetailPayload = detail;
@@ -36287,6 +36567,7 @@ def ui_preview_html(
         [tNext("containerDetail.aggregateVideos", "Videos"), summary.videoCount],
       ]);
       fillSeriesEditForm(series);
+      syncSeriesContributeButton();
       activateDetailTab("seriesDetail", document.getElementById(activePanelId) ? activePanelId : "seriesDetailDiscsPanel");
       applyAppPermissionVisibility();
       bindViewModeInteractions(document.getElementById("seriesDetailPage") || document);
@@ -36998,7 +37279,7 @@ def ui_preview_html(
         knownForLabel,
         birthdayDisplay,
         deathdayDisplay ? `${tNext("personDetail.died", "Died")} ${deathdayDisplay}` : "",
-        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "mentions")}` : "",
+        hasMentions ? `${mentionsText} ${tNext("personDetail.mentions", "Mentions").toLowerCase()}` : "",
         extendedPeople && digitalCredits.length ? `${digitalCredits.length} ${tNext("personDetail.digitalCollection", "Digital").toLowerCase()}` : "",
         extendedPeople && filmography.length ? `${filmography.length} ${tNext("personDetail.filmography", "Filmography").toLowerCase()}` : "",
         appDebugMode && person.id ? `Person ID ${person.id}` : ""
@@ -37138,10 +37419,9 @@ def ui_preview_html(
       `;
     }
     function containerMemberContainerListHtml(item, index, total, canEdit) {
-      const metadata = item.metadata || {};
       const itemId = item.entity_id || item.item_id || item.id || "";
       const itemType = item.item_type || item.container_type || item.entity_type || "container";
-      const poster = usableImage(item.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster || metadata.poster_file);
+      const poster = containerMemberItemPosterUrl(item);
       const title = item.title || tNext("common.untitled", "Untitled");
       return `
         <article class="mode-list-card" data-open-container="${escapeHtml(itemId || "")}" tabindex="0" title="${escapeHtml(title)}">
@@ -40378,6 +40658,8 @@ def ui_preview_html(
         series?.identifierType
         || series?.identifier_type
         || (series?.tmdbTvId || series?.tmdb_tv_id ? "tmdb_tv" : "")
+        // TheTVDB's id when that is the only one MovieVault knows (§7r).
+        || (series?.tvdbId ? "tvdb" : "")
         // A loose identifier is only a series reference when the candidate says
         // it is one; `tmdb_tv` names the television namespace by itself.
         || ((mediaType === "SHOW" || candidateIdentifierType === "tmdb_tv") ? candidateIdentifierType : "")
@@ -40385,6 +40667,7 @@ def ui_preview_html(
       const seriesRef = String(
         series?.tmdbTvId
         || series?.tmdb_tv_id
+        || series?.tvdbId
         || series?.identifier
         || (seriesRefType ? candidate.identifier : "")
         || ""
@@ -41571,8 +41854,13 @@ def ui_preview_html(
       const links = source.links && typeof source.links === "object" ? source.links : {};
       const identifiers = source.identifiers && typeof source.identifiers === "object" ? source.identifiers : {};
       const tmdbId = identifiers.tmdbMovieId || source.tmdbMovieId || "";
+      // A series is named by its TMDB television id; the two id spaces overlap,
+      // so it gets the /tv/ page and never the /movie/ one (#826).
+      const tmdbTvId = identifiers.tmdbTvId || source.tmdbTvId || "";
       const imdbId = identifiers.imdbId || source.imdbId || "";
-      const tmdb = links.tmdb || (tmdbId ? `https://www.themoviedb.org/movie/${encodeURIComponent(tmdbId)}` : "");
+      const tmdb = links.tmdb
+        || (tmdbId ? `https://www.themoviedb.org/movie/${encodeURIComponent(tmdbId)}` : "")
+        || (tmdbTvId ? `https://www.themoviedb.org/tv/${encodeURIComponent(tmdbTvId)}` : "");
       const imdb = links.imdb || (imdbId ? `https://www.imdb.com/title/${encodeURIComponent(imdbId)}/` : "");
       const anchors = [];
       if (tmdb) anchors.push(`<a href="${escapeHtml(tmdb)}" target="_blank" rel="noopener noreferrer">TMDB</a>`);
@@ -53121,6 +53409,7 @@ def ui_preview_html(
       document.getElementById("seriesDeleteButton")?.addEventListener("click", () => deleteActiveSeries());
       document.getElementById("seriesIdentitySearchButton")?.addEventListener("click", () => searchSeriesIdentity());
       document.getElementById("seriesSeasonPickerButton")?.addEventListener("click", () => openSeriesSeasonPicker());
+      document.getElementById("seriesContributeSeasonsButton")?.addEventListener("click", () => openSeriesContributeDialog());
       // Delegated: the save button is rendered by the picker, so it does not
       // exist when the page is wired.
       document.getElementById("seriesSeasonPicker")?.addEventListener("click", (event) => {

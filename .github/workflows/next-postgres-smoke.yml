@@ -238,6 +238,16 @@ jobs:
       - name: Test couple-and-merge identity route
         run: python -m unittest tests.test_next_movievault_contribution_identity_route
 
+      # The couple-and-merge trigger itself: the request shape it accepts, that
+      # it fails closed on the permission gate before any MovieVault call, and
+      # how a failure reads to a client -- 503 when repeating can help, 400 with
+      # the precise errorCode when it cannot, and `merge_unsupported` when the
+      # configured MovieVault has no merge operation at all (#699), so a client
+      # stops offering the merge instead of inviting a retry. Its own file, so
+      # it has to be listed here like the identity route above.
+      - name: Test couple-and-merge merge route
+        run: python -m unittest tests.test_next_movievault_contribution_merge_route
+
       # The iOS release-selection front door, and mostly what it refuses: a
       # selection when the gate is off, for a film the sync has not landed here
       # yet, or with nothing of substance to say. The 404 is the one that has to
@@ -545,6 +555,11 @@ jobs:
       - name: Test the import transaction boundary
         run: python -m unittest tests.test_next_import_transaction_boundary
 
+      # A series pressing picked from MovieVault's candidate list is added as a
+      # series in its season, through the real import route (#826).
+      - name: Test a picked series pressing imports as a series
+        run: python -m unittest tests.test_next_import_release_candidate_series
+
       # Needs the real PostgreSQL, because the property is about what the
       # database returns across page boundaries rather than about the shape of
       # the response. The assertion that matters is the negative one: a page
@@ -614,6 +629,17 @@ jobs:
       # the same trap the parser step set once before.
       - name: Test the field corrections against the readers
         run: python -m unittest tests.test_next_movievault_v2_field_corrections_postgres
+
+      # A release's seasons as a correction, and the series screen that sends
+      # them for every release at once. The first reads `movie_seasons`,
+      # `series_seasons` and the mirror's `seasons`/`work_type`, so it sits
+      # below the migrations with the readers above; the second drives the two
+      # series routes against stubs and only needs the app to import.
+      - name: Test season corrections, per release and per series
+        run: >-
+          python -m unittest
+          tests.test_next_movievault_season_corrections_postgres
+          tests.test_next_movievault_series_season_routes
 
       # Two more the hand-written list never named, and they cover the rules
       # migration 063 pushed into the schema rather than into code - a series
@@ -785,6 +811,17 @@ jobs:
       # a series.
       - name: Test adding a series from the title search
         run: python -m unittest tests.test_next_series_add_flow
+
+      # The other direction of the same distinction, and named here for the
+      # same reason: a module nobody lists is a module CI never runs. The one
+      # above is about reaching the television namespace at all; this one is
+      # about the film namespace staying away from a release already known to
+      # be television. #826 is what it costs when it does not -- two confirmed
+      # series wearing an unrelated film's synopsis, runtime, rating, cast and
+      # artwork, shown as their current metadata. No database: the claims are
+      # which questions get planned and what the merge does with the answers.
+      - name: Test that a confirmed show is not described by the film namespace
+        run: python -m unittest tests.test_next_show_identity_namespace
 
       # Named here for the same reason as the module above it. The database ids
       # a record is known by live in two different tables -- a film's in

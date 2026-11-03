@@ -197,6 +197,8 @@ try:
     from .next_movievault_v2_field_corrections import contribution_history
     from .next_movievault_v2_field_corrections import latest_contribution
     from .next_movievault_v2_field_corrections import record_contribution
+    from .next_movievault_v2_field_corrections import series_season_item
+    from .next_movievault_v2_field_corrections import catalogue_synced_at
     from .next_product_identifiers import IDENTIFIER_TYPES as PRODUCT_IDENTIFIER_TYPES
     from .next_product_identifiers import SCANNABLE_TYPES as PRODUCT_SCANNABLE_TYPES
     from .next_product_identifiers import movie_identifiers_by_type
@@ -519,6 +521,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_movievault_v2_field_corrections import contribution_history
     from next_movievault_v2_field_corrections import latest_contribution
     from next_movievault_v2_field_corrections import record_contribution
+    from next_movievault_v2_field_corrections import series_season_item
+    from next_movievault_v2_field_corrections import catalogue_synced_at
     from next_product_identifiers import IDENTIFIER_TYPES as PRODUCT_IDENTIFIER_TYPES
     from next_product_identifiers import SCANNABLE_TYPES as PRODUCT_SCANNABLE_TYPES
     from next_product_identifiers import movie_identifiers_by_type
@@ -11378,7 +11382,18 @@ def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -
             "title": film.get("title") or "",
             "year": film.get("year"),
             "tmdbMovieId": identifiers.get("tmdbMovieId"),
+            # A series is named by its TMDB television id, never by
+            # `tmdbMovieId`: the two id spaces overlap (#826). Carried
+            # separately so the picker can link it without mistaking it
+            # for a film id.
+            "tmdbTvId": identifiers.get("tmdbTvId"),
             "imdbId": identifiers.get("imdbId"),
+            # TheTVDB's series id, the second key a series is found by (§7r).
+            # Present only when MovieVault sent one, so a film's answer keeps
+            # the shape it always had.
+            **({"tvdbId": identifiers["tvdbId"]} if identifiers.get("tvdbId") else {}),
+            # Present only when MovieVault stated it; absent is "did not say".
+            **({"workType": film["workType"]} if film.get("workType") else {}),
         }
         if film
         else {},
@@ -11516,6 +11531,74 @@ def release_candidate_movie_payload(candidate: Any) -> dict[str, Any]:
         if isinstance(video.get(source), list):
             payload[target] = video[source]
     return payload
+
+
+def release_candidate_identity(
+    film: Any, candidate: Any
+) -> tuple[str | None, dict[str, Any] | None]:
+    """The type and series MovieVault states for a pressing picked from its list.
+
+    A barcode the resolver could pin only to the film, not the pressing, comes
+    back as a candidate list, and the person picks the edition in their hand.
+    The film behind that list states its work type and, for a series, its TMDB
+    television id (`release_details_search_payload`), and a catalogued pressing
+    may name its seasons. None of that reached the disc: the pick carried the
+    edition's own facts only, so a series added this way became a MOVIE with
+    no series -- the same complaint a direct match had before (#826).
+
+    Returns `(media_type, series)` in the shapes the import already uses: the
+    type as DiscVault's MOVIE/SHOW, and the series as the block the MovieVault
+    plugin emits for a synced record, so it goes through the same
+    `apply_movie_series_link`. Unstated stays unstated: no work type gives no
+    type, and a series needs both `tv` and a series id -- the id alone is not
+    enough to establish one, as on the feed. The id is the TMDB television id,
+    TheTVDB's, or both (App-Guidance media-type-and-series-hierarchy §7r).
+    """
+    if not isinstance(film, dict):
+        return None, None
+    work_type = film.get("workType")
+    if work_type == "movie":
+        return MEDIA_TYPE_MOVIE, None
+    if work_type != "tv":
+        return None, None
+    identifiers = film.get("identifiers") if isinstance(film.get("identifiers"), dict) else {}
+    tmdb_tv_id = clean_text(film.get("tmdbTvId") or identifiers.get("tmdbTvId")) or ""
+    tvdb_id = clean_text(film.get("tvdbId") or identifiers.get("tvdbId")) or ""
+    if not tmdb_tv_id.isdigit():
+        tmdb_tv_id = ""
+    if not tvdb_id.isdigit():
+        tvdb_id = ""
+    title = clean_text(film.get("title"))
+    if not (tmdb_tv_id or tvdb_id) or not title:
+        return MEDIA_TYPE_SHOW, None
+    seasons: list[dict[str, Any]] = []
+    raw_seasons = candidate.get("seasons") if isinstance(candidate, dict) else None
+    for season in raw_seasons if isinstance(raw_seasons, list) else []:
+        if not isinstance(season, dict):
+            continue
+        number = season.get("seasonNumber")
+        if not isinstance(number, int) or isinstance(number, bool):
+            continue
+        seasons.append(
+            {
+                key: value
+                for key, value in {
+                    "seasonNumber": number,
+                    "title": season.get("title"),
+                    "year": season.get("releaseYear"),
+                    "episodeCount": season.get("episodeCount"),
+                }.items()
+                if value is not None
+            }
+        )
+    series: dict[str, Any] = {"provider": MOVIEVAULT_V2_PLUGIN_ID, "title": title}
+    if tmdb_tv_id:
+        series["tmdbTvId"] = tmdb_tv_id
+    if tvdb_id:
+        series["tvdbId"] = tvdb_id
+    if seasons:
+        series["seasons"] = seasons
+    return MEDIA_TYPE_SHOW, series
 
 
 def plugin_requires_config_for_entrypoint(plugin: dict[str, Any], config: dict[str, Any], entrypoint: str) -> bool:
@@ -21130,6 +21213,17 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
         # item tile empty while the box set's own page showed the cover (#811).
         # Same lateral and the same fold as the library snapshot in
         # `collection_container_preview_entities`, so both surfaces answer alike.
+        #
+        # Its own cover is only half the question, and the reporter of #811 was
+        # still looking at an empty tile after that half shipped: a box set that
+        # owns no artwork borrows a member film's poster everywhere else, and
+        # most of them own none. The library tile and the library snapshot both
+        # carry `container_member_poster_lateral` for exactly that; this query
+        # did not, so the same box set showed a cover in the library and an
+        # empty tile inside the collection. The borrowed cover stays in its own
+        # column: which cover wins is the one client resolver's decision, and a
+        # caller has to be able to tell a container's own artwork from one it is
+        # only standing in with -- the "missing poster" filter depends on it.
         media_join = table_exists(conn, "entity_media") and table_exists(conn, "media_assets")
         poster_columns = (
             """
@@ -21160,6 +21254,10 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
             if media_join
             else ""
         )
+        member_poster_sql, member_poster_params = (
+            container_member_poster_lateral(conn, actor) if media_join else ("", [])
+        )
+        member_poster_columns = CONTAINER_MEMBER_POSTER_COLUMNS if member_poster_sql else ""
         with conn.cursor() as cur:
             cur.execute(
                 f"""
@@ -21178,23 +21276,30 @@ def collection_item_entities(conn, container_id: UUID, actor: dict[str, Any] | N
                     c.year,
                     c.description,
                     c.metadata,
-{poster_columns}
+{poster_columns}{member_poster_columns}
                     c.metadata->>'poster_url' AS poster_url,
                     c.metadata->>'backdrop_url' AS backdrop_url
                 FROM collection_items ci
                 JOIN containers c ON c.id = ci.item_id
 {poster_join}
+{member_poster_sql}
                 WHERE ci.collection_id=%s AND ci.item_type <> 'movie'
                   AND {visibility_where}
                 ORDER BY ci.sort_order, c.container_type, lower(c.title)
                 """,
-                (container_id, *visibility_params),
+                (*member_poster_params, container_id, *visibility_params),
             )
             rows = cur.fetchall()
         # `with_preview_media_urls` prefers the joined asset and falls back to
         # the metadata URL, which is what keeps a container that only carries a
-        # metadata cover rendering exactly as before.
-        items.extend(with_preview_media_urls(row) if media_join else row for row in rows)
+        # metadata cover rendering exactly as before. `fold_container_member_poster`
+        # runs first and only ever adds `member_poster_url`, so it cannot reach
+        # the container's own value either way -- the same order the library
+        # snapshot uses.
+        items.extend(
+            with_preview_media_urls(fold_container_member_poster(row)) if media_join else row
+            for row in rows
+        )
     return sorted(items, key=lambda item: (item.get("sort_order") or 0, str(item.get("title") or "").lower()))
 
 
@@ -29653,6 +29758,134 @@ def register_routes(flask_app: Flask) -> None:
                 }
             )
 
+    # ---- A series' season links, every release at once -------------------
+    #
+    # The series screen's half of the season correction. The release sheet
+    # already sends `seasons` for one release; this asks about every release
+    # filed under a series and sends the ones that differ, one seasons-only
+    # correction each. Same gate, same queue and same log as the sheet, and the
+    # diff is recomputed here for the same reason the sheet's is: `expected` is
+    # the conflict check upstream, so the client never supplies it.
+
+    def _series_season_records(conn, actor, series_value: Any):
+        """The releases of a series this actor may correct, with their metadata.
+
+        Visibility first (`series_disc_entities` answers only what the actor can
+        see), then the editing gate the release sheet applies, per release: a
+        release someone may look at but not change is left out rather than
+        failing the whole series.
+        """
+        series_uuid = parse_uuid(str(series_value or ""), "seriesId")
+        if not series_uuid:
+            raise NextApiError("seriesId is required", 400)
+        if not series_tables_available(conn):
+            raise NextApiError("Series tables are not available", 503)
+        if not series_entity(conn, series_uuid):
+            raise NextApiError("Series not found", 404)
+        records = []
+        for disc in series_disc_entities(conn, series_uuid, actor=actor):
+            try:
+                records.append(_correction_record(conn, actor, "movie", str(disc.get("id") or "")))
+            except NextApiError as exc:
+                if exc.status_code in (403, 404):
+                    continue
+                raise
+        return records
+
+    @flask_app.get("/api/next/movievault/contributions/series-seasons")
+    def movievault_series_seasons():
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            gate = field_correction_gate(conn, actor.get("id") if actor else None)
+            records = _series_season_records(conn, actor, request.args.get("seriesId"))
+            # One live read per film rather than per release, which is what
+            # makes a pre-flight affordable here at all: every release of a
+            # series is normally one film upstream.
+            live_cache: dict[str, Any] = {}
+            items = [
+                series_season_item(conn, record, metadata, live_cache=live_cache)
+                for record, metadata in records
+            ]
+            return response(
+                {
+                    "status": "ok",
+                    "enabled": gate["owner"] and gate["user"],
+                    "ownerEnabled": gate["owner"],
+                    "userEnabled": gate["user"],
+                    "catalogueSyncedAt": catalogue_synced_at(conn),
+                    "releases": items,
+                    "changedCount": sum(1 for item in items if item["state"] == "changed"),
+                }
+            )
+
+    @flask_app.post("/api/next/movievault/contributions/series-seasons/submit")
+    def movievault_series_seasons_submit():
+        body = request.get_json(silent=True) or {}
+        if not isinstance(body, dict):
+            raise NextApiError("Request body must be an object", 400)
+        wanted = body.get("movieIds")
+        if wanted is not None and (
+            not isinstance(wanted, list) or not all(isinstance(item, str) for item in wanted)
+        ):
+            raise NextApiError("movieIds must be a list of ids", 400)
+        with connect() as conn:
+            actor = require_next_permission(conn, "collection.edit_all")
+            if not field_correction_enabled(conn, actor.get("id") if actor else None):
+                raise NextApiError("Field corrections are not enabled", 403)
+            records = _series_season_records(conn, actor, body.get("seriesId"))
+            selected = {item.strip() for item in wanted} if wanted is not None else None
+            live_cache: dict[str, Any] = {}
+            results = []
+            for record, metadata in records:
+                movie_id = str(record.get("id"))
+                if selected is not None and movie_id not in selected:
+                    continue
+                item = series_season_item(conn, record, metadata, live_cache=live_cache)
+                if item["state"] != "changed":
+                    # Named rather than skipped silently: a release the user
+                    # ticked that has nothing to send (any more) is an answer
+                    # they should see, not a row that quietly did nothing.
+                    results.append({"movieId": movie_id, "queued": False, "state": item["state"], "withheld": item["withheld"]})
+                    continue
+                changes = [item["change"]]
+                job = queue_field_correction_job(
+                    conn,
+                    {"target": item["target"], "changes": changes},
+                    actor=actor,
+                    reason="series_season_correction",
+                )
+                if job:
+                    record_contribution(
+                        conn,
+                        entity="movie",
+                        record=record,
+                        target=item["target"],
+                        changes=changes,
+                        job_id=job.get("id"),
+                        actor_id=actor.get("id") if actor else None,
+                    )
+                results.append(
+                    {
+                        "movieId": movie_id,
+                        "queued": bool(job),
+                        "jobId": (job or {}).get("id"),
+                        "state": item["state"],
+                        "change": item["change"],
+                    }
+                )
+            if selected is not None:
+                known = {str(record.get("id")) for record, _ in records}
+                for movie_id in sorted(selected - known):
+                    # Not under this series, or not this actor's to change.
+                    results.append({"movieId": movie_id, "queued": False, "state": "not_found", "withheld": None})
+            return response(
+                {
+                    "status": "ok",
+                    "queued": sum(1 for item in results if item.get("queued")),
+                    "results": results,
+                }
+            )
+
     @flask_app.post("/api/next/movievault/contributions/propose")
     def movievault_release_propose():
         """Offer a release the catalogue does not hold.
@@ -29852,6 +30085,12 @@ def register_routes(flask_app: Flask) -> None:
         rejected proof, an unregistered server, a bad id) answers 400 with the
         precise `errorCode` and must not be retried, because a repeat signs
         identically.
+
+        One terminal code means "not here, not now" rather than "refused":
+        `merge_unsupported` -- the configured MovieVault has no merge operation
+        yet. Nothing was changed on either side, both identities stay intact,
+        and the client should stop offering the merge instead of inviting a
+        retry that cannot succeed until that MovieVault is upgraded.
         """
         body = request.get_json(silent=True) or {}
         if not isinstance(body, dict):
@@ -29891,6 +30130,10 @@ def register_routes(flask_app: Flask) -> None:
                 "The device identity is not known to MovieVault"
             ),
             "payload_invalid": "The merge request was rejected as invalid",
+            "merge_unsupported": (
+                "This server's MovieVault cannot merge contributor identities yet;"
+                " nothing was changed"
+            ),
         }
         with connect() as conn:
             require_next_permission(conn, "collection.edit_all")
@@ -38345,6 +38588,18 @@ def register_routes(flask_app: Flask) -> None:
                 # the transaction opened.
                 payload = dict(movie_updates)
                 payload["title"] = import_title
+                # A pressing picked from MovieVault's candidate list: the film
+                # behind the list states the work type and the series, which
+                # the edition's own facts below never carried. Stated values
+                # already in the proposal still win.
+                if release_candidate:
+                    candidate_type, candidate_series = release_candidate_identity(
+                        release_fallback_film, release_candidate
+                    )
+                    if candidate_type and not payload.get("media_type") and not payload.get("mediaType"):
+                        payload["media_type"] = candidate_type
+                    if candidate_series and not isinstance(proposal.get("series"), dict):
+                        proposal = {**proposal, "series": candidate_series}
                 # Last resort only. A stated type -- the user's, or MovieVault's
                 # workType carried on the feed -- is already in movie_updates and
                 # outranks this. The title heuristic exists for the case that has

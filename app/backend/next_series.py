@@ -209,6 +209,18 @@ def normalize_season_ids(value: Any) -> list[UUID]:
 # A source that speaks its own namespace says which one, and TheTVDB does.
 SERIES_IDENTIFIER_TYPE = "tmdb_tv"
 
+# TheTVDB's series namespace. A sibling of `tmdb_tv`, never folded into it: the
+# two number spaces overlap, so the type is what makes an id mean one show.
+TVDB_IDENTIFIER_TYPE = "tvdb"
+
+# The order in which a series' ids are asked when looking it up. The TMDB
+# television id comes first because it is the namespace every series the feed
+# ever placed was created under; when two ids name *different* series, the one
+# found first wins and the other id is not added to it (App-Guidance
+# media-type-and-series-hierarchy §7r). Any other namespace a source states is
+# asked after these two.
+SERIES_IDENTIFIER_ORDER = (SERIES_IDENTIFIER_TYPE, TVDB_IDENTIFIER_TYPE)
+
 
 def series_id_for_identifier(
     cur: Any,
@@ -217,7 +229,11 @@ def series_id_for_identifier(
     identifier: str,
     identifier_type: str = SERIES_IDENTIFIER_TYPE,
 ) -> UUID | None:
-    """The live series carrying this provider identifier, if one already does.
+    """The live series carrying this identifier, if one already does.
+
+    ``provider_id`` is accepted for the callers' sake and deliberately not part
+    of the match (see the query below): it says which source reported the id,
+    which is not part of what the id names.
 
     Soft-deleted series are ignored rather than resurrected. A deleted series is
     a statement by whoever deleted it, and quietly reviving it because a feed
@@ -228,23 +244,144 @@ def series_id_for_identifier(
     and TMDB's 305288 are different shows, and matching on the number alone
     would hand one series' row to the other.
     """
+    # Matched on the namespace and the id, not on which source reported it.
+    # `provider_id` records who said so; the identity is the id in its own
+    # namespace. A show picked from TMDB in the Add screen is stored under
+    # provider `tmdb`, the same show placed by the MovieVault feed under
+    # `movievault_v2`, and both carry `tmdb_tv` 4613 -- matching on the
+    # provider too made them two series, so a second release of the show was
+    # never linked to the first. The identifier editor's clash check
+    # (`set_series_identity`) already treats identity this way.
     cur.execute(
         """
         SELECT s.id
         FROM series_identifiers si
         JOIN series s ON s.id = si.series_id
-        WHERE si.provider_id = %s
-          AND si.identifier_type = %s
+        WHERE si.identifier_type = %s
           AND si.identifier = %s
           AND s.deleted_at IS NULL
+        ORDER BY s.created_at, s.id
         LIMIT 1
         """,
-        (provider_id, identifier_type or SERIES_IDENTIFIER_TYPE, identifier),
+        (identifier_type or SERIES_IDENTIFIER_TYPE, identifier),
     )
     row = cur.fetchone()
     if not row:
         return None
     return row["id"] if isinstance(row, dict) else row[0]
+
+
+def series_id_for_identifiers(
+    cur: Any,
+    identifiers: list[dict[str, str]],
+) -> UUID | None:
+    """The live series any of these identifiers names, asked in order.
+
+    ``identifiers`` is the list ``provider_series_payload`` produces: each entry
+    an ``identifier_type`` and an ``identifier``, already in
+    ``SERIES_IDENTIFIER_ORDER``. The first id that finds a series decides. A
+    series is reachable by every id it carries, so a show created under one
+    namespace -- picked from TheTVDB in the Add screen, say -- is found again
+    when the feed names it by another.
+    """
+    for entry in identifiers:
+        found = series_id_for_identifier(
+            cur,
+            provider_id="",
+            identifier=entry["identifier"],
+            identifier_type=entry["identifier_type"],
+        )
+        if found is not None:
+            return found
+    return None
+
+
+def series_identifier_holder(
+    cur: Any,
+    *,
+    identifier_type: str,
+    identifier: str,
+    other_than: UUID | None = None,
+) -> dict[str, Any] | None:
+    """The live series other than ``other_than`` that already carries this id.
+
+    One identifier may not name two series: ``series_id_for_identifier`` would
+    then return whichever was created first, and discs would start attaching to
+    one of two rows by age. So an id another series holds is refused rather
+    than added -- the same rule the manual identifier route applies
+    (``set_series_identity``), so a filled id and a typed one obey one check.
+    """
+    cur.execute(
+        """
+        SELECT s.id, s.title
+        FROM series_identifiers si
+        JOIN series s ON s.id = si.series_id
+        WHERE si.identifier_type = %s AND si.identifier = %s
+          AND (%s::uuid IS NULL OR si.series_id <> %s::uuid)
+          AND s.deleted_at IS NULL
+        ORDER BY s.created_at, s.id
+        LIMIT 1
+        """,
+        (identifier_type, identifier, other_than, other_than),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    if isinstance(row, dict):
+        return {"id": row["id"], "title": row.get("title")}
+    return {"id": row[0], "title": row[1]}
+
+
+def add_missing_series_identifiers(
+    cur: Any,
+    series_uuid: UUID,
+    identifiers: list[dict[str, str]],
+    *,
+    provider_id: str,
+) -> list[dict[str, str]]:
+    """Give a series the ids it lacks, and only those. Returns what was added.
+
+    Fill-only, per namespace: a series that already carries a ``tvdb`` id keeps
+    it even when a source names a different one. Correcting an id is a person's
+    decision (``set_series_identity`` replaces); a refresh that quietly swapped
+    one would re-point the series at another show with no trace.
+
+    An id another live series already carries is skipped (see
+    ``series_identifier_holder``). That is the case where two ids of one show
+    name two different series -- a duplicate somebody has to resolve, and
+    merging them here would move discs nobody asked to move.
+    """
+    cur.execute(
+        "SELECT identifier_type FROM series_identifiers WHERE series_id = %s",
+        (series_uuid,),
+    )
+    present = {
+        (row["identifier_type"] if isinstance(row, dict) else row[0]) for row in cur.fetchall()
+    }
+    added: list[dict[str, str]] = []
+    for entry in identifiers:
+        identifier_type = entry["identifier_type"]
+        identifier = entry["identifier"]
+        if identifier_type in present:
+            continue
+        if series_identifier_holder(
+            cur,
+            identifier_type=identifier_type,
+            identifier=identifier,
+            other_than=series_uuid,
+        ):
+            continue
+        cur.execute(
+            """
+            INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (series_id, provider_id, identifier_type, identifier) DO NOTHING
+            """,
+            (series_uuid, provider_id, identifier_type, identifier),
+        )
+        present.add(identifier_type)
+        added.append({"identifier_type": identifier_type, "identifier": identifier})
+    return added
 
 
 def ensure_series(
@@ -254,6 +391,7 @@ def ensure_series(
     identifier: str,
     title: str,
     identifier_type: str = SERIES_IDENTIFIER_TYPE,
+    identifiers: list[dict[str, str]] | None = None,
 ) -> UUID:
     """Find the series this identifier names, or create it once.
 
@@ -268,15 +406,18 @@ def ensure_series(
     content -- overview, artwork -- is fetched separately from a source DiscVault
     has its own relationship with. A row with a title and an id is enough to
     hang seasons and discs off, which is what this exists to do.
+
+    ``identifiers`` carries every id the source stated (``tmdb_tv``, ``tvdb``,
+    ...). The series is found by any of them; an existing one gains the ids it
+    lacks, fill-only; a new one is created with all of them (App-Guidance
+    media-type-and-series-hierarchy §7r). Without it the single ``identifier``
+    is the whole statement, as before.
     """
     identifier_type = identifier_type or SERIES_IDENTIFIER_TYPE
-    existing = series_id_for_identifier(
-        cur,
-        provider_id=provider_id,
-        identifier=identifier,
-        identifier_type=identifier_type,
-    )
+    stated = identifiers or [{"identifier_type": identifier_type, "identifier": identifier}]
+    existing = series_id_for_identifiers(cur, stated)
     if existing is not None:
+        add_missing_series_identifiers(cur, existing, stated, provider_id=provider_id)
         return existing
     series_uuid = uuid.uuid4()
     cur.execute(
@@ -286,14 +427,7 @@ def ensure_series(
         """,
         (series_uuid, f"next-series-{series_uuid.hex[:12]}", title),
     )
-    cur.execute(
-        """
-        INSERT INTO series_identifiers (series_id, provider_id, identifier_type, identifier)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (series_id, provider_id, identifier_type, identifier) DO NOTHING
-        """,
-        (series_uuid, provider_id, identifier_type, identifier),
-    )
+    add_missing_series_identifiers(cur, series_uuid, stated, provider_id=provider_id)
     return series_uuid
 
 
@@ -362,18 +496,41 @@ def provider_series_payload(value: Any) -> dict[str, Any] | None:
     The type travels onward rather than being resolved away here, because which
     namespace an id belongs to is the one thing that makes two equal numbers
     different shows.
+
+    A block may state several ids at once -- ``tmdbTvId`` and ``tvdbId`` side by
+    side, as MovieVault sends them since 0.42.0. All of them are returned under
+    ``identifiers``, in ``SERIES_IDENTIFIER_ORDER``, one per namespace; the first
+    is also returned as ``identifier``/``identifier_type`` for the callers that
+    only ever needed one.
     """
     if not isinstance(value, dict):
         return None
-    identifier = clean_text(value.get("tmdbTvId")) or clean_text(value.get("identifier"))
-    identifier_type = (
+    stated: dict[str, str] = {}
+    tmdb_tv_id = clean_text(value.get("tmdbTvId"))
+    if tmdb_tv_id:
+        stated[SERIES_IDENTIFIER_TYPE] = tmdb_tv_id
+    tvdb_id = clean_text(value.get("tvdbId"))
+    if tvdb_id:
+        stated[TVDB_IDENTIFIER_TYPE] = tvdb_id
+    named = clean_text(value.get("identifier"))
+    named_type = (
         clean_text(value.get("identifierType") or value.get("identifier_type"))
         or SERIES_IDENTIFIER_TYPE
     )
+    if named and named_type not in stated:
+        stated[named_type] = named
     provider_id = clean_text(value.get("providerId") or value.get("provider"))
     title = clean_text(value.get("title"))
-    if not identifier or not provider_id or not title:
+    if not stated or not provider_id or not title:
         return None
+    ordered_types = [kind for kind in SERIES_IDENTIFIER_ORDER if kind in stated] + [
+        kind for kind in stated if kind not in SERIES_IDENTIFIER_ORDER
+    ]
+    identifiers = [
+        {"identifier_type": kind, "identifier": stated[kind]} for kind in ordered_types
+    ]
+    identifier = identifiers[0]["identifier"]
+    identifier_type = identifiers[0]["identifier_type"]
     seasons: list[dict[str, Any]] = []
     seen: set[int] = set()
     for entry in value.get("seasons") or []:
@@ -403,6 +560,7 @@ def provider_series_payload(value: Any) -> dict[str, Any] | None:
         "provider_id": provider_id,
         "identifier": identifier,
         "identifier_type": identifier_type,
+        "identifiers": identifiers,
         "title": title,
         "seasons": seasons,
     }

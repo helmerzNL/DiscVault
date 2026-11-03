@@ -674,9 +674,34 @@ def _series_details_request(context, tmdb_tv_id):
         # argument above is against extra *requests*, not against extra fields,
         # and `append_to_response` costs neither a round trip nor a rate-limit
         # slot -- the same reason `_details` asks this way for a movie.
-        append_to_response="images",
+        #
+        # `external_ids` likewise: it carries TheTVDB's series id, which the host
+        # files on the series when it has none (App-Guidance
+        # media-type-and-series-hierarchy §7r), so a show picked from TMDB is
+        # found again when MovieVault later names it by its TheTVDB id.
+        append_to_response="images,external_ids",
         include_image_language="null,en",
     )
+
+
+def _series_external_ids(data):
+    """The other namespaces TMDB says this series is known by.
+
+    Only TheTVDB's id and IMDb's are read, each shape-checked: TMDB returns
+    `null` for an id it does not know, and an id that does not look like one is
+    no id at all.
+    """
+    external = data.get("external_ids") if isinstance(data.get("external_ids"), dict) else {}
+    result = {}
+    tvdb_id = external.get("tvdb_id")
+    if isinstance(tvdb_id, int) and not isinstance(tvdb_id, bool) and tvdb_id > 0:
+        result["tvdb"] = str(tvdb_id)
+    elif isinstance(tvdb_id, str) and tvdb_id.strip().isdigit():
+        result["tvdb"] = tvdb_id.strip()
+    imdb_id = str(external.get("imdb_id") or "").strip()
+    if imdb_id.startswith("tt") and imdb_id[2:].isdigit():
+        result["imdb"] = imdb_id
+    return result
 
 
 def _normalize_series(data):
@@ -737,6 +762,9 @@ def _normalize_series(data):
         },
         "seasons": seasons,
         "tmdbTvId": data.get("id"),
+        # Keyed by the host's identifier types. The host files a missing `tvdb`
+        # on the series; it never replaces one (§7r).
+        "seriesIdentifiers": _series_external_ids(data),
     }
 
 
@@ -765,6 +793,245 @@ def series_details(payload, context=None):
     if not tmdb_tv_id.isdigit():
         return {"status": "miss", "provider": "tmdb"}
     return _normalize_series(_series_details_request(context or {}, tmdb_tv_id))
+
+
+# TMDB numbers television genres in a space that overlaps the film one only in
+# part. The shared ids (Animation, Comedy, Crime, Documentary, Drama, Family,
+# Mystery, Western) mean the same thing in both and pass through unchanged. The
+# television-only ones are compound or have no film counterpart; the compound
+# ones are split into the film genres they name, so a show lands in the same
+# catalogue (`next_genres.GENRE_CATALOG`) a film does and a genre filter finds
+# both. News, Reality, Soap and Talk have no film genre to become and are
+# dropped -- which is what `genre_keys_from_tmdb_ids` would do with them anyway,
+# said here on purpose rather than left to happen.
+_TV_GENRE_IDS = {
+    10759: (28, 12),     # Action & Adventure -> Action, Adventure
+    10762: (10751,),     # Kids -> Family
+    10765: (878, 14),    # Sci-Fi & Fantasy -> Science Fiction, Fantasy
+    10768: (10752,),     # War & Politics -> War
+    10763: (),           # News
+    10764: (),           # Reality
+    10766: (),           # Soap
+    10767: (),           # Talk
+}
+
+
+def _tv_genre_ids(data):
+    ids = []
+    for item in data.get("genres") or []:
+        genre_id = item.get("id") if isinstance(item, dict) else None
+        if genre_id is None:
+            continue
+        for mapped in _TV_GENRE_IDS.get(genre_id, (genre_id,)):
+            if mapped not in ids:
+                ids.append(mapped)
+    return ids
+
+
+def _show_content_ratings(data):
+    ratings = {}
+    for entry in (data.get("content_ratings") or {}).get("results") or []:
+        country = entry.get("iso_3166_1") or ""
+        rating = (entry.get("rating") or "").strip()
+        if country and rating and country not in ratings:
+            ratings[country] = rating
+    return ratings
+
+
+def _show_localizations(data):
+    """`_localizations` for a series: TMDB names a show's title `name`."""
+    rows = []
+    seen = set()
+    for item in ((data.get("translations") or {}).get("translations") or []):
+        payload = item.get("data") or {}
+        title = payload.get("name") or ""
+        overview = payload.get("overview") or ""
+        lang = _locale_key(item.get("iso_639_1"), item.get("iso_3166_1"))
+        if not lang or not (title or overview):
+            continue
+        key = lang.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append({"lang": lang, "title": title, "overview": overview, "source": "tmdb"})
+    return rows
+
+
+def _aggregate_credits(data):
+    """`_credits` for a series, from TMDB's whole-run `aggregate_credits`.
+
+    Not `credits`: on `/tv/{id}` that is the cast of the *latest* season only,
+    so a show that ended years ago would be credited with whoever appeared in
+    its last episodes. `aggregate_credits` covers every season, which is what a
+    box set of the series holds. A person can play several roles or hold several
+    jobs across a run; the first one TMDB lists is the one carried, matching the
+    single `character` / `job` a film credit has.
+    """
+    credits = data.get("aggregate_credits") or {}
+    cast = []
+    crew = []
+    for index, item in enumerate((credits.get("cast") or [])[:20]):
+        roles = item.get("roles") or []
+        cast.append(
+            {
+                "role": "actor",
+                "name": item.get("name") or "",
+                "character": (roles[0].get("character") if roles and isinstance(roles[0], dict) else "") or "",
+                "tmdbId": item.get("id"),
+                "sortOrder": index,
+                "profileUrl": _image(item.get("profile_path")),
+            }
+        )
+    for index, item in enumerate((credits.get("crew") or [])[:CREW_LIMIT]):
+        jobs = item.get("jobs") or []
+        crew.append(
+            {
+                "role": "crew",
+                "name": item.get("name") or "",
+                "job": (jobs[0].get("job") if jobs and isinstance(jobs[0], dict) else "") or "",
+                "tmdbId": item.get("id"),
+                "sortOrder": 20 + index,
+                "profileUrl": _image(item.get("profile_path")),
+            }
+        )
+    return cast + crew
+
+
+def _crew_names_by_job(data, job, limit):
+    """Names holding `job` anywhere in the run, most episodes first."""
+    ranked = []
+    for item in (data.get("aggregate_credits") or {}).get("crew") or []:
+        episodes = sum(
+            entry.get("episode_count") or 0
+            for entry in item.get("jobs") or []
+            if isinstance(entry, dict) and entry.get("job") == job
+        )
+        if episodes and item.get("name"):
+            ranked.append((episodes, item["name"]))
+    ranked.sort(key=lambda pair: -pair[0])
+    names = []
+    for _episodes, name in ranked:
+        if name not in names:
+            names.append(name)
+    return names[:limit]
+
+
+def _normalize_show(data):
+    """A series described in the shape a film's description takes.
+
+    The refresh of a title record merges one shape, the one `_normalize_details`
+    produces for `/movie/{id}`. A confirmed show could not use that call at all
+    -- it is the film namespace, and asking it about a series is #826 -- and
+    `_normalize_series` describes the series *record* (its own title, overview
+    and seasons), which the title merge cannot read. So a show's title record
+    had no source for its overview, rating, cast, genres, studios or artwork.
+    This is that source, answering from `/tv/{id}`.
+
+    Deliberately absent:
+
+    * **`tmdbId`.** That key is the film id on every other answer, and the merge
+      files it as `tmdb`/`movie_id`. A television number stored there is the
+      exact confusion #826 was, so the show's id travels as `tmdbTvId`, which
+      nothing files as a film id. `imdbId` is carried: an IMDb id names one
+      title whichever kind it is.
+    * **`runtimeMinutes`.** TMDB's `episode_run_time` is one episode's length;
+      the disc's runtime is the whole set's. Writing the first as the second
+      would be a new wrong value replacing an old one.
+    """
+    poster_urls = _artwork_urls(data, "posters", "poster_path")
+    backdrop_urls = _artwork_urls(data, "backdrops", "backdrop_path")
+    trailer, extra_videos = _videos(data)
+    ratings = _show_content_ratings(data)
+    cast = (data.get("aggregate_credits") or {}).get("cast") or []
+    studios = [item.get("name") for item in data.get("production_companies") or [] if item.get("name")]
+    external_ids = data.get("external_ids") or {}
+    return {
+        "status": "hit",
+        "provider": "tmdb",
+        "sourceLabel": "TMDb",
+        "sourceRef": f"tmdb:tv:{data.get('id')}",
+        "movie": {
+            "title": data.get("name") or "",
+            "originalTitle": data.get("original_name") or "",
+            "year": str(data.get("first_air_date") or "")[:4],
+            "releaseDate": data.get("first_air_date") or "",
+            "overview": data.get("overview") or "",
+            "rating": str(data.get("vote_average") or "")[:4],
+            "ratingVotes": data.get("vote_count"),
+            "director": ", ".join(_crew_names_by_job(data, "Director", 5)),
+            "actor": ", ".join(item.get("name") for item in cast[:5] if item.get("name")),
+            "producer": ", ".join(_crew_names_by_job(data, "Producer", 5)),
+            "studios": ", ".join(studios),
+            "posterUrl": poster_urls[0] if poster_urls else "",
+            "posters": poster_urls,
+            "backdropUrl": backdrop_urls[0] if backdrop_urls else "",
+            "backdropUrls": backdrop_urls,
+            "trailerUrl": trailer,
+            "videos": extra_videos,
+            "audienceRating": ratings.get("US") or "",
+        },
+        "technicalSpecs": {"contentRatings": ratings},
+        "localizations": _show_localizations(data),
+        "credits": _aggregate_credits(data),
+        "genreIds": _tv_genre_ids(data),
+        "filmOrigin": _film_origin(data),
+        "tmdbTvId": data.get("id"),
+        "imdbId": external_ids.get("imdb_id") or "",
+    }
+
+
+def _show_tv_id(context, body):
+    """The TMDB television id for a show, from what the caller already holds.
+
+    In order: the series' own `tmdb_tv` identifier, a top-level `tmdbTvId`, and
+    last an IMDb id resolved through `/find` -- reading `tv_results` only. An
+    IMDb id names exactly one title of either kind, so a film's IMDb id finds
+    nothing here rather than the wrong work.
+
+    Never `tmdbId`: on a title record that is the film namespace, and a number
+    from it is precisely what must not be read as a series (#826). Never a
+    title search either: that is the other way #826 happened.
+    """
+    identifiers = body.get("seriesIdentifiers")
+    candidate = ""
+    if isinstance(identifiers, dict):
+        candidate = str(identifiers.get("tmdb_tv") or "").strip()
+    if not candidate:
+        candidate = str(body.get("tmdbTvId") or "").strip()
+    if candidate.isdigit():
+        return candidate
+    imdb_id = str(body.get("imdbId") or "").strip()
+    if imdb_id.startswith("tt") and imdb_id[2:].isdigit():
+        found = _request(context, f"/find/{imdb_id}", external_source="imdb_id", language=_language(context))
+        shows = (found or {}).get("tv_results") or []
+        if shows and str(shows[0].get("id") or "").isdigit():
+            return str(shows[0]["id"])
+    return ""
+
+
+def show_details(payload, context=None):
+    """Describe a television title record, from the television namespace.
+
+    The sibling of `movie_details` for a record already known to be a show, and
+    deliberately unlike it in one respect: it never searches by title. Identity
+    comes only from an id the caller holds (see `_show_tv_id`); without one the
+    answer is a miss, which is honest -- a show whose identity is not
+    established is not described by guessing.
+    """
+    body = payload or {}
+    tmdb_tv_id = _show_tv_id(context or {}, body)
+    if not tmdb_tv_id:
+        return {"status": "miss", "provider": "tmdb"}
+    data = _request_optional(
+        context or {},
+        f"/tv/{tmdb_tv_id}",
+        language=_language(context),
+        append_to_response="aggregate_credits,videos,images,content_ratings,translations,external_ids",
+        include_image_language="null,en",
+    )
+    if data is None:
+        return {"status": "miss", "provider": "tmdb"}
+    return _normalize_show(data)
 
 
 def season_episodes(payload, context=None):

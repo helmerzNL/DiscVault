@@ -143,6 +143,13 @@ RELEASE_FIELD_SOURCES: dict[str, tuple[str, str]] = {
     # Not on `movie_technical_specs`: the per-disc breakdown is its own table
     # (`movie_discs`, migration 075), read alongside it.
     "discs": ("discs", "discs"),
+    # Which seasons of its series the release covers -- the `movie_seasons`
+    # rows the release form and the series screen write. Stated by season
+    # *number*, never by id: a DiscVault season uuid means nothing upstream,
+    # and the number is the key the feed already publishes (`distribution-v4`,
+    # Seasons). Correctable since MovieVault 0.44.0; see `_local_season_numbers`
+    # for why "no seasons" proposes nothing.
+    "seasons": ("seasons", "seasons"),
 }
 
 #: Eligible upstream, deliberately not offered here. Each entry is a place where
@@ -732,6 +739,69 @@ def _disc_regions(technical: dict[str, Any], metadata: dict[str, Any]) -> list[s
     return [value for value in values if value in DISC_REGIONS] or None
 
 
+#: `series_seasons.season_number` is `>= 0` with no ceiling; MovieVault's is
+#: 0..200. A local number outside that range cannot be said upstream and would
+#: refuse the whole envelope, so it never reaches a proposal.
+MAX_SEASON_NUMBER = 200
+
+
+def _season_numbers(value: Any) -> list[int] | None:
+    """A season list as the sorted, de-duplicated numbers both sides compare.
+
+    Accepts the feed's season objects (`{"seasonNumber": 2, ...}`) and bare
+    numbers. Sorted because upstream sorts and compares the whole list: "2 and 1"
+    is the same box as "1 and 2", and reading the curator's order as a
+    disagreement would propose a correction nobody needs.
+
+    None in, None out -- "nobody said" must survive to the caller. A list that
+    holds nothing usable is `[]`, which is an answer.
+    """
+    if value is None:
+        return None
+    if not isinstance(value, list):
+        return None
+    numbers: set[int] = set()
+    for item in value:
+        number = item.get("seasonNumber") if isinstance(item, dict) else item
+        # bool is an int in Python, and `True` must not become season 1.
+        if isinstance(number, bool) or not isinstance(number, int):
+            continue
+        if 0 <= number <= MAX_SEASON_NUMBER:
+            numbers.add(number)
+    return sorted(numbers)
+
+
+def _local_season_numbers(conn: Any, movie_id: Any) -> list[int] | None:
+    """The seasons this release is linked to locally, by number, or None.
+
+    None when it is linked to none, and that is load-bearing rather than tidy.
+    Upstream reads `[]` as "the complete series, or unspecified" and applies it
+    as a replacement list, so an empty answer would *unlink* every season the
+    catalogue holds for the release. A local record with nothing recorded has
+    nothing to say, which is exactly what None proposes.
+
+    Only live seasons of the release's own series: the composite key in 063
+    already makes a link to another series' season unrepresentable, and a
+    deleted season is not one the user can see.
+    """
+    if not movie_id or not _table_exists(conn, "movie_seasons"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT ss.season_number
+            FROM movie_seasons ms
+            JOIN series_seasons ss
+              ON ss.id = ms.season_id AND ss.series_id = ms.series_id
+            WHERE ms.movie_id = %s AND ss.deleted_at IS NULL
+            """,
+            (movie_id,),
+        )
+        rows = [dict(row)["season_number"] for row in cur.fetchall()]
+    numbers = _season_numbers(rows)
+    return numbers or None
+
+
 def _local_discs(conn: Any, movie_id: Any) -> list[dict[str, Any]]:
     """The movie's own disc rows, or nothing when the table is not there yet.
 
@@ -927,12 +997,18 @@ def _local_release_values(
     identifiers: list[dict[str, str]] | None = None,
     technical: dict[str, Any] | None = None,
     discs: list[dict[str, Any]] | None = None,
+    seasons: list[int] | None = None,
 ) -> dict[str, Any]:
     values: dict[str, Any] = {}
     specs = technical or {}
     for field, (source, column) in RELEASE_FIELD_SOURCES.items():
         if source == "discs":
             values[field] = _movie_discs(discs)
+            continue
+        if source == "seasons":
+            # Already numbers; empty stays None for the reason
+            # `_local_season_numbers` gives.
+            values[field] = list(seasons) if seasons else None
             continue
         if source == "technical":
             values[field] = _technical_value(field, column, specs, metadata)
@@ -1025,7 +1101,8 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
                 SELECT release_title, edition, format, country_code, language_code,
                        release_date, runtime_minutes, distributor, disc_regions,
                        disc_count, packaging, finishes, video_resolution,
-                       video_codecs, hdr_formats, aspect_ratios, discs
+                       video_codecs, hdr_formats, aspect_ratios, discs,
+                       seasons, work_type
                 FROM movievault_v2_releases
                 WHERE generation = %s AND release_id = %s
                 """,
@@ -1108,6 +1185,15 @@ def mirror_values(conn: Any, target: dict[str, Any]) -> dict[str, Any] | None:
             # same thing produce the same value.
             "audioTracks": _audio_tracks(tracks),
             "subtitles": _subtitles(subtitles),
+            # Deliberately *not* coerced to `[]` by `_as_expected`. The column
+            # is NULL for a generation that never carried seasons (072), and
+            # stating `[]` as `expected` there would be a claim about the
+            # catalogue nobody observed. None makes the field wait for a live
+            # read instead; see `correction_preview`.
+            "seasons": _season_numbers(row.get("seasons")),
+            # Not a correctable field: whether the catalogue holds the work as a
+            # series at all, which decides whether `seasons` can be applied.
+            "_workType": _clean(row.get("work_type")),
         })
     with conn.cursor() as cur:
         cur.execute(
@@ -1179,6 +1265,30 @@ def eligible_fields(
     return allowed, withheld
 
 
+def _seasons_refusal(local: dict[str, Any], mirror: dict[str, Any]) -> str | None:
+    """Why this release's seasons cannot be sent now, or None.
+
+    Only asked when there is something to send: a release linked to no season
+    proposes nothing, and a refusal about nothing would only be noise.
+
+    * `catalogue_records_a_film` -- upstream holds the work as a film, and a
+      moderator approving `seasons` there is refused (`release_not_a_series`):
+      approving one field may not change the work type nobody proposed. Saying
+      so here saves the moderator a decision that cannot succeed and tells the
+      user why the field is missing.
+    * `needs_live_catalogue` -- `seasons` is a complete replacement list, and
+      the mirror of an older generation does not say what it would replace.
+      Same reason, same text as `eans`.
+    """
+    if not local.get("seasons"):
+        return None
+    if mirror.get("_workType") == "movie":
+        return "catalogue_records_a_film"
+    if mirror.get("seasons") is None:
+        return "needs_live_catalogue"
+    return None
+
+
 def build_changes(
     *,
     allowed: list[str],
@@ -1228,16 +1338,8 @@ def build_changes(
 PREFLIGHT_TIMEOUT_SECONDS = 8
 
 
-def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int = PREFLIGHT_TIMEOUT_SECONDS) -> dict[str, Any] | None:
-    """The catalogue's current values for one release, or None.
-
-    None means "could not be established" and never "nothing changed": the
-    caller falls back to the mirror rather than treating an unreachable
-    MovieVault as agreement. Silent on every failure for that reason -- an
-    offline instance must still be able to compose a correction.
-    """
-    if not film_id or not release_id:
-        return None
+def _film_releases_payload(film_id: Any, *, timeout_seconds: int) -> dict[str, Any] | None:
+    """`GET /v2/films/{film_id}/releases`, decoded, or None on any failure."""
     try:
         from .next_movievault_v2 import _release_details_http, enforced_origin
     except ImportError:  # pragma: no cover - supports direct module execution
@@ -1253,8 +1355,43 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
         payload = json.loads(content.decode("utf-8"))
     except Exception:  # pragma: no cover - every failure is the same answer
         return None
+    return payload if isinstance(payload, dict) else None
+
+
+def live_release_values(
+    film_id: Any,
+    release_id: Any,
+    *,
+    timeout_seconds: int = PREFLIGHT_TIMEOUT_SECONDS,
+    cache: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
+    """The catalogue's current values for one release, or None.
+
+    None means "could not be established" and never "nothing changed": the
+    caller falls back to the mirror rather than treating an unreachable
+    MovieVault as agreement. Silent on every failure for that reason -- an
+    offline instance must still be able to compose a correction.
+
+    `cache` holds one answer per film for the length of a caller's request.
+    The route answers for *every* release of a film, and the series screen asks
+    about all of a series' releases at once -- without it, a twelve-box series
+    would make twelve identical round trips, and an unreachable MovieVault would
+    cost twelve timeouts instead of one. A failed read is cached too, for that
+    second reason.
+    """
+    if not film_id or not release_id:
+        return None
+    key = str(film_id)
+    if cache is not None and key in cache:
+        payload = cache[key]
+    else:
+        payload = _film_releases_payload(film_id, timeout_seconds=timeout_seconds)
+        if cache is not None:
+            cache[key] = payload
     if not isinstance(payload, dict):
         return None
+    film = payload.get("film")
+    work_type = _clean(film.get("workType")) if isinstance(film, dict) else None
     wanted = str(release_id)
     for summary in payload.get("releases") or []:
         if not isinstance(summary, dict) or str(summary.get("releaseRef")) != wanted:
@@ -1290,6 +1427,11 @@ def live_release_values(film_id: Any, release_id: Any, *, timeout_seconds: int =
             "audioTracks": _audio_tracks(summary.get("audioTracks")),
             "subtitles": _subtitles(summary.get("subtitles")),
             "discs": _mirror_discs(summary.get("discs")),
+            # A canonical summary omits `seasons` when no season is linked
+            # (`exclude_none`), so absent here is a real `[]` -- unlike the
+            # mirror, where NULL means the generation never said.
+            "seasons": _season_numbers(summary.get("seasons") or []),
+            "_workType": work_type,
         })
     # The film is known but this release is not among its active ones: it was
     # merged, retired or deleted. Correcting a record that is no longer served
@@ -1421,6 +1563,7 @@ def correction_preview(
     metadata: dict[str, Any] | None = None,
     fields: list[str] | None = None,
     preflight: bool = True,
+    live_cache: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Everything a client needs to show a confirmation, in one answer.
 
@@ -1470,7 +1613,9 @@ def correction_preview(
     source = "mirror"
     if preflight:
         live = (
-            live_release_values(_mirror_film_id(conn, target), target["entityId"])
+            live_release_values(
+                _mirror_film_id(conn, target), target["entityId"], cache=live_cache
+            )
             if target["entityType"] == "release"
             else live_box_set_values(target["entityId"])
         )
@@ -1493,7 +1638,11 @@ def correction_preview(
             movie_identifiers_by_type(conn, record.get("id")),
             technical,
             discs,
+            _local_season_numbers(conn, record.get("id")),
         )
+        season_refusal = _seasons_refusal(local, mirror)
+        if season_refusal:
+            extra_withheld["seasons"] = season_refusal
         # A local value that exists but cannot be expressed upstream is a
         # refusal, not an agreement. Merged here beside `eans` because it is the
         # same category: a reason that depends on this record's contents rather
@@ -1544,6 +1693,87 @@ def correction_preview(
         # difference: a diff from the mirror may already have moved, and saying
         # so is more honest than presenting both the same way.
         "comparedAgainst": source,
+    }
+
+
+# ---- A series' season links, all releases at once --------------------------
+#
+# A person sorting a series usually links several boxes in one sitting: these
+# three are seasons 1, 2 and 3. Sending that one release sheet at a time would
+# be three trips through a dialog for one act, so the series screen asks about
+# every release together. Underneath it is still one `contribution-2` per
+# release carrying only `seasons` -- upstream reviews a correction against one
+# record, and bundling releases would force one verdict on three boxes a
+# moderator may want to judge apart.
+
+#: What the series screen can say about one release's seasons.
+SERIES_SEASON_STATES = (
+    "changed",  # differs from the catalogue and can be sent
+    "in_sync",  # the catalogue already says the same
+    "no_seasons",  # linked to no season here, so there is nothing to say
+    "withheld",  # differs, but cannot be sent now; `withheld` says why
+    "not_in_catalogue",  # no MovieVault release to correct
+)
+
+
+def series_season_item(
+    conn: Any,
+    record: dict[str, Any],
+    metadata: dict[str, Any] | None,
+    *,
+    preflight: bool = True,
+    live_cache: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """One release's seasons, here and upstream, and whether they can be sent.
+
+    Built on `correction_preview` restricted to `seasons`, so every rule the
+    release sheet applies -- which record, what the catalogue holds, why a field
+    is withheld -- applies here unchanged. This only reshapes its answer into
+    what a row on the series screen shows.
+    """
+    local = _local_season_numbers(conn, record.get("id")) or []
+    preview = correction_preview(
+        conn,
+        entity="movie",
+        record=record,
+        metadata=metadata,
+        fields=["seasons"],
+        preflight=preflight,
+        live_cache=live_cache,
+    )
+    change = next(
+        (item for item in preview.get("changes") or [] if item.get("field") == "seasons"),
+        None,
+    )
+    withheld = (preview.get("withheld") or {}).get("seasons")
+    catalogue: list[int] | None = None
+    if preview.get("mode") != "correction":
+        state = "not_in_catalogue"
+    elif not local:
+        state = "no_seasons"
+    elif change is not None:
+        state = "changed"
+        catalogue = list(change.get("expected") or [])
+    elif withheld:
+        state = "withheld"
+    else:
+        # Nothing to send and nothing refused: `build_changes` only drops an
+        # offered field when the catalogue already holds the same list.
+        state = "in_sync"
+        catalogue = list(local)
+    return {
+        "movieId": str(record.get("id")),
+        "title": _clean(record.get("release_title")) or _clean(record.get("title")),
+        "format": _format_display(record.get("format")),
+        "edition": _clean(record.get("edition")),
+        "state": state,
+        "localSeasons": local,
+        "catalogueSeasons": catalogue,
+        "withheld": withheld if state == "withheld" else None,
+        "change": change,
+        "target": preview.get("target"),
+        "comparedAgainst": preview.get("comparedAgainst"),
+        "lastContribution": latest_contribution(conn, entity="movie", record=record),
     }
 
 

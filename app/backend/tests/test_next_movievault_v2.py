@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import unittest
+import unittest.mock
 from unittest.mock import patch
 
 
@@ -829,6 +830,284 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             result["film"]["links"],
             {"tmdb": "https://www.themoviedb.org/movie/123"},
         )
+
+    def test_release_details_accepts_a_catalogued_series(self):
+        """MovieVault 0.40.0 reports a series by its TMDB television id (#826).
+
+        The answer carries `workType: "tv"`, `tmdbTvId` and a `/tv/` link, and
+        no `tmdbMovieId`. The link check used to derive the expected TMDB link
+        from the film id alone, read the `/tv/` link as one without a matching
+        identifier, and refused the whole answer - so scanning the barcode of
+        any catalogued series returned nothing at all.
+        """
+        payload = release_details_hit()
+        payload["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "imdbId": "tt0185906"},
+            "links": {
+                "tmdb": "https://www.themoviedb.org/tv/4613",
+                "imdb": "https://www.imdb.com/title/tt0185906/",
+            },
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "canonical_hit")
+        self.assertEqual(result["film"]["workType"], "tv")
+        self.assertEqual(
+            result["film"]["identifiers"],
+            {"tmdbTvId": "4613", "imdbId": "tt0185906"},
+        )
+        self.assertNotIn("tmdbMovieId", result["film"]["identifiers"])
+        self.assertEqual(
+            result["film"]["links"]["tmdb"],
+            "https://www.themoviedb.org/tv/4613",
+        )
+
+    def test_release_details_reads_the_tvdb_identifier_of_a_series(self):
+        """MovieVault sends TheTVDB's series id since it made the namespace
+        redistributable (App-Guidance media-type-and-series-hierarchy §7r)."""
+        payload = release_details_hit()
+        payload["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "tvdbId": "74205"},
+            "links": {"tmdb": "https://www.themoviedb.org/tv/4613"},
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["film"]["identifiers"], {"tmdbTvId": "4613", "tvdbId": "74205"}
+        )
+
+    def test_release_details_skips_a_tvdb_identifier_that_is_not_one(self):
+        """The newest key costs only itself when malformed: the answer stands
+        and the series is still found by its TMDB television id."""
+        payload = release_details_hit()
+        payload["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "tvdbId": "band-of-brothers"},
+            "links": {"tmdb": "https://www.themoviedb.org/tv/4613"},
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "canonical_hit")
+        self.assertEqual(result["film"]["identifiers"], {"tmdbTvId": "4613"})
+
+    def test_release_details_drops_a_tvdb_identifier_beside_a_film_id(self):
+        """TheTVDB's id names a series; beside a film id it contradicts the
+        work. The film id is what the rest of the answer agrees with, so the
+        TheTVDB id goes rather than the whole answer."""
+        payload = release_details_hit()
+        payload["film"]["identifiers"] = {
+            **payload["film"]["identifiers"],
+            "tvdbId": "74205",
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertNotIn("tvdbId", result["film"]["identifiers"])
+
+    def test_release_details_keeps_a_stated_movie_work_type(self):
+        payload = release_details_hit()
+        payload["film"]["workType"] = "movie"
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["film"]["workType"], "movie")
+        self.assertEqual(result["film"]["identifiers"]["tmdbMovieId"], "123")
+
+    def test_release_details_leaves_an_unstated_work_type_out(self):
+        """Absent is "did not say", which must stay distinguishable from movie."""
+        result = next_movievault_v2.validate_release_details_response(release_details_hit())
+
+        self.assertNotIn("workType", result["film"])
+
+    def test_release_details_reads_an_unknown_work_type_as_unstated(self):
+        payload = release_details_hit()
+        payload["film"]["workType"] = "miniseries"
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING"):
+            result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertNotIn("workType", result["film"])
+        self.assertEqual(result["film"]["identifiers"]["tmdbMovieId"], "123")
+
+    def test_release_details_refuses_a_film_and_a_series_id_together(self):
+        """Two TMDB ids name two different works; nothing could tell which."""
+        payload = release_details_hit()
+        payload["film"]["identifiers"]["tmdbTvId"] = "4613"
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_refuses_a_series_id_behind_a_film_link(self):
+        """The namespace in the link has to match the id beside it.
+
+        `/movie/4613` beside `tmdbTvId: 4613` is exactly the confusion #826
+        was: a number from one space presented as the other's.
+        """
+        payload = release_details_hit()
+        payload["film"]["identifiers"] = {"tmdbTvId": "4613"}
+        payload["film"]["links"] = {"tmdb": "https://www.themoviedb.org/movie/4613"}
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_refuses_a_film_id_behind_a_series_link(self):
+        payload = release_details_hit()
+        payload["film"]["identifiers"] = {"tmdbMovieId": "4613"}
+        payload["film"]["links"] = {"tmdb": "https://www.themoviedb.org/tv/4613"}
+
+        with self.assertRaisesRegex(
+            next_movievault_v2.MovieVaultV2Error,
+            "^release_details_response_invalid$",
+        ):
+            next_movievault_v2.validate_release_details_response(payload)
+
+    def test_release_details_candidates_accept_a_series_film(self):
+        payload = release_details_candidates()
+        payload["film"] = {
+            "title": "Planet Earth",
+            "year": 2006,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "1044", "imdbId": "tt0795176"},
+            "links": {
+                "tmdb": "https://www.themoviedb.org/tv/1044",
+                "imdb": "https://www.imdb.com/title/tt0795176/",
+            },
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "candidates")
+        self.assertEqual(result["film"]["identifiers"]["tmdbTvId"], "1044")
+        self.assertEqual(result["film"]["workType"], "tv")
+
+    def test_release_details_keeps_a_box_set_member_series_id(self):
+        payload = release_details_hit()
+        payload["boxSet"] = {
+            "state": "explicit",
+            "title": "Collection",
+            "members": [
+                {
+                    "position": 1,
+                    "title": "Band of Brothers",
+                    "identifiers": {"tmdbTvId": "4613"},
+                },
+                {
+                    "position": 2,
+                    "title": "Example Film",
+                    "identifiers": {"tmdbMovieId": "123"},
+                },
+            ],
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        members = result["boxSet"]["members"]
+        self.assertEqual(members[0]["identifiers"], {"tmdbTvId": "4613"})
+        self.assertEqual(members[1]["identifiers"], {"tmdbMovieId": "123"})
+
+    def test_release_details_reads_the_seasons_a_release_covers(self):
+        """A barcode the instance has not synced yet used to get its series and
+        never its season: the live fallback carried no seasons at all."""
+        payload = release_details_hit()
+        payload["release"]["seasons"] = [
+            {"seasonNumber": 2, "title": "Season 2", "releaseYear": 2002, "episodeCount": 10},
+            {"seasonNumber": 3, "title": None, "releaseYear": None, "episodeCount": None},
+        ]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual([season["seasonNumber"] for season in result["release"]["seasons"]], [2, 3])
+        self.assertEqual(result["release"]["seasons"][0]["releaseYear"], 2002)
+
+    def test_release_details_skips_an_unreadable_season_and_keeps_the_answer(self):
+        payload = release_details_hit()
+        payload["release"]["seasons"] = [
+            {"seasonNumber": "two"},
+            "not-an-object",
+            {"seasonNumber": 1},
+        ]
+
+        with self.assertLogs(next_movievault_v2.logger.name, level="WARNING"):
+            result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual([season["seasonNumber"] for season in result["release"]["seasons"]], [1])
+
+    def test_release_details_without_seasons_states_none(self):
+        """Absent and empty both mean nothing was said about seasons."""
+        for value in (None, []):
+            with self.subTest(value=value):
+                payload = release_details_hit()
+                if value is not None:
+                    payload["release"]["seasons"] = value
+                result = next_movievault_v2.validate_release_details_response(payload)
+                self.assertNotIn("seasons", result["release"])
+
+    def test_release_details_candidates_read_seasons_too(self):
+        payload = release_details_candidates()
+        payload["releases"][0]["seasons"] = [{"seasonNumber": 4}]
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["releases"][0]["seasons"][0]["seasonNumber"], 4)
+        self.assertNotIn("seasons", result["releases"][1])
+
+    def test_identity_changes_are_work_type_tv_id_and_seasons(self):
+        before = {
+            "a": ("movie", None, None),
+            "b": ("tv", "4613", '[{"seasonNumber": 1}]'),
+            "c": ("tv", "1044", None),
+        }
+        after = {
+            "a": ("tv", "4613", None),
+            "b": ("tv", "4613", '[{"seasonNumber": 1}]'),
+            "c": ("tv", "1044", '[{"seasonNumber": 2}]'),
+            "d": ("tv", "99", None),
+        }
+        self.assertEqual(
+            next_movievault_v2.identity_changed_release_ids(before, after),
+            ["a", "c", "d"],
+        )
+
+    def test_a_finished_sync_queues_refreshes_for_changed_releases(self):
+        """Every sync runs as a `sync_index` plugin job, scheduled or manual;
+        that is where discs already in the collection get their refresh."""
+        connection = unittest.mock.MagicMock()
+        connection.__enter__.return_value = connection
+        execution = {
+            "status": "ok",
+            "result": {"status": "completed", "identityChangedReleaseIds": ["r1", "r2"]},
+        }
+        with patch.object(next_worker, "plugin_execution_context_from_db", return_value={}), \
+             patch.object(next_worker, "run_plugin_entrypoint", return_value=execution), \
+             patch.object(next_worker, "connect", return_value=connection), \
+             patch.object(
+                 next_worker,
+                 "queue_movievault_identity_refreshes",
+                 return_value={"queued": 2},
+             ) as queue:
+            result = next_worker.process_plugin_execute(
+                {"pluginId": "movievault_v2", "entrypoint": "sync_index", "payload": {}},
+                "worker-1",
+            )
+        queue.assert_called_once_with(connection, ["r1", "r2"])
+        self.assertEqual(result["persistence"]["identityRefresh"], {"queued": 2})
 
     def test_release_details_rejects_a_hit_carrying_a_candidate_list(self):
         """`release` and `releases` answer the same question incompatibly.
