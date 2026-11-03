@@ -1,0 +1,5 @@
+# Shows the "Sponsor" button on the repository page. The same two links appear in
+# the README header and its "Support DiscVault" section; keep the three together
+# (Flux76HQ/App-Guidance, shared/templates/readme/README.md, "Donations: on by default").
+buy_me_a_coffee: flux76
+ko_fi: flux76
