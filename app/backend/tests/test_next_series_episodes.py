@@ -478,6 +478,58 @@ class EpisodePresentationTests(EpisodeSchemaTests):
         self.assertEqual(row["snapshot"]["episode_number"], 3)
         self.assertEqual(row["snapshot"]["season_number"], 1)
 
+    def test_an_episode_a_source_describes_only_partly_is_still_stored(self):
+        """Opening the Seasons tab fetches a season's episodes the first time, and
+        a source routinely leaves fields empty: TheTVDB has no still or summary
+        for an episode that has not aired, TMDB no air date for one announced.
+
+        `clean_text` answers None for nothing, and the length limit used to be
+        applied to that answer, so one such episode failed the whole request with
+        "'NoneType' object is not subscriptable" -- painted where the episode list
+        should have been, with nothing stored.
+        """
+        from app.backend import next_metadata
+
+        with self.connect() as conn:
+            ids = self._fixture(conn)
+        source = {"id": "tvdb", "capabilities": [next_metadata.SEASON_EPISODES_CAPABILITY]}
+        answer = {
+            "status": "hit",
+            "episodes": [
+                {"episodeNumber": 1, "title": "Pilot", "overview": "", "airDate": "", "stillUrl": ""},
+                {"episodeNumber": 2, "title": None, "overview": None, "airDate": None, "stillUrl": None},
+            ],
+        }
+        try:
+            with self.connect() as conn, patch.object(
+                next_metadata, "series_identifier_map", return_value={"tvdb": "81189"}
+            ), patch.object(
+                next_metadata, "metadata_source_plugins", return_value=[source]
+            ), patch.object(
+                next_metadata, "consult_plugins", return_value=([("tvdb", answer)], [])
+            ):
+                result = next_metadata.refresh_season_episodes(conn, ids["season2"])
+                conn.commit()
+            self.assertEqual(result["status"], "ok")
+            with self.connect() as conn, conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT episode_number, title, overview, air_date, still_url
+                    FROM series_episodes WHERE season_id = %s ORDER BY episode_number
+                    """,
+                    (ids["season2"],),
+                )
+                rows = cur.fetchall()
+            self.assertEqual(
+                [(row["episode_number"], row["title"], row["overview"], row["air_date"], row["still_url"]) for row in rows],
+                [(1, "Pilot", None, None, None), (2, None, None, None, None)],
+                "an empty field is stored as nothing, not refused",
+            )
+        finally:
+            with self.connect() as conn, conn.cursor() as cur:
+                cur.execute("DELETE FROM series_episodes WHERE season_id = %s", (ids["season2"],))
+                conn.commit()
+
     def test_a_season_is_added_by_its_episodes_and_leaves_existing_ones_alone(self):
         """"Add the whole season" is the per-episode act repeated, so the list
         carries one kind of row. Episodes already on it keep their place."""
