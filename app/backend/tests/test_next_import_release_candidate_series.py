@@ -89,6 +89,21 @@ class ReleaseCandidateIdentityTests(unittest.TestCase):
         _type, series = next_app.release_candidate_identity(film, PRESSING)
         self.assertEqual(series["tmdbTvId"], "4613")
 
+    def test_the_tvdb_id_travels_beside_the_television_id(self):
+        """Both are keys a series is found by (App-Guidance
+        media-type-and-series-hierarchy §7r)."""
+        _type, series = next_app.release_candidate_identity(
+            {**SERIES_FILM, "tvdbId": "74205"}, PRESSING
+        )
+        self.assertEqual((series["tmdbTvId"], series["tvdbId"]), ("4613", "74205"))
+
+    def test_a_tvdb_id_alone_is_enough_for_a_series(self):
+        _type, series = next_app.release_candidate_identity(
+            {**SERIES_FILM, "tmdbTvId": None, "tvdbId": "74205"}, PRESSING
+        )
+        self.assertEqual(series["tvdbId"], "74205")
+        self.assertNotIn("tmdbTvId", series)
+
 
 @unittest.skipUnless(
     DATABASE_URL and psycopg is not None and next_app is not None,

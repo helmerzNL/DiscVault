@@ -1655,11 +1655,17 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
     Both on one work is a contradiction rather than an addition: it names two
     different works, and nothing downstream could tell which one this disc is.
     It is refused, as MovieVault's own model refuses to produce it.
+
+    `tvdbId` is TheTVDB's series id, sent since MovieVault made the namespace
+    redistributable (App-Guidance media-type-and-series-hierarchy §7r). It names
+    a series, so beside a film id it contradicts the work -- but MovieVault does
+    not refuse that pairing, so the TheTVDB id is dropped rather than the whole
+    answer refused: the film id is the one the rest of the answer agrees with.
     """
     item = _release_details_object(
         value,
         required=set(),
-        optional={"tmdbMovieId", "tmdbTvId", "imdbId"},
+        optional={"tmdbMovieId", "tmdbTvId", "tvdbId", "imdbId"},
         label="film identifiers",
     )
     result: dict[str, str] = {}
@@ -1677,6 +1683,16 @@ def _release_details_identifiers(value: Any) -> dict[str, str]:
         )
     if "tmdbMovieId" in result and "tmdbTvId" in result:
         raise MovieVaultV2Error("release_details_response_invalid")
+    # Skipped rather than refused when it does not look like an id: it is the
+    # newest key here, and a malformed one costs only the shortcut it offers --
+    # the series is still found by its TMDB television id.
+    tvdb_id = item.get("tvdbId")
+    if (
+        isinstance(tvdb_id, str)
+        and re.fullmatch(r"[0-9]{1,20}", tvdb_id)
+        and "tmdbMovieId" not in result
+    ):
+        result["tvdbId"] = tvdb_id
     if item.get("imdbId") is not None:
         result["imdbId"] = _release_details_text(
             item["imdbId"],
@@ -3534,13 +3550,18 @@ IDENTITY_CHANGE_REPORT_LIMIT = 2000
 
 def _identity_snapshot(
     cur: Any, generation: str, release_ids: list[str]
-) -> dict[str, tuple[Any, Any, Any]]:
+) -> dict[str, tuple[Any, ...]]:
     """What a release says about the work behind it, per release id.
 
-    Three facts decide whether a disc is a series and which one: the work type,
-    the TMDB television id, and the seasons the release covers. Anything else
-    MovieVault republishes -- a poster, an audio track -- is not identity and
-    is left to the ordinary refresh cadence.
+    Four facts decide whether a disc is a series and which one: the work type,
+    the series' TMDB television and TheTVDB ids, and the seasons the release
+    covers. Anything else MovieVault republishes -- a poster, an audio track --
+    is not identity and is left to the ordinary refresh cadence.
+
+    A TheTVDB id that appears later is an identity change too: it is what lets
+    a series created under one namespace be found from the other
+    (App-Guidance media-type-and-series-hierarchy §7r), and a disc added before
+    MovieVault knew it would otherwise never hand it to its series.
     """
     if not release_ids:
         return {}
@@ -3549,28 +3570,30 @@ def _identity_snapshot(
         SELECT release_id::text AS release_id,
                work_type,
                provider_ids ->> 'tmdb_tv' AS tmdb_tv,
-               seasons::text AS seasons
+               seasons::text AS seasons,
+               provider_ids ->> 'tvdb' AS tvdb
         FROM movievault_v2_releases
         WHERE generation = %s AND release_id::text = ANY(%s)
         """,
         (generation, release_ids),
     )
-    snapshot: dict[str, tuple[Any, Any, Any]] = {}
+    snapshot: dict[str, tuple[Any, Any, Any, Any]] = {}
     for row in cur.fetchall():
         release_id = str(_row_value(row, "release_id", 0))
         snapshot[release_id] = (
             _row_value(row, "work_type", 1),
             _row_value(row, "tmdb_tv", 2),
             _row_value(row, "seasons", 3),
+            _row_value(row, "tvdb", 4),
         )
     return snapshot
 
 
 def identity_changed_release_ids(
-    before: dict[str, tuple[Any, Any, Any]],
-    after: dict[str, tuple[Any, Any, Any]],
+    before: dict[str, tuple[Any, ...]],
+    after: dict[str, tuple[Any, ...]],
 ) -> list[str]:
-    """Release ids whose work type, TMDB television id or seasons changed.
+    """Release ids whose work type, series ids (TMDB television, TheTVDB) or seasons changed.
 
     A release that only appears in `after` counts: a disc may already carry its
     id from a bucket lookup before the release reached the synced index. One
@@ -3633,6 +3656,7 @@ def _apply_full(
                   AND (
                       o.work_type IS DISTINCT FROM n.work_type
                       OR (o.provider_ids ->> 'tmdb_tv') IS DISTINCT FROM (n.provider_ids ->> 'tmdb_tv')
+                      OR (o.provider_ids ->> 'tvdb') IS DISTINCT FROM (n.provider_ids ->> 'tvdb')
                       OR o.seasons IS DISTINCT FROM n.seasons
                   )
                 ORDER BY n.release_id

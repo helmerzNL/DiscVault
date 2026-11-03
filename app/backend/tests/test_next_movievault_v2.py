@@ -866,6 +866,55 @@ class MovieVaultV2ContractTests(unittest.TestCase):
             "https://www.themoviedb.org/tv/4613",
         )
 
+    def test_release_details_reads_the_tvdb_identifier_of_a_series(self):
+        """MovieVault sends TheTVDB's series id since it made the namespace
+        redistributable (App-Guidance media-type-and-series-hierarchy §7r)."""
+        payload = release_details_hit()
+        payload["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "tvdbId": "74205"},
+            "links": {"tmdb": "https://www.themoviedb.org/tv/4613"},
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(
+            result["film"]["identifiers"], {"tmdbTvId": "4613", "tvdbId": "74205"}
+        )
+
+    def test_release_details_skips_a_tvdb_identifier_that_is_not_one(self):
+        """The newest key costs only itself when malformed: the answer stands
+        and the series is still found by its TMDB television id."""
+        payload = release_details_hit()
+        payload["film"] = {
+            "title": "Band of Brothers",
+            "year": 2001,
+            "workType": "tv",
+            "identifiers": {"tmdbTvId": "4613", "tvdbId": "band-of-brothers"},
+            "links": {"tmdb": "https://www.themoviedb.org/tv/4613"},
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertEqual(result["status"], "canonical_hit")
+        self.assertEqual(result["film"]["identifiers"], {"tmdbTvId": "4613"})
+
+    def test_release_details_drops_a_tvdb_identifier_beside_a_film_id(self):
+        """TheTVDB's id names a series; beside a film id it contradicts the
+        work. The film id is what the rest of the answer agrees with, so the
+        TheTVDB id goes rather than the whole answer."""
+        payload = release_details_hit()
+        payload["film"]["identifiers"] = {
+            **payload["film"]["identifiers"],
+            "tvdbId": "74205",
+        }
+
+        result = next_movievault_v2.validate_release_details_response(payload)
+
+        self.assertNotIn("tvdbId", result["film"]["identifiers"])
+
     def test_release_details_keeps_a_stated_movie_work_type(self):
         payload = release_details_hit()
         payload["film"]["workType"] = "movie"

@@ -11384,6 +11384,10 @@ def release_details_search_payload(result: dict[str, Any], *, entrypoint: str) -
             # for a film id.
             "tmdbTvId": identifiers.get("tmdbTvId"),
             "imdbId": identifiers.get("imdbId"),
+            # TheTVDB's series id, the second key a series is found by (§7r).
+            # Present only when MovieVault sent one, so a film's answer keeps
+            # the shape it always had.
+            **({"tvdbId": identifiers["tvdbId"]} if identifiers.get("tvdbId") else {}),
             # Present only when MovieVault stated it; absent is "did not say".
             **({"workType": film["workType"]} if film.get("workType") else {}),
         }
@@ -11542,8 +11546,9 @@ def release_candidate_identity(
     type as DiscVault's MOVIE/SHOW, and the series as the block the MovieVault
     plugin emits for a synced record, so it goes through the same
     `apply_movie_series_link`. Unstated stays unstated: no work type gives no
-    type, and a series needs both `tv` and a television id -- the id alone is not
-    enough to establish one, as on the feed.
+    type, and a series needs both `tv` and a series id -- the id alone is not
+    enough to establish one, as on the feed. The id is the TMDB television id,
+    TheTVDB's, or both (App-Guidance media-type-and-series-hierarchy §7r).
     """
     if not isinstance(film, dict):
         return None, None
@@ -11553,9 +11558,14 @@ def release_candidate_identity(
     if work_type != "tv":
         return None, None
     identifiers = film.get("identifiers") if isinstance(film.get("identifiers"), dict) else {}
-    tmdb_tv_id = clean_text(film.get("tmdbTvId") or identifiers.get("tmdbTvId"))
+    tmdb_tv_id = clean_text(film.get("tmdbTvId") or identifiers.get("tmdbTvId")) or ""
+    tvdb_id = clean_text(film.get("tvdbId") or identifiers.get("tvdbId")) or ""
+    if not tmdb_tv_id.isdigit():
+        tmdb_tv_id = ""
+    if not tvdb_id.isdigit():
+        tvdb_id = ""
     title = clean_text(film.get("title"))
-    if not tmdb_tv_id or not tmdb_tv_id.isdigit() or not title:
+    if not (tmdb_tv_id or tvdb_id) or not title:
         return MEDIA_TYPE_SHOW, None
     seasons: list[dict[str, Any]] = []
     raw_seasons = candidate.get("seasons") if isinstance(candidate, dict) else None
@@ -11577,11 +11587,11 @@ def release_candidate_identity(
                 if value is not None
             }
         )
-    series: dict[str, Any] = {
-        "provider": MOVIEVAULT_V2_PLUGIN_ID,
-        "tmdbTvId": tmdb_tv_id,
-        "title": title,
-    }
+    series: dict[str, Any] = {"provider": MOVIEVAULT_V2_PLUGIN_ID, "title": title}
+    if tmdb_tv_id:
+        series["tmdbTvId"] = tmdb_tv_id
+    if tvdb_id:
+        series["tvdbId"] = tvdb_id
     if seasons:
         series["seasons"] = seasons
     return MEDIA_TYPE_SHOW, series
