@@ -100,8 +100,32 @@ def _is_local_hostname(hostname: str) -> bool:
         return False
 
 
-def _validate_https_url(value: Any, label: str) -> str:
-    text = str(value or "").strip().rstrip("/")
+def _endpoint_path(path: str, *, keep_trailing_slash: bool) -> str:
+    """Canonicalise an endpoint path.
+
+    Trailing slashes are collapsed to at most one. They are only preserved for
+    URLs a provider published itself: some providers (Authentik, and anything
+    else on Django's strict routing) serve ``/authorize/`` and answer 404 on
+    ``/authorize``, so dropping the slash makes the endpoint unreachable.
+    Values configured locally stay fully stripped, because they are compared
+    against stored identities and must keep exactly one spelling.
+    """
+
+    stripped = path.rstrip("/")
+    if keep_trailing_slash and stripped and path.endswith("/"):
+        return f"{stripped}/"
+    return stripped
+
+
+def _validate_https_url(
+    value: Any,
+    label: str,
+    *,
+    keep_path_trailing_slash: bool = False,
+) -> str:
+    text = str(value or "").strip()
+    if not keep_path_trailing_slash:
+        text = text.rstrip("/")
     try:
         parsed = urlsplit(text)
         port = parsed.port
@@ -121,7 +145,15 @@ def _validate_https_url(value: Any, label: str) -> str:
     authority = hostname if port in {None, default_port} else f"{hostname}:{port}"
     if ":" in hostname and not hostname.startswith("["):
         authority = f"[{hostname}]" if port in {None, default_port} else f"[{hostname}]:{port}"
-    return urlunsplit((parsed.scheme, authority, parsed.path.rstrip("/"), "", ""))
+    return urlunsplit(
+        (
+            parsed.scheme,
+            authority,
+            _endpoint_path(parsed.path, keep_trailing_slash=keep_path_trailing_slash),
+            "",
+            "",
+        )
+    )
 
 
 def _internal_http_hostname(hostname: str) -> bool:
@@ -180,15 +212,23 @@ def _validate_backchannel_url(
     value: Any,
     label: str,
     insecure_origins: frozenset[str],
+    *,
+    keep_path_trailing_slash: bool = False,
 ) -> str:
-    text = str(value or "").strip().rstrip("/")
+    text = str(value or "").strip()
+    if not keep_path_trailing_slash:
+        text = text.rstrip("/")
     try:
         parsed = urlsplit(text)
         port = parsed.port
     except ValueError as exc:
         raise OidcConfigurationError(f"{label} is not a valid URL") from exc
     if parsed.scheme != "http" or _is_local_hostname(str(parsed.hostname or "")):
-        return _validate_https_url(text, label)
+        return _validate_https_url(
+            text,
+            label,
+            keep_path_trailing_slash=keep_path_trailing_slash,
+        )
     hostname = str(parsed.hostname or "").lower()
     if (
         not hostname
@@ -207,7 +247,15 @@ def _validate_backchannel_url(
             f"{label} uses HTTP outside "
             f"{OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV}"
         )
-    return urlunsplit(("http", authority, parsed.path.rstrip("/"), "", ""))
+    return urlunsplit(
+        (
+            "http",
+            authority,
+            _endpoint_path(parsed.path, keep_trailing_slash=keep_path_trailing_slash),
+            "",
+            "",
+        )
+    )
 
 
 def oidc_config_from_env(environ: Mapping[str, str] | None = None) -> OidcConfig | None:
@@ -353,17 +401,21 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
         normalized = {
             **payload,
             "authorization_endpoint": _validate_https_url(
-                payload.get("authorization_endpoint"), "authorization_endpoint"
+                payload.get("authorization_endpoint"),
+                "authorization_endpoint",
+                keep_path_trailing_slash=True,
             ),
             "token_endpoint": _validate_backchannel_url(
                 payload.get("token_endpoint"),
                 "token_endpoint",
                 config.insecure_backchannel_origins,
+                keep_path_trailing_slash=True,
             ),
             "jwks_uri": _validate_backchannel_url(
                 payload.get("jwks_uri"),
                 "jwks_uri",
                 config.insecure_backchannel_origins,
+                keep_path_trailing_slash=True,
             ),
         }
     except OidcConfigurationError as exc:
@@ -374,6 +426,26 @@ def oidc_discovery(config: OidcConfig, *, force: bool = False) -> dict[str, Any]
             normalized,
         )
     return dict(normalized)
+
+
+def _expected_id_token_issuer(
+    config: OidcConfig,
+    discovery: Mapping[str, Any],
+) -> str:
+    """The exact ``iss`` string the provider signs its ID tokens with.
+
+    ``config.issuer`` is stored slash-stripped because it is the identity key in
+    ``oidc_identities``, but the ``iss`` claim has to match the issuer the
+    provider publishes character for character. Providers that advertise a
+    trailing slash (Authentik) sign that spelling too. Only a value that equals
+    the configured issuer apart from trailing slashes is accepted, so this can
+    never widen the check to a different issuer.
+    """
+
+    published = str(discovery.get("issuer") or "").strip()
+    if published and published.rstrip("/") == config.issuer:
+        return published
+    return config.issuer
 
 
 def _token_auth_method(discovery: Mapping[str, Any]) -> str:
@@ -432,7 +504,10 @@ def validate_oidc_id_token(
             jwks,
             claims_cls=CodeIDToken,
             claims_options={
-                "iss": {"essential": True, "value": config.issuer},
+                "iss": {
+                    "essential": True,
+                    "value": _expected_id_token_issuer(config, discovery),
+                },
                 "sub": {"essential": True},
                 "aud": {"essential": True, "value": config.client_id},
                 "exp": {"essential": True},

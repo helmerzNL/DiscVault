@@ -42,6 +42,14 @@ class OidcConfigurationTests(unittest.TestCase):
                 {next_oidc.OIDC_ISSUER_ENV: "https://id.example.test"}
             )
 
+    def test_configured_issuer_stays_slash_stripped(self):
+        # The issuer is the identity key in oidc_identities: one spelling only.
+        values = {**OIDC_ENV, next_oidc.OIDC_ISSUER_ENV: "https://id.example.test/app/"}
+        self.assertEqual(
+            next_oidc.oidc_config_from_env(values).issuer,
+            "https://id.example.test/app",
+        )
+
     def test_non_local_http_issuer_is_rejected(self):
         values = {**OIDC_ENV, next_oidc.OIDC_ISSUER_ENV: "http://id.example.test"}
         with self.assertRaises(next_oidc.OidcConfigurationError):
@@ -266,6 +274,86 @@ class OidcDiscoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(next_oidc.OidcFlowError, "provider_invalid"):
                 next_oidc.oidc_discovery(config)
 
+    def test_discovery_preserves_provider_endpoint_trailing_slashes(self):
+        # Authentik publishes its endpoints with a trailing slash and answers
+        # 404 without one, so the discovered spelling has to survive intact.
+        metadata = {
+            "issuer": f"{self.config.issuer}/",
+            "authorization_endpoint": f"{self.config.issuer}/authorize/",
+            "token_endpoint": f"{self.config.issuer}/token/",
+            "jwks_uri": f"{self.config.issuer}/jwks/",
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value=metadata,
+        ):
+            discovery = next_oidc.oidc_discovery(self.config)
+        self.assertEqual(
+            discovery["authorization_endpoint"],
+            f"{self.config.issuer}/authorize/",
+        )
+        self.assertEqual(discovery["token_endpoint"], f"{self.config.issuer}/token/")
+        self.assertEqual(discovery["jwks_uri"], f"{self.config.issuer}/jwks/")
+
+    def test_discovery_preserves_trailing_slashes_on_allowlisted_backchannels(self):
+        origin = "http://pocket-id.pocket-id.svc.cluster.local:1411"
+        config = next_oidc.oidc_config_from_env(
+            {
+                **OIDC_ENV,
+                next_oidc.OIDC_INSECURE_BACKCHANNEL_ORIGINS_ENV: origin,
+            }
+        )
+        metadata = {
+            "issuer": config.issuer,
+            "authorization_endpoint": f"{config.issuer}/authorize/",
+            "token_endpoint": f"{origin}/api/oidc/token/",
+            "jwks_uri": f"{origin}/jwks/",
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value=metadata,
+        ):
+            discovery = next_oidc.oidc_discovery(config)
+        self.assertEqual(discovery["token_endpoint"], f"{origin}/api/oidc/token/")
+        self.assertEqual(discovery["jwks_uri"], f"{origin}/jwks/")
+
+    def test_discovery_collapses_repeated_trailing_slashes(self):
+        metadata = {
+            "issuer": self.config.issuer,
+            "authorization_endpoint": f"{self.config.issuer}/authorize///",
+            "token_endpoint": f"{self.config.issuer}/token///",
+            "jwks_uri": f"{self.config.issuer}/jwks///",
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value=metadata,
+        ):
+            discovery = next_oidc.oidc_discovery(self.config)
+        self.assertEqual(
+            discovery["authorization_endpoint"],
+            f"{self.config.issuer}/authorize/",
+        )
+        self.assertEqual(discovery["token_endpoint"], f"{self.config.issuer}/token/")
+        self.assertEqual(discovery["jwks_uri"], f"{self.config.issuer}/jwks/")
+
+    def test_a_published_trailing_slash_never_weakens_endpoint_validation(self):
+        metadata = {
+            "issuer": self.config.issuer,
+            "authorization_endpoint": "http://id.example.test/authorize/",
+            "token_endpoint": f"{self.config.issuer}/token/",
+            "jwks_uri": f"{self.config.issuer}/jwks/",
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value=metadata,
+        ):
+            with self.assertRaisesRegex(next_oidc.OidcFlowError, "provider_invalid"):
+                next_oidc.oidc_discovery(self.config)
+
     def test_document_fetches_do_not_follow_redirects(self):
         response = mock.Mock(status_code=200)
         response.json.return_value = {"keys": []}
@@ -385,6 +473,44 @@ class OidcIdTokenTests(unittest.TestCase):
     def test_wrong_issuer_is_rejected(self):
         with self.assertRaisesRegex(next_oidc.OidcFlowError, "id_token_invalid"):
             self._validate(self._token(iss="https://other.example.test"))
+
+    def test_issuer_with_a_published_trailing_slash_is_accepted(self):
+        discovery = {
+            **self.discovery,
+            "issuer": f"{self.config.issuer}/",
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value={"keys": [self.public_jwk]},
+        ):
+            claims = next_oidc.validate_oidc_id_token(
+                self.config,
+                discovery,
+                self._token(iss=f"{self.config.issuer}/"),
+                nonce_hash=next_oidc.oidc_state_hash("expected-nonce"),
+                code="authorization-code",
+            )
+        self.assertEqual(claims["sub"], "stable-subject")
+
+    def test_a_published_issuer_of_another_host_is_never_trusted(self):
+        discovery = {
+            **self.discovery,
+            "issuer": "https://other.example.test",
+        }
+        with mock.patch.object(
+            next_oidc,
+            "fetch_oidc_document",
+            return_value={"keys": [self.public_jwk]},
+        ):
+            with self.assertRaisesRegex(next_oidc.OidcFlowError, "id_token_invalid"):
+                next_oidc.validate_oidc_id_token(
+                    self.config,
+                    discovery,
+                    self._token(iss="https://other.example.test"),
+                    nonce_hash=next_oidc.oidc_state_hash("expected-nonce"),
+                    code="authorization-code",
+                )
 
     def test_wrong_audience_is_rejected(self):
         with self.assertRaisesRegex(next_oidc.OidcFlowError, "id_token_invalid"):
