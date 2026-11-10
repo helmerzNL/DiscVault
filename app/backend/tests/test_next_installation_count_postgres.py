@@ -9,7 +9,9 @@ on. Both are claims about what a *second* connection sees:
 * the owner's notice is recorded with an insert that does nothing on conflict,
   in the same transaction as the notification, so two workers or a restart
   cannot tell the owner twice -- and a notice that failed to be written leaves
-  nothing behind that says it was.
+  nothing behind that says it was;
+* the notice the PWA puts on the owner's screen is found by its kind inside
+  the ``jsonb`` payload and by being unread, which a dict only imitates.
 
 A dict cannot make a second writer wait, cannot roll a transaction back, and
 compares JSON as Python objects rather than as ``jsonb``. So these run against
@@ -149,7 +151,7 @@ class InstallationCountPostgresTests(unittest.TestCase):
         with self.connect() as conn:
             return conn.execute(
                 """
-                SELECT user_id, title, body, payload, read_at
+                SELECT id, user_id, title, body, payload, read_at
                 FROM user_notifications
                 WHERE payload->>'kind' = %s AND created_at >= %s
                 """,
@@ -379,6 +381,123 @@ class InstallationCountPostgresTests(unittest.TestCase):
             first.close()
             second.close()
         self.assertEqual(len(self._notices()), 1)
+
+    # -- the notice on the owner's screen ---------------------------------------
+
+    RELEASED = {"DISCVAULT_IMAGE_VERSION": "26.11.2"}
+
+    def _pending(self, user_id, environ=None):
+        with self.connect() as conn:
+            return count.pending_owner_notice(
+                conn, user_id, now=NOW, environ=self.RELEASED if environ is None else environ
+            )
+
+    def _quiet_inbox(self, owner_id):
+        """Read whatever notice of this kind the database already held, so a
+        database that is in use does not answer for this test. Restored after."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                """
+                UPDATE user_notifications SET read_at = now()
+                WHERE user_id = %s AND read_at IS NULL AND payload->>'kind' = %s
+                RETURNING id
+                """,
+                (owner_id, count.NOTICE_KIND),
+            ).fetchall()
+        ids = [row["id"] for row in rows]
+
+        def restore():
+            if ids:
+                with self.connect() as conn:
+                    conn.execute("UPDATE user_notifications SET read_at = NULL WHERE id = ANY(%s)", (ids,))
+
+        self.addCleanup(restore)
+
+    def test_the_screen_shows_the_owner_a_notice_it_creates_itself(self):
+        owner_id, admin_id, viewer_id = self._people()
+        self._quiet_inbox(owner_id)
+
+        shown = self._pending(owner_id)
+        (notice,) = self._notices()
+        self.assertEqual(shown, {"id": str(notice["id"])})
+        self.assertEqual(notice["user_id"], owner_id)
+        self.assertEqual(self._setting(count.NOTICE_CREATED_AT_KEY), NOW.isoformat())
+
+        # Asked again, by the screen or by the worker: the same single notice.
+        self.assertEqual(self._pending(owner_id), shown)
+        with self.connect() as conn:
+            self.assertTrue(count.ensure_owner_notice(conn, NOW))
+        self.assertEqual(len(self._notices()), 1)
+
+        # Nobody else is shown it.
+        self.assertIsNone(self._pending(admin_id))
+        self.assertIsNone(self._pending(viewer_id))
+
+    def test_the_notice_the_worker_wrote_is_shown_until_it_is_read(self):
+        owner_id, _admin_id, _viewer_id = self._people()
+        self._quiet_inbox(owner_id)
+        with self.connect() as conn:
+            self.assertTrue(count.ensure_owner_notice(conn, NOW))
+        (notice,) = self._notices()
+        self.assertEqual(self._pending(owner_id), {"id": str(notice["id"])})
+
+        with self.connect() as conn:
+            conn.execute("UPDATE user_notifications SET read_at = now() WHERE id = %s", (notice["id"],))
+        self.assertIsNone(self._pending(owner_id))
+        self.assertEqual(len(self._notices()), 1)
+
+    def test_nothing_is_shown_or_written_while_the_count_is_off(self):
+        owner_id, _admin_id, _viewer_id = self._people()
+        self._quiet_inbox(owner_id)
+
+        self.assertIsNone(self._pending(owner_id, {**self.RELEASED, count.DISABLE_ENV: "off"}))
+        self.assertIsNone(self._pending(owner_id, {}))  # not a released image
+        with self.connect() as conn:
+            count._set_setting(conn, count.ENABLED_KEY, False)
+        self.assertIsNone(self._pending(owner_id))
+        self.assertEqual(self._notices(), [])
+        self.assertIsNone(self._setting(count.NOTICE_CREATED_AT_KEY))
+
+        # And an unread notice from before is not put back while it is off.
+        with self.connect() as conn:
+            count._set_setting(conn, count.ENABLED_KEY, True)
+        self.assertIsNotNone(self._pending(owner_id))
+        with self.connect() as conn:
+            count._set_setting(conn, count.ENABLED_KEY, False)
+        self.assertIsNone(self._pending(owner_id))
+        self.assertFalse(self._reporting())
+
+    def _reporting(self, environ=None):
+        with self.connect() as conn:
+            return count.is_reporting(conn, environ=self.RELEASED if environ is None else environ)
+
+    def test_the_wizards_question_reads_and_writes_nothing(self):
+        self.assertTrue(self._reporting())
+        self.assertFalse(self._reporting({**self.RELEASED, count.DISABLE_ENV: "off"}))
+        self.assertFalse(self._reporting({}))
+        with self.connect() as conn:
+            stored = conn.execute(
+                "SELECT count(*) AS n FROM app_settings WHERE key = ANY(%s)", (list(count._STATE_KEYS),)
+            ).fetchone()["n"]
+        self.assertEqual(stored, 0)
+
+    def test_a_failed_lookup_leaves_the_snapshots_transaction_usable(self):
+        """The lookup runs inside the snapshot's own connection. Without the
+        savepoint a failing statement would abort everything after it."""
+        from app.backend import next_app
+
+        owner_id, _admin_id, _viewer_id = self._people()
+
+        def broken(conn, _user_id):
+            conn.execute("SELECT 1 FROM a_table_that_does_not_exist")
+
+        with self.connect() as conn:
+            with patch.object(next_app, "pending_installation_count_notice", side_effect=broken):
+                with self.assertLogs(next_app.logger, level="ERROR"):
+                    self.assertIsNone(
+                        next_app.installation_count_notice_for(conn, {"id": owner_id, "role": "owner"})
+                    )
+            self.assertEqual(conn.execute("SELECT 1 AS one").fetchone()["one"], 1)
 
 
 if __name__ == "__main__":

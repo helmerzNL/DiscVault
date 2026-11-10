@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "플러그인 구성이 필요합니다",
   "notifications.installationCountTitle": "익명 설치 수 집계가 켜져 있습니다",
   "notifications.installationCountBody": "이 서버는 하루에 한 번 api.discvault.eu에 실행 중임을 알립니다. 전송되는 것은 DiscVault 버전과 이전 보고 이후 지난 일수뿐입니다. 식별자도, 계정이나 컬렉션 데이터도 포함되지 않습니다. {preferences} > {collectors}에서 끌 수 있습니다.",
+  "notifications.installationCountPurpose": "이 집계는 DiscVault가 얼마나 사용되는지 가늠하여 그에 맞게 MovieVault 백엔드를 확장하기 위한 용도로만 쓰입니다.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

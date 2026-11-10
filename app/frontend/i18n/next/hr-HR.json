@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Dodaci trebaju konfiguraciju",
   "notifications.installationCountTitle": "Anonimno brojanje instalacija je uključeno",
   "notifications.installationCountBody": "Jednom dnevno ovaj poslužitelj javlja api.discvault.eu da radi: svoju verziju DiscVaulta i broj dana od prethodne dojave. Bez identifikatora i bez podataka o računima ili zbirci. Možete ga isključiti u {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Brojanje služi samo za procjenu koliko se DiscVault koristi, kako bi se pozadinski sustav MovieVaulta mogao skalirati u skladu s tim.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

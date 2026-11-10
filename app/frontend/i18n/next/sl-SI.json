@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Vtičnike je treba nastaviti",
   "notifications.installationCountTitle": "Anonimno štetje namestitev je vklopljeno",
   "notifications.installationCountBody": "Enkrat na dan ta strežnik sporoči api.discvault.eu, da deluje: svojo različico DiscVaulta in število dni od prejšnjega sporočila. Brez identifikatorja in brez podatkov o računih ali zbirki. Izklopite ga lahko v {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Štetje je namenjeno samo oceni, koliko se DiscVault uporablja, da je mogoče zaledje MovieVault ustrezno prilagoditi.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "外掛程式需要設定",
   "notifications.installationCountTitle": "匿名安裝統計已開啟",
   "notifications.installationCountBody": "此伺服器每天一次向 api.discvault.eu 回報它正在執行：只包含 DiscVault 版本以及距上次回報的天數。不含任何識別碼，也不含帳戶或收藏資料。可在「{preferences}」>「{collectors}」中關閉。",
+  "notifications.installationCountPurpose": "此統計僅用於估算 DiscVault 的使用規模，以便據此擴充 MovieVault 後端。",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

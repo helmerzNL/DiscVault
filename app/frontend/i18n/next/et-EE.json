@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Pluginad vajavad seadistamist",
   "notifications.installationCountTitle": "Anonüümne paigalduste loendus on sees",
   "notifications.installationCountBody": "Kord päevas teatab see server aadressile api.discvault.eu, et ta töötab: oma DiscVaulti versiooni ja päevade arvu eelmisest teatest. Ei ühtegi identifikaatorit ega konto- või koguandmeid. Saate selle välja lülitada jaotises {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Loendus on ainult selleks, et hinnata, kui palju DiscVaulti kasutatakse, et MovieVaulti taustasüsteemi saaks vastavalt skaleerida.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

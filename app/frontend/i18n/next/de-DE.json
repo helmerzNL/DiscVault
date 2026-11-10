@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Plugins müssen konfiguriert werden",
   "notifications.installationCountTitle": "Die anonyme Installationszählung ist eingeschaltet",
   "notifications.installationCountBody": "Einmal am Tag meldet dieser Server an api.discvault.eu, dass er läuft: seine DiscVault-Version und die Anzahl der Tage seit seiner vorherigen Meldung. Keine Kennung und keine Konto- oder Sammlungsdaten. Ausschalten kannst du sie unter {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Die Zählung dient nur dazu, einzuschätzen, wie viel DiscVault genutzt wird, damit das MovieVault-Backend entsprechend skaliert werden kann.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

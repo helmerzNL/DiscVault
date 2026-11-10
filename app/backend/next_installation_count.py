@@ -30,7 +30,10 @@ client rules, section 6 for the server); the decision is ADR-0020:
 * only a released image reports: a source checkout or a development build
   sends nothing;
 * the owner is told first: a one-time notice lands in the owner's notification
-  inbox before the first report can leave.
+  inbox before the first report can leave, and the PWA keeps it on the screen
+  until the owner has answered it (``pending_owner_notice``). On a new
+  installation the setup wizard says the same thing before there is an owner
+  at all (``is_reporting``).
 
 State lives in ``app_settings``, in this server's own database, so a restore
 from backup continues the same interval instead of appearing as a new
@@ -142,12 +145,19 @@ IMAGE_VERSION_ENV = "DISCVAULT_IMAGE_VERSION"
 #: in ``next_views_ui.py``), like the unconfigured-plugins notice.
 NOTICE_KIND = "installation_count_notice"
 NOTICE_TITLE = "Anonymous installation count is on"
-NOTICE_BODY = (
+#: Why the count exists, said before what it sends: a notice that only lists
+#: what leaves the server reads as surveillance, however little it lists.
+NOTICE_PURPOSE = (
+    "The count is only there to estimate how much DiscVault is used, so that "
+    "the MovieVault backend can be scaled to match."
+)
+NOTICE_DETAILS = (
     "Once a day this server tells api.discvault.eu that it is running: its "
     "DiscVault version and the number of days since its previous report. No "
     "identifier, and no account or collection data. You can turn it off under "
     "Preferences > Collectors."
 )
+NOTICE_BODY = f"{NOTICE_PURPOSE} {NOTICE_DETAILS}"
 NOTICE_URL = "/profile"
 
 
@@ -451,6 +461,93 @@ def ensure_owner_notice(conn, now: datetime) -> bool:
         send_push=False,
     )
     return True
+
+
+def _state_if_reporting(
+    conn,
+    environ: Mapping[str, str] | None,
+    version: str | None,
+) -> dict[str, Any] | None:
+    """The stored state when this server takes part in the count, else ``None``.
+
+    The three questions the check asks before it does anything -- neither off
+    switch set, and a released image -- for the places that *tell* somebody
+    about the count. They must not announce a count that is not running.
+    """
+    if disabled_by_environment(environ):
+        return None
+    if version is None:
+        version = release_version(environ)
+    if not is_release_version(version):
+        return None
+    if not _table_exists(conn, "app_settings"):
+        return None
+    stored = _read_state(conn)
+    if not owner_setting_enabled(stored.get(ENABLED_KEY)):
+        return None
+    return stored
+
+
+def is_reporting(
+    conn,
+    *,
+    environ: Mapping[str, str] | None = None,
+    version: str | None = None,
+) -> bool:
+    """Whether this server reports. What the setup wizard asks before it says so."""
+    return _state_if_reporting(conn, environ, version) is not None
+
+
+def pending_owner_notice(
+    conn,
+    user_id: Any,
+    *,
+    now: datetime | None = None,
+    environ: Mapping[str, str] | None = None,
+    version: str | None = None,
+) -> dict[str, Any] | None:
+    """The one-time notice this user has not answered yet, or ``None``.
+
+    A row in the inbox tells nobody anything by itself: the PWA shows no unread
+    count outside the notifications page, so the notice sat there unseen and
+    the owner of a freshly upgraded server was told nothing. The PWA therefore
+    asks for it with every snapshot and keeps it on the screen until the owner
+    closes it or opens the setting; either one marks the row read, on every
+    device at once.
+
+    The notice is created here when it is owed and still missing. On a new
+    installation the worker's first check runs before there is an owner
+    account, and its next one is up to ``CHECK_INTERVAL_SECONDS`` later -- the
+    owner would open the app to nothing and learn of the count from the inbox,
+    if ever. The once-only key is the same one the worker uses, so whichever
+    comes first creates it and the other finds it there.
+
+    Only while this server really reports: with either off switch set, or on a
+    build that is not a released image, there is nothing to announce and an
+    older unread notice is not put back on the screen.
+    """
+    if not user_id:
+        return None
+    stored = _state_if_reporting(conn, environ, version)
+    if stored is None or not _table_exists(conn, "user_notifications"):
+        return None
+    if NOTICE_CREATED_AT_KEY not in stored:
+        moment = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+        if not ensure_owner_notice(conn, moment):
+            return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id
+            FROM user_notifications
+            WHERE user_id=%s AND read_at IS NULL AND payload->>'kind' = %s
+            ORDER BY created_at ASC, id ASC
+            LIMIT 1
+            """,
+            (user_id, NOTICE_KIND),
+        )
+        row = cur.fetchone()
+    return {"id": str(row["id"])} if row else None
 
 
 # --- the check ----------------------------------------------------------------

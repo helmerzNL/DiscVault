@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "プラグインの設定が必要です",
   "notifications.installationCountTitle": "匿名のインストール数カウントがオンになっています",
   "notifications.installationCountBody": "このサーバーは 1 日 1 回、稼働中であることを api.discvault.eu に通知します。送信されるのは DiscVault のバージョンと、前回の通知からの日数だけです。識別子も、アカウントやコレクションのデータも含まれません。{preferences} > {collectors} でオフにできます。",
+  "notifications.installationCountPurpose": "このカウントは、DiscVault がどの程度使われているかを見積もり、それに合わせて MovieVault のバックエンドを拡張できるようにするためだけのものです。",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

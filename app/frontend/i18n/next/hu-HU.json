@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "A bővítményeket be kell állítani",
   "notifications.installationCountTitle": "A névtelen telepítésszámlálás be van kapcsolva",
   "notifications.installationCountBody": "Ez a szerver naponta egyszer jelzi az api.discvault.eu címnek, hogy működik: elküldi a DiscVault verzióját és az előző jelzése óta eltelt napok számát. Nincs azonosító, és nincs fiók- vagy gyűjteményadat. Kikapcsolhatja itt: {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "A számlálás kizárólag annak felmérésére szolgál, hogy mennyire használják a DiscVaultot, így a MovieVault háttérrendszere ehhez méretezhető.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",
