@@ -1261,11 +1261,24 @@ def ui_preview_html(
       padding-right: 0;
     }
     .preview-shell.sidebar-collapsed .brand > div:last-child,
-    .preview-shell.sidebar-collapsed .nav-item-label span:last-child,
     .preview-shell.sidebar-collapsed .nav-item small,
     .preview-shell.sidebar-collapsed .sidebar-support,
     .preview-shell.sidebar-collapsed .sidebar-footer {
       display: none;
+    }
+    /* Collapsed, the label leaves the screen but stays the button's name. With
+       display: none an entry had no name at all, and the Profile entry was
+       announced by its unread badge alone. */
+    .preview-shell.sidebar-collapsed .nav-item-label span:last-child {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .preview-shell.sidebar-collapsed .nav-item {
       justify-content: center;
@@ -45830,6 +45843,13 @@ def ui_preview_html(
     function updateNotificationCounts(counts = notificationsState.counts || {}) {
       const unread = Math.max(0, Math.trunc(Number(counts.unread) || 0));
       const total = Number(counts.total || notificationsState.items.length || 0);
+      // A count that differs from the one already held came from the server
+      // after the inbox list was loaded, so that list is out of date. Without
+      // this the badge leads to an inbox that does not show what it counted.
+      const known = notificationsState.counts || {};
+      if (counts !== known && ((Number(known.unread) || 0) !== unread || (Number(known.total) || 0) !== total)) {
+        notificationsState.loaded = false;
+      }
       // Kept, so that a redraw with no fresh count -- a language change, or
       // the inbox painting before its request returns -- repeats the last
       // number it was given rather than the one the inbox happened to hold.
