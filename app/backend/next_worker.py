@@ -90,6 +90,7 @@ try:
     from .next_movievault_v2_posters import link_box_set_poster_to_containers
     from .next_movievault_v2_posters import run_poster_cache_job
     from .next_movievault_v2_posters import run_poster_cleanup
+    from .next_installation_count import schedule_check as schedule_installation_count_check
 except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_import import ImportError as NextImportError
     from next_import import NextImporter
@@ -155,6 +156,7 @@ except ImportError:  # pragma: no cover - supports python next_worker.py
     from next_movievault_v2_posters import link_box_set_poster_to_containers
     from next_movievault_v2_posters import run_poster_cache_job
     from next_movievault_v2_posters import run_poster_cleanup
+    from next_installation_count import schedule_check as schedule_installation_count_check
 
 
 STOP = False
@@ -3376,6 +3378,21 @@ def _movievault_v2_sync_interval(settings: dict[str, Any]) -> int:
     return min(max(parsed, 1), 168)
 
 
+def _maybe_report_installation_count() -> None:
+    """Let the anonymous installation count run when a check is due.
+
+    One clock comparison on almost every poll. A check that is due reads its
+    state from ``app_settings`` and sends on a thread of its own
+    (``next_installation_count.schedule_check``), so an unreachable
+    ``api.discvault.eu`` never delays a job, and no outcome of a report shows up
+    as a job or as an error anywhere.
+    """
+    try:
+        schedule_installation_count_check(connect)
+    except Exception:  # noqa: BLE001 - never crash the poll loop
+        pass
+
+
 def work_loop(worker_id: str, poll_interval: float) -> int:
     while not STOP:
         _maybe_enqueue_price_sweep(worker_id)
@@ -3389,6 +3406,7 @@ def work_loop(worker_id: str, poll_interval: float) -> int:
             _maybe_enqueue_movievault_v2_sync(worker_id)
         except Exception as exc:  # noqa: BLE001 - never crash the poll loop
             print(json.dumps({"status": "error", "source": "movievault_v2_sync_scheduler", "error": str(exc)}))
+        _maybe_report_installation_count()
         try:
             run_once(worker_id, quiet_idle=True)
         except Exception as exc:  # noqa: BLE001 - a single bad iteration (e.g. the

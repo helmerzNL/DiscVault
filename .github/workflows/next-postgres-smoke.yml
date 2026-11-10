@@ -48,6 +48,12 @@ jobs:
 
       JWT_SECRET: discvault-ci-only-not-a-production-secret
 
+      # A CI run is not an installation. Only the worker's poll loop reports,
+      # and this job never starts it (`run-once` is not the loop); the test
+      # package also switches the count off for itself. Set here as well so
+      # that neither of those has to stay true for CI to stay uncounted.
+      DISCVAULT_INSTALLATION_COUNT: "off"
+
     defaults:
       run:
         working-directory: app/backend
@@ -65,7 +71,7 @@ jobs:
         run: python -m pip install -r requirements.txt
 
       - name: Compile Next tooling
-        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_artwork_trash.py next_worker.py
+        run: python -m py_compile dedup_identity.py identity_fixture_contract.py next_metadata.py scripts/sync_dedup_merge.py scripts/validate_identity_ladder_fixture.py next_database.py next_import.py next_app.py next_auth.py next_crawlers.py next_legacy_auth.py next_runtime_secrets.py next_settings_store.py next_plugin_runtime.py next_movievault_v2.py next_movievault_v2_contributions.py next_artwork_trash.py next_installation_count.py next_worker.py
 
       # `py_compile` above proves these modules parse; it cannot prove a line
       # can run. Every bulk "add to box-set" returned `name 'actor' is not
@@ -415,6 +421,17 @@ jobs:
           tests.test_next_backup
           tests.test_next_backup_summary_cache
 
+      # The anonymous installation count, and mostly what it must not do: carry
+      # a fifth field, mark a day the service never counted, make a request
+      # with either off switch set, report from a development build, report
+      # twice from two workers, or send anything before the owner has been
+      # told. No database and no network -- the request is a function the test
+      # hands in -- so it runs up here. Listed by hand because this workflow
+      # lists rather than discovers, and an unlisted module here would be a
+      # privacy promise nobody checks.
+      - name: Test the anonymous installation count
+        run: python -m unittest tests.test_next_installation_count
+
       # ======================================================================
       # EVERY STEP ABOVE THIS LINE RUNS AGAINST AN EMPTY DATABASE.
       # A test that reads or writes any table belongs BELOW it, or it dies
@@ -426,6 +443,15 @@ jobs:
 
       - name: Show migration status
         run: python next_database.py status
+
+      # The half of the installation count a dict cannot stand in for. "One
+      # report a day across workers" and "the owner is told once" are both
+      # claims about what a second connection sees: that it waits for the
+      # first, loses the compare-and-set, and finds nothing left behind by a
+      # transaction that rolled back. Without a DATABASE_URL every case skips
+      # and the module reads green while proving nothing.
+      - name: Test the installation count's claims against PostgreSQL
+        run: python -m unittest tests.test_next_installation_count_postgres
 
       # The database half of the OIDC front door, and the half that matters:
       # #799 was two `uuid` columns disagreeing. The callback's lookup returned
