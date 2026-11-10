@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Notificacao de teste enviada.",
   "notifications.total": "Total",
   "notifications.unread": "Nao lidas",
-  "notifications.unreadBadge": "Notificações não lidas: {count}",
+  "notifications.unreadCount": "Notificações não lidas: {count}",
   "notifications.unsupported": "Nao suportado",
   "people.description": "Explore atores, realizadores e equipa da sua colecao fisica e digital.",
   "people.eyebrow": "Elenco e equipa",

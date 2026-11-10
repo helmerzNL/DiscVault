@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Testvarsel sendt.",
   "notifications.total": "Totalt",
   "notifications.unread": "Uleste",
-  "notifications.unreadBadge": "Uleste varsler: {count}",
+  "notifications.unreadCount": "Uleste varsler: {count}",
   "notifications.unsupported": "Ikke stottet",
   "people.description": "Bla gjennom skuespillere, regissorer og crew fra din fysiske og digitale samling.",
   "people.eyebrow": "Skuespillere og crew",

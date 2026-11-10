@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Testi-ilmoitus lahetetty.",
   "notifications.total": "Yhteensa",
   "notifications.unread": "Lukematta",
-  "notifications.unreadBadge": "Lukemattomia ilmoituksia: {count}",
+  "notifications.unreadCount": "Lukemattomia ilmoituksia: {count}",
   "notifications.unsupported": "Ei tuettu",
   "people.description": "Selaa nayttelijoita, ohjaajia ja tekijoita fyysisesta ja digitaalisesta kokoelmastasi.",
   "people.eyebrow": "Nayttelijat ja tekijat",

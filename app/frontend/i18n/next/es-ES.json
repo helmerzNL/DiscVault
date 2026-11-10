@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Notificacion de prueba enviada.",
   "notifications.total": "Total",
   "notifications.unread": "Sin leer",
-  "notifications.unreadBadge": "Notificaciones sin leer: {count}",
+  "notifications.unreadCount": "Notificaciones sin leer: {count}",
   "notifications.unsupported": "No compatible",
   "people.description": "Explora actores, directores y equipo de tu coleccion fisica y digital.",
   "people.eyebrow": "Reparto y equipo",

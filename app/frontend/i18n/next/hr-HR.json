@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Testna obavijest poslana.",
   "notifications.total": "Ukupno",
   "notifications.unread": "Nepročitano",
-  "notifications.unreadBadge": "Nepročitane obavijesti: {count}",
+  "notifications.unreadCount": "Nepročitane obavijesti: {count}",
   "notifications.unsupported": "Nepodržano",
   "people.description": "Pregledavajte glumce, redatelje i ekipu iz svoje fizičke i digitalne zbirke.",
   "people.eyebrow": "Glumačka postava i ekipa",

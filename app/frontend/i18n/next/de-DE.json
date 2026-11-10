@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Testbenachrichtigung gesendet.",
   "notifications.total": "Gesamt",
   "notifications.unread": "Ungelesen",
-  "notifications.unreadBadge": "Ungelesene Benachrichtigungen: {count}",
+  "notifications.unreadCount": "Ungelesene Benachrichtigungen: {count}",
   "notifications.unsupported": "Nicht unterstuetzt",
   "people.description": "Durchsuche Schauspieler, Regisseure und Crew aus deiner physischen und digitalen Sammlung.",
   "people.eyebrow": "Besetzung & Crew",

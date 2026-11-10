@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Η δοκιμαστική ειδοποίηση στάλθηκε.",
   "notifications.total": "Σύνολο",
   "notifications.unread": "Μη αναγνωσμένα",
-  "notifications.unreadBadge": "Μη αναγνωσμένες ειδοποιήσεις: {count}",
+  "notifications.unreadCount": "Μη αναγνωσμένες ειδοποιήσεις: {count}",
   "notifications.unsupported": "Δεν υποστηρίζεται",
   "people.description": "Περιηγηθείτε σε ηθοποιούς, σκηνοθέτες και συντελεστές από τη φυσική και ψηφιακή συλλογή σας.",
   "people.eyebrow": "Ηθοποιοί και συντελεστές",

@@ -2229,7 +2229,7 @@
   "notifications.testSent": "测试通知已发送。",
   "notifications.total": "总计",
   "notifications.unread": "未读",
-  "notifications.unreadBadge": "未读通知：{count}",
+  "notifications.unreadCount": "未读通知：{count}",
   "notifications.unsupported": "不支持",
   "people.description": "浏览实体和数字收藏中的演员、导演与工作人员。",
   "people.eyebrow": "演员与工作人员",

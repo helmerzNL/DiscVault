@@ -2229,7 +2229,7 @@
   "notifications.testSent": "Notifica di test inviata.",
   "notifications.total": "Totale",
   "notifications.unread": "Non lette",
-  "notifications.unreadBadge": "Notifiche non lette: {count}",
+  "notifications.unreadCount": "Notifiche non lette: {count}",
   "notifications.unsupported": "Non supportato",
   "people.description": "Sfoglia attori, registi e troupe dalla tua collezione fisica e digitale.",
   "people.eyebrow": "Cast e troupe",
