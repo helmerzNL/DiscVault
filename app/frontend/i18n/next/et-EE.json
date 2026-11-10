@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testteavitus saadetud.",
   "notifications.total": "Kokku",
   "notifications.unread": "Lugemata",
+  "notifications.unreadCount": "Lugemata teavitused: {count}",
   "notifications.unsupported": "Toetamata",
   "people.description": "Sirvi näitlejaid, režissööre ja meeskonda oma füüsilisest ning digitaalsest kogust.",
   "people.eyebrow": "Osatäitjad ja meeskond",

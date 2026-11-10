@@ -2229,6 +2229,7 @@
   "notifications.testSent": "테스트 알림을 보냈습니다.",
   "notifications.total": "전체",
   "notifications.unread": "읽지 않음",
+  "notifications.unreadCount": "읽지 않은 알림: {count}개",
   "notifications.unsupported": "지원되지 않음",
   "people.description": "실물 및 디지털 컬렉션의 배우, 감독, 제작진을 찾아봅니다.",
   "people.eyebrow": "출연진 및 제작진",

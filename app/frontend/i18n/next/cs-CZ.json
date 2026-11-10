@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testovací oznámení odesláno.",
   "notifications.total": "Celkem",
   "notifications.unread": "Nepřečtené",
+  "notifications.unreadCount": "Nepřečtená oznámení: {count}",
   "notifications.unsupported": "Nepodporováno",
   "people.description": "Procházejte herce, režiséry a štáb z fyzické i digitální sbírky.",
   "people.eyebrow": "Obsazení a štáb",

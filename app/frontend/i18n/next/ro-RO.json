@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Notificare de test trimisă.",
   "notifications.total": "În total",
   "notifications.unread": "Necitite",
+  "notifications.unreadCount": "Notificări necitite: {count}",
   "notifications.unsupported": "Neacceptat",
   "people.description": "Răsfoiește actori, regizori și membri ai echipei din colecția ta fizică și digitală.",
   "people.eyebrow": "Distribuție și echipă",

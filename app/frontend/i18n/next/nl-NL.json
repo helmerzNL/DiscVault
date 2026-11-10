@@ -2227,6 +2227,7 @@
   "notifications.testSent": "Testnotificatie verstuurd.",
   "notifications.total": "Totaal",
   "notifications.unread": "Ongelezen",
+  "notifications.unreadCount": "Ongelezen notificaties: {count}",
   "notifications.unsupported": "Niet ondersteund",
   "people.description": "Blader door acteurs, regisseurs en crew uit je fysieke en digitale collectie.",
   "people.eyebrow": "Cast & crew",
