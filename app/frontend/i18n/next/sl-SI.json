@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testno obvestilo poslano.",
   "notifications.total": "Skupaj",
   "notifications.unread": "Neprebrano",
+  "notifications.unreadBadge": "Neprebrana obvestila: {count}",
   "notifications.unsupported": "Ni podprto",
   "people.description": "Brskajte po igralcih, režiserjih in ekipi iz svoje fizične in digitalne zbirke.",
   "people.eyebrow": "Igralska zasedba in ekipa",

@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Bandomasis pranešimas išsiųstas.",
   "notifications.total": "Iš viso",
   "notifications.unread": "Neskaityta",
+  "notifications.unreadBadge": "Neskaityti pranešimai: {count}",
   "notifications.unsupported": "Nepalaikoma",
   "people.description": "Naršykite aktorius, režisierius ir komandą iš savo fizinės ir skaitmeninės kolekcijos.",
   "people.eyebrow": "Aktoriai ir komanda",

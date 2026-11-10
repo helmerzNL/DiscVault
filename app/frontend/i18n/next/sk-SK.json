@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testovacie oznámenie odoslané.",
   "notifications.total": "Celkom",
   "notifications.unread": "Neprečítané",
+  "notifications.unreadBadge": "Neprečítané oznámenia: {count}",
   "notifications.unsupported": "Nepodporované",
   "people.description": "Prehliadajte hercov, režisérov a štáb z fyzickej aj digitálnej zbierky.",
   "people.eyebrow": "Obsadenie a štáb",

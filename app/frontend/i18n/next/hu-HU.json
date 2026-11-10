@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Tesztértesítés elküldve.",
   "notifications.total": "Összesen",
   "notifications.unread": "Olvasatlan",
+  "notifications.unreadBadge": "Olvasatlan értesítések: {count}",
   "notifications.unsupported": "Nem támogatott",
   "people.description": "Böngésszen színészek, rendezők és stábtagok között a fizikai és digitális gyűjteményből.",
   "people.eyebrow": "Szereplők és stáb",

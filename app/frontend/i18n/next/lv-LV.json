@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testa paziņojums nosūtīts.",
   "notifications.total": "Kopā",
   "notifications.unread": "Nelasīti",
+  "notifications.unreadBadge": "Nelasīti paziņojumi: {count}",
   "notifications.unsupported": "Netiek atbalstīts",
   "people.description": "Pārlūkojiet aktierus, režisorus un komandu no fiziskās un digitālās kolekcijas.",
   "people.eyebrow": "Aktieri un komanda",

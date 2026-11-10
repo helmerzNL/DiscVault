@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Тестовото известие е изпратено.",
   "notifications.total": "Общо",
   "notifications.unread": "Непрочетени",
+  "notifications.unreadBadge": "Непрочетени известия: {count}",
   "notifications.unsupported": "Не се поддържа",
   "people.description": "Разглеждайте актьори, режисьори и екип от физическата и цифровата си колекция.",
   "people.eyebrow": "Актьори и екип",

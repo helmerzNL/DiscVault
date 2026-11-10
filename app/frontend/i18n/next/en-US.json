@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Test notification sent.",
   "notifications.total": "Total",
   "notifications.unread": "Unread",
+  "notifications.unreadBadge": "Unread notifications: {count}",
   "notifications.unsupported": "Unsupported",
   "people.description": "Browse actors, directors and crew from your physical and digital collection.",
   "people.eyebrow": "Cast & crew",

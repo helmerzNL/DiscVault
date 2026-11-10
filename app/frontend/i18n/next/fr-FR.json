@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Notification de test envoyee.",
   "notifications.total": "Total",
   "notifications.unread": "Non lues",
+  "notifications.unreadBadge": "Notifications non lues : {count}",
   "notifications.unsupported": "Non pris en charge",
   "people.description": "Parcourez les acteurs, realisateurs et equipes de votre collection physique et numerique.",
   "people.eyebrow": "Distribution et equipe",

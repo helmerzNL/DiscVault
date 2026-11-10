@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Powiadomienie testowe wysłane.",
   "notifications.total": "Łącznie",
   "notifications.unread": "Nieprzeczytane",
+  "notifications.unreadBadge": "Nieprzeczytane powiadomienia: {count}",
   "notifications.unsupported": "Nieobsługiwane",
   "people.description": "Przeglądaj aktorów, reżyserów i ekipę z kolekcji fizycznej i cyfrowej.",
   "people.eyebrow": "Obsada i ekipa",

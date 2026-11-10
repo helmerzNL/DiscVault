@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testnotis skickad.",
   "notifications.total": "Totalt",
   "notifications.unread": "Olasta",
+  "notifications.unreadBadge": "Olästa notiser: {count}",
   "notifications.unsupported": "Stods inte",
   "people.description": "Bladdra bland skadespelare, regissorer och crew fran din fysiska och digitala samling.",
   "people.eyebrow": "Skadespelare och crew",

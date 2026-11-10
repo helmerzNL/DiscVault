@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Testnotifikation sendt.",
   "notifications.total": "I alt",
   "notifications.unread": "Ulaeste",
+  "notifications.unreadBadge": "Ulæste notifikationer: {count}",
   "notifications.unsupported": "Ikke understottet",
   "people.description": "Gennemse skuespillere, instruktoerer og crew fra din fysiske og digitale samling.",
   "people.eyebrow": "Cast & crew",

@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Test bildirimi gönderildi.",
   "notifications.total": "Toplam",
   "notifications.unread": "Okunmamış",
+  "notifications.unreadBadge": "Okunmamış bildirimler: {count}",
   "notifications.unsupported": "Desteklenmiyor",
   "people.description": "Fiziksel ve dijital koleksiyonunuzdaki oyuncuları, yönetmenleri ve ekibi inceleyin.",
   "people.eyebrow": "Oyuncular ve ekip",

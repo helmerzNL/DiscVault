@@ -231,6 +231,11 @@ def ui_preview_html(
             "</span>"
         )
 
+    # One element per place the unread count is shown. It starts hidden and
+    # empty: the number, and the name it is announced by, are written by
+    # updateNotificationCounts() from the count the snapshot already carries.
+    unread_badge = '<span class="nav-unread-badge hidden" data-notification-unread-badge role="img"></span>'
+
     attribution_cards = ui_preview_attribution_cards(
         snapshot.get("attributions") or [], nav_icon("library")
     )
@@ -1015,6 +1020,38 @@ def ui_preview_html(
       color: var(--subtle);
       font-size: 11px;
     }
+    /* Unread notifications, shown on the way to the inbox: on the Profile entry
+       of the sidebar and of the mobile tab bar, and on the Notifications button
+       of the profile page. updateNotificationCounts() writes the number and
+       hides the badge at zero. */
+    .nav-unread-badge {
+      flex: 0 0 auto;
+      box-sizing: border-box;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 999px;
+      display: inline-grid;
+      place-items: center;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 11px;
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+      line-height: 1;
+      white-space: nowrap;
+    }
+    .nav-item .nav-unread-badge {
+      margin: 0 auto 0 8px;
+    }
+    /* Where the sidebar lies flat as a top bar there is no slack for the auto
+       margin to take, and the badge would touch the role beside it. */
+    .nav-item .nav-unread-badge:not(.hidden) + small {
+      margin-left: 6px;
+    }
+    .profile-hero-nav-action .nav-unread-badge {
+      margin-left: 8px;
+    }
     .nav-symbol {
       width: 20px;
       height: 20px;
@@ -1227,16 +1264,39 @@ def ui_preview_html(
       padding-right: 0;
     }
     .preview-shell.sidebar-collapsed .brand > div:last-child,
-    .preview-shell.sidebar-collapsed .nav-item-label span:last-child,
     .preview-shell.sidebar-collapsed .nav-item small,
     .preview-shell.sidebar-collapsed .sidebar-support,
     .preview-shell.sidebar-collapsed .sidebar-footer {
       display: none;
     }
+    /* Collapsed, the label leaves the screen but stays the button's name. With
+       display: none an entry had no name at all, and the Profile entry would
+       have been announced by its unread badge alone. */
+    .preview-shell.sidebar-collapsed .nav-item-label span:last-child {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
     .preview-shell.sidebar-collapsed .nav-item {
+      position: relative;
       justify-content: center;
       padding: 0;
       min-height: 44px;
+    }
+    /* No room beside a centred icon, so the badge rides on its corner. It is
+       centred on that corner, so a wider number grows to both sides of it. */
+    .preview-shell.sidebar-collapsed .nav-item .nav-unread-badge {
+      position: absolute;
+      top: 2px;
+      left: calc(50% + 14px);
+      margin: 0;
+      transform: translateX(-50%);
     }
     .preview-shell.sidebar-collapsed .nav-item-label {
       justify-content: center;
@@ -14155,6 +14215,7 @@ def ui_preview_html(
         box-shadow: 0 20px 60px rgba(0,0,0,.46);
       }
       .mobile-tab {
+        position: relative;
         min-width: 0;
         min-height: 52px;
         border: 0;
@@ -14203,6 +14264,14 @@ def ui_preview_html(
         font-size: 10px;
         font-weight: 700;
         line-height: 1.1;
+      }
+      /* The badge rides on the corner of the icon. It sits before the label
+         in the markup because the rule above finds the label by being last. */
+      .mobile-tab .nav-unread-badge {
+        position: absolute;
+        top: 2px;
+        left: calc(50% + 14px);
+        transform: translateX(-50%);
       }
       .import-result-card.featured {
         grid-template-columns: 82px minmax(0, 1fr);
@@ -15680,7 +15749,7 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.nav">Add</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
-        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
+        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span>""" + unread_badge + """<small id="navProfileRole">-</small></button>
       </nav>
       <button type="button" class="sidebar-support" id="sidebarSupportLink" data-next-i18n="uiPreview.supportDiscVault">Support DiscVault</button>
       <div class="sidebar-footer">
@@ -18174,7 +18243,7 @@ def ui_preview_html(
           </div>
           <div class="profile-hero-actions">
             <div class="profile-hero-nav-actions">
-              <button type="button" class="secondary-button profile-hero-nav-action" id="profileOpenNotificationsButton" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span></button>
+              <button type="button" class="secondary-button profile-hero-nav-action" id="profileOpenNotificationsButton" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span>""" + unread_badge + """</button>
               <button type="button" class="secondary-button profile-hero-nav-action hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
             </div>
             <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
@@ -20150,6 +20219,7 @@ def ui_preview_html(
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
+      """ + unread_badge + """
       <span data-next-i18n="uiPreview.profile">Profile</span>
     </button>
   </nav>
@@ -20265,7 +20335,7 @@ def ui_preview_html(
       observer: null
     };
     let activeDiscoverItem = null;
-    let notificationsState = {loaded: false, items: [], counts: {total: 0, unread: 0}};
+    let notificationsState = {loaded: false, items: [], counts: (state.counts || {}).notifications || {total: 0, unread: 0}};
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
@@ -27507,6 +27577,8 @@ def ui_preview_html(
       // on the screen or in the setup wizard.
       if (document.getElementById("installationCountNotice")) renderInstallationCountNotice(true);
       if (!document.getElementById("startupInstallationCount")?.classList.contains("hidden")) renderStartupInstallationCount(currentStartup);
+      // And for the unread badge, whose name is a sentence with a number in it.
+      updateNotificationCounts();
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
       renderStatsSegmented();
@@ -45755,14 +45827,32 @@ def ui_preview_html(
       `;
     }
     function updateNotificationCounts(counts = notificationsState.counts || {}) {
-      const unread = Number(counts.unread || 0);
+      const unread = Math.max(0, Number(counts.unread) || 0);
       const total = Number(counts.total || notificationsState.items.length || 0);
-      const navNode = document.getElementById("navNotificationCount");
+      // Every count the server reports passes through here: the snapshot, the
+      // inbox and the push endpoints. The newest one is kept, so a re-render
+      // repeats it rather than an older number, and a count that differs from
+      // the one the inbox was loaded with means that list is out of date.
+      const known = notificationsState.counts || {};
+      if (counts !== known) {
+        if (Number(known.unread || 0) !== unread || Number(known.total || 0) !== Number(counts.total || 0)) {
+          notificationsState.loaded = false;
+        }
+        notificationsState.counts = counts;
+      }
       const unreadNode = document.getElementById("notificationsUnreadCount");
       const totalNode = document.getElementById("notificationsTotalCount");
-      if (navNode) navNode.textContent = String(unread);
       if (unreadNode) unreadNode.textContent = String(unread);
       if (totalNode) totalNode.textContent = String(total);
+      // A bare number on the Profile entry says nothing by itself, so the badge
+      // is named in words; the name also shows as its tooltip.
+      const badgeLabel = tNext("notifications.unreadBadge", "Unread notifications: {count}").replace("{count}", String(unread));
+      document.querySelectorAll("[data-notification-unread-badge]").forEach((node) => {
+        node.textContent = unread > 99 ? "99+" : String(unread);
+        node.setAttribute("aria-label", badgeLabel);
+        node.setAttribute("title", badgeLabel);
+        node.classList.toggle("hidden", unread < 1);
+      });
     }
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
