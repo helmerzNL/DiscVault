@@ -159,6 +159,22 @@ class BadgeStyleTests(unittest.TestCase):
         hidden = self.source[hide_start : self.source.index("{", hide_start)]
         self.assertNotIn("unread-badge", hidden)
 
+    def test_a_collapsed_sidebar_entry_keeps_its_label_as_its_name(self):
+        """Collapsed is the default on a desktop. With `display: none` on the
+        label an entry had no accessible name at all, so the Profile entry was
+        announced by its badge alone: "Unread notifications: 3", for a button
+        that opens the profile. The label leaves the screen and stays the name."""
+        hide_start = self.source.index(".preview-shell.sidebar-collapsed .brand > div:last-child,")
+        hidden = self.source[hide_start : self.source.index("{", hide_start)]
+        self.assertNotIn(".nav-item-label", hidden)
+        rule = "    .preview-shell.sidebar-collapsed .nav-item-label span:last-child {"
+        self.assertEqual(self.source.count(rule), 1)
+        start = self.source.index(rule)
+        body = self.source[start : self.source.index("}", start)]
+        self.assertIn("clip: rect(0, 0, 0, 0);", body)
+        self.assertIn("position: absolute;", body)
+        self.assertNotIn("display: none", body)
+
     def test_zero_is_hidden_by_the_shared_rule(self):
         self.assertIn(".hidden {\n      display: none !important;", self.source)
 
@@ -266,6 +282,36 @@ updateNotificationCounts();                               // what applyTranslati
 assert.equal(badges[0].shown(), true);
 assert.equal(badges[0].textContent, '3');
 assert.equal(tiles.notificationsTotalCount.textContent, '5');
+""")
+
+    def test_a_newer_count_marks_the_loaded_inbox_as_out_of_date(self):
+        """The inbox list is fetched once and then served from memory. A count
+        that arrives later and differs from the one that list was loaded with
+        means the list no longer matches the server -- and the badge has just
+        told its reader to go and look. Without this the inbox they reach says
+        "4 unread" above three cards, and the new one is not among them."""
+        self.run_js(r"""
+notificationsState = {loaded: true, items: [{}, {}, {}], counts: {total: 3, unread: 3}};
+updateNotificationCounts(notificationsState.counts);      // the inbox redrawing with its own count
+assert.equal(notificationsState.loaded, true);
+updateNotificationCounts();                               // a language change
+assert.equal(notificationsState.loaded, true);
+updateNotificationCounts({total: 3, unread: 3});          // a snapshot with nothing new in it
+assert.equal(notificationsState.loaded, true);
+updateNotificationCounts({total: 4, unread: 4});          // a snapshot after a new notification
+assert.equal(notificationsState.loaded, false);
+assert.equal(badges[0].textContent, '4');
+
+notificationsState.loaded = true;
+updateNotificationCounts({total: 4, unread: 3});          // one was read on another device
+assert.equal(notificationsState.loaded, false);
+
+// Reading one here is not news: the inbox stores the answer and redraws from it.
+notificationsState.loaded = true;
+notificationsState.counts = {total: 4, unread: 2};
+updateNotificationCounts(notificationsState.counts);
+assert.equal(notificationsState.loaded, true);
+assert.equal(badges[0].textContent, '2');
 """)
 
     def test_the_name_comes_from_the_catalogue_of_the_language_in_use(self):
