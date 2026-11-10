@@ -53,6 +53,8 @@ try:
     from .next_import import CLIENT_SYNC_SETTING_KEYS
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_installation_count import is_reporting as installation_count_is_reporting
+    from .next_installation_count import pending_owner_notice as pending_installation_count_notice
     from .next_ownership import actor_or_instance_owner_id
     from .next_plugin_runtime import plugin_registry_snapshot
     from .next_plugin_runtime import plugin_attribution
@@ -377,6 +379,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import CLIENT_SYNC_SETTING_KEYS
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_installation_count import is_reporting as installation_count_is_reporting
+    from next_installation_count import pending_owner_notice as pending_installation_count_notice
     from next_ownership import actor_or_instance_owner_id
     from next_plugin_runtime import plugin_registry_snapshot
     from next_plugin_runtime import plugin_attribution
@@ -4920,6 +4924,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
         "canUseCollection": phase == "ready",
         "canStartMigration": bool(readiness["canStart"] and can_manage_migration and auth_ready),
         "canCreateOwner": phase == "owner_setup",
+        "installationCountOn": installation_count_announced_in_setup(conn, phase),
         "canSignIn": bool(auth_effective and not user),
         "canSwitchAccount": bool(auth_effective and user and migration_blocks_collection and not can_manage_migration),
         "steps": steps,
@@ -6286,6 +6291,41 @@ def collection_attribution_entities(conn) -> list[dict[str, Any]]:
             }
         )
     return entities
+
+
+def installation_count_notice_for(conn, user: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The owner's unanswered notice about the anonymous installation count.
+
+    For the owner only, and never at the expense of the snapshot: the lookup
+    may create the notice (``next_installation_count.pending_owner_notice``),
+    so it runs in its own savepoint and a failure costs the banner, not the
+    page.
+    """
+    if not user or user.get("role") != "owner" or not user.get("id"):
+        return None
+    try:
+        with conn.transaction():
+            return pending_installation_count_notice(conn, user["id"])
+    except Exception:  # noqa: BLE001 - a notice must never break the app's first request
+        logger.exception("Installation count: could not look up the owner notice")
+        return None
+
+
+def installation_count_announced_in_setup(conn, phase: str) -> bool:
+    """Whether the setup wizard has to say that this server will be counted.
+
+    Only while the first owner is being created, and only when the count is
+    really going to run: a wizard that announces a count the operator switched
+    off would be telling the new owner something false.
+    """
+    if phase != "owner_setup":
+        return False
+    try:
+        with conn.transaction():
+            return installation_count_is_reporting(conn)
+    except Exception:  # noqa: BLE001 - never at the expense of the setup wizard
+        logger.exception("Installation count: could not tell whether the count is on")
+        return False
 
 
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -27245,7 +27285,12 @@ def register_routes(flask_app: Flask) -> None:
             if user:
                 user["role"] = next_user_primary_role(conn, user["id"])
                 user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
-            return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
+            # Before the snapshot, so that its unread count already includes a
+            # notice this request created.
+            notice = installation_count_notice_for(conn, user)
+            snapshot = collection_dashboard_snapshot(conn, user)
+            snapshot["installationCountNotice"] = notice
+            return response({"status": "ok", "snapshot": snapshot})
 
     @flask_app.get("/api/next/stats")
     def stats():

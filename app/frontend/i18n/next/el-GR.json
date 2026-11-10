@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Απαιτείται διαμόρφωση προσθέτων",
   "notifications.installationCountTitle": "Η ανώνυμη καταμέτρηση εγκαταστάσεων είναι ενεργή",
   "notifications.installationCountBody": "Μία φορά την ημέρα αυτός ο διακομιστής ενημερώνει το api.discvault.eu ότι λειτουργεί: την έκδοση του DiscVault και τον αριθμό των ημερών από την προηγούμενη αναφορά του. Κανένα αναγνωριστικό και κανένα δεδομένο λογαριασμών ή συλλογής. Μπορείτε να την απενεργοποιήσετε στο {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Η καταμέτρηση υπάρχει μόνο για να εκτιμηθεί πόσο χρησιμοποιείται το DiscVault, ώστε το backend του MovieVault να κλιμακώνεται ανάλογα.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Plugins need configuration",
   "notifications.installationCountTitle": "Anonymous installation count is on",
   "notifications.installationCountBody": "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier, and no account or collection data. You can turn it off under {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "The count is only there to estimate how much DiscVault is used, so that the MovieVault backend can be scaled to match.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

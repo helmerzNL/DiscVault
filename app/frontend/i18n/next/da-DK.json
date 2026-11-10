@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Plugins skal konfigureres",
   "notifications.installationCountTitle": "Anonym optælling af installationer er slået til",
   "notifications.installationCountBody": "En gang om dagen fortæller denne server api.discvault.eu, at den kører: dens DiscVault-version og antallet af dage siden dens forrige melding. Ingen identifikator og ingen konto- eller samlingsdata. Du kan slå den fra under {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Optællingen bruges kun til at vurdere, hvor meget DiscVault bliver brugt, så MovieVault-backenden kan skaleres derefter.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

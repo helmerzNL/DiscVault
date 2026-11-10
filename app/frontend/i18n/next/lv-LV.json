@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Spraudņi jākonfigurē",
   "notifications.installationCountTitle": "Anonīma instalāciju skaitīšana ir ieslēgta",
   "notifications.installationCountBody": "Reizi dienā šis serveris paziņo api.discvault.eu, ka tas darbojas: savu DiscVault versiju un dienu skaitu kopš iepriekšējā ziņojuma. Nav identifikatora un nav kontu vai kolekcijas datu. To var izslēgt sadaļā {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Skaitīšana ir paredzēta tikai tam, lai novērtētu, cik daudz DiscVault tiek izmantots, un attiecīgi pielāgotu MovieVault aizmugursistēmas jaudu.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

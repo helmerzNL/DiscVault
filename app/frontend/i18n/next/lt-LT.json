@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Reikia sukonfigūruoti papildinius",
   "notifications.installationCountTitle": "Anoniminis diegimų skaičiavimas įjungtas",
   "notifications.installationCountBody": "Kartą per dieną šis serveris praneša api.discvault.eu, kad veikia: savo DiscVault versiją ir dienų skaičių nuo ankstesnio pranešimo. Jokio identifikatoriaus ir jokių paskyrų ar kolekcijos duomenų. Išjungti galite čia: {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Skaičiavimas skirtas tik įvertinti, kiek DiscVault naudojamas, kad pagal tai būtų galima pritaikyti MovieVault serverio pajėgumus.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

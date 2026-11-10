@@ -51,6 +51,7 @@ UI_STRING_KEYS = (
     "preferences.installationCountEnvDisabled",
     "notifications.installationCountTitle",
     "notifications.installationCountBody",
+    "notifications.installationCountPurpose",
 )
 
 # The failed attempts below log on purpose. Without a handler of its own the
@@ -183,6 +184,17 @@ class FakeDatabase:
             }
             self.notifications.append(row)
             return [dict(row)], 1
+        if text.startswith(
+            "SELECT id FROM user_notifications WHERE user_id=%s AND read_at IS NULL AND payload->>'kind' = %s"
+        ):
+            rows = [
+                {"id": row["id"]}
+                for row in self.notifications
+                if row["user_id"] == params[0]
+                and not row.get("read")
+                and row["payload"].get("kind") == params[1]
+            ]
+            return rows[:1], len(rows[:1])
         raise AssertionError(f"the installation count issued an unexpected statement: {text}")
 
     def _claiming(self, key):
@@ -779,6 +791,240 @@ class OwnerNoticeTests(unittest.TestCase):
         self.assertEqual(post.calls, [])
 
 
+class _Untouchable:
+    """A connection nothing may be asked of."""
+
+    def cursor(self):
+        raise AssertionError("the database must not be asked while the count is off")
+
+
+class OwnerScreenNoticeTests(unittest.TestCase):
+    """What the PWA is handed to put on the owner's screen.
+
+    The notice in the inbox was never seen: nothing outside the notifications
+    page shows an unread count. ``pending_owner_notice`` is what the snapshot
+    asks instead, and these are the cases where a wrong answer would either
+    nag an owner forever or leave one untold.
+    """
+
+    def setUp(self):
+        guard = patch.object(
+            next_notifications,
+            "_next_app",
+            side_effect=AssertionError("the notice must not be pushed to any device"),
+        )
+        guard.start()
+        self.addCleanup(guard.stop)
+
+    def pending(self, database, user_id=OWNER_ID, *, environ=ENABLED_ENV, version=RELEASE):
+        with database.connect() as conn:
+            return count.pending_owner_notice(
+                conn, user_id, now=utc(2026, 11, 10), environ=environ, version=version
+            )
+
+    def test_a_new_owner_is_shown_it_without_waiting_for_the_worker(self):
+        """On a new installation the worker's first check ran before there was
+        an owner, and its next one is minutes away."""
+        database = FakeDatabase()
+        shown = self.pending(database)
+        self.assertEqual(shown, {"id": "notification-1"})
+        self.assertEqual([row["user_id"] for row in database.notifications], [OWNER_ID])
+        self.assertEqual(database.settings[count.NOTICE_CREATED_AT_KEY], utc(2026, 11, 10).isoformat())
+
+    def test_asking_again_shows_the_same_notice(self):
+        database = FakeDatabase()
+        first = self.pending(database)
+        self.assertEqual(self.pending(database), first)
+        self.assertEqual(len(database.notifications), 1)
+
+    def test_the_notice_the_worker_created_is_the_one_shown(self):
+        """The upgrade: the worker told the inbox, and nobody looked there."""
+        database = FakeDatabase()
+        run(database, Recorder(database), utc(2026, 11, 9))
+        self.assertEqual(self.pending(database), {"id": "notification-1"})
+        self.assertEqual(len(database.notifications), 1)
+
+    def test_the_worker_does_not_tell_again_what_the_screen_already_told(self):
+        database = FakeDatabase()
+        self.pending(database)
+        post = Recorder(database)
+        self.assertEqual(run(database, post, utc(2026, 11, 10)), "accepted")
+        self.assertEqual(len(database.notifications), 1)
+        self.assertEqual(len(post.calls), 1)
+
+    def test_an_answered_notice_is_not_shown_or_created_again(self):
+        database = FakeDatabase()
+        self.pending(database)
+        database.notifications[0]["read"] = True
+        self.assertIsNone(self.pending(database))
+        self.assertEqual(len(database.notifications), 1)
+
+    def test_a_deleted_notice_is_not_created_again(self):
+        database = FakeDatabase()
+        self.pending(database)
+        database.notifications.clear()
+        self.assertIsNone(self.pending(database))
+        self.assertEqual(database.notifications, [])
+
+    def test_nobody_but_the_owner_is_shown_it(self):
+        database = FakeDatabase()
+        self.assertIsNone(self.pending(database, "00000000-0000-0000-0000-0000000000b2"))
+        # Asked on someone else's behalf, the notice still went to the owner.
+        self.assertEqual([row["user_id"] for row in database.notifications], [OWNER_ID])
+        self.assertIsNone(self.pending(database, None))
+
+    def test_with_no_owner_there_is_nothing_to_show_and_nothing_is_recorded(self):
+        database = FakeDatabase(owner_id=None)
+        self.assertIsNone(self.pending(database))
+        self.assertNotIn(count.NOTICE_CREATED_AT_KEY, database.settings)
+
+    def test_nothing_is_shown_or_created_while_the_owner_has_it_off(self):
+        database = FakeDatabase({count.ENABLED_KEY: False})
+        self.assertIsNone(self.pending(database))
+        self.assertEqual(database.notifications, [])
+        self.assertNotIn(count.NOTICE_CREATED_AT_KEY, database.settings)
+
+    def test_an_unread_notice_is_not_put_back_once_the_count_is_off(self):
+        """It says the count "is on". Off, that is no longer true."""
+        database = FakeDatabase()
+        self.assertIsNotNone(self.pending(database))
+        database.settings[count.ENABLED_KEY] = False
+        self.assertIsNone(self.pending(database))
+        self.assertIsNone(self.pending(database, environ={count.DISABLE_ENV: "off"}))
+
+    def test_the_operators_switch_is_answered_without_asking_the_database(self):
+        self.assertIsNone(
+            count.pending_owner_notice(_Untouchable(), OWNER_ID, environ={count.DISABLE_ENV: "off"}, version=RELEASE)
+        )
+
+    def test_a_build_that_is_not_a_released_image_announces_nothing(self):
+        for version in (None, "", "next-dev", "build-1a2b3c4"):
+            self.assertIsNone(
+                count.pending_owner_notice(_Untouchable(), OWNER_ID, environ={}, version=version), version
+            )
+        # And the version is read from the image, not from app/VERSION.
+        self.assertIsNone(count.pending_owner_notice(_Untouchable(), OWNER_ID, environ={}))
+
+    def test_it_waits_for_the_tables(self):
+        for table in ("app_settings", "user_notifications"):
+            database = FakeDatabase()
+            database.missing_tables.add(table)
+            self.assertIsNone(self.pending(database), table)
+            self.assertEqual(database.notifications, [])
+
+    def test_a_notice_that_could_not_be_written_is_not_recorded_as_told(self):
+        database = FakeDatabase()
+        database.fail_notification = True
+        with self.assertRaises(RuntimeError):
+            self.pending(database)
+        self.assertNotIn(count.NOTICE_CREATED_AT_KEY, database.settings)
+
+
+class SetupWizardTests(unittest.TestCase):
+    """What the setup wizard asks before it tells a new owner about the count."""
+
+    def reporting(self, database, *, environ=ENABLED_ENV, version=RELEASE):
+        with database.connect() as conn:
+            return count.is_reporting(conn, environ=environ, version=version)
+
+    def test_a_released_image_with_nothing_stored_reports(self):
+        self.assertTrue(self.reporting(FakeDatabase()))
+
+    def test_it_does_not_announce_a_count_the_operator_switched_off(self):
+        self.assertFalse(self.reporting(FakeDatabase(), environ={count.DISABLE_ENV: "off"}))
+        self.assertFalse(count.is_reporting(_Untouchable(), environ={count.DISABLE_ENV: "0"}, version=RELEASE))
+
+    def test_it_does_not_announce_a_count_the_owner_switched_off(self):
+        """A restored backup can bring the setting with it."""
+        self.assertFalse(self.reporting(FakeDatabase({count.ENABLED_KEY: False})))
+
+    def test_a_source_checkout_announces_nothing(self):
+        self.assertFalse(self.reporting(FakeDatabase(), version=None, environ={}))
+        self.assertFalse(self.reporting(FakeDatabase(), version="next-dev"))
+
+    def test_asking_writes_nothing(self):
+        database = FakeDatabase()
+        self.reporting(database)
+        self.assertEqual(database.settings, {})
+        self.assertEqual(database.notifications, [])
+
+
+class _SavepointConnection:
+    """Counts the savepoints the app opens around a lookup."""
+
+    def __init__(self):
+        self.savepoints = 0
+
+    @contextlib.contextmanager
+    def transaction(self):
+        self.savepoints += 1
+        yield self
+
+
+class SnapshotAndStartupTests(unittest.TestCase):
+    """How the app hands the two answers above to the PWA."""
+
+    @classmethod
+    def setUpClass(cls):
+        from app.backend import next_app
+
+        cls.app = next_app
+
+    def test_only_the_owner_is_looked_up(self):
+        conn = _SavepointConnection()
+        with patch.object(self.app, "pending_installation_count_notice") as lookup:
+            self.assertIsNone(self.app.installation_count_notice_for(conn, None))
+            self.assertIsNone(self.app.installation_count_notice_for(conn, {"id": "u1", "role": "admin"}))
+            self.assertIsNone(self.app.installation_count_notice_for(conn, {"id": "u1", "role": "viewer"}))
+            self.assertIsNone(self.app.installation_count_notice_for(conn, {"role": "owner"}))
+        lookup.assert_not_called()
+        self.assertEqual(conn.savepoints, 0)
+
+    def test_the_owner_gets_the_notice_from_inside_a_savepoint(self):
+        conn = _SavepointConnection()
+        with patch.object(self.app, "pending_installation_count_notice", return_value={"id": "n1"}) as lookup:
+            shown = self.app.installation_count_notice_for(conn, {"id": OWNER_ID, "role": "owner"})
+        self.assertEqual(shown, {"id": "n1"})
+        lookup.assert_called_once_with(conn, OWNER_ID)
+        self.assertEqual(conn.savepoints, 1)
+
+    def test_a_failed_lookup_costs_the_banner_and_not_the_page(self):
+        conn = _SavepointConnection()
+        with patch.object(self.app, "pending_installation_count_notice", side_effect=RuntimeError("boom")):
+            with self.assertLogs(self.app.logger, level="ERROR"):
+                self.assertIsNone(self.app.installation_count_notice_for(conn, {"id": OWNER_ID, "role": "owner"}))
+
+    def test_the_snapshot_route_carries_the_notice(self):
+        source = open(os.path.join(BACKEND_DIR, "next_app.py"), encoding="utf-8").read()
+        start = source.index("def app_snapshot():")
+        body = source[start:source.index("@flask_app.get", start)]
+        self.assertIn("notice = installation_count_notice_for(conn, user)", body)
+        self.assertIn('snapshot["installationCountNotice"] = notice', body)
+        # Looked up first, so the unread count in the same answer includes it.
+        self.assertLess(body.index("installation_count_notice_for"), body.index("collection_dashboard_snapshot(conn, user)"))
+
+    def test_the_wizard_is_told_only_while_the_first_owner_is_being_created(self):
+        conn = _SavepointConnection()
+        with patch.object(self.app, "installation_count_is_reporting", return_value=True) as asked:
+            for phase in ("ready", "sign_in_required", "migration_required", "schema_blocked", ""):
+                self.assertFalse(self.app.installation_count_announced_in_setup(conn, phase), phase)
+            asked.assert_not_called()
+            self.assertTrue(self.app.installation_count_announced_in_setup(conn, "owner_setup"))
+        asked.assert_called_once_with(conn)
+
+    def test_the_wizard_says_nothing_when_the_count_is_off_or_the_answer_fails(self):
+        conn = _SavepointConnection()
+        with patch.object(self.app, "installation_count_is_reporting", return_value=False):
+            self.assertFalse(self.app.installation_count_announced_in_setup(conn, "owner_setup"))
+        with patch.object(self.app, "installation_count_is_reporting", side_effect=RuntimeError("boom")):
+            with self.assertLogs(self.app.logger, level="ERROR"):
+                self.assertFalse(self.app.installation_count_announced_in_setup(conn, "owner_setup"))
+
+    def test_the_startup_status_carries_the_wizards_answer(self):
+        source = open(os.path.join(BACKEND_DIR, "next_app.py"), encoding="utf-8").read()
+        self.assertIn('"installationCountOn": installation_count_announced_in_setup(conn, phase),', source)
+
+
 class ScheduleTests(unittest.TestCase):
     def setUp(self):
         patcher = patch.object(count, "_next_check_at", 0.0)
@@ -1169,6 +1415,84 @@ class OwnerSurfaceTests(unittest.TestCase):
         # The kind the PWA recognises is the kind the server stores.
         self.assertEqual(count.NOTICE_KIND, "installation_count_notice")
 
+    def _function(self, name):
+        start = self.ui.index(f"function {name}(")
+        return self.ui[start:self.ui.index("\n    }\n", start)]
+
+    def test_the_notice_is_put_on_the_screen_with_every_snapshot(self):
+        """The inbox alone was never seen: no unread count is shown anywhere
+        outside the notifications page."""
+        snapshot = self._function("loadAppSnapshot")
+        self.assertIn("renderInstallationCountNotice();", snapshot)
+        banner = self._function("renderInstallationCountNotice")
+        self.assertIn("(state || {}).installationCountNotice", banner)
+        self.assertIn('banner.id = "installationCountNotice";', banner)
+        self.assertIn("document.body.appendChild(banner);", banner)
+        # Why, then what, as two paragraphs under the title.
+        self.assertLess(
+            banner.index("installationCountNoticePurpose()"), banner.index("installationCountNoticeDetails()")
+        )
+
+    def test_the_banner_is_for_the_owner_and_leaves_with_the_session(self):
+        banner = self._function("renderInstallationCountNotice")
+        self.assertIn("if (!noticeId || !canManageInstallationCount()) {", banner)
+        gate = self._function("setGate")
+        self.assertIn(
+            'if (appMode && name !== "library") document.getElementById("installationCountNotice")?.remove();', gate
+        )
+
+    def test_both_answers_mark_the_inbox_entry_read(self):
+        banner = self._function("renderInstallationCountNotice")
+        self.assertIn("answerInstallationCountNotice(false)", banner)
+        self.assertIn("answerInstallationCountNotice(true)", banner)
+        answer = self._function("answerInstallationCountNotice")
+        self.assertIn("if (openSetting) openInstallationCountSetting();", answer)
+        self.assertIn("await markInstallationCountNoticeRead(noticeId);", answer)
+        mark = self._function("markInstallationCountNoticeRead")
+        self.assertIn("/api/next/notifications/${encodeURIComponent(noticeId)}", mark)
+        self.assertIn('method: "PATCH"', mark)
+        self.assertIn("JSON.stringify({read: true})", mark)
+
+    def test_reading_it_in_the_inbox_takes_the_banner_away(self):
+        opened = self._function("openNotification")
+        start = opened.index('.kind === "installation_count_notice"')
+        self.assertIn('document.getElementById("installationCountNotice")?.remove();', opened[start:start + 400])
+        self.assertIn("renderInstallationCountNotice();", self._function("markAllNotificationsRead"))
+
+    def test_the_setup_wizard_says_it_before_there_is_an_owner(self):
+        self.assertIn(
+            '<div class="startup-installation-count hidden" id="startupInstallationCount" role="note">', self.ui
+        )
+        # Outside the steps and above the buttons, so it stays through the wizard.
+        self.assertLess(
+            self.ui.index('id="startupInstallationCount"'), self.ui.index('<div class="startup-actions">')
+        )
+        self.assertGreater(
+            self.ui.index('id="startupInstallationCount"'), self.ui.index('id="startupLegacyRecoveryStep"')
+        )
+        note = self._function("renderStartupInstallationCount")
+        self.assertIn('.phase === "owner_setup" && (startup || {}).installationCountOn === true', note)
+        self.assertIn('note.classList.toggle("hidden", !show);', note)
+        self.assertIn("installationCountNoticePurpose()", note)
+        self.assertIn("installationCountNoticeDetails()", note)
+        self.assertIn("renderStartupInstallationCount(startup);", self._function("renderStartup"))
+
+    def test_what_was_read_in_the_wizard_is_not_asked_again_a_moment_later(self):
+        note = self._function("renderStartupInstallationCount")
+        self.assertIn("installationCountShownInSetup = true;", note)
+        banner = self._function("renderInstallationCountNotice")
+        start = banner.index("if (installationCountShownInSetup) {")
+        answered = banner[start:banner.index("return;", start)]
+        self.assertIn("installationCountShownInSetup = false;", answered)
+        self.assertIn("void markInstallationCountNoticeRead(noticeId);", answered)
+        # Decided before anything is drawn.
+        self.assertLess(start, banner.index("document.createElement"))
+
+    def test_the_inbox_and_the_screen_use_the_same_words(self):
+        body = self._function("installationCountNoticeBody")
+        self.assertIn("${installationCountNoticePurpose()} ${installationCountNoticeDetails()}", body)
+        self.assertIn("return installationCountNoticeBody();", self._function("notificationDisplayBody"))
+
     def test_every_string_has_its_inline_fallback_from_the_source_catalog(self):
         """``tNext(key, fallback)`` renders the fallback whenever the catalog
         has not loaded, so the two must not drift apart."""
@@ -1178,12 +1502,15 @@ class OwnerSurfaceTests(unittest.TestCase):
     def test_the_stored_notice_is_the_english_wording_of_the_catalog(self):
         """Clients that do not know the kind show the stored text."""
         self.assertEqual(count.NOTICE_TITLE, self.source["notifications.installationCountTitle"])
-        self.assertEqual(
-            count.NOTICE_BODY,
+        details = (
             self.source["notifications.installationCountBody"]
             .replace("{preferences}", self.source["preferences.title"])
-            .replace("{collectors}", self.source["preferences.tabCollectors"]),
+            .replace("{collectors}", self.source["preferences.tabCollectors"])
         )
+        self.assertEqual(count.NOTICE_PURPOSE, self.source["notifications.installationCountPurpose"])
+        self.assertEqual(count.NOTICE_DETAILS, details)
+        # Why first, then what: the same order the PWA uses.
+        self.assertEqual(count.NOTICE_BODY, f"{count.NOTICE_PURPOSE} {details}")
 
     def test_the_english_wording_says_what_the_owner_has_to_know(self):
         title = self.source["notifications.installationCountTitle"]
@@ -1195,6 +1522,11 @@ class OwnerSurfaceTests(unittest.TestCase):
             for fragment in ("api.discvault.eu", "version", "days since", "dentifier", "collection", "account"):
                 self.assertIn(fragment, text)
         self.assertIn("turn it off", body)
+        # And why: an owner who is only told what leaves the server is left
+        # to guess what it is for.
+        purpose = self.source["notifications.installationCountPurpose"]
+        for fragment in ("only", "estimate", "how much DiscVault is used", "MovieVault backend", "scaled"):
+            self.assertIn(fragment, purpose)
 
     def test_every_locale_carries_its_own_wording(self):
         """Present and non-empty is what the completeness suite checks. A
@@ -1212,6 +1544,8 @@ class OwnerSurfaceTests(unittest.TestCase):
             for placeholder in ("{preferences}", "{collectors}"):
                 self.assertIn(placeholder, body, locale)
             self.assertIn("api.discvault.eu", body, locale)
+            for name in ("DiscVault", "MovieVault"):
+                self.assertIn(name, catalog["notifications.installationCountPurpose"], locale)
             self.assertIn("api.discvault.eu", catalog["preferences.cardInstallationCountHelp"], locale)
             self.assertIn(
                 "DISCVAULT_INSTALLATION_COUNT",

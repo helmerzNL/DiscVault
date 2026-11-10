@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Programtillegg må konfigureres",
   "notifications.installationCountTitle": "Anonym telling av installasjoner er på",
   "notifications.installationCountBody": "Én gang om dagen forteller denne serveren api.discvault.eu at den kjører: DiscVault-versjonen og antall dager siden forrige melding. Ingen identifikator og ingen konto- eller samlingsdata. Du kan slå den av under {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Tellingen brukes bare til å anslå hvor mye DiscVault blir brukt, slik at MovieVault-backenden kan skaleres deretter.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

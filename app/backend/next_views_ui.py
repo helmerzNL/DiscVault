@@ -641,6 +641,25 @@ def ui_preview_html(
     .startup-auth-guidance strong {
       font-size: .95rem;
     }
+    /* What the new owner is told about the anonymous installation count while
+       the account is being created. Information, not a warning: no amber. */
+    .startup-installation-count {
+      display: grid;
+      gap: 6px;
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--accent) 5%, var(--bg-solid));
+      padding: 14px 16px;
+    }
+    .startup-installation-count strong {
+      font-size: .95rem;
+    }
+    .startup-installation-count span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
     .startup-auth-guidance span {
       color: var(--muted);
       font-size: .88rem;
@@ -2808,6 +2827,55 @@ def ui_preview_html(
       box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
       font-size: 13px;
     }
+    /* The owner's one-time notice that the anonymous installation count is on.
+       It sits on the screen rather than in the inbox because nothing outside
+       the notifications page shows an unread count. Above the page and the
+       mobile tabbar, below every dialog (120 and up), and moved up when the
+       update banner is there too. */
+    .installation-count-notice {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: grid;
+      gap: 12px;
+      width: min(560px, calc(100vw - 32px));
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      color: var(--text);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+    }
+    .installation-count-notice h2 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+    .installation-count-notice p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .installation-count-notice p + p {
+      margin-top: 6px;
+    }
+    .installation-count-notice-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .installation-count-notice-actions > button {
+      min-height: 44px;
+    }
+    body:has(#swUpdateBanner) .installation-count-notice {
+      bottom: 96px;
+    }
+    /* Its phone layout is with the other phone rules, in the main
+       `max-width: 760px` block next to the mobile tabbar it has to clear. */
     .library-export-overlay {
       position: fixed;
       inset: 0;
@@ -14630,6 +14698,16 @@ def ui_preview_html(
         /* Stick above the floating mobile tabbar (70px tall, 10px inset). */
         bottom: calc(90px + env(safe-area-inset-bottom));
       }
+      /* The installation count notice clears the same tabbar. */
+      .installation-count-notice {
+        bottom: calc(92px + env(safe-area-inset-bottom));
+      }
+      body:has(#swUpdateBanner) .installation-count-notice {
+        bottom: calc(170px + env(safe-area-inset-bottom));
+      }
+      .installation-count-notice-actions > button {
+        flex: 1 1 140px;
+      }
       .movie-edit-actions .primary-button,
       .movie-edit-actions .secondary-button {
         flex: 1;
@@ -15569,6 +15647,11 @@ def ui_preview_html(
             </label>
           </div>
         </div>
+      </div>
+      <div class="startup-installation-count hidden" id="startupInstallationCount" role="note">
+        <strong id="startupInstallationCountTitle"></strong>
+        <span id="startupInstallationCountPurpose"></span>
+        <span id="startupInstallationCountDetails"></span>
       </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
@@ -20186,6 +20269,9 @@ def ui_preview_html(
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
+    // Set once the setup wizard has shown the installation count note; see
+    // renderStartupInstallationCount().
+    let installationCountShownInSetup = false;
     let currentAuthStatus = {};
     let legacyFlowToken = "";
     let legacyStage = "";
@@ -21530,6 +21616,9 @@ def ui_preview_html(
       startupScreen?.classList.toggle("hidden", name !== "startup");
       shell?.classList.toggle("app-shell-hidden", appMode && name !== "library");
       mobile?.classList.toggle("hidden", appMode && name !== "library");
+      // The owner's notice belongs to the signed-in app, not to the sign-in or
+      // startup screen; the next snapshot draws it again.
+      if (appMode && name !== "library") document.getElementById("installationCountNotice")?.remove();
     }
     const SIDEBAR_COLLAPSED_STORAGE_KEY = "dv_next_sidebar_collapsed";
     function sidebarCollapseSupported() {
@@ -27414,6 +27503,10 @@ def ui_preview_html(
       // The banner writes its own text rather than carrying data-next-i18n,
       // because it is only ever shown for a reason the code decides.
       renderBackendReachability();
+      // The same goes for the installation count notice, when it is showing,
+      // on the screen or in the setup wizard.
+      if (document.getElementById("installationCountNotice")) renderInstallationCountNotice(true);
+      if (!document.getElementById("startupInstallationCount")?.classList.contains("hidden")) renderStartupInstallationCount(currentStartup);
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
       renderStatsSegmented();
@@ -45632,11 +45725,7 @@ def ui_preview_html(
         return tNext("notifications.pluginsUnconfiguredBody", "The following plugins are not configured yet: {plugins}").replace("{plugins}", names);
       }
       if (payload.kind === "installation_count_notice") {
-        // Names the two tabs the way this locale's own navigation does, so the
-        // path in the notice is the path on the screen.
-        return tNext("notifications.installationCountBody", "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier, and no account or collection data. You can turn it off under {preferences} > {collectors}.")
-          .replace("{preferences}", tNext("preferences.title", "Preferences"))
-          .replace("{collectors}", tNext("preferences.tabCollectors", "Collectors"));
+        return installationCountNoticeBody();
       }
       return notification.body || "";
     }
@@ -45777,6 +45866,9 @@ def ui_preview_html(
         console.warn("Could not mark notification as read", error);
       }
       if ((notification.payload || {}).kind === "installation_count_notice") {
+        // Read here is answered there: the banner goes with the inbox entry.
+        document.getElementById("installationCountNotice")?.remove();
+        if (state) state.installationCountNotice = null;
         openInstallationCountSetting();
         return;
       }
@@ -45803,6 +45895,8 @@ def ui_preview_html(
         notificationsState.items = payload.notifications || [];
         notificationsState.counts = payload.counts || {};
         notificationsState.loaded = true;
+        if (state) state.installationCountNotice = null;
+        renderInstallationCountNotice();
         renderNotificationsView();
       } catch (error) {
         const empty = document.getElementById("notificationsEmptyMessage");
@@ -49457,6 +49551,131 @@ def ui_preview_html(
         setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
       }
     }
+    // ---- The same notice, on the screen ------------------------------------
+    //
+    // The inbox entry alone was never seen: no unread count is shown outside
+    // the notifications page. So the snapshot names the owner's unanswered
+    // notice (`installationCountNotice`, owner only, and only while the count
+    // is on) and it stays on the screen until the owner answers it. Either
+    // answer marks the inbox entry read, which is what takes it off every
+    // other device too.
+    // Why first, then what: the count exists to size the MovieVault backend,
+    // and a notice that only lists what leaves the server does not say so.
+    function installationCountNoticePurpose() {
+      return tNext("notifications.installationCountPurpose", "The count is only there to estimate how much DiscVault is used, so that the MovieVault backend can be scaled to match.");
+    }
+    function installationCountNoticeDetails() {
+      // Names the two tabs the way this locale's own navigation does, so the
+      // path in the notice is the path on the screen.
+      return tNext("notifications.installationCountBody", "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier, and no account or collection data. You can turn it off under {preferences} > {collectors}.")
+        .replace("{preferences}", tNext("preferences.title", "Preferences"))
+        .replace("{collectors}", tNext("preferences.tabCollectors", "Collectors"));
+    }
+    function installationCountNoticeBody() {
+      return `${installationCountNoticePurpose()} ${installationCountNoticeDetails()}`;
+    }
+    // ---- ...and in the setup wizard ----------------------------------------
+    //
+    // A new installation has no owner yet, so nobody to send a notice to. The
+    // wizard says it instead, while the account is being created, and only
+    // when the server says the count is really going to run. Whoever read it
+    // there is not shown the banner again a moment later: the notice the
+    // first snapshot brings is marked read on the spot. That memory lives in
+    // this page only -- after a reload the banner appears, which is the safe
+    // side to err on. (`installationCountShownInSetup` is declared with
+    // `currentStartup`, ahead of anything that can run during startup.)
+    function renderStartupInstallationCount(startup) {
+      const note = document.getElementById("startupInstallationCount");
+      if (!note) return;
+      const show = (startup || {}).phase === "owner_setup" && (startup || {}).installationCountOn === true;
+      note.classList.toggle("hidden", !show);
+      if (!show) return;
+      installationCountShownInSetup = true;
+      document.getElementById("startupInstallationCountTitle").textContent = tNext("notifications.installationCountTitle", "Anonymous installation count is on");
+      document.getElementById("startupInstallationCountPurpose").textContent = installationCountNoticePurpose();
+      document.getElementById("startupInstallationCountDetails").textContent = installationCountNoticeDetails();
+    }
+    function renderInstallationCountNotice(redraw = false) {
+      const existing = document.getElementById("installationCountNotice");
+      const notice = (state || {}).installationCountNotice;
+      const noticeId = notice && notice.id ? String(notice.id) : "";
+      if (!noticeId || !canManageInstallationCount()) {
+        if (existing) existing.remove();
+        return;
+      }
+      if (installationCountShownInSetup) {
+        // Read in the wizard a moment ago: answered, not asked twice.
+        installationCountShownInSetup = false;
+        if (existing) existing.remove();
+        state.installationCountNotice = null;
+        void markInstallationCountNoticeRead(noticeId);
+        return;
+      }
+      if (existing) {
+        if (!redraw && existing.dataset.notificationId === noticeId) return;
+        existing.remove();
+      }
+      const banner = document.createElement("section");
+      banner.id = "installationCountNotice";
+      banner.className = "installation-count-notice";
+      banner.dataset.notificationId = noticeId;
+      banner.setAttribute("role", "region");
+      banner.setAttribute("aria-labelledby", "installationCountNoticeTitle");
+      const text = document.createElement("div");
+      const title = document.createElement("h2");
+      title.id = "installationCountNoticeTitle";
+      title.textContent = tNext("notifications.installationCountTitle", "Anonymous installation count is on");
+      const purpose = document.createElement("p");
+      purpose.textContent = installationCountNoticePurpose();
+      const details = document.createElement("p");
+      details.textContent = installationCountNoticeDetails();
+      text.appendChild(title);
+      text.appendChild(purpose);
+      text.appendChild(details);
+      const actions = document.createElement("div");
+      actions.className = "installation-count-notice-actions";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "secondary-button";
+      close.textContent = tNext("common.close", "Close");
+      close.addEventListener("click", () => answerInstallationCountNotice(false));
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "primary-button";
+      open.textContent = tNext("preferences.title", "Preferences");
+      open.addEventListener("click", () => answerInstallationCountNotice(true));
+      actions.appendChild(close);
+      actions.appendChild(open);
+      banner.appendChild(text);
+      banner.appendChild(actions);
+      document.body.appendChild(banner);
+    }
+    async function answerInstallationCountNotice(openSetting) {
+      const banner = document.getElementById("installationCountNotice");
+      const noticeId = banner ? banner.dataset.notificationId : "";
+      if (banner) banner.remove();
+      if (state) state.installationCountNotice = null;
+      if (openSetting) openInstallationCountSetting();
+      await markInstallationCountNoticeRead(noticeId);
+    }
+    async function markInstallationCountNoticeRead(noticeId) {
+      if (!noticeId) return;
+      try {
+        const payload = await authApiJson(`/api/next/notifications/${encodeURIComponent(noticeId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({read: true})
+        });
+        const item = (notificationsState.items || []).find((entry) => String(entry.id) === noticeId);
+        if (item) item.read_at = payload.notification?.read_at || new Date().toISOString();
+        notificationsState.counts = payload.counts || notificationsState.counts;
+        updateNotificationCounts(notificationsState.counts);
+      } catch (error) {
+        // Not marked read, so the next snapshot puts the notice back: an
+        // answer that did not reach the server is not an answer.
+        console.warn("Could not mark the installation count notice as read", error);
+      }
+    }
     // Where the one-time notice in the inbox leads: the card above, on the
     // Collectors tab of the preferences. There is no URL for a preferences
     // tab, so the notice is opened by kind rather than by its stored link. The
@@ -50718,6 +50937,7 @@ def ui_preview_html(
         else title.removeAttribute("title");
       }
       if (description) description.textContent = tNext(`startup.description.${phase}`, startup.message || "");
+      renderStartupInstallationCount(startup);
       const steps = document.getElementById("startupSteps");
       if (steps) {
         steps.classList.toggle("hidden", phase === "owner_setup");
@@ -50800,6 +51020,7 @@ def ui_preview_html(
       }
       updateListsCounts((state.counts || {}).personalLists || {});
       updateNotificationCounts((state.counts || {}).notifications || {});
+      renderInstallationCountNotice();
       if (!document.getElementById("listsView")?.classList.contains("hidden")) {
         listsState.loaded = false;
         loadListsView(true);

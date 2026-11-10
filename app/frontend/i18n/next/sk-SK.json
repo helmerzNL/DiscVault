@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Doplnky je potrebné nastaviť",
   "notifications.installationCountTitle": "Anonymné počítanie inštalácií je zapnuté",
   "notifications.installationCountBody": "Raz denne tento server oznámi api.discvault.eu, že beží: svoju verziu DiscVault a počet dní od predchádzajúceho hlásenia. Žiadny identifikátor a žiadne údaje o účtoch ani kolekcii. Vypnúť ho môžete v {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Počítanie slúži len na odhad toho, ako veľmi sa DiscVault používa, aby bolo možné podľa toho škálovať backend MovieVault.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

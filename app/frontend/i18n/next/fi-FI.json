@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Laajennukset vaativat määrityksen",
   "notifications.installationCountTitle": "Anonyymi asennusten laskenta on päällä",
   "notifications.installationCountBody": "Kerran päivässä tämä palvelin ilmoittaa osoitteeseen api.discvault.eu olevansa käynnissä: DiscVault-versionsa ja päivien määrän edellisestä ilmoituksestaan. Ei tunnistetta eikä tili- tai kokoelmatietoja. Voit kytkeä sen pois kohdassa {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Laskennalla arvioidaan vain sitä, kuinka paljon DiscVaultia käytetään, jotta MovieVaultin taustajärjestelmä voidaan mitoittaa sen mukaan.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

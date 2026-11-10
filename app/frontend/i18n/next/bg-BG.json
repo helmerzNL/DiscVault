@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Плъгините се нуждаят от настройка",
   "notifications.installationCountTitle": "Анонимното броене на инсталациите е включено",
   "notifications.installationCountBody": "Веднъж дневно този сървър съобщава на api.discvault.eu, че работи: своята версия на DiscVault и броя дни от предишното си съобщение. Без идентификатор и без данни за акаунти или колекция. Можете да го изключите в {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Броенето служи само за да се прецени колко се използва DiscVault, така че бекендът на MovieVault да може да бъде мащабиран спрямо това.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

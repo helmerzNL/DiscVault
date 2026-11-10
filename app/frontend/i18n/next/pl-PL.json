@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Wtyczki wymagają konfiguracji",
   "notifications.installationCountTitle": "Anonimowe zliczanie instalacji jest włączone",
   "notifications.installationCountBody": "Raz dziennie ten serwer informuje api.discvault.eu, że działa: podaje swoją wersję DiscVault i liczbę dni od poprzedniego zgłoszenia. Żadnego identyfikatora ani danych o kontach lub kolekcji. Możesz to wyłączyć w {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Zliczanie służy wyłącznie do oszacowania, jak często DiscVault jest używany, aby można było odpowiednio skalować backend MovieVault.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

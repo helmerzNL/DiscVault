@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Hay complementos por configurar",
   "notifications.installationCountTitle": "El recuento anónimo de instalaciones está activado",
   "notifications.installationCountBody": "Una vez al día, este servidor comunica a api.discvault.eu que está en funcionamiento: su versión de DiscVault y el número de días transcurridos desde su aviso anterior. Sin identificador y sin datos de cuentas ni de la colección. Puede desactivarlo en {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "El recuento solo sirve para estimar cuánto se usa DiscVault, de modo que el backend de MovieVault pueda escalarse en consecuencia.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

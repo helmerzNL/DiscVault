@@ -7,6 +7,10 @@ Nobody could say how many DiscVault servers are in use. So a running server
 reports, at most once a day, that it is running, and it does so without saying
 which server it is.
 
+The count has one purpose: to estimate how much DiscVault is used, so that the
+MovieVault backend, which every installation looks discs up in, can be scaled
+to match.
+
 ## What is sent, and when
 
 Once per UTC day the background worker (`next-worker`) sends one request:
@@ -53,16 +57,27 @@ request log for this route.
 
 ## The owner is told first
 
-Before the first report leaves, the owner gets one notice in the notification
-inbox: the anonymous installation count is on, what it sends, and where to turn
-it off. Opening the notice goes straight to the setting.
+Before the first report leaves, the owner is told that the anonymous
+installation count is on, what it is for, what it sends, and where to turn it
+off. Where that happens depends on how the owner arrives:
+
+- **A new installation.** The setup wizard says it while the owner account is
+  being created.
+- **An existing server after the upgrade.** The first time the owner opens the
+  web app, the notice is on the screen, with a button that goes straight to the
+  setting. It stays there until the owner closes it or opens the setting.
+
+The same notice is kept in the owner's notification inbox. It was the only
+place at first (26.11.2), and nobody saw it there: the web app shows no unread
+count outside the notifications page.
 
 - It is created once and never again, whether or not it was read.
 - It goes to the owner only, and it is not pushed to any device.
 - A server that has no owner account yet has nobody to tell, so it sends
   nothing until there is one.
-- While the count is off, no notice is created. It is created if the count is
-  ever turned on.
+- While the count is off, nothing is announced: no notice is created, the
+  wizard does not mention it, and an unread notice is not put back on the
+  screen. The notice is created if the count is ever turned on.
 
 ## Turning it off
 

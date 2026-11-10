@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Плагіни потребують налаштування",
   "notifications.installationCountTitle": "Анонімний підрахунок інсталяцій увімкнено",
   "notifications.installationCountBody": "Раз на день цей сервер повідомляє api.discvault.eu, що він працює: свою версію DiscVault і кількість днів від попереднього повідомлення. Без ідентифікатора та без даних про облікові записи чи колекцію. Вимкнути його можна в {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Підрахунок потрібен лише для того, щоб оцінити, наскільки активно використовується DiscVault, і відповідно масштабувати бекенд MovieVault.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

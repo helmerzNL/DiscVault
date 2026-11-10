@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Pluginurile necesită configurare",
   "notifications.installationCountTitle": "Numărarea anonimă a instalărilor este activată",
   "notifications.installationCountBody": "O dată pe zi, acest server îi comunică lui api.discvault.eu că funcționează: versiunea sa de DiscVault și numărul de zile de la raportarea anterioară. Niciun identificator și nicio dată despre conturi sau colecție. O puteți dezactiva din {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Numărarea servește doar la estimarea gradului de utilizare a DiscVault, astfel încât backendul MovieVault să poată fi scalat corespunzător.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",

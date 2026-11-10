@@ -2194,6 +2194,7 @@
   "notifications.pluginsUnconfiguredTitle": "Plugin-program behöver konfigureras",
   "notifications.installationCountTitle": "Anonym räkning av installationer är på",
   "notifications.installationCountBody": "En gång om dagen meddelar den här servern api.discvault.eu att den är igång: dess DiscVault-version och antalet dagar sedan dess förra rapport. Ingen identifierare och inga konto- eller samlingsdata. Du kan stänga av den under {preferences} > {collectors}.",
+  "notifications.installationCountPurpose": "Räkningen används bara för att uppskatta hur mycket DiscVault används, så att MovieVaults backend kan skalas därefter.",
   "notifications.pref.app_updates": "App updates",
   "notifications.pref.group_invites": "Groups",
   "notifications.pref.imports": "Imports",
