@@ -18267,6 +18267,7 @@ def ui_preview_html(
                 <div id="preferencePanelCollectors" class="preferences-panel-content hidden" role="tabpanel" aria-labelledby="preferenceTabCollectors" tabindex="0" aria-hidden="true" data-preferences-panel="collectors">
                   <div id="profileCollectorPreferenceList"></div>
                   <div class="hidden" id="loansSystemSettingRow"></div>
+                  <div class="hidden" id="installationCountSettingRow"></div>
                   <div class="hidden" id="movieVaultContributionSettingRow"></div>
                   <div class="hidden" id="contributeHistoryRow"></div>
                 </div>
@@ -45619,6 +45620,9 @@ def ui_preview_html(
       if (payload.kind === "metadata_plugins_unconfigured") {
         return tNext("notifications.pluginsUnconfiguredTitle", "Plugins need configuration");
       }
+      if (payload.kind === "installation_count_notice") {
+        return tNext("notifications.installationCountTitle", "Anonymous installation count is on");
+      }
       return notification.title || tNext("notifications.itemTitle", "Notification");
     }
     function notificationDisplayBody(notification) {
@@ -45626,6 +45630,13 @@ def ui_preview_html(
       if (payload.kind === "metadata_plugins_unconfigured") {
         const names = Array.isArray(payload.plugins) ? payload.plugins.join(", ") : "";
         return tNext("notifications.pluginsUnconfiguredBody", "The following plugins are not configured yet: {plugins}").replace("{plugins}", names);
+      }
+      if (payload.kind === "installation_count_notice") {
+        // Names the two tabs the way this locale's own navigation does, so the
+        // path in the notice is the path on the screen.
+        return tNext("notifications.installationCountBody", "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier, and no account or collection data. You can turn it off under {preferences} > {collectors}.")
+          .replace("{preferences}", tNext("preferences.title", "Preferences"))
+          .replace("{collectors}", tNext("preferences.tabCollectors", "Collectors"));
       }
       return notification.body || "";
     }
@@ -45764,6 +45775,10 @@ def ui_preview_html(
         }
       } catch (error) {
         console.warn("Could not mark notification as read", error);
+      }
+      if ((notification.payload || {}).kind === "installation_count_notice") {
+        openInstallationCountSetting();
+        return;
       }
       const url = notificationUrl(notification);
       if (url === "/notifications") return;
@@ -49344,6 +49359,115 @@ def ui_preview_html(
         setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
       }
     }
+    // ---- Anonymous installation count (owner setting) ---------------------
+    //
+    // On by default, and this card is one of its two off switches. The other
+    // is the DISCVAULT_INSTALLATION_COUNT environment variable, which wins:
+    // when the operator has it off, the switch is drawn off and locked with
+    // the reason beside it, instead of looking like it is the one in charge.
+    //
+    // The same endpoint and the same owner-only gate as the MovieVault
+    // contribution switch below it, and not a preference row for the same
+    // reason: a preference is user-writable by construction.
+    const installationCount = {loaded: false, loading: false, enabled: true, disabledByEnvironment: false, revealOnRender: false};
+
+    function canManageInstallationCount() {
+      if (!appMode) return true;
+      return !!currentAuthStatus.authenticated && currentRole() === "owner";
+    }
+    function applyInstallationCountSettings(settings) {
+      // A missing value is "on", as it is on the server.
+      installationCount.enabled = settings.installation_count_enabled !== false;
+      installationCount.disabledByEnvironment = !!settings.installation_count_disabled_by_environment;
+      installationCount.loaded = true;
+    }
+    async function loadInstallationCountSetting() {
+      if (installationCount.loading || !canManageInstallationCount()) return;
+      installationCount.loading = true;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings");
+        applyInstallationCountSettings(payload.settings || {});
+        renderInstallationCountSetting();
+      } catch (error) {
+        /* Not an owner, or offline. The card stays hidden. */
+      } finally {
+        installationCount.loading = false;
+      }
+    }
+    function renderInstallationCountSetting() {
+      const row = document.getElementById("installationCountSettingRow");
+      if (!row) return;
+      if (!canManageInstallationCount()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      if (!installationCount.loaded) {
+        // Drawn only once the stored value is known. This switch defaults to
+        // on, so drawing it before the answer arrives would show "on" on an
+        // instance where the owner had turned it off.
+        void loadInstallationCountSetting();
+        return;
+      }
+      const lockedOff = installationCount.disabledByEnvironment;
+      const active = installationCount.enabled && !lockedOff;
+      const label = tNext("preferences.installationCount", "Count this server");
+      const help = lockedOff
+        ? tNext("preferences.installationCountEnvDisabled", "Turned off for this server with the DISCVAULT_INSTALLATION_COUNT environment variable. Nothing is sent, and this switch cannot turn it back on.")
+        : tNext("preferences.installationCountHelp", "Off means nothing is sent at all. You can change this here at any time.");
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <section class="preferences-setting-card system wide" data-preference-card="installation-count">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("preferences.cardInstallationCount", "Anonymous installation count"))}</h5>
+            <p>${escapeHtml(tNext("preferences.cardInstallationCountHelp", "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier is sent, and nothing about your collection or your accounts."))}</p>
+          </div>
+          <div class="preferences-card-list">
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(label)}</strong>
+                <span id="installationCountHelp">${escapeHtml(help)}</span>
+              </span>
+              <button type="button" class="switch ${active ? "on" : ""}" id="installationCountToggle" aria-label="${escapeHtml(label)}" aria-describedby="installationCountHelp" aria-pressed="${active ? "true" : "false"}" ${lockedOff ? "disabled" : ""}></button>
+            </div>
+          </div>
+        </section>
+      `;
+      const toggle = document.getElementById("installationCountToggle");
+      if (toggle && !lockedOff) toggle.addEventListener("click", () => toggleInstallationCount(!active));
+      if (installationCount.revealOnRender) {
+        installationCount.revealOnRender = false;
+        row.scrollIntoView({block: "center"});
+      }
+    }
+    async function toggleInstallationCount(enabled) {
+      const toggle = document.getElementById("installationCountToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({installation_count_enabled: !!enabled})
+        });
+        applyInstallationCountSettings(payload.settings || {});
+        renderInstallationCountSetting();
+        setPreferencesMessage(tNext("preferences.saved", "Saved."), "good");
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
+    // Where the one-time notice in the inbox leads: the card above, on the
+    // Collectors tab of the preferences. There is no URL for a preferences
+    // tab, so the notice is opened by kind rather than by its stored link. The
+    // card may still be loading, so it scrolls itself into view once drawn.
+    function openInstallationCountSetting() {
+      showProfilePage(true);
+      setProfileTab("preferences");
+      setPreferenceTab("collectors");
+      installationCount.revealOnRender = true;
+      renderInstallationCountSetting();
+    }
     // ---- MovieVault contribution (owner setting) --------------------------
     //
     // The owner half of the contribution gate, on the Collectors tab beside the
@@ -49574,6 +49698,7 @@ def ui_preview_html(
         bindPreferenceList(collectorList);
       }
       renderLoansSystemSetting();
+      renderInstallationCountSetting();
       renderMovieVaultContributionSetting();
       renderContributeHistory();
       setProfileMenuStyle(effectiveProfileMenuStyle());

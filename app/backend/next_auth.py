@@ -81,6 +81,11 @@ try:
     )
     from .next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
     from .next_common import table_exists as _shared_table_exists
+    from .next_installation_count import (
+        ENABLED_KEY as INSTALLATION_COUNT_ENABLED_KEY,
+        disabled_by_environment as installation_count_disabled_by_environment,
+        owner_setting_enabled as installation_count_owner_setting_enabled,
+    )
     from .next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -137,6 +142,11 @@ except ImportError:  # pragma: no cover - direct module execution compatibility
     )
     from next_audit import request_ip_details, request_is_behind_trusted_proxy, trusted_client_ip
     from next_common import table_exists as _shared_table_exists
+    from next_installation_count import (
+        ENABLED_KEY as INSTALLATION_COUNT_ENABLED_KEY,
+        disabled_by_environment as installation_count_disabled_by_environment,
+        owner_setting_enabled as installation_count_owner_setting_enabled,
+    )
     from next_movievault_v2_contributions import (
         registration_state as movievault_v2_contribution_state,
         reset_registration as reset_movievault_v2_contribution_registration,
@@ -6114,11 +6124,39 @@ def register_next_auth_routes(
                             summary="MovieVault contribution identity reset",
                             metadata={},
                         )
+                if INSTALLATION_COUNT_ENABLED_KEY in body:
+                    # The owner's off switch for the anonymous installation
+                    # count. Stored even while the operator's environment
+                    # variable has it off: that one wins in the worker either
+                    # way, and the choice made here is what applies again the
+                    # day the variable is removed.
+                    count_enabled = bool(body.get(INSTALLATION_COUNT_ENABLED_KEY))
+                    with conn.transaction():
+                        set_setting(conn, INSTALLATION_COUNT_ENABLED_KEY, count_enabled)
+                        audit_event(
+                            conn,
+                            event_type="settings.installation_count",
+                            category="settings",
+                            actor=owner,
+                            target_type="setting",
+                            target_id=INSTALLATION_COUNT_ENABLED_KEY,
+                            summary=("Enabled" if count_enabled else "Disabled")
+                            + " the anonymous installation count",
+                            metadata={"enabled": count_enabled},
+                        )
             settings = {
                 "movievault_v2_contribution_enabled": bool(
                     setting_value(conn, "movievault_v2_contribution_enabled", False)
                 ),
                 "movievault_v2_contribution": movievault_v2_contribution_state(conn),
+                # On unless the owner turned it off: a missing value is on.
+                INSTALLATION_COUNT_ENABLED_KEY: installation_count_owner_setting_enabled(
+                    setting_value(conn, INSTALLATION_COUNT_ENABLED_KEY, None)
+                ),
+                # True when DISCVAULT_INSTALLATION_COUNT has it off for this
+                # process, so the switch can say that it is not the one in
+                # charge instead of pretending to be.
+                "installation_count_disabled_by_environment": installation_count_disabled_by_environment(),
             }
         return response({"status": "ok", "settings": settings})
 

@@ -60,6 +60,10 @@ services:
       # known search-engine and AI-crawler user agents get a 403, every response
       # carries X-Robots-Tag: noindex, and /robots.txt disallows everything.
       DISCVAULT_BLOCK_CRAWLERS: ${DISCVAULT_BLOCK_CRAWLERS:-true}
+      # The anonymous installation count is sent by next-worker. next-api only
+      # reads this to show the owner that the operator switched it off, so set
+      # it on both or the owner's switch looks like it is the one in charge.
+      DISCVAULT_INSTALLATION_COUNT: ${DISCVAULT_INSTALLATION_COUNT:-on}
       DISCVAULT_NEXT_ENABLE_TEST_RESET: ${DISCVAULT_NEXT_ENABLE_TEST_RESET:-false}
       DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED: ${DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED:-false}
       DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS: ${DISCVAULT_NEXT_API_STATEMENT_TIMEOUT_MS:-10000}
@@ -110,6 +114,11 @@ services:
       DISCVAULT_LEGACY_DATA_DIR: /data
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env; generate it with openssl rand -base64 48}
       DISCVAULT_NEXT_KEY_ENCRYPTION_KEY: ${DISCVAULT_NEXT_KEY_ENCRYPTION_KEY:-}
+      # next-worker is what sends the anonymous installation count: once a day,
+      # the version and the days since the previous report, to
+      # api.discvault.eu. "off" here stops it before the first start, whatever
+      # the owner setting says. See docs/installation-count.md.
+      DISCVAULT_INSTALLATION_COUNT: ${DISCVAULT_INSTALLATION_COUNT:-on}
     volumes:
       - ${DISCVAULT_DATA_DIR}:/data
     depends_on:

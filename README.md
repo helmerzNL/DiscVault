@@ -63,7 +63,8 @@ A disc collection outgrows memory and spreadsheets quickly: which edition is on 
 4K inside that box set, did you already buy this one? Streaming apps only know what you stream,
 and collection websites keep your list on their servers. DiscVault catalogues the films you own on
 disc, edition by edition, and keeps that catalogue where you want it: on a server you run, or on
-your own phone. No account with us, no analytics, no advertising and no trackers.
+your own phone. No account with us, no advertising and no trackers. The one thing a server tells us
+is that it is running: once a day, anonymously, and you can turn that off.
 
 ## Features
 
@@ -201,6 +202,7 @@ them at length. Never commit `.env`.
 | `LEGACY_AUTH_ENABLED` | ❌ | `false` | Offers password + TOTP sign-in besides passkeys |
 | `DISCVAULT_OIDC_*` | ❌ | empty | OpenID Connect sign-in: `_ISSUER`, `_CLIENT_ID` and `_CLIENT_SECRET` all three, or none. See [OIDC](https://docs.discvault.eu/configure/oidc/) |
 | `DISCVAULT_BLOCK_CRAWLERS` | ❌ | `true` | Keeps the instance out of search engines and AI training corpora. See [Privacy and security](#privacy-and-security) |
+| `DISCVAULT_INSTALLATION_COUNT` | ❌ | `on` | The anonymous daily report that this server is running. `off` sends nothing at all, whatever the owner setting says. See [`docs/installation-count.md`](docs/installation-count.md) |
 | `DISCVAULT_ADMIN_DEDUP_EXECUTE_ENABLED` | ❌ | `false` | Safety gate for the destructive duplicate merge. Leave it off |
 
 **Password and TOTP.** Passkeys remain the preferred sign-in. `LEGACY_AUTH_ENABLED=true` only
@@ -320,7 +322,8 @@ cd backend && python -m unittest discover -s tests -t . -p "test_*.py"
 
 ## Privacy and security
 
-- Everything is stored on your own server, or on your own device: no account with us, no analytics, no advertising, no tracking.
+- Everything is stored on your own server, or on your own device: no account with us, no advertising, no tracking.
+- The one thing a server tells us is that it is running: once a day it sends its DiscVault version and the number of days since its previous report to `api.discvault.eu`, with no identifier and nothing about your collection or your accounts. The owner is told in the app before the first report and can turn it off there, or with `DISCVAULT_INSTALLATION_COUNT=off`. The details: [`docs/installation-count.md`](docs/installation-count.md).
 - Metadata lookups go to the metadata plugins that are enabled. MovieVault v2, on by default, is reached through an anonymous bridge in DiscVault itself; contributing corrections back to MovieVault is a separate setting that only the owner can change.
 - An instance keeps itself out of search engines and AI training corpora without any configuration: `/robots.txt` disallows every crawler, every response carries `X-Robots-Tag: noindex`, and known crawlers are refused. A reverse proxy in front must pass this through. This is not a security control: an instance that must not be reachable belongs behind authentication, a VPN, or off the public internet. The details: [`docs/search-engines-and-ai-crawlers.md`](docs/search-engines-and-ai-crawlers.md).
 - Report a vulnerability privately, as described in [`SECURITY.md`](.github/SECURITY.md), never in a public issue.
