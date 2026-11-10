@@ -315,6 +315,13 @@ jobs:
           tests.test_next_i18n
           tests.test_next_i18n_completeness
 
+      # The unread count had nowhere to go for as long as the inbox existed:
+      # the script wrote it to an element the markup never contained, and
+      # nothing failed. This holds the badge on every entry that leads to the
+      # inbox, the one function that fills it, and its name in all 29 locales.
+      - name: Test the unread-notification badge
+        run: python -m unittest tests.test_next_notification_badge
+
       # The allowlist that decides whether a declared capability can run at all.
       # It disagreed with both bundled manifests for the whole life of the series
       # feature -- six capabilities implemented, declared, and unreachable -- and

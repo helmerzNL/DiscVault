@@ -2229,6 +2229,7 @@
   "notifications.testSent": "テスト通知を送信しました。",
   "notifications.total": "合計",
   "notifications.unread": "未読",
+  "notifications.unreadCount": "未読の通知: {count} 件",
   "notifications.unsupported": "未対応",
   "people.description": "物理コレクションとデジタルコレクションの俳優、監督、スタッフを参照します。",
   "people.eyebrow": "キャストとスタッフ",

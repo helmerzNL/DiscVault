@@ -2229,6 +2229,7 @@
   "notifications.testSent": "Тестове сповіщення надіслано.",
   "notifications.total": "Усього",
   "notifications.unread": "Непрочитані",
+  "notifications.unreadCount": "Непрочитані сповіщення: {count}",
   "notifications.unsupported": "Не підтримується",
   "people.description": "Переглядайте акторів, режисерів і знімальну групу з фізичної та цифрової колекції.",
   "people.eyebrow": "Актори та команда",

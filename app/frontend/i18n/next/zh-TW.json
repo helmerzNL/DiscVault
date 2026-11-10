@@ -2229,6 +2229,7 @@
   "notifications.testSent": "測試通知已傳送。",
   "notifications.total": "總計",
   "notifications.unread": "未讀",
+  "notifications.unreadCount": "未讀通知：{count}",
   "notifications.unsupported": "不支援",
   "people.description": "瀏覽實體與數位收藏中的演員、導演和工作人員。",
   "people.eyebrow": "演員與工作人員",
