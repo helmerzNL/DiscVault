@@ -7053,6 +7053,28 @@ LOCATION_DESCRIPTION_LIMIT = 2000
 LOCATION_MAX_DEPTH_ERROR = "Locations can be nested at most 4 levels deep"
 
 
+#: Who may see locations at all -- the gate on `GET /api/next/locations`.
+#:
+#: There is no per-location rule to consult: the list returns the whole tree to
+#: anyone holding one of these, and the location page is drawn from that list.
+#: So "may view this location" and "may list locations" are one question, and
+#: `actor_can_view_media_asset` answers it with this tuple for a location's
+#: backdrop.
+#:
+#: The routes themselves keep the tuple written out, on purpose:
+#: `test_next_token_scope_sufficiency` reads each gate as a literal from the
+#: source, and a route gated by a name drops out of that check without failing
+#: it. `test_next_media_authorization` holds this tuple and those three gates
+#: equal instead, so neither side can move alone.
+LOCATION_VIEW_PERMISSIONS = (
+    "containers.view",
+    "collection.view",
+    "collection.view_own",
+    "collection.view_group",
+    "collection.view_all",
+)
+
+
 def location_public_id() -> str:
     return f"next-location-{uuid.uuid4().hex[:12]}"
 
@@ -17180,6 +17202,7 @@ def media_asset_authorization_references(conn, media_id: UUID) -> dict[str, set[
         "series": set(),
         "user_avatar": set(),
         "wishlist": set(),
+        "location": set(),
     }
     if table_exists(conn, "entity_media"):
         with conn.cursor() as cur:
@@ -17241,6 +17264,22 @@ def media_asset_authorization_references(conn, media_id: UUID) -> dict[str, set[
                 ),
             )
             references["wishlist"].update(row["user_id"] for row in cur.fetchall())
+
+    if table_exists(conn, "locations"):
+        with conn.cursor() as cur:
+            # A location's backdrop is not an `entity_media` row: the upload
+            # route records it in `locations.metadata` and nowhere else. So the
+            # list above could never have found it, and the result was the same
+            # write-only artwork the series comment describes -- upload accepted,
+            # `backdrop_url` on the location, and a 404 for the image itself.
+            #
+            # Matched on the asset id the server wrote rather than on
+            # `backdrop_url`: the id is the reference, the URL is derived from it.
+            cur.execute(
+                "SELECT id FROM locations WHERE metadata->>'backdrop_asset_id' = %s",
+                (str(media_id),),
+            )
+            references["location"].update(row["id"] for row in cur.fetchall())
     return references
 
 
@@ -17264,6 +17303,12 @@ def actor_can_view_media_asset(conn, actor: dict[str, Any] | None, media_id: UUI
         # shelf -- which is why `series_sync_entities` publishes series without a
         # per-user filter too. What is private is *which discs* sit under it, and
         # that is enforced where discs are listed rather than here.
+        return True
+    if references.get("location") and actor_effective_has_any_permission(actor, LOCATION_VIEW_PERMISSIONS):
+        # No per-location check, because there is none anywhere: whoever may
+        # list locations is handed every one of them, backdrop URL included.
+        # The effective variant is the one the list route itself goes through,
+        # so a token scoped away from locations is refused their artwork too.
         return True
 
     actor_id = str(actor.get("id") or "") if actor else ""
