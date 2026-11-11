@@ -126,16 +126,22 @@ class ListsSortingSourceTests(unittest.TestCase):
         self.assertIn('"date_desc"', line, "any other default rearranges every existing list on upgrade")
 
     def test_the_order_is_taken_from_sort_title_while_title_is_displayed(self):
-        body = self._function("listsEntrySortTitle", 300)
+        body = self._function("listsEntrySortKey", 300)
         self.assertIn("sort_title", body)
         self.assertIn("sortTitle", body)
-        self.assertIn("title", body)
+        self.assertIn("entry?.title", body)
+        # The Library's key, not a copy of it: a second comparator is how the
+        # two surfaces disagreed about "The Matrix" before (library-ordering §3).
+        self.assertIn("titleSortKey(", body)
 
     def test_the_title_comparison_is_locale_aware_and_case_insensitive(self):
         body = self._function("sortPersonalListEntries")
-        self.assertIn("localeCompare", body)
+        self.assertIn("compareTitleSortKeys(", body)
         self.assertIn('sensitivity: "base"', body)
-        self.assertIn("localeState.locale", body)
+        # The comparison itself is the shared one, under the viewer's locale.
+        shared = self._function("compareTitleSortKeys", 500)
+        self.assertIn("localeCompare", shared)
+        self.assertIn("localeState.locale", shared)
 
     def test_each_list_sorts_on_its_own_date(self):
         body = self._function("listsEntryDateValue", 500)
@@ -146,7 +152,7 @@ class ListsSortingSourceTests(unittest.TestCase):
         """Two films added in the same second, or sharing a year, must not land
         in an order that changes between renders."""
         body = self._function("sortPersonalListEntries")
-        tail = body[body.index("listsEntrySortTitle(a).localeCompare"):]
+        tail = body[body.index("compareTitleSortKeys(listsEntrySortKey(a), listsEntrySortKey(b)"):]
         self.assertIn("mode === \"title_desc\" ? -diff : diff", tail)
         for guard in ('if (diff) return mode === "date_desc"', 'if (diff) return mode === "year_desc"'):
             self.assertIn(guard, body, "a zero difference must fall through to the title comparison")

@@ -20519,6 +20519,36 @@ def ui_preview_html(
       messages: {},
       locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
     };
+    // The leading articles a name ordering skips (App-Guidance
+    // library-ordering.md §1a), one row per language the app is translated
+    // into. English applies for every viewer; the row of the language the app
+    // is displayed in applies on top of it; no other row ever does -- with all
+    // of them at once "Die Hard" files under H for everyone. A word ending in
+    // an apostrophe is elided and attaches straight to the next word
+    // ("L'avventura"); every other word needs whitespace after it.
+    //
+    // A language with no articles is listed below the table instead, so that
+    // "no row" is a decision rather than something nobody got round to:
+    // test_next_library_title_sort_key fails when an app locale is in neither.
+    // The iOS app carries the same rows (DiscVaultApp, TitleSortKey.swift);
+    // change the spec first, then both.
+    const LEADING_ARTICLES = {
+      en: ["the", "a", "an"],
+      nl: ["de", "het", "een", "'t"],
+      de: ["der", "die", "das", "ein", "eine"],
+      fr: ["le", "la", "les", "l'", "un", "une", "des"],
+      es: ["el", "la", "lo", "los", "las", "un", "una", "unos", "unas"],
+      it: ["il", "lo", "la", "i", "gli", "le", "l'", "un", "uno", "una", "un'"],
+      pt: ["o", "a", "os", "as", "um", "uma", "uns", "umas"],
+      da: ["en", "et", "den", "det", "de"],
+      sv: ["en", "ett", "den", "det", "de"],
+      nb: ["en", "ei", "et", "den", "det", "de"],
+      el: ["ο", "η", "το", "οι", "τα", "ένας", "μια", "μία", "ένα"],
+      hu: ["a", "az", "egy"],
+      ro: ["un", "o"]
+    };
+    const LANGUAGES_WITHOUT_LEADING_ARTICLES = ["bg", "cs", "et", "fi", "hr", "ja", "ko", "lt", "lv", "pl", "sk", "sl", "tr", "uk", "zh"];
+    let leadingArticleCache = null;
     const SHELL_FALLBACK_LOCALE = "en-US";
     // Only an explicit pick is pinned in localStorage. loadLocale() used to
     // store every successful load, so one fallback page view was enough to
@@ -29508,7 +29538,7 @@ def ui_preview_html(
           const diff = itemYearValue(a, mode) - itemYearValue(b, mode);
           if (diff) return mode === "year_desc" ? -diff : diff;
         }
-        const diff = itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base"});
+        const diff = compareItemTitles(a, b, {sensitivity: "base"});
         return mode === "title_desc" ? -diff : diff;
       });
     }
@@ -29723,9 +29753,90 @@ def ui_preview_html(
     // Both spellings are load-bearing: movies reach the client as raw rows
     // (`sort_title`), series are serialised camelCase (`sortTitle`), and
     // containers have no such column -- they fall back to the title they show.
-    function itemSortTitleValue(item) {
+    //
+    // The fallback skips one leading article (library-ordering §1a): "The
+    // Matrix" files under M, "The Matrix Collection" next to it. A sort title
+    // is used exactly as typed -- skipping an article in it would leave the
+    // field unable to say "no, file this under The", and it is the only
+    // correction a wrong guess has. Every name ordering goes through
+    // titleSortKey() and compareTitleSortKeys() rather than its own
+    // comparator: three hand-written comparators agreeing on a rule is how
+    // this Library came to ignore sort titles in the first place.
+    function leadingArticlesFor(locale) {
+      const language = String(locale || "").toLowerCase().split(/[-_]/)[0];
+      if (leadingArticleCache && leadingArticleCache.language === language) return leadingArticleCache;
+      const words = new Set([...LEADING_ARTICLES.en, ...(LEADING_ARTICLES[language] || [])]);
+      leadingArticleCache = {
+        language,
+        spaced: new Set([...words].filter((word) => !word.endsWith("'"))),
+        // Sorted only so the result cannot depend on Set order; no elided
+        // form is a prefix of another that could match differently.
+        elided: [...words].filter((word) => word.endsWith("'")).sort(),
+        // Per name, because a sort asks for the same key tens of thousands of
+        // times. Bounded by the titles in the library, and dropped with the
+        // rest of the cache when the display language changes.
+        skipped: new Map()
+      };
+      return leadingArticleCache;
+    }
+    // Case-insensitive but diacritic-sensitive on purpose: "À bout de
+    // souffle" opens with a preposition and Dutch "Eén" is a numeral. The
+    // typographic apostrophes match the plain one, so "\\u2019t Schaep" and
+    // "'t Schaep" file together.
+    function normalizedLeadingWord(text) {
+      return String(text).toLowerCase().replace(/[\\u2018\\u2019]/g, "'");
+    }
+    // The test is lexical, not grammatical, and it is wrong sometimes --
+    // "Die Hard" loses its "Die" for a German viewer. The remedy is the row's
+    // sort title; never add an exception list here.
+    function skipLeadingArticle(name, articles = leadingArticlesFor(localeState.locale)) {
+      const text = String(name ?? "");
+      const known = articles.skipped.get(text);
+      if (known !== undefined) return known;
+      const trimmed = text.trim();
+      let result = trimmed;
+      // A whole word, then whitespace, then something left to sort on. "A.I.",
+      // "A-ha" and "I, Robot" have no whitespace straight after the candidate,
+      // and a film called "The" has nothing after it at all.
+      const boundary = trimmed.search(/\\s/);
+      if (boundary > 0 && articles.spaced.has(normalizedLeadingWord(trimmed.slice(0, boundary)))) {
+        result = trimmed.slice(boundary).trimStart();
+      } else {
+        for (const article of articles.elided) {
+          const rest = trimmed.slice(article.length);
+          const next = rest ? String.fromCodePoint(rest.codePointAt(0)) : "";
+          if (next && /[\\p{L}\\p{N}]/u.test(next) && normalizedLeadingWord(trimmed.slice(0, article.length)) === article) {
+            result = rest;
+            break;
+          }
+        }
+      }
+      articles.skipped.set(text, result);
+      return result;
+    }
+    // `primary` decides the order; `full` breaks a tie in it, so "Matrix" and
+    // "The Matrix" have a defined order instead of whichever the sort left
+    // first. A blank sort title is no sort title.
+    function titleSortKey(name, sortTitle) {
+      const own = String(sortTitle ?? "");
+      if (own.trim()) return {primary: own, full: own};
+      const shown = String(name ?? "");
+      return {primary: skipLeadingArticle(shown), full: shown};
+    }
+    function compareTitleSortKeys(left, right, options = {sensitivity: "base"}) {
+      const locale = localeState.locale || undefined;
+      return left.primary.localeCompare(right.primary, locale, options)
+        || left.full.localeCompare(right.full, locale, options);
+    }
+    function itemTitleSortKey(item) {
       const entity = itemEntity(item);
-      return entity?.sort_title || entity?.sortTitle || itemTitleValue(item);
+      return titleSortKey(itemTitleValue(item), entity?.sort_title || entity?.sortTitle);
+    }
+    function itemSortTitleValue(item) {
+      return itemTitleSortKey(item).primary;
+    }
+    function compareItemTitles(a, b, options = {sensitivity: "base"}) {
+      return compareTitleSortKeys(itemTitleSortKey(a), itemTitleSortKey(b), options);
     }
     function itemYearLabel(item) {
       if (item?.kind === "movie") return item.movie?.year || "";
@@ -30137,17 +30248,24 @@ def ui_preview_html(
         if (typeof state.key === "string" && state.key.startsWith("custom:")) {
           const diff = compareCustomFieldValue(a, b, state.key.slice(7), state.direction);
           if (diff) return diff;
-          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+          return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
         }
         if (state.key === "externalScore") {
           const diff = compareExternalScore(a, b, state.direction);
           if (diff) return diff;
-          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+          return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
         }
         if (state.key === "personalRating") {
           const diff = comparePersonalRating(a, b, state.direction);
           if (diff) return diff;
-          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+          return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
+        }
+        // The Title column itself: the whole key, tiebreak included, flipped
+        // together -- so Z-A is the exact reverse of A-Z, "The Matrix" and
+        // "Matrix" included.
+        if (state.key === "title") {
+          const diff = compareItemTitles(a, b, {sensitivity: "base", numeric: true});
+          return state.direction === "desc" ? -diff : diff;
         }
         const diff = state.key === "behavior"
           ? compareLibraryBehavior(a, b)
@@ -30157,7 +30275,7 @@ def ui_preview_html(
               {sensitivity: "base", numeric: true}
             );
         if (diff) return state.direction === "desc" ? -diff : diff;
-        return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
       });
     }
     function libraryListSortIconHtml(direction) {
@@ -30290,7 +30408,11 @@ def ui_preview_html(
         const diff = typeof left === "number" && typeof right === "number"
           ? left - right
           : String(left).localeCompare(String(right), localeState.locale || undefined, {sensitivity: "base"});
-        return state.direction === "desc" ? -diff : diff;
+        // Equal values -- two discs of one year, or two titles equal once the
+        // article is skipped -- fall to the full title key, so the table has
+        // one order rather than whatever the server happened to send.
+        const ordered = diff || compareItemTitles(a, b, {sensitivity: "base"});
+        return state.direction === "desc" ? -ordered : ordered;
       });
     }
     function detailSortButton(scope, key, label, sortState) {
@@ -36149,7 +36271,15 @@ def ui_preview_html(
         setContainerMemberGridMode(node, seriesDiscsViewMode);
         return;
       }
-      const decorated = discs.map((disc) => Object.assign({}, disc, {
+      // The server sends these by COALESCE(sort_title, title); the grid and
+      // list re-derive that with the article rule (library-ordering §1a), as
+      // the detail table does, so all three view modes agree with each other
+      // and with the Library tile the series came from.
+      const ordered = discs
+        .map((disc) => ({disc, key: titleSortKey(disc.title, disc.sort_title || disc.sortTitle)}))
+        .sort((left, right) => compareTitleSortKeys(left.key, right.key))
+        .map((entry) => entry.disc);
+      const decorated = ordered.map((disc) => Object.assign({}, disc, {
         edition: disc.edition || seriesDiscSeasonLabel(detail, disc.id),
       }));
       const entries = decorated.map((disc, index) => ({
@@ -43594,12 +43724,13 @@ def ui_preview_html(
       return Number.isNaN(value) ? 0 : value;
     }
     // `sort_title` decides the order while `title` is what the card shows --
-    // the same split the Library makes, so "The Thing" files under T here and
-    // under T there. itemSortTitleValue is not reusable: it unwraps the
+    // the same split and the same key the Library uses, article rule included
+    // (library-ordering §1a), so "The Thing" files under T here exactly when
+    // it does there. itemTitleSortKey is not reusable: it unwraps the
     // library's {kind, movie, series} item, and a personal-list entry is a
     // flat row.
-    function listsEntrySortTitle(entry) {
-      return String(entry?.sort_title || entry?.sortTitle || entry?.title || "");
+    function listsEntrySortKey(entry) {
+      return titleSortKey(entry?.title, entry?.sort_title || entry?.sortTitle);
     }
     function listsEntryYearValue(entry) {
       return Number.parseInt(entry?.year || "0", 10) || 0;
@@ -43617,7 +43748,7 @@ def ui_preview_html(
         }
         // Title breaks every other tie, so two films added the same second, or
         // sharing a year, still land in a stable, explicable order.
-        const diff = listsEntrySortTitle(a).localeCompare(listsEntrySortTitle(b), localeState.locale || undefined, {sensitivity: "base"});
+        const diff = compareTitleSortKeys(listsEntrySortKey(a), listsEntrySortKey(b), {sensitivity: "base"});
         return mode === "title_desc" ? -diff : diff;
       });
     }

@@ -26,6 +26,9 @@ const libraryListCompactMode = () => compact;
 const customFieldDefinitions = () => [];
 const itemSortTitleValue = item => item.movie?.title || item.title || "";
 const itemTitleValue = itemSortTitleValue;
+// The title key is exercised by test_next_library_title_sort_key; here it is
+// only the tiebreaker under the score columns.
+const compareItemTitles = (a, b, options) => itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale, options);
 const itemYearLabel = () => "";
 const itemFormatValues = () => [];
 const itemDirectorCredits = () => [];
