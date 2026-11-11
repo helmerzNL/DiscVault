@@ -11,10 +11,12 @@ try:  # package import (Flask app factory)
     from .next_app import (
         pwa_head_tags,
     )
+    from .next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_app import (
         pwa_head_tags,
     )
+    from next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 
 
 def migration_dashboard_html() -> str:
@@ -820,6 +822,7 @@ def migration_dashboard_html() -> str:
       if (value === null || value === undefined || value === "") return "-";
       return Number(value).toLocaleString();
     }
+""" + PLUGIN_DISPLAY_NAME_JS + """
     const NEXT_I18N_FALLBACK_LOCALES = [
       {locale: "nl-NL", legacy: "nl", nativeName: "Nederlands"},
       {locale: "en-US", legacy: "en", nativeName: "English"},
