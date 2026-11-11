@@ -23,6 +23,7 @@ try:  # package import (Flask app factory)
         server_usable_image,
         supported_next_locales,
     )
+    from .next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_app import (
         APP_PREFERENCE_DEFAULTS,
@@ -39,6 +40,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         server_usable_image,
         supported_next_locales,
     )
+    from next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 
 
 def ui_preview_movie_cards(movies: list[dict[str, Any]]) -> str:
@@ -20910,53 +20912,7 @@ def ui_preview_html(
       cache[cacheKey] = {cachedAt: Date.now(), detail};
       saveDiscoverDetailCache(cache);
     }
-    function pluginDisplayName(pluginOrId, fallback = "") {
-      if (!pluginOrId && fallback) return fallback;
-      const direct = pluginOrId && typeof pluginOrId === "object" ? pluginOrId : null;
-      const pluginId = String(direct?.id || direct?.pluginId || direct?.plugin_id || pluginOrId || "").trim();
-      const directName = String(direct?.displayName || direct?.pluginName || direct?.name || direct?.manifest?.name || "").trim();
-      if (directName) return directName;
-      const pools = [
-        typeof appAdmin !== "undefined" ? appAdmin.plugins : [],
-        typeof state !== "undefined" ? state.metadataPlugins : [],
-        typeof state !== "undefined" ? state.plugins : [],
-        typeof importCenter !== "undefined" ? importCenter.report?.metadataPlugins?.items : [],
-        typeof importCenter !== "undefined" ? importCenter.report?.importSources : [],
-        typeof importCenter !== "undefined" ? importCenter.preview?.sources : [],
-        typeof adminState !== "undefined" ? adminState.plugins : []
-      ].filter(Array.isArray);
-      for (const pool of pools) {
-        const match = pool.find((plugin) => {
-          const id = String(plugin?.id || plugin?.pluginId || plugin?.plugin_id || "").trim();
-          return id && id === pluginId;
-        });
-        const name = String(match?.displayName || match?.pluginName || match?.name || match?.manifest?.name || "").trim();
-        if (name) return name;
-      }
-      // Names for plugin ids the registry cannot supply one for. `movievault`
-      // and `movievault_26` are removed plugins and stay here on purpose:
-      // identifiers and audit entries they wrote are still on existing movies,
-      // and without an entry those rows would render a mangled id instead of the
-      // source's name.
-      const known = {
-        movievault: "MovieVault",
-        movievault_26: "MovieVault 26",
-        tmdb: "TMDb",
-        omdb: "OMDb",
-        upcitemdb: "UPCItemDB",
-        bluray_com: "Blu-ray.com",
-        trakt: "Trakt",
-        plex: "Plex",
-        jellyfin: "Jellyfin",
-        discvault_legacy_import: "DiscVault Legacy Import"
-      };
-      if (pluginId && known[pluginId]) return known[pluginId];
-      if (fallback) return fallback;
-      if (!pluginId) return "";
-      return pluginId
-        .replace(/[_-]+/g, " ")
-        .replace(/\\b\\w/g, (char) => char.toUpperCase());
-    }
+""" + PLUGIN_DISPLAY_NAME_JS + """
     // Flag files are named by ISO 3166-1 alpha-2 COUNTRY code, never by
     // language code. Denmark and Sweden used to sit on disk as da.svg/sv.svg,
     // so every caller -- which passes a country, "DK" or "SE" -- asked for a
