@@ -1,7 +1,7 @@
 // Execute the real comparator out of next_views_ui.py, rather than reading it.
 //
 // The Lists page is inline JavaScript inside a Python string, so there is no
-// module to import. This harness cuts the four functions that make up the sort
+// module to import. This harness cuts the functions that make up the sort
 // out of that string and evaluates them with the small amount of environment
 // they touch stubbed -- the same trade the library-hydration replay makes, and
 // for the same reason: a source-text assertion pins the shape of a fix already
@@ -11,6 +11,7 @@
 // Prints the sorted titles as JSON.
 
 import { readFileSync } from "node:fs";
+import { pythonStringText, titleSortKeySource } from "./title-sort-key.mjs";
 
 const [, , sourcePath, payloadJson] = process.argv;
 const source = readFileSync(sourcePath, "utf8");
@@ -19,7 +20,7 @@ const NEEDED = [
   "const LISTS_SORT_MODES",
   "function normalizeListsSortMode(",
   "function listsEntryDateValue(",
-  "function listsEntrySortTitle(",
+  "function listsEntrySortKey(",
   "function listsEntryYearValue(",
   "function sortPersonalListEntries(",
 ];
@@ -42,10 +43,12 @@ const payload = JSON.parse(payloadJson);
 const localeState = { locale: payload.locale || "en-US" };
 let listsSortMode = payload.mode;
 
+// The title key the comparator orders on lives with the Library's helpers,
+// not in this slice: the Lists page shares it rather than keeping its own.
 const evaluate = new Function(
   "localeState",
   "listsSortMode",
-  `${slice}\nreturn sortPersonalListEntries;`,
+  `${titleSortKeySource(source)}\n${pythonStringText(slice)}\nreturn sortPersonalListEntries;`,
 );
 const sortPersonalListEntries = evaluate(localeState, listsSortMode);
 

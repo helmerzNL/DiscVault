@@ -723,6 +723,15 @@ jobs:
       - name: Test the library list and its sort order
         run: python -m unittest tests.test_next_library_list_ui
 
+      # The key every name ordering shares: the sort title as typed, else the
+      # name with one leading article skipped -- English for every viewer, plus
+      # the display language's (App-Guidance library-ordering.md §1a). Runs
+      # the real grid, list-view, series-table and Lists comparators under
+      # node, with the iOS suite's cases, and fails when an app locale has
+      # neither an article row nor a declaration that it needs none.
+      - name: Test the title sort key and its leading articles
+        run: python -m unittest tests.test_next_library_title_sort_key
+
       # The library page is one function with two SQL branches, and only the one
       # that finds entity_media/media_assets is ever exercised. A column added to
       # that branch alone is absent on the fallback, where the feature reading it

@@ -212,12 +212,14 @@ class NextLibraryListUiTests(unittest.TestCase):
         # The server has always ordered on COALESCE(sort_title, title); the SPA
         # re-sorted the hydrated rows on the display title and threw that away,
         # so filling in every sort title changed nothing and nothing was red
-        # (#716). One helper, and every client-side title ordering goes through
+        # (#716). One key, and every client-side title ordering goes through
         # it -- the grid, the list view's Title column, its tiebreaker, and the
-        # series disc table.
+        # series disc table. What the key does with a leading article is
+        # executed, not read, in test_next_library_title_sort_key.
         self.assertEqual(self.source.count("function itemSortTitleValue(item) {"), 1)
+        self.assertEqual(self.source.count("function itemTitleSortKey(item) {"), 1)
         self.assertIn(
-            "return entity?.sort_title || entity?.sortTitle || itemTitleValue(item);",
+            "return titleSortKey(itemTitleValue(item), entity?.sort_title || entity?.sortTitle);",
             self.source,
         )
 
@@ -225,8 +227,8 @@ class NextLibraryListUiTests(unittest.TestCase):
         # `title` property, which is still set for other callers -- so asserting
         # the new call is not enough, the old read has to be gone.
         self.assertIn(
-            "const diff = itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), "
-            'localeState.locale || undefined, {sensitivity: "base"});',
+            'const diff = compareItemTitles(a, b, {sensitivity: "base"});\n'
+            '        return mode === "title_desc" ? -diff : diff;',
             self.source,
         )
         self.assertNotIn(
@@ -242,10 +244,12 @@ class NextLibraryListUiTests(unittest.TestCase):
             self.source,
         )
         self.assertIn(
-            "return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), "
-            'localeState.locale || undefined, {sensitivity: "base", numeric: true});',
+            'return compareItemTitles(a, b, {sensitivity: "base", numeric: true});',
             self.source,
         )
+        # No comparator may go back to comparing the bare primary key: it drops
+        # the full-title tiebreak, and "Matrix" / "The Matrix" lose their order.
+        self.assertNotIn("itemSortTitleValue(a).localeCompare(", self.source)
 
         # The series disc table, so both library view modes and the detail table
         # agree about the same shelf.
