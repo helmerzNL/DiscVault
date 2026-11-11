@@ -181,7 +181,7 @@ def ui_preview_html(
     featured_backdrop_html = (
         f'<img class="hero-backdrop" id="heroBackdrop" src="{h(featured_backdrop)}" alt="">'
         if featured_backdrop
-        else '<img class="hero-backdrop" id="heroBackdrop" alt="">'
+        else '<img class="hero-backdrop hidden" id="heroBackdrop" alt="">'
     )
     initial_state_json = html_lib.escape(json_lib.dumps(json_ready(snapshot), separators=(",", ":")), quote=False)
     locales_json = html_lib.escape(json_lib.dumps(supported_next_locales(), separators=(",", ":")), quote=False)
@@ -16932,7 +16932,7 @@ def ui_preview_html(
       </section>
       <section class="discover-detail-page hidden" id="discoverDetailPage" aria-labelledby="discoverDetailTitle">
         <section class="movie-detail-hero" id="discoverDetailHero">
-          <img id="discoverDetailBackdrop" alt="">
+          <img class="hidden" id="discoverDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="discoverDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="discoverDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
@@ -16967,7 +16967,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
-          <img id="movieDetailBackdrop" alt="">
+          <img class="hidden" id="movieDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="movieDetailBackButton" aria-label="Back" title="Back" data-next-i18n-aria="movieDetail.backToLibrary" data-next-i18n-title="movieDetail.backToLibrary">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 16.58 10.83 12 15.41 7.41 14 6 8 12 14 18 15.41 16.58Z"></path></svg>
             <span class="button-label" data-next-i18n="movieDetail.backToLibrary">Back</span>
@@ -17591,7 +17591,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page container-detail-page hidden" id="containerDetailPage" aria-labelledby="containerDetailTitle">
         <section class="movie-detail-hero" id="containerDetailHero">
-          <img id="containerDetailBackdrop" alt="">
+          <img class="hidden" id="containerDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back</button>
           <div class="movie-detail-hero-actions" aria-label="Container actions" data-next-i18n-aria="containerDetail.actions">
             <button type="button" class="movie-detail-icon-action hidden" id="containerEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
@@ -17867,7 +17867,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page series-detail-page hidden" id="seriesDetailPage" aria-labelledby="seriesDetailTitle">
         <section class="movie-detail-hero" id="seriesDetailHero">
-          <img id="seriesDetailBackdrop" alt="">
+          <img class="hidden" id="seriesDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="seriesDetailBackButton" data-next-i18n="seriesDetail.backToLibrary">Back</button>
           <div class="movie-detail-hero-actions" aria-label="Series actions" data-next-i18n-aria="seriesDetail.actions">
             <button type="button" class="movie-detail-icon-action hidden" id="seriesEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
@@ -18128,7 +18128,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page location-detail-page hidden" id="locationDetailPage" aria-labelledby="locationDetailTitle">
         <section class="movie-detail-hero" id="locationDetailHero">
-          <img id="locationDetailBackdrop" alt="">
+          <img class="hidden" id="locationDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="locationDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="locationDetailQr"><span data-next-i18n="collection.loading">Loading...</span></div>
@@ -20555,6 +20555,20 @@ def ui_preview_html(
     function usableImage(value) {
       const text = String(value || "");
       return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") || text.startsWith("/api/next/movievault-v2/posters/") ? text : "";
+    }
+    // A header backdrop that has no image must not be an <img> with an empty
+    // `src`. Assigning "" leaves the attribute present, the element is sized
+    // to fill the header, and the browser paints its broken-image icon in the
+    // top-left corner. Dropping the attribute and hiding the element is the
+    // only state that draws nothing.
+    function setBackdropImage(node, url) {
+      if (!node || node.tagName !== "IMG") return;
+      if (url) {
+        node.src = url;
+      } else {
+        node.removeAttribute("src");
+      }
+      node.classList.toggle("hidden", !url);
     }
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -35334,11 +35348,7 @@ def ui_preview_html(
       const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
       const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop") || usableImage(movie.backdrop_url || metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
       const title = movie.title || tNext("common.untitled", "Untitled");
-      const backdropNode = document.getElementById("movieDetailBackdrop");
-      if (backdropNode) {
-        backdropNode.src = backdrop || "";
-        backdropNode.classList.toggle("hidden", !backdrop);
-      }
+      setBackdropImage(document.getElementById("movieDetailBackdrop"), backdrop);
       const movieHeroNode = document.getElementById("movieDetailHero");
       if (movieHeroNode) movieHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("movieDetailPoster");
@@ -35686,7 +35696,7 @@ def ui_preview_html(
       document.getElementById("movieDetailCast").innerHTML = "";
       document.getElementById("movieDetailCrew").innerHTML = "";
       document.getElementById("movieDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("movieDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("movieDetailBackdrop"), "");
       setMovieDetailMessage("");
     }
     async function openAppMovieDetail(movieId, pushUrl = true) {
@@ -36023,11 +36033,7 @@ def ui_preview_html(
       const backdrop = containerMediaImage(detail, "backdrop");
       const title = container.title || tNext("common.untitled", "Untitled");
       const typeLabel = containerTypeLabel(container.container_type);
-      const backdropNode = document.getElementById("containerDetailBackdrop");
-      if (backdropNode) {
-        backdropNode.src = backdrop || "";
-        backdropNode.classList.toggle("hidden", !backdrop);
-      }
+      setBackdropImage(document.getElementById("containerDetailBackdrop"), backdrop);
       const containerHeroNode = document.getElementById("containerDetailHero");
       if (containerHeroNode) containerHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("containerDetailPoster");
@@ -36692,8 +36698,7 @@ def ui_preview_html(
         || mediaAssetImage(detail.aggregateMediaAssets, "backdrop");
       const hero = document.getElementById("seriesDetailHero");
       if (hero) hero.classList.toggle("is-flat", !backdrop);
-      const backdropNode = document.getElementById("seriesDetailBackdrop");
-      if (backdropNode) backdropNode.src = backdrop || "";
+      setBackdropImage(document.getElementById("seriesDetailBackdrop"), backdrop);
       // The hero poster is painted by `renderSeriesSeasons` further down rather
       // than here: which season is selected is settled while the rail renders,
       // and painting a guess first would show one season's poster and replace it
@@ -36780,7 +36785,7 @@ def ui_preview_html(
       document.getElementById("seriesDetailBackdropArtwork").innerHTML = "";
       document.getElementById("seriesDetailVideos").innerHTML = "";
       document.getElementById("seriesDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("seriesDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("seriesDetailBackdrop"), "");
       activateDetailTab("seriesDetail", "seriesDetailDiscsPanel");
       setSeriesDetailMessage("");
     }
@@ -37177,7 +37182,7 @@ def ui_preview_html(
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("containerDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("containerDetailBackdrop"), "");
       activateDetailTab("containerDetail", "containerDetailFilmsPanel");
       setContainerDetailMessage("");
     }
@@ -46752,7 +46757,7 @@ def ui_preview_html(
       document.getElementById("discoverDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("discoverDetailOverview").textContent = "";
       document.getElementById("discoverDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("discoverDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("discoverDetailBackdrop"), "");
       document.getElementById("discoverDetailHero")?.classList.add("is-flat");
       document.getElementById("discoverDetailRelease").innerHTML = "";
       document.getElementById("discoverDetailPeople").innerHTML = "";
@@ -46783,11 +46788,7 @@ def ui_preview_html(
         document.getElementById("discoverDetailTitle").textContent = title;
         document.getElementById("discoverDetailOverview").textContent = detail.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
         document.getElementById("discoverDetailPoster").innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-        const backdropNode = document.getElementById("discoverDetailBackdrop");
-        if (backdropNode) {
-          backdropNode.src = backdrop || "";
-          backdropNode.classList.toggle("hidden", !backdrop);
-        }
+        setBackdropImage(document.getElementById("discoverDetailBackdrop"), backdrop);
         const discoverHeroNode = document.getElementById("discoverDetailHero");
         if (discoverHeroNode) discoverHeroNode.classList.toggle("is-flat", !backdrop);
         const contentRatingInfo = discoverContentRatingInfo(detail);
@@ -48482,10 +48483,7 @@ def ui_preview_html(
           ? tNext("locations.routeNotFound", "Location not found.")
           : `${visibleMovieCount} ${tNext("collection.movies", "Movies").toLowerCase()} · ${boxCountText} · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", routeLabel)}`;
       }
-      const backdropNode = document.getElementById("locationDetailBackdrop");
-      if (backdropNode && backdropNode.tagName === "IMG") {
-        backdropNode.src = routeBackdrop || "";
-      }
+      setBackdropImage(document.getElementById("locationDetailBackdrop"), routeBackdrop);
       const locationHeroNode = document.getElementById("locationDetailHero");
       if (locationHeroNode) locationHeroNode.classList.toggle("is-flat", !routeBackdrop);
       const qrNode = document.getElementById("locationDetailQr");
@@ -52568,10 +52566,7 @@ def ui_preview_html(
       document.getElementById("heroTitle").textContent = title;
       document.getElementById("heroMeta").innerHTML = movieMeta(movie).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
       document.getElementById("heroDetailLink").href = movie.id ? `/movies/${encodeURIComponent(movie.id)}` : "/";
-      const backdropNode = document.getElementById("heroBackdrop");
-      if (backdropNode && backdropNode.tagName === "IMG") {
-        backdropNode.src = backdrop || "";
-      }
+      setBackdropImage(document.getElementById("heroBackdrop"), backdrop);
       const posterNode = document.getElementById("heroPoster");
       posterNode.innerHTML = poster
         ? `<img src="${escapeHtml(poster)}" alt="">`
@@ -52597,10 +52592,7 @@ def ui_preview_html(
         movieIdSetForContainer(container.id).size ? `${movieIdSetForContainer(container.id).size} ${tNext("collection.movies", "Movies").toLowerCase()}` : ""
       ].filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
       document.getElementById("heroDetailLink").href = container.id ? `/containers/${encodeURIComponent(container.id)}` : "/";
-      const backdropNode = document.getElementById("heroBackdrop");
-      if (backdropNode && backdropNode.tagName === "IMG") {
-        backdropNode.src = backdrop || "";
-      }
+      setBackdropImage(document.getElementById("heroBackdrop"), backdrop);
       const posterNode = document.getElementById("heroPoster");
       posterNode.innerHTML = poster
         ? `<img src="${escapeHtml(poster)}" alt="">`
