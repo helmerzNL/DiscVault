@@ -60,7 +60,15 @@ def parse_semver(value: str) -> tuple[int, int, int] | None:
 
 
 def read_version_at(ref: str) -> str | None:
-    """Return the trimmed app/VERSION contents at ``ref`` (or the worktree)."""
+    """Return the trimmed app/VERSION contents at ``ref`` (or the worktree).
+
+    An empty ``ref`` is "no baseline", never the index: ``git show :path``
+    reads the staged copy, which in a CI checkout is HEAD's own value, so
+    every version would compare equal to itself. That is how the v26.11.8
+    release snapshot was refused.
+    """
+    if not ref:
+        return None
     if ref == "WORKTREE":
         try:
             with open(VERSION_FILE, "r", encoding="utf-8") as handle:
@@ -272,8 +280,15 @@ def main() -> int:
         base = args.base
         head = args.head
         if not valid_commit(base):
+            # A manual dispatch or a tag build has no "before" commit. HEAD is
+            # then judged on its own, against its own first parent -- the same
+            # fallback commit_list() uses -- so a squashed promotion that both
+            # changes app code and bumps passes, and one that does not bump
+            # still fails. Without a parent there is no baseline at all.
             if valid_commit(head):
                 files = changed_files_for_commit(head)
+                parent = f"{head}~1"
+                base = parent if valid_commit(parent) else ""
             else:
                 print("DiscVault version guard ok.")
                 return 0

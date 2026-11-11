@@ -340,6 +340,77 @@ class TestVersionGuardCLI(unittest.TestCase):
             rc_without_base_ref = repo.run("--base", root_sha, "--head", sha_b, "--aggregate")
             self.assertEqual(rc_without_base_ref, 0)
 
+    # -- no usable --base: a manual dispatch or a tag build ------------------
+    #
+    # docker-publish.yml passes `--base "${{ github.event.before }}"`, which is
+    # empty for a workflow_dispatch and for a tag. The v26.11.8 release snapshot
+    # never built because of it: the promotion had been squash-merged, so the
+    # tagged commit carried every app change *and* the bump, the guard compared
+    # its app/VERSION against `git show :app/VERSION` -- the index, which always
+    # holds HEAD's own value -- and called 26.11.8 "not strictly greater than"
+    # 26.11.8. A merge-commit promotion only escaped it because a merge commit
+    # lists no files of its own.
+
+    def test_squashed_commit_with_a_real_bump_passes_without_a_base(self) -> None:
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/foo.py", "# foo")
+            repo.write("app/VERSION", "1.0.8")
+            squash = repo.commit("app/backend/foo.py", "app/VERSION", message="promotion, squashed")
+
+            result = _run_script_result(repo.path, "--base", "", "--head", squash, "--aggregate")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_squashed_commit_without_a_bump_still_fails_without_a_base(self) -> None:
+        """No base must not mean no check: the commit's own parent is the
+        baseline, the same fallback the per-commit mode already uses."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            repo.commit("app/VERSION", message="init")
+
+            repo.write("app/backend/foo.py", "# foo")
+            head = repo.commit("app/backend/foo.py", message="app change, no bump")
+
+            result = _run_script_result(repo.path, "--base", "", "--head", head, "--aggregate")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("not strictly greater", result.stderr)
+
+    def test_merge_commit_passes_without_a_base(self) -> None:
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            root = repo.commit("app/VERSION", message="init")
+            subprocess.check_call(["git", "-C", repo.path, "checkout", "-q", "-b", "beta"])
+            repo.write("app/backend/foo.py", "# foo")
+            repo.write("app/VERSION", "1.0.1")
+            repo.commit("app/backend/foo.py", "app/VERSION", message="feature + bump")
+            subprocess.check_call(["git", "-C", repo.path, "checkout", "-q", root])
+            subprocess.check_call(
+                ["git", "-C", repo.path, "merge", "-q", "--no-ff", "-m", "promote", "beta"],
+                stdout=subprocess.DEVNULL,
+            )
+            merge = subprocess.check_output(["git", "-C", repo.path, "rev-parse", "HEAD"], text=True).strip()
+
+            self.assertEqual(repo.run("--base", "", "--head", merge, "--aggregate"), 0)
+
+    def test_root_commit_without_a_base_only_needs_valid_semver(self) -> None:
+        """A commit with no parent has no baseline at all; the index is never
+        one."""
+        with TempRepo() as repo:
+            repo.write("app/VERSION", "1.0.0")
+            repo.write("app/backend/foo.py", "# foo")
+            root = repo.commit("app/VERSION", "app/backend/foo.py", message="init with app code")
+
+            result = _run_script_result(repo.path, "--base", "", "--head", root, "--aggregate")
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_an_empty_ref_never_reads_the_index(self) -> None:
+        sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+        import check_version_bumped as m  # noqa: PLC0415
+
+        self.assertIsNone(m.read_version_at(""))
+
     def test_failure_reports_full_range_and_actual_target_branch(self) -> None:
         """Failure output keeps the aggregate range and uses --base-ref guidance."""
         with TempRepo() as repo:
