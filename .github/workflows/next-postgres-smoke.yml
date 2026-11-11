@@ -175,6 +175,19 @@ jobs:
           tests.test_next_token_binding
           tests.test_next_plugin_authorization
 
+      # Who may fetch a stored image, and what a header draws without one.
+      # The authorization module had never been listed here: it imported
+      # `app.backend` and so only ran from the repository root, which this job
+      # does not. That is how a location's backdrop could be uploaded, recorded
+      # on the location, and then answer 404 for every user without a red
+      # check anywhere -- no reference bucket existed for a location, and an
+      # asset nobody is authorized for is one nobody may view.
+      - name: Test media asset authorization and backdrop headers
+        run: >-
+          python -m unittest
+          tests.test_next_media_authorization
+          tests.test_next_backdrop_header_ui
+
       # Opening a film queues its refresh instead of waiting for it. The whole
       # claim is that the *work* is unchanged and only its location moved, so
       # these assertions are about what must not quietly disappear: the job
