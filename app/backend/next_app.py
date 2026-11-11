@@ -53,6 +53,8 @@ try:
     from .next_import import CLIENT_SYNC_SETTING_KEYS
     from .next_import import apply_legacy_metadata_plugin_plan
     from .next_import import clean_text
+    from .next_installation_count import is_reporting as installation_count_is_reporting
+    from .next_installation_count import pending_owner_notice as pending_installation_count_notice
     from .next_ownership import actor_or_instance_owner_id
     from .next_plugin_runtime import plugin_registry_snapshot
     from .next_plugin_runtime import plugin_attribution
@@ -377,6 +379,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_import import CLIENT_SYNC_SETTING_KEYS
     from next_import import apply_legacy_metadata_plugin_plan
     from next_import import clean_text
+    from next_installation_count import is_reporting as installation_count_is_reporting
+    from next_installation_count import pending_owner_notice as pending_installation_count_notice
     from next_ownership import actor_or_instance_owner_id
     from next_plugin_runtime import plugin_registry_snapshot
     from next_plugin_runtime import plugin_attribution
@@ -4920,6 +4924,7 @@ def startup_status_payload(conn) -> dict[str, Any]:
         "canUseCollection": phase == "ready",
         "canStartMigration": bool(readiness["canStart"] and can_manage_migration and auth_ready),
         "canCreateOwner": phase == "owner_setup",
+        "installationCountOn": installation_count_announced_in_setup(conn, phase),
         "canSignIn": bool(auth_effective and not user),
         "canSwitchAccount": bool(auth_effective and user and migration_blocks_collection and not can_manage_migration),
         "steps": steps,
@@ -6288,6 +6293,41 @@ def collection_attribution_entities(conn) -> list[dict[str, Any]]:
     return entities
 
 
+def installation_count_notice_for(conn, user: dict[str, Any] | None) -> dict[str, Any] | None:
+    """The owner's unanswered notice about the anonymous installation count.
+
+    For the owner only, and never at the expense of the snapshot: the lookup
+    may create the notice (``next_installation_count.pending_owner_notice``),
+    so it runs in its own savepoint and a failure costs the banner, not the
+    page.
+    """
+    if not user or user.get("role") != "owner" or not user.get("id"):
+        return None
+    try:
+        with conn.transaction():
+            return pending_installation_count_notice(conn, user["id"])
+    except Exception:  # noqa: BLE001 - a notice must never break the app's first request
+        logger.exception("Installation count: could not look up the owner notice")
+        return None
+
+
+def installation_count_announced_in_setup(conn, phase: str) -> bool:
+    """Whether the setup wizard has to say that this server will be counted.
+
+    Only while the first owner is being created, and only when the count is
+    really going to run: a wizard that announces a count the operator switched
+    off would be telling the new owner something false.
+    """
+    if phase != "owner_setup":
+        return False
+    try:
+        with conn.transaction():
+            return installation_count_is_reporting(conn)
+    except Exception:  # noqa: BLE001 - never at the expense of the setup wizard
+        logger.exception("Installation count: could not tell whether the count is on")
+        return False
+
+
 def collection_dashboard_snapshot(conn, user: dict[str, Any] | None = None) -> dict[str, Any]:
     user_id = user.get("id") if user else None
     preferences = app_effective_preferences(conn, user_id)
@@ -7011,6 +7051,28 @@ LOCATION_MAX_DEPTH = 4
 LOCATION_NAME_LIMIT = 240
 LOCATION_DESCRIPTION_LIMIT = 2000
 LOCATION_MAX_DEPTH_ERROR = "Locations can be nested at most 4 levels deep"
+
+
+#: Who may see locations at all -- the gate on `GET /api/next/locations`.
+#:
+#: There is no per-location rule to consult: the list returns the whole tree to
+#: anyone holding one of these, and the location page is drawn from that list.
+#: So "may view this location" and "may list locations" are one question, and
+#: `actor_can_view_media_asset` answers it with this tuple for a location's
+#: backdrop.
+#:
+#: The routes themselves keep the tuple written out, on purpose:
+#: `test_next_token_scope_sufficiency` reads each gate as a literal from the
+#: source, and a route gated by a name drops out of that check without failing
+#: it. `test_next_media_authorization` holds this tuple and those three gates
+#: equal instead, so neither side can move alone.
+LOCATION_VIEW_PERMISSIONS = (
+    "containers.view",
+    "collection.view",
+    "collection.view_own",
+    "collection.view_group",
+    "collection.view_all",
+)
 
 
 def location_public_id() -> str:
@@ -17140,6 +17202,7 @@ def media_asset_authorization_references(conn, media_id: UUID) -> dict[str, set[
         "series": set(),
         "user_avatar": set(),
         "wishlist": set(),
+        "location": set(),
     }
     if table_exists(conn, "entity_media"):
         with conn.cursor() as cur:
@@ -17201,6 +17264,22 @@ def media_asset_authorization_references(conn, media_id: UUID) -> dict[str, set[
                 ),
             )
             references["wishlist"].update(row["user_id"] for row in cur.fetchall())
+
+    if table_exists(conn, "locations"):
+        with conn.cursor() as cur:
+            # A location's backdrop is not an `entity_media` row: the upload
+            # route records it in `locations.metadata` and nowhere else. So the
+            # list above could never have found it, and the result was the same
+            # write-only artwork the series comment describes -- upload accepted,
+            # `backdrop_url` on the location, and a 404 for the image itself.
+            #
+            # Matched on the asset id the server wrote rather than on
+            # `backdrop_url`: the id is the reference, the URL is derived from it.
+            cur.execute(
+                "SELECT id FROM locations WHERE metadata->>'backdrop_asset_id' = %s",
+                (str(media_id),),
+            )
+            references["location"].update(row["id"] for row in cur.fetchall())
     return references
 
 
@@ -17224,6 +17303,12 @@ def actor_can_view_media_asset(conn, actor: dict[str, Any] | None, media_id: UUI
         # shelf -- which is why `series_sync_entities` publishes series without a
         # per-user filter too. What is private is *which discs* sit under it, and
         # that is enforced where discs are listed rather than here.
+        return True
+    if references.get("location") and actor_effective_has_any_permission(actor, LOCATION_VIEW_PERMISSIONS):
+        # No per-location check, because there is none anywhere: whoever may
+        # list locations is handed every one of them, backdrop URL included.
+        # The effective variant is the one the list route itself goes through,
+        # so a token scoped away from locations is refused their artwork too.
         return True
 
     actor_id = str(actor.get("id") or "") if actor else ""
@@ -27245,7 +27330,12 @@ def register_routes(flask_app: Flask) -> None:
             if user:
                 user["role"] = next_user_primary_role(conn, user["id"])
                 user["permissions"] = sorted(next_user_permission_keys(conn, user["id"]))
-            return response({"status": "ok", "snapshot": collection_dashboard_snapshot(conn, user)})
+            # Before the snapshot, so that its unread count already includes a
+            # notice this request created.
+            notice = installation_count_notice_for(conn, user)
+            snapshot = collection_dashboard_snapshot(conn, user)
+            snapshot["installationCountNotice"] = notice
+            return response({"status": "ok", "snapshot": snapshot})
 
     @flask_app.get("/api/next/stats")
     def stats():

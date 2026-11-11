@@ -20,6 +20,7 @@ try:  # package import (Flask app factory)
         server_usable_image,
     )
     from .next_genres import GENRE_KEY_TO_LABEL
+    from .next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_app import (
         APP_PREFERENCE_DEFAULTS,
@@ -33,6 +34,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         server_usable_image,
     )
     from next_genres import GENRE_KEY_TO_LABEL
+    from next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 
 
 def server_movie_cards(movies: list[dict[str, Any]]) -> str:
@@ -1661,6 +1663,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
     function number(value) {
       return Number(value || 0).toLocaleString();
     }
+""" + PLUGIN_DISPLAY_NAME_JS + """
     const NEXT_I18N_FALLBACK_LOCALES = [
       {locale: "nl-NL", legacy: "nl", nativeName: "Nederlands"},
       {locale: "en-US", legacy: "en", nativeName: "English"},
@@ -3002,7 +3005,7 @@ def collection_dashboard_html(snapshot: dict[str, Any] | None = None) -> str:
             <div class="muted">${escapeHtml(winner.reason || decision.outcome || "-")}</div>
             <div class="admin-plugin-meta">
               <span class="tag" title="${escapeHtml(metadataValuePreview(decision.finalValue))}">${escapeHtml(tNext("appAdmin.finalValue", "Final value"))}: ${escapeHtml(metadataValuePreview(decision.finalValue))}</span>
-              <span class="tag ${decision.conflict ? "blue" : ""}">${escapeHtml(formatNumber(decision.candidateCount || 0))} ${escapeHtml(tNext("appAdmin.candidates", "candidates"))}</span>
+              <span class="tag ${decision.conflict ? "blue" : ""}">${escapeHtml(number(decision.candidateCount || 0))} ${escapeHtml(tNext("appAdmin.candidates", "candidates"))}</span>
               ${decision.written ? `<span class="tag good">${escapeHtml(tNext("appAdmin.written", "Written"))}</span>` : ""}
             </div>
             ${rejected ? `<div class="muted">${escapeHtml(tNext("appAdmin.rejectedProviders", "Rejected providers"))}: ${escapeHtml(rejected)}</div>` : ""}

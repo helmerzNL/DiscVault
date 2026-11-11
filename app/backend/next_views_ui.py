@@ -23,6 +23,7 @@ try:  # package import (Flask app factory)
         server_usable_image,
         supported_next_locales,
     )
+    from .next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_app import (
         APP_PREFERENCE_DEFAULTS,
@@ -39,6 +40,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
         server_usable_image,
         supported_next_locales,
     )
+    from next_views_shared_js import PLUGIN_DISPLAY_NAME_JS
 
 
 def ui_preview_movie_cards(movies: list[dict[str, Any]]) -> str:
@@ -181,7 +183,7 @@ def ui_preview_html(
     featured_backdrop_html = (
         f'<img class="hero-backdrop" id="heroBackdrop" src="{h(featured_backdrop)}" alt="">'
         if featured_backdrop
-        else '<img class="hero-backdrop" id="heroBackdrop" alt="">'
+        else '<img class="hero-backdrop hidden" id="heroBackdrop" alt="">'
     )
     initial_state_json = html_lib.escape(json_lib.dumps(json_ready(snapshot), separators=(",", ":")), quote=False)
     locales_json = html_lib.escape(json_lib.dumps(supported_next_locales(), separators=(",", ":")), quote=False)
@@ -641,6 +643,25 @@ def ui_preview_html(
     .startup-auth-guidance strong {
       font-size: .95rem;
     }
+    /* What the new owner is told about the anonymous installation count while
+       the account is being created. Information, not a warning: no amber. */
+    .startup-installation-count {
+      display: grid;
+      gap: 6px;
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--accent) 5%, var(--bg-solid));
+      padding: 14px 16px;
+    }
+    .startup-installation-count strong {
+      font-size: .95rem;
+    }
+    .startup-installation-count span {
+      color: var(--muted);
+      font-size: .88rem;
+      line-height: 1.5;
+    }
     .startup-auth-guidance span {
       color: var(--muted);
       font-size: .88rem;
@@ -996,6 +1017,40 @@ def ui_preview_html(
       color: var(--subtle);
       font-size: 11px;
     }
+    /* Unread notifications, shown on whatever leads to them. The same accent
+       as the unread dot in the inbox, so the two read as one signal. Always
+       hidden at zero, through `.hidden`. */
+    .unread-badge {
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--accent-contrast);
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+    }
+    /* On the profile entry the badge is a size smaller. With the sidebar open
+       it stands in the row, ahead of the role, in the column where the other
+       entries keep their counts. It is a sibling of the label and not a child
+       of it: `.nav-item-label span:last-child` styles the label by position,
+       and hides it when the sidebar collapses. */
+    .nav-unread-badge {
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      font-size: 10px;
+    }
+    .nav-item .nav-unread-badge {
+      margin-left: auto;
+      margin-right: 8px;
+    }
     .nav-symbol {
       width: 20px;
       height: 20px;
@@ -1208,11 +1263,24 @@ def ui_preview_html(
       padding-right: 0;
     }
     .preview-shell.sidebar-collapsed .brand > div:last-child,
-    .preview-shell.sidebar-collapsed .nav-item-label span:last-child,
     .preview-shell.sidebar-collapsed .nav-item small,
     .preview-shell.sidebar-collapsed .sidebar-support,
     .preview-shell.sidebar-collapsed .sidebar-footer {
       display: none;
+    }
+    /* Collapsed, the label leaves the screen but stays the button's name. With
+       display: none an entry had no name at all, and the Profile entry was
+       announced by its unread badge alone. */
+    .preview-shell.sidebar-collapsed .nav-item-label span:last-child {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      padding: 0;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
     }
     .preview-shell.sidebar-collapsed .nav-item {
       justify-content: center;
@@ -1223,6 +1291,18 @@ def ui_preview_html(
       justify-content: center;
       gap: 0;
       width: 100%;
+    }
+    /* Collapsed, the icon is all that is left of the entry, so the badge
+       moves onto its corner: anchored by its left edge just past the icon's
+       centre, so that a wider count grows away from the icon. */
+    .preview-shell.sidebar-collapsed .nav-item {
+      position: relative;
+    }
+    .preview-shell.sidebar-collapsed .nav-item .nav-unread-badge {
+      position: absolute;
+      top: calc(50% - 16px);
+      left: calc(50% + 4px);
+      margin: 0;
     }
     .preview-shell.sidebar-collapsed .sidebar-collapse-toggle {
       min-height: 40px;
@@ -2808,6 +2888,55 @@ def ui_preview_html(
       box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
       font-size: 13px;
     }
+    /* The owner's one-time notice that the anonymous installation count is on.
+       It sits on the screen rather than in the inbox because nothing outside
+       the notifications page shows an unread count. Above the page and the
+       mobile tabbar, below every dialog (120 and up), and moved up when the
+       update banner is there too. */
+    .installation-count-notice {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 100;
+      display: grid;
+      gap: 12px;
+      width: min(560px, calc(100vw - 32px));
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--bg-solid);
+      color: var(--text);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+    }
+    .installation-count-notice h2 {
+      margin: 0 0 6px;
+      font-size: 15px;
+      line-height: 1.3;
+    }
+    .installation-count-notice p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .installation-count-notice p + p {
+      margin-top: 6px;
+    }
+    .installation-count-notice-actions {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 8px;
+    }
+    .installation-count-notice-actions > button {
+      min-height: 44px;
+    }
+    body:has(#swUpdateBanner) .installation-count-notice {
+      bottom: 96px;
+    }
+    /* Its phone layout is with the other phone rules, in the main
+       `max-width: 760px` block next to the mobile tabbar it has to clear. */
     .library-export-overlay {
       position: fixed;
       inset: 0;
@@ -10482,6 +10611,9 @@ def ui_preview_html(
     .profile-hero-nav-action .nav-item-label {
       gap: 8px;
     }
+    .profile-hero-nav-action .unread-badge {
+      margin-left: 8px;
+    }
     .profile-grid {
       display: grid;
       grid-template-columns: minmax(280px, .82fr) minmax(0, 1.18fr);
@@ -13908,6 +14040,11 @@ def ui_preview_html(
         grid-auto-columns: max-content;
         overflow-x: auto;
       }
+      /* An entry is only as wide as its content here, so no free space is
+         left to push the badge across the row: it needs a gap of its own. */
+      .nav-item .nav-unread-badge {
+        margin-left: 8px;
+      }
       .sidebar-collapse-toggle { display: none; }
       .sidebar-support { display: none; }
       .sidebar-footer { display: none; }
@@ -14135,6 +14272,18 @@ def ui_preview_html(
         font-size: 10px;
         font-weight: 700;
         line-height: 1.1;
+      }
+      /* On the tab the badge sits on the icon's corner, as it does on the
+         collapsed sidebar. It stands between the icon and the label in the
+         markup because the rule above styles the label as the tab's last
+         child. */
+      .mobile-tab {
+        position: relative;
+      }
+      .mobile-tab .nav-unread-badge {
+        position: absolute;
+        top: 3px;
+        left: calc(50% + 4px);
       }
       .import-result-card.featured {
         grid-template-columns: 82px minmax(0, 1fr);
@@ -14629,6 +14778,16 @@ def ui_preview_html(
         justify-content: stretch;
         /* Stick above the floating mobile tabbar (70px tall, 10px inset). */
         bottom: calc(90px + env(safe-area-inset-bottom));
+      }
+      /* The installation count notice clears the same tabbar. */
+      .installation-count-notice {
+        bottom: calc(92px + env(safe-area-inset-bottom));
+      }
+      body:has(#swUpdateBanner) .installation-count-notice {
+        bottom: calc(170px + env(safe-area-inset-bottom));
+      }
+      .installation-count-notice-actions > button {
+        flex: 1 1 140px;
       }
       .movie-edit-actions .primary-button,
       .movie-edit-actions .secondary-button {
@@ -15570,6 +15729,11 @@ def ui_preview_html(
           </div>
         </div>
       </div>
+      <div class="startup-installation-count hidden" id="startupInstallationCount" role="note">
+        <strong id="startupInstallationCountTitle"></strong>
+        <span id="startupInstallationCountPurpose"></span>
+        <span id="startupInstallationCountDetails"></span>
+      </div>
       <div class="startup-actions">
         <button type="button" class="primary-button hidden" id="startupOwnerPasskeyButton" data-next-i18n="auth.createOwnerPasskey">Create owner passkey</button>
         <button type="button" class="secondary-button hidden" id="startupLegacyButton" data-next-i18n="legacyAuth.setupOwner">Start</button>
@@ -15597,7 +15761,7 @@ def ui_preview_html(
         <button type="button" class="nav-item" data-app-route="lists"><span class="nav-item-label">""" + nav_icon("lists") + """<span data-next-i18n="uiPreview.navLists">Lists</span></span><small id="navListCount">""" + h((counts.get("personalLists") or {}).get("watchlist", 0)) + """</small></button>
         <button type="button" class="nav-item" data-app-route="import"><span class="nav-item-label">""" + nav_icon("import") + """<span data-next-i18n="importCenter.nav">Add</span></span><small id="navImportState">-</small></button>
         <button type="button" class="nav-item" data-app-route="discover"><span class="nav-item-label">""" + nav_icon("discover") + """<span data-next-i18n="discover.nav">Discover</span></span><small id="navDiscoverCount">TMDb</small></button>
-        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><small id="navProfileRole">-</small></button>
+        <button type="button" class="nav-item" data-app-route="profile"><span class="nav-item-label">""" + nav_icon("profile") + """<span data-next-i18n="uiPreview.profile">Profile</span></span><span class="unread-badge nav-unread-badge hidden" data-notification-unread-badge role="img"></span><small id="navProfileRole">-</small></button>
       </nav>
       <button type="button" class="sidebar-support" id="sidebarSupportLink" data-next-i18n="uiPreview.supportDiscVault">Support DiscVault</button>
       <div class="sidebar-footer">
@@ -16770,7 +16934,7 @@ def ui_preview_html(
       </section>
       <section class="discover-detail-page hidden" id="discoverDetailPage" aria-labelledby="discoverDetailTitle">
         <section class="movie-detail-hero" id="discoverDetailHero">
-          <img id="discoverDetailBackdrop" alt="">
+          <img class="hidden" id="discoverDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="discoverDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="discoverDetailPoster"><span data-next-i18n="collection.loading">Loading...</span></div>
@@ -16805,7 +16969,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page hidden" id="movieDetailPage" aria-labelledby="movieDetailTitle">
         <section class="movie-detail-hero" id="movieDetailHero">
-          <img id="movieDetailBackdrop" alt="">
+          <img class="hidden" id="movieDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="movieDetailBackButton" aria-label="Back" title="Back" data-next-i18n-aria="movieDetail.backToLibrary" data-next-i18n-title="movieDetail.backToLibrary">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15.41 16.58 10.83 12 15.41 7.41 14 6 8 12 14 18 15.41 16.58Z"></path></svg>
             <span class="button-label" data-next-i18n="movieDetail.backToLibrary">Back</span>
@@ -17429,7 +17593,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page container-detail-page hidden" id="containerDetailPage" aria-labelledby="containerDetailTitle">
         <section class="movie-detail-hero" id="containerDetailHero">
-          <img id="containerDetailBackdrop" alt="">
+          <img class="hidden" id="containerDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="containerDetailBackButton" data-next-i18n="containerDetail.backToLibrary">Back</button>
           <div class="movie-detail-hero-actions" aria-label="Container actions" data-next-i18n-aria="containerDetail.actions">
             <button type="button" class="movie-detail-icon-action hidden" id="containerEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
@@ -17705,7 +17869,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page series-detail-page hidden" id="seriesDetailPage" aria-labelledby="seriesDetailTitle">
         <section class="movie-detail-hero" id="seriesDetailHero">
-          <img id="seriesDetailBackdrop" alt="">
+          <img class="hidden" id="seriesDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="seriesDetailBackButton" data-next-i18n="seriesDetail.backToLibrary">Back</button>
           <div class="movie-detail-hero-actions" aria-label="Series actions" data-next-i18n-aria="seriesDetail.actions">
             <button type="button" class="movie-detail-icon-action hidden" id="seriesEditToggleButton" aria-label="Edit" title="Edit" data-next-i18n-aria="common.edit" data-next-i18n-title="common.edit">
@@ -17966,7 +18130,7 @@ def ui_preview_html(
       </section>
       <section class="movie-detail-page location-detail-page hidden" id="locationDetailPage" aria-labelledby="locationDetailTitle">
         <section class="movie-detail-hero" id="locationDetailHero">
-          <img id="locationDetailBackdrop" alt="">
+          <img class="hidden" id="locationDetailBackdrop" alt="">
           <button type="button" class="movie-detail-back" id="locationDetailBackButton" data-next-i18n="movieDetail.backToLibrary">Back</button>
           <div class="movie-detail-summary">
             <div class="movie-detail-poster" id="locationDetailQr"><span data-next-i18n="collection.loading">Loading...</span></div>
@@ -18091,7 +18255,7 @@ def ui_preview_html(
           </div>
           <div class="profile-hero-actions">
             <div class="profile-hero-nav-actions">
-              <button type="button" class="secondary-button profile-hero-nav-action" id="profileOpenNotificationsButton" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span></button>
+              <button type="button" class="secondary-button profile-hero-nav-action" id="profileOpenNotificationsButton" data-app-route="notifications"><span class="nav-item-label">""" + nav_icon("notifications") + """<span data-next-i18n="uiPreview.navNotifications">Notifications</span></span><span class="unread-badge hidden" data-notification-unread-badge role="img"></span></button>
               <button type="button" class="secondary-button profile-hero-nav-action hidden" id="profileOpenStatisticsButton" data-app-route="statistics"><span class="nav-item-label">""" + nav_icon("statistics") + """<span data-next-i18n="uiPreview.navStatistics">Statistics</span></span></button>
             </div>
             <button type="button" class="secondary-button hidden" id="profileOpenAdminButton" data-app-route="admin" data-next-i18n="profile.openAdmin">Open admin</button>
@@ -18267,6 +18431,7 @@ def ui_preview_html(
                 <div id="preferencePanelCollectors" class="preferences-panel-content hidden" role="tabpanel" aria-labelledby="preferenceTabCollectors" tabindex="0" aria-hidden="true" data-preferences-panel="collectors">
                   <div id="profileCollectorPreferenceList"></div>
                   <div class="hidden" id="loansSystemSettingRow"></div>
+                  <div class="hidden" id="installationCountSettingRow"></div>
                   <div class="hidden" id="movieVaultContributionSettingRow"></div>
                   <div class="hidden" id="contributeHistoryRow"></div>
                 </div>
@@ -20066,6 +20231,7 @@ def ui_preview_html(
     </button>
     <button type="button" class="mobile-tab" data-app-route="profile">
       """ + nav_icon("profile") + """
+      <span class="unread-badge nav-unread-badge hidden" data-notification-unread-badge role="img"></span>
       <span data-next-i18n="uiPreview.profile">Profile</span>
     </button>
   </nav>
@@ -20185,6 +20351,9 @@ def ui_preview_html(
     let notificationFilter = localStorage.getItem("dv_next_notification_filter") || "all";
     let pushProfile = {loaded: false, supported: false, subscribed: false, permission: "default", preferences: {}, subscriptions: []};
     let currentStartup = {};
+    // Set once the setup wizard has shown the installation count note; see
+    // renderStartupInstallationCount().
+    let installationCountShownInSetup = false;
     let currentAuthStatus = {};
     let legacyFlowToken = "";
     let legacyStage = "";
@@ -20350,6 +20519,36 @@ def ui_preview_html(
       messages: {},
       locales: JSON.parse(document.getElementById("nextLocales").textContent || "[]")
     };
+    // The leading articles a name ordering skips (App-Guidance
+    // library-ordering.md §1a), one row per language the app is translated
+    // into. English applies for every viewer; the row of the language the app
+    // is displayed in applies on top of it; no other row ever does -- with all
+    // of them at once "Die Hard" files under H for everyone. A word ending in
+    // an apostrophe is elided and attaches straight to the next word
+    // ("L'avventura"); every other word needs whitespace after it.
+    //
+    // A language with no articles is listed below the table instead, so that
+    // "no row" is a decision rather than something nobody got round to:
+    // test_next_library_title_sort_key fails when an app locale is in neither.
+    // The iOS app carries the same rows (DiscVaultApp, TitleSortKey.swift);
+    // change the spec first, then both.
+    const LEADING_ARTICLES = {
+      en: ["the", "a", "an"],
+      nl: ["de", "het", "een", "'t"],
+      de: ["der", "die", "das", "ein", "eine"],
+      fr: ["le", "la", "les", "l'", "un", "une", "des"],
+      es: ["el", "la", "lo", "los", "las", "un", "una", "unos", "unas"],
+      it: ["il", "lo", "la", "i", "gli", "le", "l'", "un", "uno", "una", "un'"],
+      pt: ["o", "a", "os", "as", "um", "uma", "uns", "umas"],
+      da: ["en", "et", "den", "det", "de"],
+      sv: ["en", "ett", "den", "det", "de"],
+      nb: ["en", "ei", "et", "den", "det", "de"],
+      el: ["ο", "η", "το", "οι", "τα", "ένας", "μια", "μία", "ένα"],
+      hu: ["a", "az", "egy"],
+      ro: ["un", "o"]
+    };
+    const LANGUAGES_WITHOUT_LEADING_ARTICLES = ["bg", "cs", "et", "fi", "hr", "ja", "ko", "lt", "lv", "pl", "sk", "sl", "tr", "uk", "zh"];
+    let leadingArticleCache = null;
     const SHELL_FALLBACK_LOCALE = "en-US";
     // Only an explicit pick is pinned in localStorage. loadLocale() used to
     // store every successful load, so one fallback page view was enough to
@@ -20388,6 +20587,20 @@ def ui_preview_html(
     function usableImage(value) {
       const text = String(value || "");
       return text.startsWith("http://") || text.startsWith("https://") || text.startsWith("/api/next/media/") || text.startsWith("/api/next/movievault-v2/posters/") ? text : "";
+    }
+    // A header backdrop that has no image must not be an <img> with an empty
+    // `src`. Assigning "" leaves the attribute present, the element is sized
+    // to fill the header, and the browser paints its broken-image icon in the
+    // top-left corner. Dropping the attribute and hiding the element is the
+    // only state that draws nothing.
+    function setBackdropImage(node, url) {
+      if (!node || node.tagName !== "IMG") return;
+      if (url) {
+        node.src = url;
+      } else {
+        node.removeAttribute("src");
+      }
+      node.classList.toggle("hidden", !url);
     }
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, (char) => ({
@@ -20729,53 +20942,7 @@ def ui_preview_html(
       cache[cacheKey] = {cachedAt: Date.now(), detail};
       saveDiscoverDetailCache(cache);
     }
-    function pluginDisplayName(pluginOrId, fallback = "") {
-      if (!pluginOrId && fallback) return fallback;
-      const direct = pluginOrId && typeof pluginOrId === "object" ? pluginOrId : null;
-      const pluginId = String(direct?.id || direct?.pluginId || direct?.plugin_id || pluginOrId || "").trim();
-      const directName = String(direct?.displayName || direct?.pluginName || direct?.name || direct?.manifest?.name || "").trim();
-      if (directName) return directName;
-      const pools = [
-        typeof appAdmin !== "undefined" ? appAdmin.plugins : [],
-        typeof state !== "undefined" ? state.metadataPlugins : [],
-        typeof state !== "undefined" ? state.plugins : [],
-        typeof importCenter !== "undefined" ? importCenter.report?.metadataPlugins?.items : [],
-        typeof importCenter !== "undefined" ? importCenter.report?.importSources : [],
-        typeof importCenter !== "undefined" ? importCenter.preview?.sources : [],
-        typeof adminState !== "undefined" ? adminState.plugins : []
-      ].filter(Array.isArray);
-      for (const pool of pools) {
-        const match = pool.find((plugin) => {
-          const id = String(plugin?.id || plugin?.pluginId || plugin?.plugin_id || "").trim();
-          return id && id === pluginId;
-        });
-        const name = String(match?.displayName || match?.pluginName || match?.name || match?.manifest?.name || "").trim();
-        if (name) return name;
-      }
-      // Names for plugin ids the registry cannot supply one for. `movievault`
-      // and `movievault_26` are removed plugins and stay here on purpose:
-      // identifiers and audit entries they wrote are still on existing movies,
-      // and without an entry those rows would render a mangled id instead of the
-      // source's name.
-      const known = {
-        movievault: "MovieVault",
-        movievault_26: "MovieVault 26",
-        tmdb: "TMDb",
-        omdb: "OMDb",
-        upcitemdb: "UPCItemDB",
-        bluray_com: "Blu-ray.com",
-        trakt: "Trakt",
-        plex: "Plex",
-        jellyfin: "Jellyfin",
-        discvault_legacy_import: "DiscVault Legacy Import"
-      };
-      if (pluginId && known[pluginId]) return known[pluginId];
-      if (fallback) return fallback;
-      if (!pluginId) return "";
-      return pluginId
-        .replace(/[_-]+/g, " ")
-        .replace(/\\b\\w/g, (char) => char.toUpperCase());
-    }
+""" + PLUGIN_DISPLAY_NAME_JS + """
     // Flag files are named by ISO 3166-1 alpha-2 COUNTRY code, never by
     // language code. Denmark and Sweden used to sit on disk as da.svg/sv.svg,
     // so every caller -- which passes a country, "DK" or "SE" -- asked for a
@@ -21529,6 +21696,9 @@ def ui_preview_html(
       startupScreen?.classList.toggle("hidden", name !== "startup");
       shell?.classList.toggle("app-shell-hidden", appMode && name !== "library");
       mobile?.classList.toggle("hidden", appMode && name !== "library");
+      // The owner's notice belongs to the signed-in app, not to the sign-in or
+      // startup screen; the next snapshot draws it again.
+      if (appMode && name !== "library") document.getElementById("installationCountNotice")?.remove();
     }
     const SIDEBAR_COLLAPSED_STORAGE_KEY = "dv_next_sidebar_collapsed";
     function sidebarCollapseSupported() {
@@ -27413,6 +27583,12 @@ def ui_preview_html(
       // The banner writes its own text rather than carrying data-next-i18n,
       // because it is only ever shown for a reason the code decides.
       renderBackendReachability();
+      // The same goes for the installation count notice, when it is showing,
+      // on the screen or in the setup wizard.
+      if (document.getElementById("installationCountNotice")) renderInstallationCountNotice(true);
+      if (!document.getElementById("startupInstallationCount")?.classList.contains("hidden")) renderStartupInstallationCount(currentStartup);
+      // And for the unread badge, whose name carries a number.
+      updateNotificationCounts();
       // Translated labels change the segment widths, so the sliding thumb has
       // to be measured again against the text that is actually on screen.
       renderStatsSegmented();
@@ -29362,7 +29538,7 @@ def ui_preview_html(
           const diff = itemYearValue(a, mode) - itemYearValue(b, mode);
           if (diff) return mode === "year_desc" ? -diff : diff;
         }
-        const diff = itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base"});
+        const diff = compareItemTitles(a, b, {sensitivity: "base"});
         return mode === "title_desc" ? -diff : diff;
       });
     }
@@ -29577,9 +29753,90 @@ def ui_preview_html(
     // Both spellings are load-bearing: movies reach the client as raw rows
     // (`sort_title`), series are serialised camelCase (`sortTitle`), and
     // containers have no such column -- they fall back to the title they show.
-    function itemSortTitleValue(item) {
+    //
+    // The fallback skips one leading article (library-ordering §1a): "The
+    // Matrix" files under M, "The Matrix Collection" next to it. A sort title
+    // is used exactly as typed -- skipping an article in it would leave the
+    // field unable to say "no, file this under The", and it is the only
+    // correction a wrong guess has. Every name ordering goes through
+    // titleSortKey() and compareTitleSortKeys() rather than its own
+    // comparator: three hand-written comparators agreeing on a rule is how
+    // this Library came to ignore sort titles in the first place.
+    function leadingArticlesFor(locale) {
+      const language = String(locale || "").toLowerCase().split(/[-_]/)[0];
+      if (leadingArticleCache && leadingArticleCache.language === language) return leadingArticleCache;
+      const words = new Set([...LEADING_ARTICLES.en, ...(LEADING_ARTICLES[language] || [])]);
+      leadingArticleCache = {
+        language,
+        spaced: new Set([...words].filter((word) => !word.endsWith("'"))),
+        // Sorted only so the result cannot depend on Set order; no elided
+        // form is a prefix of another that could match differently.
+        elided: [...words].filter((word) => word.endsWith("'")).sort(),
+        // Per name, because a sort asks for the same key tens of thousands of
+        // times. Bounded by the titles in the library, and dropped with the
+        // rest of the cache when the display language changes.
+        skipped: new Map()
+      };
+      return leadingArticleCache;
+    }
+    // Case-insensitive but diacritic-sensitive on purpose: "À bout de
+    // souffle" opens with a preposition and Dutch "Eén" is a numeral. The
+    // typographic apostrophes match the plain one, so "\\u2019t Schaep" and
+    // "'t Schaep" file together.
+    function normalizedLeadingWord(text) {
+      return String(text).toLowerCase().replace(/[\\u2018\\u2019]/g, "'");
+    }
+    // The test is lexical, not grammatical, and it is wrong sometimes --
+    // "Die Hard" loses its "Die" for a German viewer. The remedy is the row's
+    // sort title; never add an exception list here.
+    function skipLeadingArticle(name, articles = leadingArticlesFor(localeState.locale)) {
+      const text = String(name ?? "");
+      const known = articles.skipped.get(text);
+      if (known !== undefined) return known;
+      const trimmed = text.trim();
+      let result = trimmed;
+      // A whole word, then whitespace, then something left to sort on. "A.I.",
+      // "A-ha" and "I, Robot" have no whitespace straight after the candidate,
+      // and a film called "The" has nothing after it at all.
+      const boundary = trimmed.search(/\\s/);
+      if (boundary > 0 && articles.spaced.has(normalizedLeadingWord(trimmed.slice(0, boundary)))) {
+        result = trimmed.slice(boundary).trimStart();
+      } else {
+        for (const article of articles.elided) {
+          const rest = trimmed.slice(article.length);
+          const next = rest ? String.fromCodePoint(rest.codePointAt(0)) : "";
+          if (next && /[\\p{L}\\p{N}]/u.test(next) && normalizedLeadingWord(trimmed.slice(0, article.length)) === article) {
+            result = rest;
+            break;
+          }
+        }
+      }
+      articles.skipped.set(text, result);
+      return result;
+    }
+    // `primary` decides the order; `full` breaks a tie in it, so "Matrix" and
+    // "The Matrix" have a defined order instead of whichever the sort left
+    // first. A blank sort title is no sort title.
+    function titleSortKey(name, sortTitle) {
+      const own = String(sortTitle ?? "");
+      if (own.trim()) return {primary: own, full: own};
+      const shown = String(name ?? "");
+      return {primary: skipLeadingArticle(shown), full: shown};
+    }
+    function compareTitleSortKeys(left, right, options = {sensitivity: "base"}) {
+      const locale = localeState.locale || undefined;
+      return left.primary.localeCompare(right.primary, locale, options)
+        || left.full.localeCompare(right.full, locale, options);
+    }
+    function itemTitleSortKey(item) {
       const entity = itemEntity(item);
-      return entity?.sort_title || entity?.sortTitle || itemTitleValue(item);
+      return titleSortKey(itemTitleValue(item), entity?.sort_title || entity?.sortTitle);
+    }
+    function itemSortTitleValue(item) {
+      return itemTitleSortKey(item).primary;
+    }
+    function compareItemTitles(a, b, options = {sensitivity: "base"}) {
+      return compareTitleSortKeys(itemTitleSortKey(a), itemTitleSortKey(b), options);
     }
     function itemYearLabel(item) {
       if (item?.kind === "movie") return item.movie?.year || "";
@@ -29991,17 +30248,24 @@ def ui_preview_html(
         if (typeof state.key === "string" && state.key.startsWith("custom:")) {
           const diff = compareCustomFieldValue(a, b, state.key.slice(7), state.direction);
           if (diff) return diff;
-          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+          return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
         }
         if (state.key === "externalScore") {
           const diff = compareExternalScore(a, b, state.direction);
           if (diff) return diff;
-          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+          return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
         }
         if (state.key === "personalRating") {
           const diff = comparePersonalRating(a, b, state.direction);
           if (diff) return diff;
-          return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+          return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
+        }
+        // The Title column itself: the whole key, tiebreak included, flipped
+        // together -- so Z-A is the exact reverse of A-Z, "The Matrix" and
+        // "Matrix" included.
+        if (state.key === "title") {
+          const diff = compareItemTitles(a, b, {sensitivity: "base", numeric: true});
+          return state.direction === "desc" ? -diff : diff;
         }
         const diff = state.key === "behavior"
           ? compareLibraryBehavior(a, b)
@@ -30011,7 +30275,7 @@ def ui_preview_html(
               {sensitivity: "base", numeric: true}
             );
         if (diff) return state.direction === "desc" ? -diff : diff;
-        return itemSortTitleValue(a).localeCompare(itemSortTitleValue(b), localeState.locale || undefined, {sensitivity: "base", numeric: true});
+        return compareItemTitles(a, b, {sensitivity: "base", numeric: true});
       });
     }
     function libraryListSortIconHtml(direction) {
@@ -30144,7 +30408,11 @@ def ui_preview_html(
         const diff = typeof left === "number" && typeof right === "number"
           ? left - right
           : String(left).localeCompare(String(right), localeState.locale || undefined, {sensitivity: "base"});
-        return state.direction === "desc" ? -diff : diff;
+        // Equal values -- two discs of one year, or two titles equal once the
+        // article is skipped -- fall to the full title key, so the table has
+        // one order rather than whatever the server happened to send.
+        const ordered = diff || compareItemTitles(a, b, {sensitivity: "base"});
+        return state.direction === "desc" ? -ordered : ordered;
       });
     }
     function detailSortButton(scope, key, label, sortState) {
@@ -35158,11 +35426,7 @@ def ui_preview_html(
       const poster = mediaAssetImage(detail.mediaAssets, "poster") || usableImage(movie.poster_url || metadata.poster_url || metadata.posterUrl || metadata.poster);
       const backdrop = mediaAssetImage(detail.mediaAssets, "backdrop") || usableImage(movie.backdrop_url || metadata.backdrop_url || metadata.backdropUrl || metadata.backdrop);
       const title = movie.title || tNext("common.untitled", "Untitled");
-      const backdropNode = document.getElementById("movieDetailBackdrop");
-      if (backdropNode) {
-        backdropNode.src = backdrop || "";
-        backdropNode.classList.toggle("hidden", !backdrop);
-      }
+      setBackdropImage(document.getElementById("movieDetailBackdrop"), backdrop);
       const movieHeroNode = document.getElementById("movieDetailHero");
       if (movieHeroNode) movieHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("movieDetailPoster");
@@ -35510,7 +35774,7 @@ def ui_preview_html(
       document.getElementById("movieDetailCast").innerHTML = "";
       document.getElementById("movieDetailCrew").innerHTML = "";
       document.getElementById("movieDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("movieDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("movieDetailBackdrop"), "");
       setMovieDetailMessage("");
     }
     async function openAppMovieDetail(movieId, pushUrl = true) {
@@ -35847,11 +36111,7 @@ def ui_preview_html(
       const backdrop = containerMediaImage(detail, "backdrop");
       const title = container.title || tNext("common.untitled", "Untitled");
       const typeLabel = containerTypeLabel(container.container_type);
-      const backdropNode = document.getElementById("containerDetailBackdrop");
-      if (backdropNode) {
-        backdropNode.src = backdrop || "";
-        backdropNode.classList.toggle("hidden", !backdrop);
-      }
+      setBackdropImage(document.getElementById("containerDetailBackdrop"), backdrop);
       const containerHeroNode = document.getElementById("containerDetailHero");
       if (containerHeroNode) containerHeroNode.classList.toggle("is-flat", !backdrop);
       const posterNode = document.getElementById("containerDetailPoster");
@@ -36011,7 +36271,15 @@ def ui_preview_html(
         setContainerMemberGridMode(node, seriesDiscsViewMode);
         return;
       }
-      const decorated = discs.map((disc) => Object.assign({}, disc, {
+      // The server sends these by COALESCE(sort_title, title); the grid and
+      // list re-derive that with the article rule (library-ordering §1a), as
+      // the detail table does, so all three view modes agree with each other
+      // and with the Library tile the series came from.
+      const ordered = discs
+        .map((disc) => ({disc, key: titleSortKey(disc.title, disc.sort_title || disc.sortTitle)}))
+        .sort((left, right) => compareTitleSortKeys(left.key, right.key))
+        .map((entry) => entry.disc);
+      const decorated = ordered.map((disc) => Object.assign({}, disc, {
         edition: disc.edition || seriesDiscSeasonLabel(detail, disc.id),
       }));
       const entries = decorated.map((disc, index) => ({
@@ -36516,8 +36784,7 @@ def ui_preview_html(
         || mediaAssetImage(detail.aggregateMediaAssets, "backdrop");
       const hero = document.getElementById("seriesDetailHero");
       if (hero) hero.classList.toggle("is-flat", !backdrop);
-      const backdropNode = document.getElementById("seriesDetailBackdrop");
-      if (backdropNode) backdropNode.src = backdrop || "";
+      setBackdropImage(document.getElementById("seriesDetailBackdrop"), backdrop);
       // The hero poster is painted by `renderSeriesSeasons` further down rather
       // than here: which season is selected is settled while the rail renders,
       // and painting a guess first would show one season's poster and replace it
@@ -36604,7 +36871,7 @@ def ui_preview_html(
       document.getElementById("seriesDetailBackdropArtwork").innerHTML = "";
       document.getElementById("seriesDetailVideos").innerHTML = "";
       document.getElementById("seriesDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("seriesDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("seriesDetailBackdrop"), "");
       activateDetailTab("seriesDetail", "seriesDetailDiscsPanel");
       setSeriesDetailMessage("");
     }
@@ -37001,7 +37268,7 @@ def ui_preview_html(
       document.getElementById("containerDetailBackdropArtwork").innerHTML = "";
       document.getElementById("containerDetailVideos").innerHTML = "";
       document.getElementById("containerDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("containerDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("containerDetailBackdrop"), "");
       activateDetailTab("containerDetail", "containerDetailFilmsPanel");
       setContainerDetailMessage("");
     }
@@ -43457,12 +43724,13 @@ def ui_preview_html(
       return Number.isNaN(value) ? 0 : value;
     }
     // `sort_title` decides the order while `title` is what the card shows --
-    // the same split the Library makes, so "The Thing" files under T here and
-    // under T there. itemSortTitleValue is not reusable: it unwraps the
+    // the same split and the same key the Library uses, article rule included
+    // (library-ordering §1a), so "The Thing" files under T here exactly when
+    // it does there. itemTitleSortKey is not reusable: it unwraps the
     // library's {kind, movie, series} item, and a personal-list entry is a
     // flat row.
-    function listsEntrySortTitle(entry) {
-      return String(entry?.sort_title || entry?.sortTitle || entry?.title || "");
+    function listsEntrySortKey(entry) {
+      return titleSortKey(entry?.title, entry?.sort_title || entry?.sortTitle);
     }
     function listsEntryYearValue(entry) {
       return Number.parseInt(entry?.year || "0", 10) || 0;
@@ -43480,7 +43748,7 @@ def ui_preview_html(
         }
         // Title breaks every other tie, so two films added the same second, or
         // sharing a year, still land in a stable, explicable order.
-        const diff = listsEntrySortTitle(a).localeCompare(listsEntrySortTitle(b), localeState.locale || undefined, {sensitivity: "base"});
+        const diff = compareTitleSortKeys(listsEntrySortKey(a), listsEntrySortKey(b), {sensitivity: "base"});
         return mode === "title_desc" ? -diff : diff;
       });
     }
@@ -45619,6 +45887,9 @@ def ui_preview_html(
       if (payload.kind === "metadata_plugins_unconfigured") {
         return tNext("notifications.pluginsUnconfiguredTitle", "Plugins need configuration");
       }
+      if (payload.kind === "installation_count_notice") {
+        return tNext("notifications.installationCountTitle", "Anonymous installation count is on");
+      }
       return notification.title || tNext("notifications.itemTitle", "Notification");
     }
     function notificationDisplayBody(notification) {
@@ -45626,6 +45897,9 @@ def ui_preview_html(
       if (payload.kind === "metadata_plugins_unconfigured") {
         const names = Array.isArray(payload.plugins) ? payload.plugins.join(", ") : "";
         return tNext("notifications.pluginsUnconfiguredBody", "The following plugins are not configured yet: {plugins}").replace("{plugins}", names);
+      }
+      if (payload.kind === "installation_count_notice") {
+        return installationCountNoticeBody();
       }
       return notification.body || "";
     }
@@ -45654,15 +45928,37 @@ def ui_preview_html(
         </article>
       `;
     }
+    // The one place the unread count reaches the screen: the inbox's own
+    // tiles, and the badge on everything that leads to the inbox. Every
+    // source of a count -- the app snapshot, the notifications API, the push
+    // endpoints -- comes through here.
     function updateNotificationCounts(counts = notificationsState.counts || {}) {
-      const unread = Number(counts.unread || 0);
+      const unread = Math.max(0, Math.trunc(Number(counts.unread) || 0));
       const total = Number(counts.total || notificationsState.items.length || 0);
-      const navNode = document.getElementById("navNotificationCount");
+      // A count that differs from the one already held came from the server
+      // after the inbox list was loaded, so that list is out of date. Without
+      // this the badge leads to an inbox that does not show what it counted.
+      const known = notificationsState.counts || {};
+      if (counts !== known && ((Number(known.unread) || 0) !== unread || (Number(known.total) || 0) !== total)) {
+        notificationsState.loaded = false;
+      }
+      // Kept, so that a redraw with no fresh count -- a language change, or
+      // the inbox painting before its request returns -- repeats the last
+      // number it was given rather than the one the inbox happened to hold.
+      notificationsState.counts = {total, unread};
       const unreadNode = document.getElementById("notificationsUnreadCount");
       const totalNode = document.getElementById("notificationsTotalCount");
-      if (navNode) navNode.textContent = String(unread);
       if (unreadNode) unreadNode.textContent = String(unread);
       if (totalNode) totalNode.textContent = String(total);
+      // A badge is small, so it stops counting at 99; its name does not.
+      const badgeText = unread > 99 ? "99+" : String(unread);
+      const badgeName = tNext("notifications.unreadCount", "Unread notifications: {count}").replace("{count}", String(unread));
+      document.querySelectorAll("[data-notification-unread-badge]").forEach((badge) => {
+        badge.classList.toggle("hidden", !unread);
+        badge.textContent = unread ? badgeText : "";
+        if (unread) badge.setAttribute("aria-label", badgeName);
+        else badge.removeAttribute("aria-label");
+      });
     }
     function renderNotificationsView() {
       const list = document.getElementById("notificationsList");
@@ -45765,6 +46061,13 @@ def ui_preview_html(
       } catch (error) {
         console.warn("Could not mark notification as read", error);
       }
+      if ((notification.payload || {}).kind === "installation_count_notice") {
+        // Read here is answered there: the banner goes with the inbox entry.
+        document.getElementById("installationCountNotice")?.remove();
+        if (state) state.installationCountNotice = null;
+        openInstallationCountSetting();
+        return;
+      }
       const url = notificationUrl(notification);
       if (url === "/notifications") return;
       history.pushState({}, "", url);
@@ -45788,6 +46091,8 @@ def ui_preview_html(
         notificationsState.items = payload.notifications || [];
         notificationsState.counts = payload.counts || {};
         notificationsState.loaded = true;
+        if (state) state.installationCountNotice = null;
+        renderInstallationCountNotice();
         renderNotificationsView();
       } catch (error) {
         const empty = document.getElementById("notificationsEmptyMessage");
@@ -46539,7 +46844,7 @@ def ui_preview_html(
       document.getElementById("discoverDetailTitle").textContent = tNext("collection.loading", "Loading...");
       document.getElementById("discoverDetailOverview").textContent = "";
       document.getElementById("discoverDetailPoster").innerHTML = `<span>${escapeHtml(tNext("collection.loading", "Loading..."))}</span>`;
-      document.getElementById("discoverDetailBackdrop").src = "";
+      setBackdropImage(document.getElementById("discoverDetailBackdrop"), "");
       document.getElementById("discoverDetailHero")?.classList.add("is-flat");
       document.getElementById("discoverDetailRelease").innerHTML = "";
       document.getElementById("discoverDetailPeople").innerHTML = "";
@@ -46570,11 +46875,7 @@ def ui_preview_html(
         document.getElementById("discoverDetailTitle").textContent = title;
         document.getElementById("discoverDetailOverview").textContent = detail.overview || tNext("movieDetail.noOverview", "No overview imported yet.");
         document.getElementById("discoverDetailPoster").innerHTML = poster ? `<img src="${escapeHtml(poster)}" alt="">` : `<span>${escapeHtml(tNext("collection.noPoster", "No poster"))}</span>`;
-        const backdropNode = document.getElementById("discoverDetailBackdrop");
-        if (backdropNode) {
-          backdropNode.src = backdrop || "";
-          backdropNode.classList.toggle("hidden", !backdrop);
-        }
+        setBackdropImage(document.getElementById("discoverDetailBackdrop"), backdrop);
         const discoverHeroNode = document.getElementById("discoverDetailHero");
         if (discoverHeroNode) discoverHeroNode.classList.toggle("is-flat", !backdrop);
         const contentRatingInfo = discoverContentRatingInfo(detail);
@@ -48269,10 +48570,7 @@ def ui_preview_html(
           ? tNext("locations.routeNotFound", "Location not found.")
           : `${visibleMovieCount} ${tNext("collection.movies", "Movies").toLowerCase()} · ${boxCountText} · ${tNext("locations.routeContext", "Location: {path}").replace("{path}", routeLabel)}`;
       }
-      const backdropNode = document.getElementById("locationDetailBackdrop");
-      if (backdropNode && backdropNode.tagName === "IMG") {
-        backdropNode.src = routeBackdrop || "";
-      }
+      setBackdropImage(document.getElementById("locationDetailBackdrop"), routeBackdrop);
       const locationHeroNode = document.getElementById("locationDetailHero");
       if (locationHeroNode) locationHeroNode.classList.toggle("is-flat", !routeBackdrop);
       const qrNode = document.getElementById("locationDetailQr");
@@ -49344,6 +49642,240 @@ def ui_preview_html(
         setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
       }
     }
+    // ---- Anonymous installation count (owner setting) ---------------------
+    //
+    // On by default, and this card is one of its two off switches. The other
+    // is the DISCVAULT_INSTALLATION_COUNT environment variable, which wins:
+    // when the operator has it off, the switch is drawn off and locked with
+    // the reason beside it, instead of looking like it is the one in charge.
+    //
+    // The same endpoint and the same owner-only gate as the MovieVault
+    // contribution switch below it, and not a preference row for the same
+    // reason: a preference is user-writable by construction.
+    const installationCount = {loaded: false, loading: false, enabled: true, disabledByEnvironment: false, revealOnRender: false};
+
+    function canManageInstallationCount() {
+      if (!appMode) return true;
+      return !!currentAuthStatus.authenticated && currentRole() === "owner";
+    }
+    function applyInstallationCountSettings(settings) {
+      // A missing value is "on", as it is on the server.
+      installationCount.enabled = settings.installation_count_enabled !== false;
+      installationCount.disabledByEnvironment = !!settings.installation_count_disabled_by_environment;
+      installationCount.loaded = true;
+    }
+    async function loadInstallationCountSetting() {
+      if (installationCount.loading || !canManageInstallationCount()) return;
+      installationCount.loading = true;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings");
+        applyInstallationCountSettings(payload.settings || {});
+        renderInstallationCountSetting();
+      } catch (error) {
+        /* Not an owner, or offline. The card stays hidden. */
+      } finally {
+        installationCount.loading = false;
+      }
+    }
+    function renderInstallationCountSetting() {
+      const row = document.getElementById("installationCountSettingRow");
+      if (!row) return;
+      if (!canManageInstallationCount()) {
+        row.classList.add("hidden");
+        row.innerHTML = "";
+        return;
+      }
+      if (!installationCount.loaded) {
+        // Drawn only once the stored value is known. This switch defaults to
+        // on, so drawing it before the answer arrives would show "on" on an
+        // instance where the owner had turned it off.
+        void loadInstallationCountSetting();
+        return;
+      }
+      const lockedOff = installationCount.disabledByEnvironment;
+      const active = installationCount.enabled && !lockedOff;
+      const label = tNext("preferences.installationCount", "Count this server");
+      const help = lockedOff
+        ? tNext("preferences.installationCountEnvDisabled", "Turned off for this server with the DISCVAULT_INSTALLATION_COUNT environment variable. Nothing is sent, and this switch cannot turn it back on.")
+        : tNext("preferences.installationCountHelp", "Off means nothing is sent at all. You can change this here at any time.");
+      row.classList.remove("hidden");
+      row.innerHTML = `
+        <section class="preferences-setting-card system wide" data-preference-card="installation-count">
+          <div class="preferences-setting-card-head">
+            <h5>${escapeHtml(tNext("preferences.cardInstallationCount", "Anonymous installation count"))}</h5>
+            <p>${escapeHtml(tNext("preferences.cardInstallationCountHelp", "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier is sent, and nothing about your collection or your accounts."))}</p>
+          </div>
+          <div class="preferences-card-list">
+            <div class="preference-row">
+              <span>
+                <strong>${escapeHtml(label)}</strong>
+                <span id="installationCountHelp">${escapeHtml(help)}</span>
+              </span>
+              <button type="button" class="switch ${active ? "on" : ""}" id="installationCountToggle" aria-label="${escapeHtml(label)}" aria-describedby="installationCountHelp" aria-pressed="${active ? "true" : "false"}" ${lockedOff ? "disabled" : ""}></button>
+            </div>
+          </div>
+        </section>
+      `;
+      const toggle = document.getElementById("installationCountToggle");
+      if (toggle && !lockedOff) toggle.addEventListener("click", () => toggleInstallationCount(!active));
+      if (installationCount.revealOnRender) {
+        installationCount.revealOnRender = false;
+        row.scrollIntoView({block: "center"});
+      }
+    }
+    async function toggleInstallationCount(enabled) {
+      const toggle = document.getElementById("installationCountToggle");
+      if (toggle) toggle.disabled = true;
+      try {
+        const payload = await authApiJson("/api/next/auth/owner/settings", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({installation_count_enabled: !!enabled})
+        });
+        applyInstallationCountSettings(payload.settings || {});
+        renderInstallationCountSetting();
+        setPreferencesMessage(tNext("preferences.saved", "Saved."), "good");
+      } catch (error) {
+        if (toggle) toggle.disabled = false;
+        setPreferencesMessage(error?.message || tNext("common.error", "Something went wrong."), "bad");
+      }
+    }
+    // ---- The same notice, on the screen ------------------------------------
+    //
+    // The inbox entry alone was never seen: no unread count is shown outside
+    // the notifications page. So the snapshot names the owner's unanswered
+    // notice (`installationCountNotice`, owner only, and only while the count
+    // is on) and it stays on the screen until the owner answers it. Either
+    // answer marks the inbox entry read, which is what takes it off every
+    // other device too.
+    // Why first, then what: the count exists to size the MovieVault backend,
+    // and a notice that only lists what leaves the server does not say so.
+    function installationCountNoticePurpose() {
+      return tNext("notifications.installationCountPurpose", "The count is only there to estimate how much DiscVault is used, so that the MovieVault backend can be scaled to match.");
+    }
+    function installationCountNoticeDetails() {
+      // Names the two tabs the way this locale's own navigation does, so the
+      // path in the notice is the path on the screen.
+      return tNext("notifications.installationCountBody", "Once a day this server tells api.discvault.eu that it is running: its DiscVault version and the number of days since its previous report. No identifier, and no account or collection data. You can turn it off under {preferences} > {collectors}.")
+        .replace("{preferences}", tNext("preferences.title", "Preferences"))
+        .replace("{collectors}", tNext("preferences.tabCollectors", "Collectors"));
+    }
+    function installationCountNoticeBody() {
+      return `${installationCountNoticePurpose()} ${installationCountNoticeDetails()}`;
+    }
+    // ---- ...and in the setup wizard ----------------------------------------
+    //
+    // A new installation has no owner yet, so nobody to send a notice to. The
+    // wizard says it instead, while the account is being created, and only
+    // when the server says the count is really going to run. Whoever read it
+    // there is not shown the banner again a moment later: the notice the
+    // first snapshot brings is marked read on the spot. That memory lives in
+    // this page only -- after a reload the banner appears, which is the safe
+    // side to err on. (`installationCountShownInSetup` is declared with
+    // `currentStartup`, ahead of anything that can run during startup.)
+    function renderStartupInstallationCount(startup) {
+      const note = document.getElementById("startupInstallationCount");
+      if (!note) return;
+      const show = (startup || {}).phase === "owner_setup" && (startup || {}).installationCountOn === true;
+      note.classList.toggle("hidden", !show);
+      if (!show) return;
+      installationCountShownInSetup = true;
+      document.getElementById("startupInstallationCountTitle").textContent = tNext("notifications.installationCountTitle", "Anonymous installation count is on");
+      document.getElementById("startupInstallationCountPurpose").textContent = installationCountNoticePurpose();
+      document.getElementById("startupInstallationCountDetails").textContent = installationCountNoticeDetails();
+    }
+    function renderInstallationCountNotice(redraw = false) {
+      const existing = document.getElementById("installationCountNotice");
+      const notice = (state || {}).installationCountNotice;
+      const noticeId = notice && notice.id ? String(notice.id) : "";
+      if (!noticeId || !canManageInstallationCount()) {
+        if (existing) existing.remove();
+        return;
+      }
+      if (installationCountShownInSetup) {
+        // Read in the wizard a moment ago: answered, not asked twice.
+        installationCountShownInSetup = false;
+        if (existing) existing.remove();
+        state.installationCountNotice = null;
+        void markInstallationCountNoticeRead(noticeId);
+        return;
+      }
+      if (existing) {
+        if (!redraw && existing.dataset.notificationId === noticeId) return;
+        existing.remove();
+      }
+      const banner = document.createElement("section");
+      banner.id = "installationCountNotice";
+      banner.className = "installation-count-notice";
+      banner.dataset.notificationId = noticeId;
+      banner.setAttribute("role", "region");
+      banner.setAttribute("aria-labelledby", "installationCountNoticeTitle");
+      const text = document.createElement("div");
+      const title = document.createElement("h2");
+      title.id = "installationCountNoticeTitle";
+      title.textContent = tNext("notifications.installationCountTitle", "Anonymous installation count is on");
+      const purpose = document.createElement("p");
+      purpose.textContent = installationCountNoticePurpose();
+      const details = document.createElement("p");
+      details.textContent = installationCountNoticeDetails();
+      text.appendChild(title);
+      text.appendChild(purpose);
+      text.appendChild(details);
+      const actions = document.createElement("div");
+      actions.className = "installation-count-notice-actions";
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "secondary-button";
+      close.textContent = tNext("common.close", "Close");
+      close.addEventListener("click", () => answerInstallationCountNotice(false));
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "primary-button";
+      open.textContent = tNext("preferences.title", "Preferences");
+      open.addEventListener("click", () => answerInstallationCountNotice(true));
+      actions.appendChild(close);
+      actions.appendChild(open);
+      banner.appendChild(text);
+      banner.appendChild(actions);
+      document.body.appendChild(banner);
+    }
+    async function answerInstallationCountNotice(openSetting) {
+      const banner = document.getElementById("installationCountNotice");
+      const noticeId = banner ? banner.dataset.notificationId : "";
+      if (banner) banner.remove();
+      if (state) state.installationCountNotice = null;
+      if (openSetting) openInstallationCountSetting();
+      await markInstallationCountNoticeRead(noticeId);
+    }
+    async function markInstallationCountNoticeRead(noticeId) {
+      if (!noticeId) return;
+      try {
+        const payload = await authApiJson(`/api/next/notifications/${encodeURIComponent(noticeId)}`, {
+          method: "PATCH",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({read: true})
+        });
+        const item = (notificationsState.items || []).find((entry) => String(entry.id) === noticeId);
+        if (item) item.read_at = payload.notification?.read_at || new Date().toISOString();
+        notificationsState.counts = payload.counts || notificationsState.counts;
+        updateNotificationCounts(notificationsState.counts);
+      } catch (error) {
+        // Not marked read, so the next snapshot puts the notice back: an
+        // answer that did not reach the server is not an answer.
+        console.warn("Could not mark the installation count notice as read", error);
+      }
+    }
+    // Where the one-time notice in the inbox leads: the card above, on the
+    // Collectors tab of the preferences. There is no URL for a preferences
+    // tab, so the notice is opened by kind rather than by its stored link. The
+    // card may still be loading, so it scrolls itself into view once drawn.
+    function openInstallationCountSetting() {
+      showProfilePage(true);
+      setProfileTab("preferences");
+      setPreferenceTab("collectors");
+      installationCount.revealOnRender = true;
+      renderInstallationCountSetting();
+    }
     // ---- MovieVault contribution (owner setting) --------------------------
     //
     // The owner half of the contribution gate, on the Collectors tab beside the
@@ -49574,6 +50106,7 @@ def ui_preview_html(
         bindPreferenceList(collectorList);
       }
       renderLoansSystemSetting();
+      renderInstallationCountSetting();
       renderMovieVaultContributionSetting();
       renderContributeHistory();
       setProfileMenuStyle(effectiveProfileMenuStyle());
@@ -50593,6 +51126,7 @@ def ui_preview_html(
         else title.removeAttribute("title");
       }
       if (description) description.textContent = tNext(`startup.description.${phase}`, startup.message || "");
+      renderStartupInstallationCount(startup);
       const steps = document.getElementById("startupSteps");
       if (steps) {
         steps.classList.toggle("hidden", phase === "owner_setup");
@@ -50675,6 +51209,7 @@ def ui_preview_html(
       }
       updateListsCounts((state.counts || {}).personalLists || {});
       updateNotificationCounts((state.counts || {}).notifications || {});
+      renderInstallationCountNotice();
       if (!document.getElementById("listsView")?.classList.contains("hidden")) {
         listsState.loaded = false;
         loadListsView(true);
@@ -52118,10 +52653,7 @@ def ui_preview_html(
       document.getElementById("heroTitle").textContent = title;
       document.getElementById("heroMeta").innerHTML = movieMeta(movie).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
       document.getElementById("heroDetailLink").href = movie.id ? `/movies/${encodeURIComponent(movie.id)}` : "/";
-      const backdropNode = document.getElementById("heroBackdrop");
-      if (backdropNode && backdropNode.tagName === "IMG") {
-        backdropNode.src = backdrop || "";
-      }
+      setBackdropImage(document.getElementById("heroBackdrop"), backdrop);
       const posterNode = document.getElementById("heroPoster");
       posterNode.innerHTML = poster
         ? `<img src="${escapeHtml(poster)}" alt="">`
@@ -52147,10 +52679,7 @@ def ui_preview_html(
         movieIdSetForContainer(container.id).size ? `${movieIdSetForContainer(container.id).size} ${tNext("collection.movies", "Movies").toLowerCase()}` : ""
       ].filter(Boolean).map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
       document.getElementById("heroDetailLink").href = container.id ? `/containers/${encodeURIComponent(container.id)}` : "/";
-      const backdropNode = document.getElementById("heroBackdrop");
-      if (backdropNode && backdropNode.tagName === "IMG") {
-        backdropNode.src = backdrop || "";
-      }
+      setBackdropImage(document.getElementById("heroBackdrop"), backdrop);
       const posterNode = document.getElementById("heroPoster");
       posterNode.innerHTML = poster
         ? `<img src="${escapeHtml(poster)}" alt="">`

@@ -1,4 +1,6 @@
 import os
+import re
+import sys
 import tempfile
 import unittest
 import uuid
@@ -6,7 +8,14 @@ from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import ANY, patch
 
-from app.backend import next_app
+# CI runs these as `tests.<module>` from `app/backend`, where `app` is not
+# importable until the repository root is on the path. Without this the module
+# only ever ran from the root -- which is how it stayed out of the workflow.
+_REPO_ROOT = str(Path(__file__).resolve().parents[3])
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from app.backend import next_app  # noqa: E402
 
 
 class _ReferenceCursor:
@@ -32,6 +41,8 @@ class _ReferenceCursor:
             self._result = self._rows["users"]
         elif "FROM wishlist_items" in normalized:
             self._result = self._rows["wishlist"]
+        elif "FROM locations" in normalized:
+            self._result = self._rows["locations"]
         else:
             raise AssertionError(f"Unexpected query: {normalized}")
 
@@ -46,6 +57,7 @@ class _ReferenceConnection:
             "people": rows.get("people", []),
             "users": rows.get("users", []),
             "wishlist": rows.get("wishlist", []),
+            "locations": rows.get("locations", []),
         }
         self.queries = []
 
@@ -214,6 +226,118 @@ class MediaAssetAuthorizationTests(unittest.TestCase):
                 )
             )
 
+    def test_asset_referenced_only_by_a_location_is_collected(self):
+        """The reference lives in `locations.metadata`, not in `entity_media`.
+
+        That is why it was missed: every other owner of artwork is found by the
+        one `entity_media` query, and a location has no row there to find.
+        """
+        media_id = uuid.uuid4()
+        location_id = uuid.uuid4()
+        conn = _ReferenceConnection(locations=[{"id": location_id}])
+
+        with patch.object(next_app, "table_exists", return_value=True):
+            result = next_app.media_asset_authorization_references(conn, media_id)
+
+        self.assertEqual(result["location"], {location_id})
+        for bucket in ("movie", "container", "person", "series", "user_avatar", "wishlist"):
+            self.assertEqual(result[bucket], set(), bucket)
+        location_query, location_params = next(
+            (query, params) for query, params in conn.queries if "FROM locations" in query
+        )
+        self.assertIn("metadata->>'backdrop_asset_id' = %s", location_query)
+        self.assertEqual(location_params, (str(media_id),))
+
+    def test_location_backdrop_is_visible_to_whoever_may_list_locations(self):
+        media_id = uuid.uuid4()
+        refs = _references(location={uuid.uuid4()})
+        with patch.object(next_app, "media_asset_authorization_references", return_value=refs):
+            for permission in next_app.LOCATION_VIEW_PERMISSIONS:
+                with self.subTest(permission=permission):
+                    self.assertTrue(
+                        next_app.actor_can_view_media_asset(
+                            object(),
+                            {"id": "user-1", "permissions": [permission]},
+                            media_id,
+                        )
+                    )
+
+    def test_location_backdrop_is_refused_to_whoever_may_not_list_locations(self):
+        media_id = uuid.uuid4()
+        refs = _references(location={uuid.uuid4()})
+        with patch.object(next_app, "media_asset_authorization_references", return_value=refs):
+            # Signed in, and allowed things -- just none of the ones that open
+            # the location list.
+            self.assertFalse(
+                next_app.actor_can_view_media_asset(
+                    object(),
+                    {"id": "user-2", "permissions": ["watchlist.manage", "users.view"]},
+                    media_id,
+                )
+            )
+            self.assertFalse(
+                next_app.actor_can_view_media_asset(
+                    object(),
+                    {"id": "user-3", "permissions": []},
+                    media_id,
+                )
+            )
+            self.assertFalse(next_app.actor_can_view_media_asset(object(), None, media_id))
+            # The role would allow it; the token was scoped away from it. The
+            # list route refuses this actor, so the artwork must as well.
+            self.assertFalse(
+                next_app.actor_can_view_media_asset(
+                    object(),
+                    {
+                        "id": "user-4",
+                        "permissions": ["collection.view"],
+                        "apiToken": {"permissionKeys": ["watchlist.manage"]},
+                    },
+                    media_id,
+                )
+            )
+
+    def test_location_permission_alone_does_not_open_unreferenced_assets(self):
+        # Holding the permission is half of the rule. Without a location that
+        # actually points at the asset it must stay closed, or the five keys
+        # would become a pass for every image on the instance.
+        media_id = uuid.uuid4()
+        actor = {"id": "user-1", "permissions": list(next_app.LOCATION_VIEW_PERMISSIONS)}
+        refs = _references(movie={uuid.uuid4()}, container={uuid.uuid4()})
+        with (
+            patch.object(next_app, "media_asset_authorization_references", return_value=refs),
+            patch.object(next_app, "actor_can_view_movie", return_value=False),
+            patch.object(next_app, "actor_can_view_container", return_value=False),
+        ):
+            self.assertFalse(next_app.actor_can_view_media_asset(object(), actor, media_id))
+
+    def test_location_artwork_rule_is_the_location_routes_own_gate(self):
+        """The artwork rule is only right while it equals the routes' gate.
+
+        The three location read routes spell their permissions out (another
+        test parses them as literals), and the artwork gate reads
+        `LOCATION_VIEW_PERMISSIONS`. Widen either alone and a location's
+        backdrop is visible to someone who cannot see the location, or hidden
+        from someone who can -- which is the bug this module was extended for.
+        """
+        source = Path(next_app.__file__).read_text(encoding="utf-8")
+        for handler in (
+            "def list_locations():",
+            "def location_qr(location_id: str):",
+            "def location_qr_png_route(location_id: str):",
+        ):
+            with self.subTest(handler=handler):
+                start = source.index(handler)
+                gate = re.search(
+                    r"require_any_next_permission\(\s*conn\s*,\s*\(([^)]*)\)",
+                    source[start : start + 600],
+                )
+                self.assertIsNotNone(gate, "the route is no longer gated by a literal tuple")
+                self.assertEqual(
+                    tuple(re.findall(r'"([a-z_.]+)"', gate.group(1))),
+                    next_app.LOCATION_VIEW_PERMISSIONS,
+                )
+
     def test_wishlist_poster_is_visible_only_to_owning_user(self):
         media_id = uuid.uuid4()
         refs = _references(wishlist={"user-1"})
@@ -303,6 +427,55 @@ class MediaAssetRouteTests(unittest.TestCase):
                 self.assertEqual(conditional.status_code, 304)
                 response.close()
                 conditional.close()
+
+    def test_location_backdrop_is_served_to_a_location_viewer_and_404s_otherwise(self):
+        """The whole bug, at the route: uploaded, referenced, and not servable.
+
+        `actor_can_view_media_asset` is deliberately *not* patched here -- the
+        tests above this one that patch it to True would have passed while the
+        image 404'd for every user. Only the reference lookup is stubbed.
+        """
+        media_id = uuid.uuid4()
+        refs = _references(location={uuid.uuid4()})
+        viewer = {"id": "user-1", "permissions": ["containers.view"]}
+        outsider = {"id": "user-2", "permissions": ["watchlist.manage"]}
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "backdrop.jpg"
+            path.write_bytes(b"\xff\xd8\xfflocation-backdrop")
+            asset = {
+                "id": media_id,
+                "kind": "backdrop",
+                "provider_id": "upload",
+                "storage_key": "media/backdrop.jpg",
+                "content_type": "image/jpeg",
+            }
+
+            def fetch(actor):
+                with (
+                    patch.object(next_app, "connect", _connection),
+                    patch.object(next_app, "next_auth_effective_enabled", return_value=True),
+                    patch.object(next_app, "next_auth_current_user", return_value=actor),
+                    patch.object(next_app, "require_next_authenticated_user", return_value=actor),
+                    patch.object(next_app, "media_asset_entity", return_value=asset),
+                    patch.object(
+                        next_app,
+                        "media_asset_authorization_references",
+                        return_value=refs,
+                    ),
+                    patch.object(next_app, "local_media_asset_path", return_value=path),
+                ):
+                    return self.app.test_client().get(f"/api/next/media/assets/{media_id}")
+
+            served = fetch(viewer)
+            refused = fetch(outsider)
+            self.assertEqual(served.status_code, 200)
+            self.assertEqual(served.data, b"\xff\xd8\xfflocation-backdrop")
+            self.assertEqual(served.mimetype, "image/jpeg")
+            self.assertIn("private", served.headers["Cache-Control"])
+            self.assertEqual(refused.status_code, 404)
+            self.assertEqual(refused.get_json()["error"], "Media asset not found")
+            served.close()
+            refused.close()
 
     def test_unauthorized_and_unlinked_media_share_generic_not_found(self):
         media_id = uuid.uuid4()
