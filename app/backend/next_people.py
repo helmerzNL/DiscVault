@@ -178,7 +178,9 @@ def people_list_entities(
     if not table_exists(conn, "people"):
         return []
     limit = max(1, min(int(limit or 120), 500))
-    search = clean_text(query).lower()
+    # clean_text() answers None for a missing or blank value; no search term
+    # means an empty search, which the query below already treats as "all".
+    search = (clean_text(query) or "").lower()
     role_filter = (clean_text(role) or "all").lower()
     if role_filter not in {"all", "actor", "crew"}:
         role_filter = "all"
@@ -1258,7 +1260,8 @@ def register_next_people_routes(flask_app: Flask, *, connect) -> None:  # pragma
 
     @flask_app.get("/api/next/people")
     def people_list():
-        query = clean_text(request.args.get("q"))
+        # Echoed below, so an absent search is "" and never null.
+        query = clean_text(request.args.get("q")) or ""
         role = clean_text(request.args.get("role")) or "all"
         # 500 is the ceiling people_list_entities already enforced; stating it
         # here is what makes the echoed `limit` below true. It used to report

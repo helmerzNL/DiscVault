@@ -624,6 +624,14 @@ jobs:
       - name: Test bootstrap completeness reporting
         run: python -m unittest tests.test_next_bootstrap_completeness
 
+      # The People list answered 500 to its own default request: the page sends
+      # no `q` until something is typed, and a missing `q` was the one input the
+      # lister could not take. Every searched request worked, and nothing ran
+      # the route, so only the first page load could find it. Below the
+      # migrations because it executes the route against the `people` table.
+      - name: Test the People list with and without a search term
+        run: python -m unittest tests.test_next_people_list_route
+
       # The same rule one level deeper, and the one the user's own
       # pg_stat_activity sample specified: five backends idle in transaction for
       # three to five seconds, each having last run a read of a plugin's
