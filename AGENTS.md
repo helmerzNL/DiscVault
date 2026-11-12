@@ -44,6 +44,15 @@ is not repeated here:
 | Which document leads per domain, and where that document lives | [`AUTHORITY.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/AUTHORITY.md) |
 | The normative sync contract — identity, dedup, tombstones | [`projects/discvault/contracts/sync-contract.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/projects/discvault/contracts/sync-contract.md) |
 | DiscVault specs and cross-repo change specs | [`projects/discvault/`](https://github.com/Flux76HQ/App-Guidance/tree/main/projects/discvault) |
+| How performance work is done (measure, plan, fix, pin, measure again), and the DiscVault roadmap with its measured numbers | [`shared/guidelines/performance-playbook.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/guidelines/performance-playbook.md), [`shared/plans/2026-11-11-discvault-performance-roadmap.md`](https://github.com/Flux76HQ/App-Guidance/blob/main/shared/plans/2026-11-11-discvault-performance-roadmap.md) |
+
+Performance work here follows that playbook. The measurement harness is in this
+repository: `app/scripts/perf_seed.py` fills an empty database with a fixed
+library, `app/scripts/perf_measure.py` times the hot read paths and counts their
+queries, `app/scripts/perf_pwa.mjs` times the page in a browser. A change made
+for speed states a before and an after from that harness, with the date and the
+data size, and comes with a test that fails if it is undone; plan assertions
+follow `app/backend/tests/test_next_library_sort_index.py`.
 
 **Precedence.** On anything shared, App-Guidance leads and this file must not
 contradict it. On DiscVault's own two-branch model, its version guard and its

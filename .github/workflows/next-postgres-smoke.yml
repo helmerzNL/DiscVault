@@ -430,6 +430,16 @@ jobs:
           app.scripts.tests.test_check_plugin_manifest_versions
           app.scripts.tests.test_prune_landed_branches
 
+      # The measurement harness (perf_seed.py, perf_measure.py) is only useful
+      # if two runs can be compared, so what is pinned is the data, not a
+      # latency: the seed writes what it says, the same arguments give the same
+      # rows, and it refuses a database that already holds a library. No timing
+      # is asserted here on purpose -- a threshold on a shared runner measures
+      # the runner (baseline §8). Builds and drops its own scratch database.
+      - name: Test the performance measurement harness
+        working-directory: .
+        run: python -m unittest app.scripts.tests.test_perf_seed
+
       # What the backup screen costs, and what it is allowed to report. The
       # summary cache is the reason listing the archives is cheap; the older
       # module beside it is the regression net for the validation the cache now
