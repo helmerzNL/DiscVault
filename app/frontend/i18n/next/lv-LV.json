@@ -214,7 +214,7 @@
   "appAdmin.duplicateCenterHelp": "Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.",
   "appAdmin.duplicateSignals": "duplicate signals",
   "appAdmin.duplicates": "Duplicates",
-  "appAdmin.dedupConfirm": "This will permanently merge duplicate movies. Are you sure?",
+  "appAdmin.dedupConfirm": "This will permanently merge duplicate movies and box-sets. Are you sure?",
   "appAdmin.dedupDone": "Done! {count} duplicate(s) removed.",
   "appAdmin.dedupExecuting": "Merging…",
   "appAdmin.dedupGroupCount": "Duplicate groups found: {count}",
@@ -3343,5 +3343,18 @@
   "seriesContribute.noSeasons": "Šeit nav piesaistīts nevienai sezonai, tāpēc nav ko sūtīt.",
   "seriesContribute.notInCatalogue": "Nav šī servera MovieVault kataloga kopijā.",
   "seriesContribute.nothingToSend": "Nav ko sūtīt: katrs izdevums atbilst MovieVault vai to vēl nevar nosūtīt.",
-  "seriesContribute.queued": "Nosūtīti {count} sezonu labojumi moderēšanai."
+  "seriesContribute.queued": "Nosūtīti {count} sezonu labojumi moderēšanai.",
+  "appAdmin.dedupBoxSetMovieCount": "{count} movie(s)",
+  "appAdmin.dedupApproximateBarcode": "Approximately the same barcode",
+  "appAdmin.dedupBoxSetGroupCount": "Duplicate box-set groups found: {count}",
+  "appAdmin.dedupBoxSetsHeading": "Box-sets",
+  "appAdmin.dedupDoneBreakdown": "{movies} movie(s), {boxSets} box-set(s).",
+  "appAdmin.boxSetBarcodeOnMember": "member film carries the box-set barcode",
+  "appAdmin.boxSetBarcodeImportedAsRelease": "box-set also added as a separate release",
+  "appAdmin.boxSetBarcodeAsReleaseApprox": "Barcode ≈ release",
+  "appAdmin.boxSetBarcodeAsRelease": "Barcode also on release",
+  "appAdmin.boxSetBarcodeAsReleaseHelp": "box-sets whose barcode is also on a release",
+  "appAdmin.boxSetBarcodeCheck": "Check box-set barcodes",
+  "appAdmin.boxSetBarcodeCheckClean": "No box-set barcode is also used by a release.",
+  "appAdmin.boxSetBarcodeCheckSummary": "{boxSets} box-set(s) share their barcode with {releases} release(s)."
 }

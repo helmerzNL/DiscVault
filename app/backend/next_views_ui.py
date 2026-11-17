@@ -19461,9 +19461,13 @@ def ui_preview_html(
                         <p data-next-i18n="appAdmin.duplicateCenterHelp">Find likely duplicate barcodes, titles and external IDs before imports or bulk cleanup.</p>
                       </div>
                     </div>
-                    <button type="button" class="secondary-button small" id="appAdminDedupScanBtn" onclick="startDedupScan()" data-next-i18n="appAdmin.dedupScan">Scan &amp; merge</button>
+                    <div class="profile-action-row">
+                      <button type="button" class="secondary-button small" id="appAdminBoxSetBarcodeCheckBtn" onclick="runAppAdminBoxSetBarcodeCheck()" data-next-i18n="appAdmin.boxSetBarcodeCheck">Check box-set barcodes</button>
+                      <button type="button" class="secondary-button small" id="appAdminDedupScanBtn" onclick="startDedupScan()" data-next-i18n="appAdmin.dedupScan">Scan &amp; merge</button>
+                    </div>
                   </div>
                   <div class="operations-row-list" id="appAdminDuplicateCenter"></div>
+                  <div id="appAdminBoxSetBarcodeCheckArea"></div>
                   <div id="appAdminDedupWizardArea"></div>
                 </section>
               </div>
@@ -24060,7 +24064,59 @@ def ui_preview_html(
       addRows(issues.emptyContainers, tNext("appAdmin.emptyContainer", "Empty container"), "bad");
       addRows(issues.missingContainerPosters, tNext("appAdmin.missingPoster", "Missing poster"), "blue", (item) => item.title || item.id || "-");
       addRows(issues.boxSetsMissingBarcode, tNext("appAdmin.missingBarcode", "Missing barcode"), "bad", (item) => item.title || item.id || "-");
+      (issues.boxSetBarcodeAsRelease || []).slice(0, 8).forEach((item) => rows.push(appAdminBoxSetReleaseOverlapRow(item)));
       return rows;
+    }
+    function appAdminBoxSetReleaseKindLabel(kind) {
+      return kind === "member_carries_box_barcode"
+        ? tNext("appAdmin.boxSetBarcodeOnMember", "member film carries the box-set barcode")
+        : tNext("appAdmin.boxSetBarcodeImportedAsRelease", "box-set also added as a separate release");
+    }
+    function appAdminBoxSetReleaseOverlapRow(item) {
+      const releases = (item.releases || []).map((release) => {
+        const parts = [release.title || release.movieId || "-"];
+        if (release.year) parts[0] += ` (${release.year})`;
+        if (release.barcode && release.match === "approximate") parts.push(release.barcode);
+        parts.push(appAdminBoxSetReleaseKindLabel(release.kind));
+        return parts.join(" \u00b7 ");
+      });
+      const meta = [item.barcode, ...releases].filter(Boolean).join(" \u2014 ");
+      return appAdminOperationsRow(
+        item.title || item.containerId || "-",
+        meta,
+        item.match === "approximate"
+          ? tNext("appAdmin.boxSetBarcodeAsReleaseApprox", "Barcode ≈ release")
+          : tNext("appAdmin.boxSetBarcodeAsRelease", "Barcode also on release"),
+        "bad"
+      );
+    }
+    async function runAppAdminBoxSetBarcodeCheck() {
+      const area = document.getElementById("appAdminBoxSetBarcodeCheckArea");
+      const button = document.getElementById("appAdminBoxSetBarcodeCheckBtn");
+      if (!area) return;
+      if (button) button.disabled = true;
+      area.innerHTML = `<div class="preview-empty">${escapeHtml(tNext("appAdmin.dedupScanning", "Scanning\u2026"))}</div>`;
+      try {
+        const result = await authApiJson("/api/next/admin/box-sets/barcode-check");
+        const items = (result && result.items) || [];
+        const counts = (result && result.counts) || {};
+        if (!items.length) {
+          area.innerHTML = `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.boxSetBarcodeCheckClean", "No box-set barcode is also used by a release."))}</div>`;
+          return;
+        }
+        const summary = tNext("appAdmin.boxSetBarcodeCheckSummary", "{boxSets} box-set(s) share their barcode with {releases} release(s).")
+          .replace("{boxSets}", String(counts.boxSets || items.length))
+          .replace("{releases}", String(counts.releases || 0));
+        area.innerHTML = `
+          <div class="dedup-wizard-summary"><p>${escapeHtml(summary)}</p></div>
+          <div class="operations-row-list">${items.map(appAdminBoxSetReleaseOverlapRow).join("")}</div>
+        `;
+      } catch (err) {
+        console.error("Box-set barcode check failed", err);
+        area.innerHTML = `<div class="preview-empty bad">${escapeHtml(tNext("appAdmin.dedupScanError", "Scan failed. Please try again."))}</div>`;
+      } finally {
+        if (button) button.disabled = false;
+      }
     }
     function renderAppAdminCollectionHealth() {
       const collectionHealth = (appAdmin.operations || {}).collectionHealth || {};
@@ -24103,6 +24159,11 @@ def ui_preview_html(
           <span>${escapeHtml(tNext("collection.containers", "Containers"))}</span>
           <strong>${escapeHtml(formatNumber(counts.emptyContainers || 0))}</strong>
           <span>${escapeHtml(formatNumber(counts.boxSetsMissingBarcode || 0))} ${escapeHtml(tNext("appAdmin.boxSetsMissingBarcode", "box-sets missing barcode"))}</span>
+        </div>
+        <div class="operations-dashboard-card">
+          <span>${escapeHtml(tNext("appAdmin.boxSetBarcodeAsRelease", "Barcode also on release"))}</span>
+          <strong>${escapeHtml(formatNumber(counts.boxSetBarcodeAsRelease || 0))}</strong>
+          <span>${escapeHtml(tNext("appAdmin.boxSetBarcodeAsReleaseHelp", "box-sets whose barcode is also on a release"))}</span>
         </div>
         <div class="operations-dashboard-card">
           <span>${escapeHtml(tNext("appAdmin.duplicates", "Duplicates"))}</span>
@@ -24268,6 +24329,17 @@ def ui_preview_html(
             `${formatNumber(item.count)}x`,
             "blue"
           ))),
+          ...((duplicates.duplicateBoxSetBarcodes || []).map((item) => appAdminOperationsRow(
+            `${tNext("appAdmin.dedupBoxSetsHeading", "Box-sets")} \u00b7 ${tNext("common.barcode", "Barcode")} ${item.barcode || "-"}`,
+            [
+              (item.titles || []).slice(0, 4).join(", "),
+              item.match === "approximate" ? (item.barcodes || []).join(" / ") : ""
+            ].filter(Boolean).join(" \u2014 "),
+            item.match === "approximate"
+              ? `${formatNumber(item.count)}x \u2248`
+              : `${formatNumber(item.count)}x`,
+            "bad"
+          ))),
           ...((duplicates.duplicateExternalIds || []).map((item) => appAdminOperationsRow(
             `${item.providerId || "-"}:${item.identifier || "-"}`,
             item.identifierType || "identifier",
@@ -24333,39 +24405,59 @@ def ui_preview_html(
       } else if (state === "results") {
         const report = data || {};
         const groups = report.groups || [];
+        const containerGroups = report.container_groups || [];
         if (scanBtn) { scanBtn.disabled = false; scanBtn.textContent = tNext("appAdmin.dedupScan", "Scan & merge"); }
-        if (!groups.length) {
+        if (!groups.length && !containerGroups.length) {
           area.innerHTML = `<div class="preview-empty good">${escapeHtml(tNext("appAdmin.dedupNoGroups", "No duplicates found. Your collection is clean."))}</div>`;
           return;
         }
-        const groupsHtml = groups.map((group) => {
+        const movieLine = (member) => `${escapeHtml(member.title || "")}${member.year ? ` (${escapeHtml(String(member.year))})` : ""}${member.format ? ` \u00b7 ${escapeHtml(member.format)}` : ""}`;
+        const containerLine = (member) => {
+          const count = tNext("appAdmin.dedupBoxSetMovieCount", "{count} movie(s)").replace("{count}", String(member.movie_count || 0));
+          return `${escapeHtml(member.title || "")}${member.year ? ` (${escapeHtml(String(member.year))})` : ""} \u00b7 ${escapeHtml(count)}`;
+        };
+        const groupCard = (group, describe, extraTag) => {
           const winner = (group.members || []).find((m) => m.id === group.winner) || {};
           const losers = (group.members || []).filter((m) => m.id !== group.winner);
           return `
             <div class="dedup-group-card">
               <div class="dedup-group-head">
                 <span class="tag blue">${escapeHtml(tNext("appAdmin.dedupTier", "Tier"))}: ${escapeHtml(group.tier || "")}</span>
+                ${extraTag || ""}
                 <span>${escapeHtml(group.winner_reason || "")}</span>
               </div>
               <div class="dedup-group-member winner">
                 <strong>${escapeHtml(tNext("appAdmin.dedupWinner", "Keep"))}</strong>
-                <span>${escapeHtml(winner.title || "")}${winner.year ? ` (${escapeHtml(String(winner.year))})` : ""}${winner.format ? ` \u00b7 ${escapeHtml(winner.format)}` : ""}</span>
+                <span>${describe(winner)}</span>
                 ${winner.barcode ? `<span class="tag good">${escapeHtml(winner.barcode)}</span>` : ""}
               </div>
               ${losers.map((loser) => `
                 <div class="dedup-group-member loser">
                   <strong>${escapeHtml(tNext("appAdmin.dedupLosers", "Remove"))}</strong>
-                  <span>${escapeHtml(loser.title || "")}${loser.year ? ` (${escapeHtml(String(loser.year))})` : ""}${loser.format ? ` \u00b7 ${escapeHtml(loser.format)}` : ""}</span>
+                  <span>${describe(loser)}</span>
                   ${loser.barcode ? `<span class="tag">${escapeHtml(loser.barcode)}</span>` : ""}
                 </div>
               `).join("")}
             </div>
           `;
-        }).join("");
+        };
+        const containerMatchTag = (group) => group.match === "approximate"
+          ? `<span class="tag warning">${escapeHtml(tNext("appAdmin.dedupApproximateBarcode", "Approximately the same barcode"))}</span>`
+          : "";
+        const groupsHtml = groups.map((group) => groupCard(group, movieLine, "")).join("");
+        const containerGroupsHtml = containerGroups.map((group) => groupCard(group, containerLine, containerMatchTag(group))).join("");
         const countMsg = tNext("appAdmin.dedupGroupCount", "Duplicate groups found: {count}").replace("{count}", String(groups.length));
+        const boxSetCountMsg = tNext("appAdmin.dedupBoxSetGroupCount", "Duplicate box-set groups found: {count}").replace("{count}", String(containerGroups.length));
         area.innerHTML = `
-          <div class="dedup-wizard-summary"><p>${escapeHtml(countMsg)}</p></div>
-          <div class="dedup-group-list">${groupsHtml}</div>
+          <div class="dedup-wizard-summary"><p>${escapeHtml(countMsg)}</p><p>${escapeHtml(boxSetCountMsg)}</p></div>
+          ${groups.length ? `
+            <h5>${escapeHtml(tNext("collection.movies", "Movies"))}</h5>
+            <div class="dedup-group-list">${groupsHtml}</div>
+          ` : ""}
+          ${containerGroups.length ? `
+            <h5>${escapeHtml(tNext("appAdmin.dedupBoxSetsHeading", "Box-sets"))}</h5>
+            <div class="dedup-group-list" id="appAdminDedupBoxSetGroups">${containerGroupsHtml}</div>
+          ` : ""}
           ${_dedupExecuteEnabled ? `
             <div class="profile-action-row">
               <button type="button" class="primary-button" id="appAdminDedupExecuteBtn" onclick="executeDedupMerge()">${escapeHtml(tNext("appAdmin.dedupMergeButton", "Merge duplicates"))}</button>
@@ -24377,8 +24469,14 @@ def ui_preview_html(
         if (execBtn) { execBtn.disabled = true; execBtn.textContent = tNext("appAdmin.dedupExecuting", "Merging\u2026"); }
       } else if (state === "done") {
         if (scanBtn) { scanBtn.disabled = false; scanBtn.textContent = tNext("appAdmin.dedupScan", "Scan & merge"); }
-        const tombstoned = data || 0;
-        const doneMsg = tNext("appAdmin.dedupDone", "Done! {count} duplicate(s) removed.").replace("{count}", String(tombstoned));
+        const result = (data && typeof data === "object") ? data : { tombstoned: Number(data) || 0 };
+        const tombstoned = Number(result.tombstoned) || 0;
+        let doneMsg = tNext("appAdmin.dedupDone", "Done! {count} duplicate(s) removed.").replace("{count}", String(tombstoned));
+        if (Number(result.containersTombstoned) > 0) {
+          doneMsg += " " + tNext("appAdmin.dedupDoneBreakdown", "{movies} movie(s), {boxSets} box-set(s).")
+            .replace("{movies}", String(Number(result.moviesTombstoned) || 0))
+            .replace("{boxSets}", String(Number(result.containersTombstoned) || 0));
+        }
         area.innerHTML = `<div class="preview-empty good">${escapeHtml(doneMsg)}</div>`;
         _dedupReport = null;
         _dedupReportId = null;
@@ -24400,7 +24498,7 @@ def ui_preview_html(
     }
     async function executeDedupMerge() {
       if (!_dedupReport || !_dedupReportId) { renderAppAdminDedupWizard("error"); return; }
-      if (!confirm(tNext("appAdmin.dedupConfirm", "This will permanently merge duplicate movies. Are you sure?"))) return;
+      if (!confirm(tNext("appAdmin.dedupConfirm", "This will permanently merge duplicate movies and box-sets. Are you sure?"))) return;
       renderAppAdminDedupWizard("executing");
       try {
         if (!window.PublicKeyCredential) {
@@ -24435,7 +24533,7 @@ def ui_preview_html(
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reportId: _dedupReportId, credential }),
         });
-        renderAppAdminDedupWizard("done", execRes.tombstoned || 0);
+        renderAppAdminDedupWizard("done", execRes || {});
       } catch (err) {
         console.error("Dedup execute failed", err);
         renderAppAdminDedupWizard("results", _dedupReport);

@@ -99,6 +99,77 @@ def media_type_conflicts(left: object, right: object) -> bool:
     return bool(left_key and right_key and left_key != right_key)
 
 
+def _gs1_check_digit(body: str) -> str:
+    """The GS1 mod-10 check digit for ``body`` (the code without its check digit).
+
+    Same arithmetic as ``next_product_identifiers.gs1_check_digit_ok``; kept here
+    so the standalone dedup script can use it without importing the Flask app.
+    """
+    total = sum(
+        int(digit) * (3 if index % 2 == 0 else 1)
+        for index, digit in enumerate(reversed(body))
+    )
+    return str((10 - total % 10) % 10)
+
+
+def _gs1_valid(digits: str) -> bool:
+    return len(digits) >= 2 and _gs1_check_digit(digits[:-1]) == digits[-1]
+
+
+#: Lengths of a GS1 code that has lost its check digit: EAN-8, UPC-A, EAN-13 and
+#: GTIN-14 minus one. A shorter or longer run of digits is not read as one.
+_CHECKLESS_LENGTHS = frozenset({7, 11, 12, 13})
+
+
+def barcode_match_keys(value: object) -> frozenset[str]:
+    """Comparison keys under which two printed barcodes name the same product.
+
+    Deliberately *approximate* in two well-understood ways, and in no other:
+
+    * **Leading zeros.** A UPC-A ``012345678905``, the same code zero-padded to
+      EAN-13 ``0012345678905`` and as GTIN-14 ``00012345678905`` are one product
+      in GS1's own model -- the GTIN is right-aligned and zero-filled. Every key
+      therefore drops leading zeros.
+    * **A missing check digit.** Hand-typed and some imported barcodes drop the
+      last digit. A code whose own check digit does *not* validate is also keyed
+      as if a check digit were appended, so ``501234567890`` meets
+      ``5012345678900``. A code that validates is never re-read this way -- that
+      would let two genuinely different valid codes collide.
+
+    Formatting (spaces, dashes) is ignored because only digits are read. The
+    stored value is never rewritten; these keys exist only for matching.
+    """
+    digits = re.sub(r"\D", "", str(value or ""))
+    if not digits:
+        return frozenset()
+    keys = set()
+    canonical = digits.lstrip("0")
+    if canonical:
+        keys.add(canonical)
+    if len(digits) in _CHECKLESS_LENGTHS and not _gs1_valid(digits):
+        completed = (digits + _gs1_check_digit(digits)).lstrip("0")
+        if completed:
+            keys.add(completed)
+    return frozenset(keys)
+
+
+def barcodes_match(left: object, right: object) -> bool:
+    """True when both barcodes are present and share a match key."""
+    left_keys = barcode_match_keys(left)
+    return bool(left_keys and left_keys & barcode_match_keys(right))
+
+
+def barcodes_conflict(left: object, right: object) -> bool:
+    """True when both sides carry a barcode and the two cannot be the same product.
+
+    One-sided absence is inconclusive and blocks nothing, matching the movie
+    ladder's barcode rule.
+    """
+    left_keys = barcode_match_keys(left)
+    right_keys = barcode_match_keys(right)
+    return bool(left_keys and right_keys and not left_keys & right_keys)
+
+
 def normalize_container_identities(values: Iterable[object] | None) -> frozenset[str]:
     return frozenset(
         normalized

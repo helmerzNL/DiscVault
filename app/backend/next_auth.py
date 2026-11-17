@@ -594,6 +594,21 @@ def admin_dedup_execute_enabled() -> bool:
     return _env_flag(ADMIN_DEDUP_EXECUTE_ENV, default=False)
 
 
+def _dedup_merge_counts(result: Any) -> tuple[int, int]:
+    """``(movies, containers)`` tombstoned, from what ``execute_merge`` returned.
+
+    ``execute_merge`` returns a pair since box-sets joined the merge. This route
+    used to take the pair for a single number, so the response's ``tombstoned``
+    was a two-element list and the UI printed it as text. A bare integer is still
+    read as a movie count for anything that returns the older shape.
+    """
+    if isinstance(result, (tuple, list)):
+        movies = int(result[0] or 0) if len(result) > 0 else 0
+        containers = int(result[1] or 0) if len(result) > 1 else 0
+        return movies, containers
+    return int(result or 0), 0
+
+
 def _register_admin_dedup_routes(
     *,
     route: Callable[..., Any],
@@ -790,11 +805,16 @@ def _register_admin_dedup_routes(
                             """,
                             (stored["new_sign_count"], stored["id"]),
                         )
-                    tombstoned = _dedup_execute_merge(
-                        conn,
-                        canonical["report"],
-                        commit=False,
+                    movies_tombstoned, containers_tombstoned = (
+                        _dedup_merge_counts(
+                            _dedup_execute_merge(
+                                conn,
+                                canonical["report"],
+                                commit=False,
+                            )
+                        )
                     )
+                    tombstoned = movies_tombstoned + containers_tombstoned
                     consumed_at = _dedup_consume_report(
                         conn,
                         canonical["id"],
@@ -808,15 +828,21 @@ def _register_admin_dedup_routes(
                         target_type="movies",
                         target_id=None,
                         summary=(
-                            f"Dedup merge executed: {tombstoned} movie(s) "
+                            f"Dedup merge executed: {movies_tombstoned} "
+                            f"movie(s) and {containers_tombstoned} box-set(s) "
                             "tombstoned"
                         ),
                         metadata={
                             "canonicalReportId": canonical["id"],
                             "canonicalReportHash": canonical["reportHash"],
                             "tombstoned": tombstoned,
+                            "moviesTombstoned": movies_tombstoned,
+                            "containersTombstoned": containers_tombstoned,
                             "mergeGroupCount": len(
                                 canonical["report"].get("groups", [])
+                            ),
+                            "containerMergeGroupCount": len(
+                                canonical["report"].get("container_groups", [])
                             ),
                         },
                     )
@@ -829,6 +855,8 @@ def _register_admin_dedup_routes(
                 "reportHash": canonical["reportHash"],
                 "consumedAt": consumed_at,
                 "tombstoned": tombstoned,
+                "moviesTombstoned": movies_tombstoned,
+                "containersTombstoned": containers_tombstoned,
             }
         )
 

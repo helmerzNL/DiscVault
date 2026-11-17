@@ -64,32 +64,53 @@ def _digest(value: Any) -> str:
     return hashlib.sha256(_canonical_json(value).encode("utf-8")).hexdigest()
 
 
-def _group_id(group: dict[str, Any]) -> str:
+def _group_id(group: dict[str, Any], *, entity: str = "movie") -> str:
     member_ids = sorted(
         str(member.get("id"))
         for member in group.get("members", [])
         if isinstance(member, dict) and member.get("id")
     )
-    return _digest({"tier": group.get("tier"), "members": member_ids})[:32]
+    identity: dict[str, Any] = {"tier": group.get("tier"), "members": member_ids}
+    if entity != "movie":
+        # A namespace for every non-movie group, so a box-set group can never
+        # share an id with a movie group -- winner selections are looked up by
+        # id across both lists. Movie ids keep their historical digest input.
+        identity["entity"] = entity
+    return _digest(identity)[:32]
 
 
-def canonical_report_payload(report: dict[str, Any]) -> dict[str, Any]:
-    payload = deepcopy(_json_value(report))
+def _canonical_groups(raw_groups: Any, *, entity: str) -> list[dict[str, Any]]:
     groups = []
-    for raw_group in payload.get("groups", []):
+    for raw_group in raw_groups or []:
         if not isinstance(raw_group, dict):
             continue
         group = deepcopy(raw_group)
-        group["group_id"] = _group_id(group)
+        group["group_id"] = _group_id(group, entity=entity)
         group["members"] = sorted(
             [member for member in group.get("members", []) if isinstance(member, dict)],
             key=lambda member: str(member.get("id") or ""),
         )
         group["losers"] = sorted(str(value) for value in group.get("losers", []))
         groups.append(group)
-    payload["groups"] = sorted(groups, key=lambda group: group["group_id"])
+    return sorted(groups, key=lambda group: group["group_id"])
+
+
+def canonical_report_payload(report: dict[str, Any]) -> dict[str, Any]:
+    payload = deepcopy(_json_value(report))
+    groups = _canonical_groups(payload.get("groups", []), entity="movie")
+    payload["groups"] = groups
     payload["merge_group_count"] = len(groups)
     payload["movies_to_tombstone"] = sum(len(group["losers"]) for group in groups)
+    if "container_groups" in payload:
+        container_groups = _canonical_groups(
+            payload.get("container_groups", []),
+            entity="container",
+        )
+        payload["container_groups"] = container_groups
+        payload["container_group_count"] = len(container_groups)
+        payload["containers_to_tombstone"] = sum(
+            len(group["losers"]) for group in container_groups
+        )
     return payload
 
 
@@ -97,9 +118,9 @@ def report_hash(report: dict[str, Any]) -> str:
     return _digest(canonical_report_payload(report))
 
 
-def collection_fingerprint(report: dict[str, Any]) -> str:
+def _fingerprint_groups(groups_in: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups = []
-    for group in canonical_report_payload(report).get("groups", []):
+    for group in groups_in:
         members = []
         for member in group.get("members", []):
             members.append(
@@ -121,7 +142,21 @@ def collection_fingerprint(report: dict[str, Any]) -> str:
                 },
             }
         )
-    return _digest({"groups": groups})
+    return groups
+
+
+def collection_fingerprint(report: dict[str, Any]) -> str:
+    """Digest of the merge candidates' state, ignoring volatile report metadata.
+
+    Box-set groups join the digest only when there are any, so a movie-only
+    report keeps exactly the fingerprint it had before box-sets were covered.
+    """
+    payload = canonical_report_payload(report)
+    identity: dict[str, Any] = {"groups": _fingerprint_groups(payload.get("groups", []))}
+    container_groups = payload.get("container_groups") or []
+    if container_groups:
+        identity["container_groups"] = _fingerprint_groups(container_groups)
+    return _digest(identity)
 
 
 def _record(row: dict[str, Any]) -> dict[str, Any]:
@@ -287,7 +322,10 @@ def apply_winner_selections(
         selected[group_id] = winner_id
 
     report = canonical_report_payload(source_report)
-    groups_by_id = {group["group_id"]: group for group in report.get("groups", [])}
+    groups_by_id = {
+        group["group_id"]: group
+        for group in [*report.get("groups", []), *report.get("container_groups", [])]
+    }
     if any(group_id not in groups_by_id for group_id in selected):
         raise CanonicalReportError(
             "Winner selection references an unknown duplicate group",

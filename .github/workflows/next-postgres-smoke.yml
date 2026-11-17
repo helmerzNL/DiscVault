@@ -1058,6 +1058,15 @@ jobs:
       - name: Test box-set member deduplication
         run: python -m unittest tests.test_next_box_set_member_dedupe
 
+      # Box-set barcodes: a box-set whose barcode is also on a release is
+      # reported (and told apart: a member carrying the box EAN vs the box added
+      # as a film), and box-sets sharing approximately one barcode -- leading
+      # zeros, a missing check digit -- are merged by the admin Scan & merge.
+      # Below the migrations because the merge case writes and tombstones rows;
+      # it executes only its own group, never the whole shared database.
+      - name: Test box-set barcode check and merge
+        run: python -m unittest tests.test_next_box_set_barcodes tests.test_next_box_set_barcode_ui
+
       # An imported box-set member is identified by the MovieVault release the
       # proposal names and by nothing else -- it has no year and its barcode is
       # synthetic. Dropping that id left every member unrefreshable while the

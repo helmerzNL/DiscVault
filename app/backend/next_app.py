@@ -212,6 +212,8 @@ try:
     from .dedup_identity import media_type_conflicts
     from .dedup_identity import normalize_media_type
     from .dedup_identity import title_year_identity_compatible
+    from .dedup_identity import barcode_match_keys
+    from .next_box_set_barcodes import box_set_release_barcode_summary
     from .versioning import backend_version
     from .versioning import build_sha as version_build_sha
     from .next_common import NextApiError
@@ -538,6 +540,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from dedup_identity import media_type_conflicts
     from dedup_identity import normalize_media_type
     from dedup_identity import title_year_identity_compatible
+    from dedup_identity import barcode_match_keys
+    from next_box_set_barcodes import box_set_release_barcode_summary
     from versioning import backend_version
     from versioning import build_sha as version_build_sha
     from next_common import NextApiError
@@ -26066,6 +26070,63 @@ def admin_operations_latest_audit_events(
         return [audit_event_row(row) for row in cur.fetchall()]
 
 
+def admin_operations_duplicate_box_set_barcodes(conn, *, limit: int = 12) -> list[dict[str, Any]]:
+    """Live box-sets sharing (approximately) one barcode -- merge candidates.
+
+    Uses the same match keys as the admin dedup merge (leading zeros and a
+    missing check digit are tolerated), so every group listed here is one the
+    "Scan & merge" wizard can offer, unless an owner or barcode veto splits it.
+    """
+    if not table_exists(conn, "containers"):
+        return []
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, title, barcode, created_at
+            FROM containers
+            WHERE container_type = 'box_set'
+              AND deleted_at IS NULL
+              AND NULLIF(BTRIM(COALESCE(barcode, '')), '') IS NOT NULL
+            ORDER BY created_at, id
+            """
+        )
+        rows = cur.fetchall()
+    first_owner: dict[str, int] = {}
+    parent: list[int] = list(range(len(rows)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    for index, row in enumerate(rows):
+        for key in barcode_match_keys(row.get("barcode")):
+            if key in first_owner:
+                parent[find(index)] = find(first_owner[key])
+            else:
+                first_owner[key] = index
+    components: dict[int, list[dict[str, Any]]] = {}
+    for index, row in enumerate(rows):
+        components.setdefault(find(index), []).append(row)
+    groups = []
+    for members in components.values():
+        if len(members) < 2:
+            continue
+        digits = {re.sub(r"\D", "", str(member.get("barcode") or "")) for member in members}
+        groups.append(
+            {
+                "barcode": members[0].get("barcode"),
+                "barcodes": [member.get("barcode") for member in members],
+                "count": len(members),
+                "titles": [member.get("title") for member in members],
+                "match": "exact" if len(digits) == 1 else "approximate",
+            }
+        )
+    groups.sort(key=lambda group: (-group["count"], str(group["barcode"] or "")))
+    return groups[:limit]
+
+
 def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
     summary: dict[str, Any] = {
         "duplicateBarcodes": [],
@@ -26133,10 +26194,12 @@ def admin_operations_duplicate_summary(conn) -> dict[str, Any]:
                 }
                 for row in cur.fetchall()
             ]
+    summary["duplicateBoxSetBarcodes"] = admin_operations_duplicate_box_set_barcodes(conn)
     summary["counts"] = {
         "barcodes": len(summary["duplicateBarcodes"]),
         "titles": len(summary["duplicateTitles"]),
         "externalIds": len(summary["duplicateExternalIds"]),
+        "boxSetBarcodes": len(summary["duplicateBoxSetBarcodes"]),
     }
     summary["status"] = operations_status_from_counts(*summary["counts"].values())
     return summary
@@ -26295,6 +26358,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
         "missingContainerPosters": [],
         "emptyContainers": [],
         "boxSetsMissingBarcode": [],
+        "boxSetBarcodeAsRelease": [],
     }
     counts: dict[str, int] = {
         "movies": movie_count,
@@ -26305,6 +26369,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
         "missingContainerPosters": 0,
         "emptyContainers": 0,
         "boxSetsMissingBarcode": 0,
+        "boxSetBarcodeAsRelease": 0,
         "duplicateSignals": sum(int(value or 0) for value in (duplicate_summary.get("counts") or {}).values()),
     }
 
@@ -26483,6 +26548,10 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
             )
             issues["boxSetsMissingBarcode"] = [row_summary(row) for row in cur.fetchall()]
 
+        release_overlap = box_set_release_barcode_summary(conn, limit=12)
+        counts["boxSetBarcodeAsRelease"] = int(release_overlap["counts"]["boxSets"])
+        issues["boxSetBarcodeAsRelease"] = release_overlap["items"]
+
     total_issues = sum(
         int(counts.get(key) or 0)
         for key in (
@@ -26492,6 +26561,7 @@ def admin_operations_collection_health(conn, duplicate_summary: dict[str, Any] |
             "missingContainerPosters",
             "emptyContainers",
             "boxSetsMissingBarcode",
+            "boxSetBarcodeAsRelease",
             "duplicateSignals",
         )
     )
@@ -39995,6 +40065,13 @@ def register_routes(flask_app: Flask) -> None:
         with connect() as conn:
             actor = require_any_next_permission(conn, ADMIN_OPERATIONS_PERMISSIONS)
             return response({"status": "ok", "operations": admin_operations_payload(conn, actor)})
+
+    @flask_app.get("/api/next/admin/box-sets/barcode-check")
+    def admin_box_set_barcode_check():
+        """Full, uncapped list of box-sets whose barcode is also on a release."""
+        with connect() as conn:
+            require_any_next_permission(conn, ADMIN_OPERATIONS_PERMISSIONS)
+            return response({"status": "ok", **box_set_release_barcode_summary(conn)})
 
     @flask_app.post("/api/next/jobs")
     def create_job():

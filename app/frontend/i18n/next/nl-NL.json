@@ -214,7 +214,7 @@
   "appAdmin.duplicateCenterHelp": "Vind waarschijnlijke dubbele barcodes, titels en externe IDs voor imports of bulkopschoning.",
   "appAdmin.duplicateSignals": "dubbele signalen",
   "appAdmin.duplicates": "Duplicaten",
-  "appAdmin.dedupConfirm": "Hiermee worden dubbele films definitief samengevoegd. Weet je het zeker?",
+  "appAdmin.dedupConfirm": "Hiermee worden dubbele films en box-sets definitief samengevoegd. Weet je het zeker?",
   "appAdmin.dedupDone": "Klaar! {count} duplicaat/duplicaten verwijderd.",
   "appAdmin.dedupExecuting": "Samenvoegen…",
   "appAdmin.dedupGroupCount": "Duplicaatgroepen gevonden: {count}",
@@ -3343,5 +3343,18 @@
   "seriesContribute.noSeasons": "Hier aan geen seizoen gekoppeld, dus er is niets te versturen.",
   "seriesContribute.notInCatalogue": "Niet in de kopie van de MovieVault-catalogus op deze server.",
   "seriesContribute.nothingToSend": "Niets te versturen: elke release komt overeen met MovieVault of kan nog niet worden verstuurd.",
-  "seriesContribute.queued": "{count} seizoenscorrecties ter moderatie verstuurd."
+  "seriesContribute.queued": "{count} seizoenscorrecties ter moderatie verstuurd.",
+  "appAdmin.dedupBoxSetMovieCount": "{count} film(s)",
+  "appAdmin.dedupApproximateBarcode": "Ongeveer dezelfde barcode",
+  "appAdmin.dedupBoxSetGroupCount": "Dubbele box-setgroepen gevonden: {count}",
+  "appAdmin.dedupBoxSetsHeading": "Box-sets",
+  "appAdmin.dedupDoneBreakdown": "{movies} film(s), {boxSets} box-set(s).",
+  "appAdmin.boxSetBarcodeOnMember": "film in de box-set heeft de barcode van de box-set",
+  "appAdmin.boxSetBarcodeImportedAsRelease": "box-set staat ook als losse release in de collectie",
+  "appAdmin.boxSetBarcodeAsReleaseApprox": "Barcode ≈ release",
+  "appAdmin.boxSetBarcodeAsRelease": "Barcode ook op release",
+  "appAdmin.boxSetBarcodeAsReleaseHelp": "box-sets waarvan de barcode ook op een release staat",
+  "appAdmin.boxSetBarcodeCheck": "Box-setbarcodes controleren",
+  "appAdmin.boxSetBarcodeCheckClean": "Geen enkele box-setbarcode wordt ook door een release gebruikt.",
+  "appAdmin.boxSetBarcodeCheckSummary": "{boxSets} box-set(s) delen hun barcode met {releases} release(s)."
 }

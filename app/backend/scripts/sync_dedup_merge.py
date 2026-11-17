@@ -47,6 +47,8 @@ from urllib.parse import urlparse
 
 if __package__ and __package__ != "scripts":
     from ..dedup_identity import (
+        barcode_match_keys,
+        barcodes_conflict,
         media_type_conflicts,
         select_tmdb_identifier,
         title_year_identity_compatible,
@@ -54,6 +56,8 @@ if __package__ and __package__ != "scripts":
     from ..versioning import backend_version, build_sha
 elif __package__ == "scripts":  # pragma: no cover - gunicorn top-level imports
     from dedup_identity import (
+        barcode_match_keys,
+        barcodes_conflict,
         media_type_conflicts,
         select_tmdb_identifier,
         title_year_identity_compatible,
@@ -64,6 +68,8 @@ else:  # pragma: no cover - exercised by the published-image CLI path
     if str(backend_dir) not in sys.path:
         sys.path.insert(0, str(backend_dir))
     from dedup_identity import (
+        barcode_match_keys,
+        barcodes_conflict,
         media_type_conflicts,
         select_tmdb_identifier,
         title_year_identity_compatible,
@@ -361,6 +367,110 @@ def _fetch_live_containers(conn, *, container_types=None):
         return cur.fetchall()
 
 
+def _containers_are_compatible(left, right):
+    """Whether two containers may be one physical box at all.
+
+    The container counterpart of ``_members_are_compatible``:
+
+    * a different ``container_type`` is never the same thing (a vault and a
+      box-set can share a name or even a sticker);
+    * two barcodes that cannot be the same product veto the merge -- without
+      this, the title tier would fold the DVD and Blu-ray editions of
+      "The Harry Potter Collection" into one box;
+    * two different owners veto it, so one user's box-set is never absorbed
+      into another user's.
+
+    A value missing on either side is inconclusive and blocks nothing.
+    """
+    if (left.get("container_type") or "") != (right.get("container_type") or ""):
+        return False
+    if barcodes_conflict(left.get("barcode"), right.get("barcode")):
+        return False
+    left_owner = left.get("owner_id")
+    right_owner = right.get("owner_id")
+    if left_owner and right_owner and str(left_owner) != str(right_owner):
+        return False
+    return True
+
+
+def _split_container_members(members, by_id):
+    clusters = []
+    for cid in members:
+        container = by_id.get(cid) or {}
+        for cluster in clusters:
+            if all(
+                _containers_are_compatible(container, by_id.get(existing) or {})
+                for existing in cluster
+            ):
+                cluster.append(cid)
+                break
+        else:
+            clusters.append([cid])
+    return [cluster for cluster in clusters if len(cluster) > 1]
+
+
+def _split_container_group_map(groups, by_id):
+    split = {}
+    for key, members in groups.items():
+        clusters = _split_container_members(members, by_id)
+        if len(clusters) == 1 and len(clusters[0]) == len(members):
+            split[key] = clusters[0]
+            continue
+        for idx, cluster in enumerate(clusters, start=1):
+            split[(key, f"split{idx}")] = cluster
+    return split
+
+
+def _barcode_components(containers):
+    """Connected components of containers sharing a barcode match key.
+
+    A union-find over ``barcode_match_keys`` rather than a dict keyed on one
+    normalized value, because "approximately the same barcode" is not a single
+    key: a check-digit-less code carries two, and links the codes on both sides.
+    Components never cross ``container_type``.
+    """
+    parent: dict = {}
+
+    def find(item):
+        while parent[item] != item:
+            parent[item] = parent[parent[item]]
+            item = parent[item]
+        return item
+
+    def union(left, right):
+        left_root, right_root = find(left), find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    owner_of_key: dict = {}
+    keys_of: dict = {}
+    for c in containers:
+        keys = barcode_match_keys(c.get("barcode"))
+        if not keys:
+            continue
+        cid = c["id"]
+        parent.setdefault(cid, cid)
+        keys_of[cid] = keys
+        container_type = c.get("container_type") or ""
+        for key in keys:
+            scoped = (container_type, key)
+            if scoped in owner_of_key:
+                union(owner_of_key[scoped], cid)
+            else:
+                owner_of_key[scoped] = cid
+
+    components: dict = {}
+    for cid in parent:
+        components.setdefault(find(cid), []).append(cid)
+    return [members for members in components.values() if len(members) > 1], keys_of
+
+
+def container_barcode_match(members, by_id):
+    """``exact`` when every member carries the same digits, else ``approximate``."""
+    codes = {normalize_barcode(by_id.get(cid, {}).get("barcode")) for cid in members}
+    return "exact" if len(codes) == 1 else "approximate"
+
+
 def detect_container_groups(conn, *, container_types=None):
     """Return duplicate container groups (box_set/vault/collection) keyed by tier."""
     containers = _fetch_live_containers(conn, container_types=container_types)
@@ -369,12 +479,19 @@ def detect_container_groups(conn, *, container_types=None):
     barcode_groups: dict = {}
     titletype_groups: dict = {}
 
-    for c in containers:
-        cid = c["id"]
-        code = normalize_barcode(c.get("barcode"))
-        if code:
-            barcode_groups.setdefault(code, []).append(cid)
+    components, keys_of = _barcode_components(containers)
+    for members in components:
+        # Name the group after its shortest, then lowest, match key: stable
+        # across runs and equal to the plain digits when the barcodes agree.
+        key = min(
+            (key for cid in members for key in keys_of[cid]),
+            key=lambda value: (len(value), value),
+        )
+        container_type = by_id[members[0]].get("container_type") or ""
+        group_key = key if key not in barcode_groups else (key, container_type)
+        barcode_groups[group_key] = sorted(members, key=str)
 
+    for c in containers:
         # Containers have no year concept the way movies do, and a vault
         # named "Kids" must never group with a collection named "Kids" --
         # so this keys on container_type where the movie ladder keys on
@@ -383,14 +500,14 @@ def detect_container_groups(conn, *, container_types=None):
         norm = normalize_title(c.get("title"))
         container_type = c.get("container_type") or ""
         if norm:
-            titletype_groups.setdefault((norm, container_type), []).append(cid)
+            titletype_groups.setdefault((norm, container_type), []).append(c["id"])
 
     def _dups(groups):
         return {k: v for k, v in groups.items() if len(v) > 1}
 
     return {
-        "barcode": _dups(barcode_groups),
-        "titleYear": _dups(titletype_groups),
+        "barcode": _split_container_group_map(barcode_groups, by_id),
+        "titleYear": _split_container_group_map(_dups(titletype_groups), by_id),
     }, by_id
 
 
@@ -409,19 +526,110 @@ def _score_container(conn, container_id, by_id):
     return score
 
 
-def _choose_container_winner(conn, members, by_id):
+def _rank_containers(conn, members, by_id):
     scored = []
     for cid in members:
         score = _score_container(conn, cid, by_id)
         created = by_id.get(cid, {}).get("created_at") or datetime.max.replace(tzinfo=timezone.utc)
         scored.append((score, created, cid))
     scored.sort(key=lambda t: (-t[0], t[1], str(t[2])))
+    return scored
+
+
+def _choose_container_winner(conn, members, by_id):
+    scored = _rank_containers(conn, members, by_id)
     winner = scored[0][2]
     losers = [t[2] for t in scored[1:]]
     return winner, losers
 
 
+def _container_state_hash(container):
+    """Fingerprint of one container row, so a stale report is refused on execute."""
+    snapshot = {
+        key: value
+        for key, value in container.items()
+        if key not in {"canonical_state"}
+    }
+    serialized = json.dumps(
+        snapshot,
+        default=str,
+        ensure_ascii=True,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _container_membership_members(cur, container_id, container_type):
+    """Member rows in the shape ``next_app.container_membership_snapshot`` emits.
+
+    Duplicated rather than imported because this script never imports the Flask
+    app; if the shape there changes, change it here too.
+    """
+    if container_type == "collection":
+        cur.execute(
+            """
+            SELECT
+                collection_id AS container_id,
+                CASE WHEN item_type = 'movie' THEN item_id END AS movie_id,
+                CASE WHEN item_type <> 'movie' THEN item_id END AS child_container_id,
+                CASE WHEN item_type = 'movie' THEN 'collection_movie'
+                     ELSE 'collection_container' END AS relationship,
+                item_type,
+                sort_order,
+                created_at
+            FROM collection_items
+            WHERE collection_id=%s
+            ORDER BY sort_order, created_at
+            """,
+            (str(container_id),),
+        )
+        return cur.fetchall()
+    cur.execute(
+        """
+        SELECT container_id, movie_id, sort_order, created_at
+        FROM container_movies
+        WHERE container_id=%s
+        ORDER BY sort_order, created_at
+        """,
+        (str(container_id),),
+    )
+    return cur.fetchall()
+
+
+def _emit_container_membership(cur, container_id):
+    """Publish the container's full member list after a merge changed it."""
+    cur.execute(
+        "SELECT container_type FROM containers WHERE id=%s",
+        (str(container_id),),
+    )
+    row = cur.fetchone() or {}
+    members = _container_membership_members(cur, container_id, row.get("container_type"))
+    revision = _next_revision(cur)
+    if revision is None:
+        return
+    cur.execute(
+        """
+        INSERT INTO sync_changes (revision, entity_type, entity_id, operation, payload)
+        VALUES (%s, 'container_membership', %s, 'upsert', %s)
+        """,
+        (
+            revision,
+            str(container_id),
+            json.dumps(
+                {"containerId": str(container_id), "members": members},
+                default=str,
+            ),
+        ),
+    )
+
+
 def _rehang_container_relations(cur, winner, loser):
+    """Move everything that points at ``loser`` onto ``winner``.
+
+    Returns the ids of the collections that held the loser as an item, so their
+    membership can be re-published.
+    """
     for table, fk, conflict in CONTAINER_RELATIONS:
         if conflict:
             cols = " AND ".join(f"w.{c} = l.{c}" for c in conflict)
@@ -444,15 +652,48 @@ def _rehang_container_relations(cur, winner, loser):
         "UPDATE entity_media SET entity_id = %s WHERE entity_type = 'container' AND entity_id = %s",
         (str(winner), str(loser)),
     )
+    # A collection that listed the loser as one of its items now lists the
+    # winner. `collection_items.item_id` has no foreign key, so nothing else
+    # would notice the loser being tombstoned underneath it.
+    cur.execute(
+        """
+        DELETE FROM collection_items l
+        WHERE l.item_type <> 'movie'
+          AND l.item_id = %s
+          AND EXISTS (
+              SELECT 1 FROM collection_items w
+              WHERE w.collection_id = l.collection_id
+                AND w.item_type = l.item_type
+                AND w.item_id = %s
+          )
+        RETURNING l.collection_id
+        """,
+        (str(loser), str(winner)),
+    )
+    affected = {str(row["collection_id"]) for row in cur.fetchall() or []}
+    cur.execute(
+        """
+        UPDATE collection_items
+        SET item_id = %s
+        WHERE item_type <> 'movie' AND item_id = %s
+        RETURNING collection_id
+        """,
+        (str(winner), str(loser)),
+    )
+    affected.update(str(row["collection_id"]) for row in cur.fetchall() or [])
+    return affected
 
 
 def lock_collection_snapshot(conn):
     """Block collection writes while an Admin execution revalidates and merges."""
     with conn.cursor() as cur:
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (COLLECTION_LOCK_KEY,))
+    # Containers are merged in the same transaction, so their tables are held
+    # too; a box-set edited between revalidation and merge would otherwise be
+    # merged in a state nobody reviewed.
     tables = [
         table_name
-        for table_name in COLLECTION_STATE_TABLES
+        for table_name in dict.fromkeys([*COLLECTION_STATE_TABLES, *CONTAINER_STATE_TABLES])
         if _table_exists(conn, table_name)
     ]
     with conn.cursor() as cur:
@@ -847,7 +1088,11 @@ def build_report(conn, *, container_types=None):
     container_report_groups = []
     total_container_losers = 0
     for plan in container_plans:
-        winner, losers = _choose_container_winner(conn, plan["members"], container_by_id)
+        ranked = _rank_containers(conn, plan["members"], container_by_id)
+        winner = ranked[0][2]
+        losers = [entry[2] for entry in ranked[1:]]
+        scores = {entry[2]: entry[0] for entry in ranked}
+        tied = sum(1 for entry in ranked if entry[0] == ranked[0][0]) > 1
         total_container_losers += len(losers)
         members = []
         for cid in plan["members"]:
@@ -858,15 +1103,30 @@ def build_report(conn, *, container_types=None):
                     "title": c.get("title"),
                     "year": c.get("year"),
                     "barcode": c.get("barcode"),
+                    "container_type": c.get("container_type"),
+                    "owner_id": str(c["owner_id"]) if c.get("owner_id") else None,
                     "movie_count": int(c.get("movie_count") or 0),
                     "created_at": c.get("created_at"),
+                    "score_breakdown": {"total_score": scores.get(cid)},
+                    "state_hash": _container_state_hash(c),
                 }
             )
         container_report_groups.append(
             {
                 "tier": plan["tier"],
                 "key": list(plan["key"]) if isinstance(plan["key"], tuple) else plan["key"],
+                "match": (
+                    container_barcode_match(plan["members"], container_by_id)
+                    if plan["tier"] == "barcode"
+                    else "title"
+                ),
                 "winner": str(winner),
+                "winner_score": scores.get(winner),
+                "winner_reason": (
+                    "tie on user-data score; oldest created_at won"
+                    if tied
+                    else "highest user-data score won"
+                ),
                 "losers": [str(c) for c in losers],
                 "members": members,
             }
@@ -919,12 +1179,19 @@ def _rehang_relations(cur, winner, loser):
 
 
 def execute_container_merge(conn, report, *, cur):
-    """Tombstone duplicate containers and emit sync_change entries. Uses the caller's cursor."""
+    """Tombstone duplicate containers and emit sync_change entries. Uses the caller's cursor.
+
+    Besides the loser's ``delete`` (carrying ``mergedInto``), the winner and every
+    collection that listed a loser get a ``container_membership`` upsert: the
+    winner's member list grew, and a client that only saw the delete would keep
+    showing the box-set without the films that just moved into it.
+    """
     tombstoned = 0
     for group in report.get("container_groups", []):
         winner = group["winner"]
+        republish = set()
         for loser in group["losers"]:
-            _rehang_container_relations(cur, winner, loser)
+            republish.update(_rehang_container_relations(cur, winner, loser))
             cur.execute(
                 """
                 UPDATE containers
@@ -937,6 +1204,7 @@ def execute_container_merge(conn, report, *, cur):
             if cur.fetchone() is None:
                 continue
             tombstoned += 1
+            republish.add(str(winner))
             revision = _next_revision(cur)
             if revision is not None:
                 cur.execute(
@@ -946,6 +1214,13 @@ def execute_container_merge(conn, report, *, cur):
                     """,
                     (revision, str(loser), json.dumps({"mergedInto": str(winner)})),
                 )
+        if str(winner) in republish:
+            cur.execute(
+                "UPDATE containers SET updated_at = now() WHERE id = %s",
+                (str(winner),),
+            )
+        for container_id in sorted(republish):
+            _emit_container_membership(cur, container_id)
     return tombstoned
 
 
