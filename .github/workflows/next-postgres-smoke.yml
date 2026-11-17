@@ -674,6 +674,15 @@ jobs:
       - name: Test the statistics work key and media filter
         run: python -m unittest tests.test_next_stats_work_dedup_postgres
 
+      # The admin Scan & merge re-hung a loser movie's relations through
+      # MOVIE_RELATIONS, which cannot hold collection_items: its item_id has no
+      # foreign key. A collection that listed the loser kept pointing at the
+      # tombstone and the film dropped out of it. Below the migrations because
+      # it writes and tombstones rows; it executes only its own group, never
+      # the whole shared database.
+      - name: Test movie dedup keeps the film in its collections
+        run: python -m unittest tests.test_next_movie_dedup_collection_items
+
       - name: Test MovieVault v2 PostgreSQL synchronization
         run: python -m unittest tests.test_next_movievault_v2_postgres
 

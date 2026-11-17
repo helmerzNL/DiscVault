@@ -284,6 +284,10 @@ COLLECTION_LOCK_KEY = 293225158992
 COLLECTION_STATE_TABLES = [
     "movies",
     *(table for table, _fk, _conflict in MOVIE_RELATIONS),
+    # Not a MOVIE_RELATIONS table (its item_id has no foreign key), but a
+    # movie merge repoints its movie rows, so a collection edit must not slip
+    # in between and re-list the loser after it was repointed.
+    "collection_items",
     "entity_media",
     "media_assets",
 ]
@@ -419,6 +423,70 @@ def _choose_container_winner(conn, members, by_id):
     winner = scored[0][2]
     losers = [t[2] for t in scored[1:]]
     return winner, losers
+
+
+def _container_membership_members(cur, container_id, container_type):
+    """Member rows in the shape ``next_app.container_membership_snapshot`` emits.
+
+    Duplicated rather than imported because this script never imports the Flask
+    app; if the shape there changes, change it here too.
+    """
+    if container_type == "collection":
+        cur.execute(
+            """
+            SELECT
+                collection_id AS container_id,
+                CASE WHEN item_type = 'movie' THEN item_id END AS movie_id,
+                CASE WHEN item_type <> 'movie' THEN item_id END AS child_container_id,
+                CASE WHEN item_type = 'movie' THEN 'collection_movie'
+                     ELSE 'collection_container' END AS relationship,
+                item_type,
+                sort_order,
+                created_at
+            FROM collection_items
+            WHERE collection_id=%s
+            ORDER BY sort_order, created_at
+            """,
+            (str(container_id),),
+        )
+        return cur.fetchall()
+    cur.execute(
+        """
+        SELECT container_id, movie_id, sort_order, created_at
+        FROM container_movies
+        WHERE container_id=%s
+        ORDER BY sort_order, created_at
+        """,
+        (str(container_id),),
+    )
+    return cur.fetchall()
+
+
+def _emit_container_membership(cur, container_id):
+    """Publish the container's full member list after a merge changed it."""
+    cur.execute(
+        "SELECT container_type FROM containers WHERE id=%s",
+        (str(container_id),),
+    )
+    row = cur.fetchone() or {}
+    members = _container_membership_members(cur, container_id, row.get("container_type"))
+    revision = _next_revision(cur)
+    if revision is None:
+        return
+    cur.execute(
+        """
+        INSERT INTO sync_changes (revision, entity_type, entity_id, operation, payload)
+        VALUES (%s, 'container_membership', %s, 'upsert', %s)
+        """,
+        (
+            revision,
+            str(container_id),
+            json.dumps(
+                {"containerId": str(container_id), "members": members},
+                default=str,
+            ),
+        ),
+    )
 
 
 def _rehang_container_relations(cur, winner, loser):
@@ -896,7 +964,55 @@ def _next_revision(cur):
     return int(row["revision"]) if row else None
 
 
+def _rehang_movie_collection_items(cur, winner, loser):
+    """Repoint collections that list the loser movie onto the winner.
+
+    ``collection_items.item_id`` has no foreign key -- it names a movie or a
+    container depending on ``item_type`` -- so it cannot sit in
+    ``MOVIE_RELATIONS``, and nothing else notices the loser being tombstoned
+    underneath it: the film would silently drop out of the collection.
+
+    A collection that already lists the winner keeps that row (its sort order
+    and date added) and loses the loser's, which would otherwise collide on the
+    ``(collection_id, item_type, item_id)`` primary key.
+
+    Returns the ids of the collections whose member list changed.
+    """
+    cur.execute(
+        """
+        DELETE FROM collection_items l
+        WHERE l.item_type = 'movie'
+          AND l.item_id = %s
+          AND EXISTS (
+              SELECT 1 FROM collection_items w
+              WHERE w.collection_id = l.collection_id
+                AND w.item_type = 'movie'
+                AND w.item_id = %s
+          )
+        RETURNING l.collection_id
+        """,
+        (str(loser), str(winner)),
+    )
+    affected = {str(row["collection_id"]) for row in cur.fetchall() or []}
+    cur.execute(
+        """
+        UPDATE collection_items
+        SET item_id = %s
+        WHERE item_type = 'movie' AND item_id = %s
+        RETURNING collection_id
+        """,
+        (str(winner), str(loser)),
+    )
+    affected.update(str(row["collection_id"]) for row in cur.fetchall() or [])
+    return affected
+
+
 def _rehang_relations(cur, winner, loser):
+    """Move everything that points at the loser movie onto the winner.
+
+    Returns the ids of the collections that listed the loser, so their
+    membership can be re-published.
+    """
     for table, fk, conflict in MOVIE_RELATIONS:
         if conflict:
             # Drop loser rows that would collide with a winner row on the unique key.
@@ -916,6 +1032,7 @@ def _rehang_relations(cur, winner, loser):
             f"UPDATE {table} SET {fk} = %s WHERE {fk} = %s",
             (winner, loser),
         )
+    return _rehang_movie_collection_items(cur, winner, loser)
 
 
 def execute_container_merge(conn, report, *, cur):
@@ -950,14 +1067,21 @@ def execute_container_merge(conn, report, *, cur):
 
 
 def execute_merge(conn, report, *, commit=True):
-    """Apply the merge plan from ``report`` inside one transaction."""
+    """Apply the merge plan from ``report`` inside one transaction.
+
+    Every collection that listed a loser movie gets one ``container_membership``
+    upsert after the movie groups are merged: a client that only saw the loser's
+    ``delete`` would drop the film from that collection instead of showing the
+    winner in its place.
+    """
     tombstoned = 0
     container_tombstoned = 0
     with conn.cursor() as cur:
+        republish = set()
         for group in report["groups"]:
             winner = group["winner"]
             for loser in group["losers"]:
-                _rehang_relations(cur, winner, loser)
+                republish.update(_rehang_relations(cur, winner, loser))
                 cur.execute(
                     """
                     UPDATE movies
@@ -979,6 +1103,8 @@ def execute_merge(conn, report, *, commit=True):
                         """,
                         (revision, str(loser), json.dumps({"mergedInto": str(winner)})),
                     )
+        for collection_id in sorted(republish):
+            _emit_container_membership(cur, collection_id)
         container_tombstoned = execute_container_merge(conn, report, cur=cur)
     if commit:
         conn.commit()
