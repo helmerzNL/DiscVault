@@ -624,6 +624,14 @@ jobs:
       - name: Test bootstrap completeness reporting
         run: python -m unittest tests.test_next_bootstrap_completeness
 
+      # How big the library is, answered without a bootstrap that stops at 5000.
+      # The cases that matter are the two that keep the answer honest -- the
+      # count is the bootstrap's own population (live rows, whole instance), and
+      # the plain /sync/state stays the cheap one-integer route -- plus that the
+      # path never joins the public list, which nothing else would notice.
+      - name: Test the sync state library counts
+        run: python -m unittest tests.test_next_sync_state_counts
+
       # The People list answered 500 to its own default request: the page sends
       # no `q` until something is typed, and a missing `q` was the one input the
       # lister could not take. Every searched request worked, and nothing ran

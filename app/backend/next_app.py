@@ -22681,6 +22681,33 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
         return [fold_sync_artwork(row) for row in cur.fetchall()]
 
 
+def sync_library_counts(conn) -> dict[str, int]:
+    """How many films and containers `/sync/bootstrap` would return, uncapped.
+
+    The population is the bootstrap's own, on purpose: live rows only
+    (``deleted_at IS NULL``), the whole instance, and **no actor**. The bootstrap
+    selects with `all_movie_entities` / `all_container_entities`, which apply no
+    visibility filter when they are called without an actor, so a count scoped to
+    the caller would make "the server holds N films" and "the bootstrap delivered
+    N films" two different statements. Keep the two predicates identical.
+
+    Unlike the bootstrap this is not capped by `limit`, which is the reason it
+    exists: a client deciding what to do about a large collection cannot learn
+    the size of it from a snapshot that stops at 5000.
+    """
+
+    counts = {"movies": 0, "containers": 0}
+    for key, table in (("movies", "movies"), ("containers", "containers")):
+        if not table_exists(conn, table):
+            continue
+        with conn.cursor() as cur:
+            # The table name comes from the literal pairs above, never from input.
+            cur.execute(f"SELECT COUNT(*) AS total FROM {table} WHERE deleted_at IS NULL")
+            row = cur.fetchone()
+        counts[key] = int(row["total"]) if row else 0
+    return counts
+
+
 def non_secret_settings(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "app_settings"):
         return []
@@ -41022,9 +41049,15 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/sync/state")
     def sync_state():
+        # Opt-in. This is the cheapest route the server has -- it authenticates
+        # and reads one integer -- and nothing that merely asks "where is the
+        # stream" should pay for two COUNT(*)s. Same auth as the plain call: the
+        # global before_request gate, no public path.
+        include_counts = str(request.args.get("counts") or "").strip().lower() in {"1", "true"}
         with connect() as conn:
             revision = current_revision(conn)
             stream_id = sync_stream_id(conn)
+            counts = sync_library_counts(conn) if include_counts else None
         return response(
             {
                 "status": "ok",
@@ -41076,6 +41109,9 @@ def register_routes(flask_app: Flask) -> None:
                     "bootstrap": "/api/next/sync/user/bootstrap",
                     "delta": "/api/next/sync/user/delta",
                 },
+                # Present only when asked for, so the plain response is exactly
+                # what it always was.
+                **({"counts": counts} if counts is not None else {}),
             }
         )
 
