@@ -962,6 +962,15 @@ jobs:
       - name: Test tombstone resurrection on a sync upsert
         run: python -m unittest tests.test_next_sync_tombstone_resurrection_postgres
 
+      # The container half of the same guard. A container upsert that reached a
+      # tombstone either failed with a unique violation (same token, new request:
+      # `uq_containers_client_id` ignores `deleted_at`) or rewrote the deleted row
+      # and announced it as a change (entityId / clientEntityId mapping). Both
+      # need real rows: the first is a database error, the second is what the
+      # stream carries afterwards.
+      - name: Test the container tombstone guard on a sync upsert
+        run: python -m unittest tests.test_next_sync_container_tombstone_postgres
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge

@@ -122,6 +122,14 @@ creates en maakt trede 4 beheersbaar (alleen hier actief).
   deleted-signaal terug; die update maakt het record niet opnieuw live. Alleen een create-intent
   zonder `entityId` kan volgens de bestaande H4-regel herleven wanneer `payload.updated_at`
   aantoonbaar later is dan `deleted_at`.
+- **Containers** (box set, vault, collection) volgen de delete-wins-helft hiervan, zonder de
+  herlevingsregel: een `container.upsert` met een `entityId` (of een `clientEntityId`-koppeling)
+  die op een getombstoned container uitkomt, of een create waarvan het `client_id` bij een
+  getombstoned container hoort, krijgt het deleted-signaal terug. De rij blijft onaangeroerd en er
+  gaat geen `upsert`-change de delta in. Een nieuw token dat alleen op barcode met een tombstone
+  overeenkomt is een bewuste heraanmaak: dat blijft een nieuwe levende rij. (Voorheen eindigde
+  de eerste variant in een unique-violation `status: "error"`, en herschreef de tweede de
+  verwijderde rij en kondigde dat aan als wijziging.)
 
 ## Deel 3 — Opschonen bestaande duplicaten (server-side)
 
