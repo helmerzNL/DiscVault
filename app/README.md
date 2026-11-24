@@ -365,6 +365,7 @@ GET http://localhost:6180/api/next/metadata/plugins
 GET http://localhost:6180/api/next/movies
 GET http://localhost:6180/api/next/containers
 GET http://localhost:6180/api/next/sync/state
+GET http://localhost:6180/api/next/sync/state?counts=1
 GET http://localhost:6180/api/next/sync/bootstrap
 GET http://localhost:6180/api/next/sync/delta?since=0
 POST http://localhost:6180/api/next/sync/mutations
@@ -372,6 +373,11 @@ GET http://localhost:6180/api/next/jobs
 POST http://localhost:6180/api/next/jobs
 GET http://localhost:6180/api/next/jobs/<jobId>
 ```
+
+`sync/state?counts=1` adds `counts: {movies, containers}` to the state: the
+live rows (not deleted) a bootstrap would return, for the whole instance and
+not capped by the bootstrap `limit`. Without the parameter the response is
+unchanged. It needs the same sign-in as every other `/api/next` route.
 
 The first migration set creates the PostgreSQL foundation for users/passkeys,
 RBAC, movies, people, containers, media assets, metadata plugins, plugin

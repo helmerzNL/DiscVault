@@ -624,6 +624,14 @@ jobs:
       - name: Test bootstrap completeness reporting
         run: python -m unittest tests.test_next_bootstrap_completeness
 
+      # How big the library is, answered without a bootstrap that stops at 5000.
+      # The cases that matter are the two that keep the answer honest -- the
+      # count is the bootstrap's own population (live rows, whole instance), and
+      # the plain /sync/state stays the cheap one-integer route -- plus that the
+      # path never joins the public list, which nothing else would notice.
+      - name: Test the sync state library counts
+        run: python -m unittest tests.test_next_sync_state_counts
+
       # The People list answered 500 to its own default request: the page sends
       # no `q` until something is typed, and a missing `q` was the one input the
       # lister could not take. Every searched request worked, and nothing ran
@@ -953,6 +961,15 @@ jobs:
       # ladder.
       - name: Test tombstone resurrection on a sync upsert
         run: python -m unittest tests.test_next_sync_tombstone_resurrection_postgres
+
+      # The container half of the same guard. A container upsert that reached a
+      # tombstone either failed with a unique violation (same token, new request:
+      # `uq_containers_client_id` ignores `deleted_at`) or rewrote the deleted row
+      # and announced it as a change (entityId / clientEntityId mapping). Both
+      # need real rows: the first is a database error, the second is what the
+      # stream carries afterwards.
+      - name: Test the container tombstone guard on a sync upsert
+        run: python -m unittest tests.test_next_sync_container_tombstone_postgres
 
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and

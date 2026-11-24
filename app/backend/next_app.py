@@ -22681,6 +22681,33 @@ def all_container_entities(conn, *, limit: int = 1000, actor: dict[str, Any] | N
         return [fold_sync_artwork(row) for row in cur.fetchall()]
 
 
+def sync_library_counts(conn) -> dict[str, int]:
+    """How many films and containers `/sync/bootstrap` would return, uncapped.
+
+    The population is the bootstrap's own, on purpose: live rows only
+    (``deleted_at IS NULL``), the whole instance, and **no actor**. The bootstrap
+    selects with `all_movie_entities` / `all_container_entities`, which apply no
+    visibility filter when they are called without an actor, so a count scoped to
+    the caller would make "the server holds N films" and "the bootstrap delivered
+    N films" two different statements. Keep the two predicates identical.
+
+    Unlike the bootstrap this is not capped by `limit`, which is the reason it
+    exists: a client deciding what to do about a large collection cannot learn
+    the size of it from a snapshot that stops at 5000.
+    """
+
+    counts = {"movies": 0, "containers": 0}
+    for key, table in (("movies", "movies"), ("containers", "containers")):
+        if not table_exists(conn, table):
+            continue
+        with conn.cursor() as cur:
+            # The table name comes from the literal pairs above, never from input.
+            cur.execute(f"SELECT COUNT(*) AS total FROM {table} WHERE deleted_at IS NULL")
+            row = cur.fetchone()
+        counts[key] = int(row["total"]) if row else 0
+    return counts
+
+
 def non_secret_settings(conn) -> list[dict[str, Any]]:
     if not table_exists(conn, "app_settings"):
         return []
@@ -24106,6 +24133,95 @@ def find_container_by_client_id(conn, client_id: str | None) -> UUID | None:
     return row["id"] if row else None
 
 
+def find_tombstoned_container_by_client_id(conn, client_id: str | None) -> dict[str, Any] | None:
+    """The tombstoned container carrying this persistent clientId, if any.
+
+    The counterpart of `find_container_by_client_id`, which only ever sees live
+    rows. `uq_containers_client_id` does not look at `deleted_at`, so a deleted
+    container keeps its token for good and an INSERT carrying it collides with
+    the tombstone instead of finding it.
+    """
+    if not client_id:
+        return None
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, client_id, deleted_at
+            FROM containers
+            WHERE client_id=%s AND deleted_at IS NOT NULL
+            """,
+            (client_id,),
+        )
+        return cur.fetchone()
+
+
+def tombstoned_container_by_id(conn, container_id: UUID) -> dict[str, Any] | None:
+    """The row for ``container_id`` when it is a tombstone, otherwise ``None``."""
+    if not table_exists(conn, "containers"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT id, client_id, deleted_at
+            FROM containers
+            WHERE id=%s AND deleted_at IS NOT NULL
+            """,
+            (container_id,),
+        )
+        return cur.fetchone()
+
+
+def tombstoned_container_upsert_result(
+    conn,
+    *,
+    client_id: str,
+    idem_key: str,
+    mutation: dict[str, Any],
+    client_entity_id: str | None,
+    tombstone: dict[str, Any],
+    matched_by: str | None,
+    persistent_client_id: str | None,
+) -> dict[str, Any]:
+    """The deleted signal for a container upsert (sync-contract §7).
+
+    Same shape as `tombstoned_movie_upsert_result`, and the same non-resurrection
+    branch: the row is not touched, no change is emitted, and the client is told
+    the record is gone so it can converge by removing its own copy. The
+    timestamp-resurrection rule movies have is deliberately not applied here --
+    a container that comes back is a decision for the contract, not for this
+    guard.
+    """
+    entity_id = tombstone["id"]
+    store_client_entity_mapping(
+        conn,
+        client_id=client_id,
+        client_entity_id=client_entity_id,
+        entity_type="container",
+        entity_id=entity_id,
+        idem_key=idem_key,
+    )
+    entity = single_container_sync_entity(conn, entity_id) or {}
+    revision = next_revision(conn)
+    return {
+        "clientMutationId": mutation["clientMutationId"],
+        "status": "applied",
+        "entityType": "container",
+        "operation": "upsert",
+        "entityId": entity_id,
+        "clientEntityId": client_entity_id,
+        "revision": revision,
+        "entity": entity,
+        "created": False,
+        "matchedBy": matched_by,
+        "recordClientId": tombstone.get("client_id") or persistent_client_id,
+        "deleted": True,
+        "deletedAt": tombstone.get("deleted_at"),
+        "tombstoned": True,
+    }
+
+
 def find_container_by_identifier(
     conn,
     *,
@@ -24381,6 +24497,24 @@ def apply_container_upsert(
         )
     entity_id = provided_entity_id or mapped_entity_id
 
+    # Tombstone guard (contract §7, "update-intent on a tombstoned row"): an
+    # explicit entityId, or a clientEntityId mapping, that lands on a deleted
+    # container is answered with the deleted signal. Without it the upsert below
+    # rewrote the deleted row and announced the change to every device.
+    if entity_id is not None:
+        tombstone = tombstoned_container_by_id(conn, entity_id)
+        if tombstone is not None:
+            return tombstoned_container_upsert_result(
+                conn,
+                client_id=client_id,
+                idem_key=idem_key,
+                mutation=mutation,
+                client_entity_id=client_entity_id,
+                tombstone=tombstone,
+                matched_by=None,
+                persistent_client_id=clean_text(payload.get("client_id")),
+            )
+
     # Persistent per-record identity (contract §4b.1), mirroring the movie
     # upsert's persistent_client_id handling. Trede 3's identifier fields are
     # read here too, structurally, even though no client currently sends
@@ -24427,6 +24561,27 @@ def apply_container_upsert(
                 incoming_barcode=incoming_barcode,
             ),
         )
+
+    if entity_id is None:
+        # Tombstone guard (contract §7, "create with the same token as a
+        # tombstone"). The ladder above only sees live rows, so a token that
+        # belongs to a deleted container reaches here unmatched -- and
+        # `uq_containers_client_id` ignores `deleted_at`, so minting a fresh id
+        # for it ends in a unique violation. Only the token is looked at: a new
+        # token that merely matches a tombstone by barcode is a user adding the
+        # container again (a new live row) and stays one.
+        tombstone = find_tombstoned_container_by_client_id(conn, persistent_client_id)
+        if tombstone is not None:
+            return tombstoned_container_upsert_result(
+                conn,
+                client_id=client_id,
+                idem_key=idem_key,
+                mutation=mutation,
+                client_entity_id=client_entity_id,
+                tombstone=tombstone,
+                matched_by="clientId",
+                persistent_client_id=persistent_client_id,
+            )
 
     entity_id = entity_id or uuid.uuid4()
     existing = container_entity(conn, entity_id)
@@ -41022,9 +41177,15 @@ def register_routes(flask_app: Flask) -> None:
 
     @flask_app.get("/api/next/sync/state")
     def sync_state():
+        # Opt-in. This is the cheapest route the server has -- it authenticates
+        # and reads one integer -- and nothing that merely asks "where is the
+        # stream" should pay for two COUNT(*)s. Same auth as the plain call: the
+        # global before_request gate, no public path.
+        include_counts = str(request.args.get("counts") or "").strip().lower() in {"1", "true"}
         with connect() as conn:
             revision = current_revision(conn)
             stream_id = sync_stream_id(conn)
+            counts = sync_library_counts(conn) if include_counts else None
         return response(
             {
                 "status": "ok",
@@ -41076,6 +41237,9 @@ def register_routes(flask_app: Flask) -> None:
                     "bootstrap": "/api/next/sync/user/bootstrap",
                     "delta": "/api/next/sync/user/delta",
                 },
+                # Present only when asked for, so the plain response is exactly
+                # what it always was.
+                **({"counts": counts} if counts is not None else {}),
             }
         )
 
