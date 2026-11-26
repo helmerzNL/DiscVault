@@ -971,6 +971,22 @@ jobs:
       - name: Test the container tombstone guard on a sync upsert
         run: python -m unittest tests.test_next_sync_container_tombstone_postgres
 
+      # The server half of the link wizard (sync-contract §5f): the permission,
+      # the safety snapshot, the one destructive step, and the flag that lets a
+      # leading phone bring back what the server had tombstoned. They share a
+      # support module and need real rows and a real backup directory, because
+      # what matters is what exists afterwards: a snapshot row only for an archive
+      # the engine accepted, exactly the right rows tombstoned and nothing else,
+      # and a tombstone lifted only inside a session. The permission module's
+      # first half runs without a database; its migration half needs one.
+      - name: Test the link wizard's server routes
+        run: >-
+          python -m unittest
+          tests.test_next_sync_library_replace_permission
+          tests.test_next_sync_snapshot_postgres
+          tests.test_next_sync_retain_postgres
+          tests.test_next_sync_supersede_postgres
+
       # Who changed a film. The interesting half is the half a real database
       # settles: that a synced push actually leaves an audit row behind, and
       # that the two sources -- the audit and the per-field provenance -- merge

@@ -442,6 +442,13 @@ def mobile_feature_capabilities(conn, actor: dict[str, Any]) -> dict[str, Any]:
             "tokensManage": has_any("api.tokens.manage"),
             "mcp": has_any("mcp.use") or any(key.startswith("mcp.tool.") for key in permissions),
         },
+        # Whether this user may use the link wizard's destructive half
+        # ("phone leads", sync-contract §5f). The same answer the routes give:
+        # a client told it may and then refused would show a broken screen.
+        "sync": {
+            "replaceLibrary": has_any("sync.replace_library")
+            and actor.get("role") in {"owner", "admin"},
+        },
         "offline": {
             "readCache": True,
             "queuedMutations": True,
@@ -472,6 +479,8 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "delta": "/api/next/sync/delta",
             "mutations": "/api/next/sync/mutations",
             "reconcile": "/api/next/sync/reconcile",
+            "snapshot": "/api/next/sync/snapshot",
+            "retain": "/api/next/sync/retain",
             "userBootstrap": "/api/next/sync/user/bootstrap",
             "userDelta": "/api/next/sync/user/delta",
         },

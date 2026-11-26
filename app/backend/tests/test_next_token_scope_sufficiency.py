@@ -150,9 +150,14 @@ class NativeTokenCoherenceTests(unittest.TestCase):
         # Not a security property -- it is a consistency one. A key the server
         # issues to its own client but refuses in the token UI means the two
         # paths disagree about what a bearer token may be.
+        #
+        # One deliberate exception, pinned by name so it stays a decision and
+        # not an oversight: sync.replace_library is what the link wizard's
+        # snapshot and retain routes ask for (sync-contract §5f). It is the
+        # native app's alone, so the profile page must not be able to grant it.
         self.assertEqual(
             sorted(MOBILE - GRANTABLE),
-            [],
+            ["sync.replace_library"],
             "the native token carries keys the profile UI refuses to grant",
         )
 
@@ -199,6 +204,7 @@ class GrantableSurfaceTests(unittest.TestCase):
             "containers.delete",
             "groups.create",
             "groups.invite",
+            "sync.replace_library",
         }
         offenders = sorted(
             key

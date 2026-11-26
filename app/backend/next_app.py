@@ -152,6 +152,11 @@ try:
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_sync_snapshot import RETAIN_MAX_BODY_BYTES
+    from .next_sync_snapshot import create_library_snapshot
+    from .next_sync_snapshot import parse_retain_request
+    from .next_sync_snapshot import require_valid_snapshot
+    from .next_sync_snapshot import snapshot_is_valid
     from .next_scheduled_jobs import load_config as load_scheduled_jobs_config
     from .next_scheduled_jobs import load_state as load_scheduled_jobs_state
     from .next_scheduled_jobs import save_config as save_scheduled_jobs_config
@@ -478,6 +483,11 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_sync_snapshot import RETAIN_MAX_BODY_BYTES
+    from next_sync_snapshot import create_library_snapshot
+    from next_sync_snapshot import parse_retain_request
+    from next_sync_snapshot import require_valid_snapshot
+    from next_sync_snapshot import snapshot_is_valid
     from next_scheduled_jobs import load_config as load_scheduled_jobs_config
     from next_scheduled_jobs import load_state as load_scheduled_jobs_state
     from next_scheduled_jobs import save_config as save_scheduled_jobs_config
@@ -10577,6 +10587,57 @@ def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[
         )
         raise NextApiError(message, 403)
     return user
+
+
+#: The one permission behind the link wizard's two destructive routes
+#: (sync-contract §5f): snapshot and retain. Migration 096 grants it to the
+#: owner and admin roles and to nobody else.
+SYNC_LIBRARY_REPLACE_PERMISSION = "sync.replace_library"
+#: Roles that may use those routes, checked in addition to the permission.
+SYNC_LIBRARY_REPLACE_ROLES = frozenset({"owner", "admin"})
+
+
+def require_next_library_replace_actor(conn) -> dict[str, Any]:
+    """Who may snapshot or retain: an owner or an admin, on an instance with auth.
+
+    Three independent refusals, each with its own stable `errorCode`, because the
+    wizard has to tell the user *why* it cannot offer "phone leads":
+
+    * `auth_not_enabled` -- authentication is not effectively on. With it off,
+      `require_next_permission` hands back an owner-level system actor to anybody
+      who can reach the server, so these routes would be open to the network.
+    * `permission_missing` -- the permission is absent from the role or from the
+      token. Both halves have to allow it (`actor_effective_has_permission`), so a
+      token never exceeds its user: a native token of an ordinary user carries
+      the key in its list and is still refused here, because the role lacks it.
+    * `role_not_allowed` -- the permission is present but the primary role is
+      neither owner nor admin. An admin may grant any catalogued permission to a
+      custom role; this keeps D2 ("owner or admin only") true whatever the role
+      matrix says.
+    """
+    if not next_auth_effective_enabled(conn, table_exists):
+        raise NextApiError(
+            "Replacing the library needs authentication to be switched on for this server",
+            403,
+            code="auth_not_enabled",
+        )
+    try:
+        actor = require_next_permission(conn, SYNC_LIBRARY_REPLACE_PERMISSION)
+    except NextApiError as exc:
+        if exc.status_code == 403 and not exc.code:
+            raise NextApiError(str(exc), 403, code="permission_missing") from exc
+        raise
+    if actor.get("role") not in SYNC_LIBRARY_REPLACE_ROLES:
+        message = "Only an owner or an admin may replace the library"
+        audit_permission_denied(
+            conn,
+            actor,
+            required_permissions=(SYNC_LIBRARY_REPLACE_PERMISSION,),
+            reason="library_replace_needs_owner_or_admin",
+            message=message,
+        )
+        raise NextApiError(message, 403, code="role_not_allowed")
+    return actor
 
 
 def actor_collection_visibility_scope(actor: dict[str, Any] | None) -> dict[str, bool]:
@@ -22774,6 +22835,11 @@ class SyncBatchContext:
     """
 
     def __init__(self) -> None:
+        # Set by `POST /sync/mutations` when the request carries a snapshotId that
+        # passed the same validation as `POST /sync/retain` (sync-contract §7,
+        # `supersedeTombstone`). False for every request that does not, so an
+        # upsert's `supersedeTombstone: true` is ignored outside a wizard session.
+        self.supersede_tombstones: bool = False
         self.consumed_client_entity_ids: set[str] = set()
         self.claimed_barcodes: set[str] = set()
         # Persistent per-record clientId -> server id created earlier in this
@@ -23488,6 +23554,7 @@ def apply_movie_upsert(
     idem_key: str,
     mutation: dict[str, Any],
     batch_ctx: "SyncBatchContext | None" = None,
+    supersede_tombstone: bool = False,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
@@ -23509,23 +23576,30 @@ def apply_movie_upsert(
     tmdb_id = clean_text(metadata_payload.get("tmdb_id"))
     duplicate_copy = bool(payload.get("duplicate_copy"))
 
+    # True when this push lifted a tombstone because it carried `supersedeTombstone`
+    # inside a wizard session (sync-contract §7). Always False otherwise.
+    superseded_tombstone = False
     if provided_entity_id is not None:
         provided_entity = movie_entity(conn, provided_entity_id)
         if provided_entity and provided_entity.get("deleted_at") is not None:
-            return tombstoned_movie_upsert_result(
-                conn,
-                client_id=client_id,
-                idem_key=idem_key,
-                mutation=mutation,
-                client_entity_id=client_entity_id,
-                tombstone=provided_entity,
-                matched_by=None,
-                persistent_client_id=persistent_client_id,
-            )
+            if not supersede_tombstone:
+                return tombstoned_movie_upsert_result(
+                    conn,
+                    client_id=client_id,
+                    idem_key=idem_key,
+                    mutation=mutation,
+                    client_entity_id=client_entity_id,
+                    tombstone=provided_entity,
+                    matched_by=None,
+                    persistent_client_id=persistent_client_id,
+                )
+            # The user chose to keep this film: it falls through to the ordinary
+            # write below, which clears `deleted_at` and announces an upsert.
+            superseded_tombstone = True
 
     matched_by: str | None = None
     ladder_entity_id: UUID | None = None
-    resurrect_tombstone = False
+    resurrect_tombstone = superseded_tombstone
     if batch_ctx is not None and provided_entity_id is None:
         # Only run the dedup ladder for genuinely new records. A record already
         # mapped via clientEntityId is a normal idempotent device re-push and
@@ -23603,6 +23677,11 @@ def apply_movie_upsert(
                     and deleted_at is not None
                     and client_ts > deleted_at
                 )
+                if supersede_tombstone:
+                    # Inside a wizard session the user has decided; the
+                    # timestamp tiebreak is for the ordinary stale-device case.
+                    resurrect = True
+                    superseded_tombstone = True
                 if not resurrect:
                     # Delete wins: do not touch the tombstone. Map the client's
                     # temp id to it and return the deleted record so the client
@@ -23971,9 +24050,10 @@ def apply_movie_upsert(
             "changedFields": sorted(
                 key for key in payload if key not in {"id", "clientEntityId", "clientMutationId"}
             ),
+            **({"supersededTombstone": True} if superseded_tombstone else {}),
         },
     )
-    return {
+    result = {
         "clientMutationId": mutation["clientMutationId"],
         "status": "applied",
         "entityType": "movie",
@@ -23986,6 +24066,30 @@ def apply_movie_upsert(
         "matchedBy": matched_by,
         "recordClientId": persistent_client_id,
     }
+    if superseded_tombstone:
+        result["supersededTombstone"] = True
+    return result
+
+
+def emit_movie_delete_change(conn, entity_id, payload: dict[str, Any]) -> int:
+    """The delta entry for a tombstoned movie: one revision, one `delete` change.
+
+    Shared by `movie.delete` and by `POST /sync/retain`, so a movie removed by
+    the link wizard reaches every other device exactly the way a movie one user
+    deleted does. One revision per change, never one for a batch: a delta page
+    ends at the revision of its last change, and two changes sharing a revision
+    could be split across a page boundary and the second skipped.
+    """
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie",
+        entity_id=str(entity_id),
+        operation="delete",
+        payload=payload,
+    )
+    return revision
 
 
 def apply_movie_delete(
@@ -24024,20 +24128,15 @@ def apply_movie_delete(
             row = cur.fetchone()
         if not row:
             raise NextApiError("Movie not found", 404)
-    revision = next_revision(conn)
-    payload = {
-        "entityId": entity_id,
-        "clientId": client_id,
-        "clientEntityId": client_entity_id,
-        "clientMutationId": mutation["clientMutationId"],
-    }
-    sync_change(
+    revision = emit_movie_delete_change(
         conn,
-        revision=revision,
-        entity_type="movie",
-        entity_id=str(entity_id),
-        operation="delete",
-        payload=payload,
+        entity_id,
+        {
+            "entityId": entity_id,
+            "clientId": client_id,
+            "clientEntityId": client_entity_id,
+            "clientMutationId": mutation["clientMutationId"],
+        },
     )
     return {
         "clientMutationId": mutation["clientMutationId"],
@@ -24478,6 +24577,7 @@ def apply_container_upsert(
     idem_key: str,
     mutation: dict[str, Any],
     actor: dict[str, Any] | None = None,
+    supersede_tombstone: bool = False,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
@@ -24501,19 +24601,26 @@ def apply_container_upsert(
     # explicit entityId, or a clientEntityId mapping, that lands on a deleted
     # container is answered with the deleted signal. Without it the upsert below
     # rewrote the deleted row and announced the change to every device.
+    #
+    # Inside a wizard session (`supersede_tombstone`, sync-contract §7) the user
+    # has chosen to keep this container, so the guards below let it through and the
+    # write lifts the tombstone instead.
+    superseded_tombstone = False
     if entity_id is not None:
         tombstone = tombstoned_container_by_id(conn, entity_id)
         if tombstone is not None:
-            return tombstoned_container_upsert_result(
-                conn,
-                client_id=client_id,
-                idem_key=idem_key,
-                mutation=mutation,
-                client_entity_id=client_entity_id,
-                tombstone=tombstone,
-                matched_by=None,
-                persistent_client_id=clean_text(payload.get("client_id")),
-            )
+            if not supersede_tombstone:
+                return tombstoned_container_upsert_result(
+                    conn,
+                    client_id=client_id,
+                    idem_key=idem_key,
+                    mutation=mutation,
+                    client_entity_id=client_entity_id,
+                    tombstone=tombstone,
+                    matched_by=None,
+                    persistent_client_id=clean_text(payload.get("client_id")),
+                )
+            superseded_tombstone = True
 
     # Persistent per-record identity (contract §4b.1), mirroring the movie
     # upsert's persistent_client_id handling. Trede 3's identifier fields are
@@ -24572,16 +24679,22 @@ def apply_container_upsert(
         # container again (a new live row) and stays one.
         tombstone = find_tombstoned_container_by_client_id(conn, persistent_client_id)
         if tombstone is not None:
-            return tombstoned_container_upsert_result(
-                conn,
-                client_id=client_id,
-                idem_key=idem_key,
-                mutation=mutation,
-                client_entity_id=client_entity_id,
-                tombstone=tombstone,
-                matched_by="clientId",
-                persistent_client_id=persistent_client_id,
-            )
+            if not supersede_tombstone:
+                return tombstoned_container_upsert_result(
+                    conn,
+                    client_id=client_id,
+                    idem_key=idem_key,
+                    mutation=mutation,
+                    client_entity_id=client_entity_id,
+                    tombstone=tombstone,
+                    matched_by="clientId",
+                    persistent_client_id=persistent_client_id,
+                )
+            # Reuse the tombstone's id: minting a fresh one would hit
+            # `uq_containers_client_id`, which ignores `deleted_at`.
+            entity_id = tombstone["id"]
+            matched_by = "clientId"
+            superseded_tombstone = True
 
     entity_id = entity_id or uuid.uuid4()
     existing = container_entity(conn, entity_id)
@@ -24639,6 +24752,18 @@ def apply_container_upsert(
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
+    if superseded_tombstone:
+        # The upsert above rewrites a deleted row but never clears `deleted_at`;
+        # lifting the tombstone is the whole point of the flag.
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE containers
+                SET deleted_at=NULL, updated_at=now()
+                WHERE id=%s AND deleted_at IS NOT NULL
+                """,
+                (entity_id,),
+            )
 
     # No write path into container_identifiers yet: contract §2b tier 3 is
     # "structurally defined, may have zero live producers initially" -- there
@@ -24677,7 +24802,7 @@ def apply_container_upsert(
             "clientMutationId": mutation["clientMutationId"],
         },
     )
-    return {
+    result = {
         "clientMutationId": mutation["clientMutationId"],
         "status": "applied",
         "entityType": "container",
@@ -24690,6 +24815,9 @@ def apply_container_upsert(
         "matchedBy": matched_by,
         "recordClientId": persistent_client_id,
     }
+    if superseded_tombstone:
+        result["supersededTombstone"] = True
+    return result
 
 
 def apply_container_delete(
@@ -24742,6 +24870,100 @@ def apply_container_delete(
         "entityId": entity_id,
         "clientEntityId": client_entity_id,
         "revision": revision,
+    }
+
+
+def retain_library_entities(
+    conn,
+    *,
+    snapshot_id: str,
+    movie_ids: list[UUID],
+    container_ids: list[UUID],
+) -> dict[str, Any]:
+    """Tombstone every live movie and container that is not in the keep lists.
+
+    The destructive half of the link wizard's "phone leads" (sync-contract §5f).
+    It does exactly what `movie.delete` and `container.delete` do to a row -- a
+    soft delete, then one `delete` change per row through the same helpers
+    (`emit_movie_delete_change`, `emit_container_change`) -- so every other
+    device converges through the ordinary delta. Nothing else is touched:
+    locations, series, discs and own images of retained films, and every user's
+    personal lists, are not rows this function ever names.
+
+    The caller owns the transaction. Everything below runs inside it, so a
+    failure at any point rolls the whole retain back and leaves nothing
+    tombstoned. Running it twice with the same lists changes nothing the second
+    time: after the first run no live row is outside the lists.
+
+    Ids that are not in the lists but live are the ones removed. Ids in the lists
+    that do not exist are counted as `unknown`, and ids in the lists that are
+    already tombstoned as `tombstoned`; neither is an error, and neither is
+    revived -- bringing a deleted film back is `supersedeTombstone`'s job.
+    """
+    with conn.cursor() as cur:
+        # Two simultaneous retains would interleave their revisions.
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("discvault.sync_library_retain",))
+
+    change_payload = {
+        "clientId": "sync-retain",
+        "clientEntityId": None,
+        "clientMutationId": f"retain:{snapshot_id}",
+    }
+
+    # Two fixed statements; no part of either is built from a request value.
+    state_queries = {
+        "movies": "SELECT deleted_at IS NOT NULL AS gone FROM movies WHERE id = ANY(%s::uuid[])",
+        "containers": "SELECT deleted_at IS NOT NULL AS gone FROM containers WHERE id = ANY(%s::uuid[])",
+    }
+
+    def requested_state(kind: str, ids: list[UUID]) -> dict[str, int]:
+        with conn.cursor() as cur:
+            cur.execute(state_queries[kind], (ids,))
+            rows = cur.fetchall()
+        live = sum(1 for row in rows if not row["gone"])
+        gone = len(rows) - live
+        return {"retained": live, "tombstoned": gone, "unknown": len(ids) - len(rows)}
+
+    movie_state = requested_state("movies", movie_ids)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE movies
+            SET deleted_at=now(), updated_at=now()
+            WHERE deleted_at IS NULL AND NOT (id = ANY(%s::uuid[]))
+            RETURNING id
+            """,
+            (movie_ids,),
+        )
+        removed_movies = sorted((row["id"] for row in cur.fetchall()), key=str)
+    for movie_id in removed_movies:
+        emit_movie_delete_change(conn, movie_id, {"entityId": movie_id, **change_payload})
+
+    container_state = {"retained": 0, "tombstoned": 0, "unknown": len(container_ids)}
+    removed_containers: list[UUID] = []
+    if table_exists(conn, "containers"):
+        container_state = requested_state("containers", container_ids)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE containers
+                SET deleted_at=now(), updated_at=now()
+                WHERE deleted_at IS NULL AND NOT (id = ANY(%s::uuid[]))
+                RETURNING id
+                """,
+                (container_ids,),
+            )
+            removed_containers = sorted((row["id"] for row in cur.fetchall()), key=str)
+        for container_id in removed_containers:
+            emit_container_change(conn, container_id, operation="delete")
+
+    return {
+        "tombstoned": {"movies": len(removed_movies), "containers": len(removed_containers)},
+        "retained": {"movies": movie_state["retained"], "containers": container_state["retained"]},
+        "ignored": {
+            "movies": {"unknown": movie_state["unknown"], "tombstoned": movie_state["tombstoned"]},
+            "containers": {"unknown": container_state["unknown"], "tombstoned": container_state["tombstoned"]},
+        },
     }
 
 
@@ -25358,9 +25580,23 @@ def apply_sync_mutation(
         existing["replayed"] = True
         return existing
 
+    # `supersedeTombstone: true` is a per-mutation opt-in that only counts inside a
+    # wizard session: the request carried a snapshotId that validated, which
+    # `sync_mutations` recorded on the batch context. Anywhere else it is ignored
+    # and the tombstone rules apply exactly as before (sync-contract §7).
+    supersede_tombstone = bool(
+        mutation.get("supersedeTombstone") is True
+        and batch_ctx is not None
+        and batch_ctx.supersede_tombstones
+    )
     if entity_type == "movie" and operation == "upsert":
         result = apply_movie_upsert(
-            conn, client_id=client_id, idem_key=key, mutation=mutation, batch_ctx=batch_ctx
+            conn,
+            client_id=client_id,
+            idem_key=key,
+            mutation=mutation,
+            batch_ctx=batch_ctx,
+            supersede_tombstone=supersede_tombstone,
         )
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
@@ -25371,6 +25607,7 @@ def apply_sync_mutation(
             idem_key=key,
             mutation=mutation,
             actor=actor,
+            supersede_tombstone=supersede_tombstone,
         )
     elif entity_type == "container" and operation == "delete":
         result = apply_container_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
@@ -41243,6 +41480,131 @@ def register_routes(flask_app: Flask) -> None:
             }
         )
 
+    @flask_app.post("/api/next/sync/snapshot")
+    def sync_snapshot():
+        """Take the server-side safety copy the link wizard needs (sync-contract §5f).
+
+        The id this returns is what `POST /sync/retain` and the
+        `supersedeTombstone` flag insist on, so the order "copy first, then
+        replace" is enforced here rather than trusted to the client. Owner or
+        admin only, never on an instance without authentication, and never
+        restorable from an app: an administrator restores it through the
+        existing backup routes.
+
+        No request body. Answers 201 with
+        `{snapshotId, createdAt, expiresAt, validForSeconds, counts, fileName,
+        sizeBytes, sha256}`; refusals carry a stable `errorCode`
+        (`auth_not_enabled`, `permission_missing`, `role_not_allowed`,
+        `snapshot_rate_limited`, `snapshot_no_space`, `snapshot_failed`).
+        """
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            actor = require_next_library_replace_actor(conn)
+            snapshot = create_library_snapshot(
+                conn,
+                actor=actor,
+                data_dir=data_dir,
+                backup_dir=backup_dir,
+                counts=sync_library_counts(conn),
+                generator={
+                    "service": "DiscVault Next",
+                    "version": build_version(),
+                    "sha": build_sha(),
+                    "description": "Safety copy taken before the library is replaced from a linked app",
+                },
+            )
+            audit_event(
+                conn,
+                event_type="sync.library_snapshot_created",
+                category="sync",
+                actor=actor,
+                target_type="sync_snapshot",
+                target_id=snapshot["snapshotId"],
+                summary="Created a safety snapshot before the library is replaced from a linked app",
+                metadata={
+                    "fileName": snapshot["fileName"],
+                    "sha256": snapshot["sha256"],
+                    "sizeBytes": snapshot["sizeBytes"],
+                    "counts": snapshot["counts"],
+                },
+            )
+        return response({"status": "ok", **snapshot}, 201)
+
+    @flask_app.post("/api/next/sync/retain")
+    def sync_retain():
+        """Make the server's library match the phone's: remove what the phone does not hold.
+
+        The destructive half of "phone leads" (sync-contract §5f). The app has
+        already pushed every record it holds with the ordinary mutations; this
+        names the ids it ended up with and the server tombstones every other live
+        film and container in ONE transaction, with a `delete` change per row so
+        other devices follow through the delta.
+
+        Body: `{snapshotId, retain: {movies: [entityId...], containers:
+        [entityId...]}, allowEmpty?: true}`. It refuses, each with a stable
+        `errorCode`, without a valid recent snapshot of the same user
+        (`snapshot_required`, `snapshot_unknown`, `snapshot_expired`,
+        `snapshot_file_missing`), without the permission or authentication
+        (`auth_not_enabled`, `permission_missing`, `role_not_allowed`), with both
+        lists empty and no `allowEmpty` (`retain_empty`), with a malformed body
+        or id (`retain_invalid_body`, `retain_invalid_ids`) or an oversized one
+        (`retain_too_large`). Nothing is changed on a refusal.
+
+        Answers 200 with `{snapshotId, tombstoned: {movies, containers},
+        retained: {movies, containers}, ignored: {movies: {unknown, tombstoned},
+        containers: {...}}, counts: {movies, containers}, revision}`. Idempotent:
+        the same call again tombstones nothing.
+        """
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            actor = require_next_library_replace_actor(conn)
+            if (request.content_length or 0) > RETAIN_MAX_BODY_BYTES:
+                raise NextApiError("The request body is too large", 413, code="retain_too_large")
+            body = request.get_json(silent=True)
+            snapshot = require_valid_snapshot(
+                conn,
+                body.get("snapshotId") if isinstance(body, dict) else None,
+                actor,
+                backup_dir=backup_dir,
+            )
+            parsed = parse_retain_request(body)
+            outcome = retain_library_entities(
+                conn,
+                snapshot_id=snapshot["snapshotId"],
+                movie_ids=parsed["movies"],
+                container_ids=parsed["containers"],
+            )
+            counts = sync_library_counts(conn)
+            revision = current_revision(conn)
+            audit_event(
+                conn,
+                event_type="sync.library_retained",
+                category="sync",
+                actor=actor,
+                target_type="sync_snapshot",
+                target_id=snapshot["snapshotId"],
+                summary="Removed the films and containers a linked phone does not hold",
+                metadata={
+                    "snapshotId": snapshot["snapshotId"],
+                    "tombstoned": outcome["tombstoned"],
+                    "retained": outcome["retained"],
+                    "ignored": outcome["ignored"],
+                    "counts": counts,
+                    "allowEmpty": parsed["allowEmpty"],
+                },
+            )
+        return response(
+            {
+                "status": "ok",
+                "snapshotId": snapshot["snapshotId"],
+                **outcome,
+                "counts": counts,
+                "revision": revision,
+            }
+        )
+
     @flask_app.get("/api/next/sync/bootstrap")
     def sync_bootstrap():
         limit = parse_int_arg("limit", 1000, minimum=1, maximum=5000)
@@ -41447,11 +41809,41 @@ def register_routes(flask_app: Flask) -> None:
 
         results = []
         batch_ctx = SyncBatchContext()
+        snapshot_id = body.get("snapshotId")
+        snapshot_note: dict[str, Any] | None = None
         with connect() as conn:
             actor = require_next_authenticated_user(conn)
             # The batch is the unit the route authenticates, so the actor is
             # attached here and read by every apply_* that audits.
             batch_ctx.actor = actor
+            if snapshot_id not in (None, ""):
+                # A wizard session (sync-contract §5f, §7): the request names the
+                # safety snapshot taken before the library is replaced. Only then
+                # may a mutation's `supersedeTombstone: true` count, and only for
+                # someone who could take that snapshot now (owner or admin, with
+                # the permission, on an instance with authentication) and whose
+                # snapshot it is. Anything else is not an error -- the pushes go
+                # through under the ordinary tombstone rules -- but the response
+                # says the flag was not honoured and why, so a client does not
+                # mistake a refused session for a granted one.
+                refusal: str | None = None
+                try:
+                    require_next_library_replace_actor(conn)
+                    require_valid_snapshot(
+                        conn,
+                        snapshot_id,
+                        actor,
+                        backup_dir=backup_storage_dir(legacy_data_dir()),
+                    )
+                except NextApiError as exc:
+                    refusal = exc.code or "snapshot_invalid"
+                batch_ctx.supersede_tombstones = refusal is None
+                snapshot_note = {
+                    "id": str(snapshot_id)[:64],
+                    "honoured": refusal is None,
+                }
+                if refusal is not None:
+                    snapshot_note["errorCode"] = refusal
             ensure_sync_state(conn)
             for mutation in mutations:
                 client_mutation_id = None
@@ -41485,14 +41877,15 @@ def register_routes(flask_app: Flask) -> None:
                         }
                     )
             revision = current_revision(conn)
-        return response(
-            {
-                "status": "ok",
-                "baseRevision": base_revision,
-                "currentRevision": revision,
-                "results": results,
-            }
-        )
+        payload = {
+            "status": "ok",
+            "baseRevision": base_revision,
+            "currentRevision": revision,
+            "results": results,
+        }
+        if snapshot_note is not None:
+            payload["snapshot"] = snapshot_note
+        return response(payload)
 
     @flask_app.post("/api/next/sync/reconcile")
     def sync_reconcile():
