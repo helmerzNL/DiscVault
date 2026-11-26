@@ -140,6 +140,15 @@ class RetainRefusalTests(WizardCase):
             with self.subTest(retain=body):
                 self.refused(self.post_retain({"snapshotId": sid, "retain": body}), 400, "retain_empty")
 
+    def test_an_empty_film_list_is_refused_even_when_containers_are_listed(self):
+        # A client that failed to collect its film ids would send exactly this; the
+        # box sets it did collect must not make it look deliberate.
+        sid = self.take_snapshot()
+        container = str(uuid.UUID(int=1))
+        for body in ({"movies": [], "containers": [container]}, {"containers": [container]}):
+            with self.subTest(retain=body):
+                self.refused(self.post_retain({"snapshotId": sid, "retain": body}), 400, "retain_empty")
+
     def test_allow_empty_must_be_exactly_true(self):
         sid = self.take_snapshot()
         for value in ("true", 1, "yes"):
@@ -443,3 +452,14 @@ class RetainHelperTests(WizardCase):
     def test_missing_lists_count_as_empty(self):
         parsed = snap.parse_retain_request({"retain": {"movies": [str(uuid.UUID(int=1))]}})
         self.assertEqual(parsed["containers"], [])
+
+    def test_an_empty_film_list_needs_allow_empty_whatever_the_containers_say(self):
+        container = str(uuid.UUID(int=1))
+        with self.assertRaises(na.NextApiError) as caught:
+            snap.parse_retain_request({"retain": {"movies": [], "containers": [container]}})
+        self.assertEqual(caught.exception.code, "retain_empty")
+        parsed = snap.parse_retain_request(
+            {"retain": {"movies": [], "containers": [container]}, "allowEmpty": True}
+        )
+        self.assertEqual(parsed["movies"], [])
+        self.assertEqual(parsed["containers"], [uuid.UUID(container)])

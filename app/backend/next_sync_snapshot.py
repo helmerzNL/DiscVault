@@ -331,12 +331,15 @@ def parse_retain_request(body: Any) -> dict[str, Any]:
     `errorCode`: `retain_invalid_body` (not an object, `retain` missing or not
     an object, a list that is not a list), `retain_too_large` (a list over
     `RETAIN_MAX_IDS_PER_LIST`), `retain_invalid_ids` (an entry that is not an id;
-    the entry itself is never echoed back) and `retain_empty` (both lists empty
+    the entry itself is never echoed back) and `retain_empty` (the film list empty
     without an explicit `allowEmpty: true`).
 
-    One empty list is accepted: a phone that holds films and no box sets is an
-    ordinary library. Only both empty is the request that would empty the server,
-    so only that one has to say so.
+    An empty container list on its own is accepted: a phone that holds films and
+    no box sets is an ordinary library. An empty FILM list is not, whatever the
+    container list says: it removes every film on the server, which is exactly
+    what a client that failed to collect its ids would ask for. A phone that
+    holds box sets but no films is not a library worth trusting without being
+    told so.
     """
     if not isinstance(body, dict):
         raise NextApiError("The request body must be a JSON object", 400, code="retain_invalid_body")
@@ -378,9 +381,9 @@ def parse_retain_request(body: Any) -> dict[str, Any]:
             )
         parsed[key] = sorted(ids, key=str)
     parsed["allowEmpty"] = body.get("allowEmpty") is True
-    if not parsed["movies"] and not parsed["containers"] and not parsed["allowEmpty"]:
+    if not parsed["movies"] and not parsed["allowEmpty"]:
         raise NextApiError(
-            "Both retain lists are empty, which would remove every film and container; "
+            "The film list is empty, which would remove every film; "
             "send allowEmpty: true if that is what you mean",
             400,
             code="retain_empty",

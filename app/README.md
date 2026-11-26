@@ -395,8 +395,9 @@ server holds:
 - `POST sync/retain` with `{snapshotId, retain: {movies: [...], containers: [...]}}`
   removes every other live film and container in one transaction, as ordinary
   deletes that other devices receive through the delta. It refuses without a
-  valid snapshot of the same user taken in the last 60 minutes, and with both
-  lists empty unless `allowEmpty: true`. It never touches locations, series,
+  valid snapshot of the same user taken in the last 60 minutes, and with an empty
+  film list unless `allowEmpty: true` (an empty box-set list alone is an ordinary
+  library and needs no flag). It never touches locations, series,
   discs or any user's personal lists.
 - A mutation in `POST sync/mutations` may carry `supersedeTombstone: true`, and the
   request a top-level `snapshotId`; only then is a push allowed to bring back a

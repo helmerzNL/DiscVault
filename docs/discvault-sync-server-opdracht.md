@@ -166,7 +166,8 @@ tombstone, via dezelfde helpers als `movie.delete` en `container.delete`, met é
 worden genoemd: locaties, series, discs, eigen foto's van bewaarde films, lidmaatschappen en
 persoonlijke lijsten blijven staan. Weigert zonder geldig snapshot-id van dezelfde gebruiker
 (`snapshot_required`, `snapshot_unknown`, `snapshot_expired` na 60 minuten, `snapshot_file_missing`),
-bij twee lege lijsten zonder `allowEmpty: true` (`retain_empty`), bij een misvormde body of id
+bij een lege filmlijst zonder `allowEmpty: true` (`retain_empty`; een lege containerlijst alleen is
+een gewone bibliotheek zonder box sets en vraagt geen vlag), bij een misvormde body of id
 (`retain_invalid_body`, `retain_invalid_ids`) en bij te grote lijsten of body (`retain_too_large`:
 50.000 id's per lijst, 8 MiB). Idempotent: nog een keer met dezelfde lijsten verandert niets. Het
 snapshot-id wordt door gebruik niet verbruikt, zodat een wizard-run opnieuw kan. Antwoord 200:
