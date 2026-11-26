@@ -152,7 +152,9 @@ try:
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_sync_snapshot import RETAIN_MAX_BODY_BYTES
     from .next_sync_snapshot import create_library_snapshot
+    from .next_sync_snapshot import parse_retain_request
     from .next_sync_snapshot import require_valid_snapshot
     from .next_sync_snapshot import snapshot_is_valid
     from .next_scheduled_jobs import load_config as load_scheduled_jobs_config
@@ -481,7 +483,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_sync_snapshot import RETAIN_MAX_BODY_BYTES
     from next_sync_snapshot import create_library_snapshot
+    from next_sync_snapshot import parse_retain_request
     from next_sync_snapshot import require_valid_snapshot
     from next_sync_snapshot import snapshot_is_valid
     from next_scheduled_jobs import load_config as load_scheduled_jobs_config
@@ -24045,6 +24049,27 @@ def apply_movie_upsert(
     }
 
 
+def emit_movie_delete_change(conn, entity_id, payload: dict[str, Any]) -> int:
+    """The delta entry for a tombstoned movie: one revision, one `delete` change.
+
+    Shared by `movie.delete` and by `POST /sync/retain`, so a movie removed by
+    the link wizard reaches every other device exactly the way a movie one user
+    deleted does. One revision per change, never one for a batch: a delta page
+    ends at the revision of its last change, and two changes sharing a revision
+    could be split across a page boundary and the second skipped.
+    """
+    revision = next_revision(conn)
+    sync_change(
+        conn,
+        revision=revision,
+        entity_type="movie",
+        entity_id=str(entity_id),
+        operation="delete",
+        payload=payload,
+    )
+    return revision
+
+
 def apply_movie_delete(
     conn,
     *,
@@ -24081,20 +24106,15 @@ def apply_movie_delete(
             row = cur.fetchone()
         if not row:
             raise NextApiError("Movie not found", 404)
-    revision = next_revision(conn)
-    payload = {
-        "entityId": entity_id,
-        "clientId": client_id,
-        "clientEntityId": client_entity_id,
-        "clientMutationId": mutation["clientMutationId"],
-    }
-    sync_change(
+    revision = emit_movie_delete_change(
         conn,
-        revision=revision,
-        entity_type="movie",
-        entity_id=str(entity_id),
-        operation="delete",
-        payload=payload,
+        entity_id,
+        {
+            "entityId": entity_id,
+            "clientId": client_id,
+            "clientEntityId": client_entity_id,
+            "clientMutationId": mutation["clientMutationId"],
+        },
     )
     return {
         "clientMutationId": mutation["clientMutationId"],
@@ -24799,6 +24819,100 @@ def apply_container_delete(
         "entityId": entity_id,
         "clientEntityId": client_entity_id,
         "revision": revision,
+    }
+
+
+def retain_library_entities(
+    conn,
+    *,
+    snapshot_id: str,
+    movie_ids: list[UUID],
+    container_ids: list[UUID],
+) -> dict[str, Any]:
+    """Tombstone every live movie and container that is not in the keep lists.
+
+    The destructive half of the link wizard's "phone leads" (sync-contract §5f).
+    It does exactly what `movie.delete` and `container.delete` do to a row -- a
+    soft delete, then one `delete` change per row through the same helpers
+    (`emit_movie_delete_change`, `emit_container_change`) -- so every other
+    device converges through the ordinary delta. Nothing else is touched:
+    locations, series, discs and own images of retained films, and every user's
+    personal lists, are not rows this function ever names.
+
+    The caller owns the transaction. Everything below runs inside it, so a
+    failure at any point rolls the whole retain back and leaves nothing
+    tombstoned. Running it twice with the same lists changes nothing the second
+    time: after the first run no live row is outside the lists.
+
+    Ids that are not in the lists but live are the ones removed. Ids in the lists
+    that do not exist are counted as `unknown`, and ids in the lists that are
+    already tombstoned as `tombstoned`; neither is an error, and neither is
+    revived -- bringing a deleted film back is `supersedeTombstone`'s job.
+    """
+    with conn.cursor() as cur:
+        # Two simultaneous retains would interleave their revisions.
+        cur.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", ("discvault.sync_library_retain",))
+
+    change_payload = {
+        "clientId": "sync-retain",
+        "clientEntityId": None,
+        "clientMutationId": f"retain:{snapshot_id}",
+    }
+
+    # Two fixed statements; no part of either is built from a request value.
+    state_queries = {
+        "movies": "SELECT deleted_at IS NOT NULL AS gone FROM movies WHERE id = ANY(%s::uuid[])",
+        "containers": "SELECT deleted_at IS NOT NULL AS gone FROM containers WHERE id = ANY(%s::uuid[])",
+    }
+
+    def requested_state(kind: str, ids: list[UUID]) -> dict[str, int]:
+        with conn.cursor() as cur:
+            cur.execute(state_queries[kind], (ids,))
+            rows = cur.fetchall()
+        live = sum(1 for row in rows if not row["gone"])
+        gone = len(rows) - live
+        return {"retained": live, "tombstoned": gone, "unknown": len(ids) - len(rows)}
+
+    movie_state = requested_state("movies", movie_ids)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            UPDATE movies
+            SET deleted_at=now(), updated_at=now()
+            WHERE deleted_at IS NULL AND NOT (id = ANY(%s::uuid[]))
+            RETURNING id
+            """,
+            (movie_ids,),
+        )
+        removed_movies = sorted((row["id"] for row in cur.fetchall()), key=str)
+    for movie_id in removed_movies:
+        emit_movie_delete_change(conn, movie_id, {"entityId": movie_id, **change_payload})
+
+    container_state = {"retained": 0, "tombstoned": 0, "unknown": len(container_ids)}
+    removed_containers: list[UUID] = []
+    if table_exists(conn, "containers"):
+        container_state = requested_state("containers", container_ids)
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE containers
+                SET deleted_at=now(), updated_at=now()
+                WHERE deleted_at IS NULL AND NOT (id = ANY(%s::uuid[]))
+                RETURNING id
+                """,
+                (container_ids,),
+            )
+            removed_containers = sorted((row["id"] for row in cur.fetchall()), key=str)
+        for container_id in removed_containers:
+            emit_container_change(conn, container_id, operation="delete")
+
+    return {
+        "tombstoned": {"movies": len(removed_movies), "containers": len(removed_containers)},
+        "retained": {"movies": movie_state["retained"], "containers": container_state["retained"]},
+        "ignored": {
+            "movies": {"unknown": movie_state["unknown"], "tombstoned": movie_state["tombstoned"]},
+            "containers": {"unknown": container_state["unknown"], "tombstoned": container_state["tombstoned"]},
+        },
     }
 
 
@@ -41350,6 +41464,80 @@ def register_routes(flask_app: Flask) -> None:
                 },
             )
         return response({"status": "ok", **snapshot}, 201)
+
+    @flask_app.post("/api/next/sync/retain")
+    def sync_retain():
+        """Make the server's library match the phone's: remove what the phone does not hold.
+
+        The destructive half of "phone leads" (sync-contract §5f). The app has
+        already pushed every record it holds with the ordinary mutations; this
+        names the ids it ended up with and the server tombstones every other live
+        film and container in ONE transaction, with a `delete` change per row so
+        other devices follow through the delta.
+
+        Body: `{snapshotId, retain: {movies: [entityId...], containers:
+        [entityId...]}, allowEmpty?: true}`. It refuses, each with a stable
+        `errorCode`, without a valid recent snapshot of the same user
+        (`snapshot_required`, `snapshot_unknown`, `snapshot_expired`,
+        `snapshot_file_missing`), without the permission or authentication
+        (`auth_not_enabled`, `permission_missing`, `role_not_allowed`), with both
+        lists empty and no `allowEmpty` (`retain_empty`), with a malformed body
+        or id (`retain_invalid_body`, `retain_invalid_ids`) or an oversized one
+        (`retain_too_large`). Nothing is changed on a refusal.
+
+        Answers 200 with `{snapshotId, tombstoned: {movies, containers},
+        retained: {movies, containers}, ignored: {movies: {unknown, tombstoned},
+        containers: {...}}, counts: {movies, containers}, revision}`. Idempotent:
+        the same call again tombstones nothing.
+        """
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            actor = require_next_library_replace_actor(conn)
+            if (request.content_length or 0) > RETAIN_MAX_BODY_BYTES:
+                raise NextApiError("The request body is too large", 413, code="retain_too_large")
+            body = request.get_json(silent=True)
+            snapshot = require_valid_snapshot(
+                conn,
+                body.get("snapshotId") if isinstance(body, dict) else None,
+                actor,
+                backup_dir=backup_dir,
+            )
+            parsed = parse_retain_request(body)
+            outcome = retain_library_entities(
+                conn,
+                snapshot_id=snapshot["snapshotId"],
+                movie_ids=parsed["movies"],
+                container_ids=parsed["containers"],
+            )
+            counts = sync_library_counts(conn)
+            revision = current_revision(conn)
+            audit_event(
+                conn,
+                event_type="sync.library_retained",
+                category="sync",
+                actor=actor,
+                target_type="sync_snapshot",
+                target_id=snapshot["snapshotId"],
+                summary="Removed the films and containers a linked phone does not hold",
+                metadata={
+                    "snapshotId": snapshot["snapshotId"],
+                    "tombstoned": outcome["tombstoned"],
+                    "retained": outcome["retained"],
+                    "ignored": outcome["ignored"],
+                    "counts": counts,
+                    "allowEmpty": parsed["allowEmpty"],
+                },
+            )
+        return response(
+            {
+                "status": "ok",
+                "snapshotId": snapshot["snapshotId"],
+                **outcome,
+                "counts": counts,
+                "revision": revision,
+            }
+        )
 
     @flask_app.get("/api/next/sync/bootstrap")
     def sync_bootstrap():

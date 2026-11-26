@@ -25,6 +25,10 @@ Design choices worth keeping in mind:
   (`snapshot_file_missing`) rather than trusted.
 * **An id belongs to whoever took it.** Another user's id answers exactly like an
   unknown one, so ids cannot be probed.
+
+`parse_retain_request` is the other half of the same wizard step: it reads and
+validates the body of `POST /sync/retain` without touching the database, so every
+refusal that does not need a row is decided before a transaction opens.
 """
 
 from __future__ import annotations
@@ -307,3 +311,78 @@ def create_library_snapshot(
     snapshot = _row_to_snapshot(row)
     snapshot["validForSeconds"] = SNAPSHOT_VALID_FOR_SECONDS
     return snapshot
+
+
+#: The most ids one retain list may carry. A library of 50,000 films is far past
+#: anything a collector owns; the cap exists so a malformed or hostile request
+#: cannot make the server build an unbounded array.
+RETAIN_MAX_IDS_PER_LIST = 50_000
+#: The request body cap, in bytes. 50,000 ids is about 2 MB; this leaves room for
+#: both lists at the cap and refuses anything stranger before it is parsed.
+RETAIN_MAX_BODY_BYTES = 8 * 1024 * 1024
+
+
+def parse_retain_request(body: Any) -> dict[str, Any]:
+    """Validate the body of `POST /sync/retain`; never touches the database.
+
+    Returns `{"movies": [UUID...], "containers": [UUID...], "allowEmpty": bool}`
+    with each list de-duplicated and sorted, so a retry with the same ids in a
+    different order is the same request. Refusals, each with a stable
+    `errorCode`: `retain_invalid_body` (not an object, `retain` missing or not
+    an object, a list that is not a list), `retain_too_large` (a list over
+    `RETAIN_MAX_IDS_PER_LIST`), `retain_invalid_ids` (an entry that is not an id;
+    the entry itself is never echoed back) and `retain_empty` (both lists empty
+    without an explicit `allowEmpty: true`).
+
+    One empty list is accepted: a phone that holds films and no box sets is an
+    ordinary library. Only both empty is the request that would empty the server,
+    so only that one has to say so.
+    """
+    if not isinstance(body, dict):
+        raise NextApiError("The request body must be a JSON object", 400, code="retain_invalid_body")
+    retain = body.get("retain")
+    if not isinstance(retain, dict):
+        raise NextApiError(
+            "retain must be an object with a movies list and a containers list",
+            400,
+            code="retain_invalid_body",
+        )
+    parsed: dict[str, Any] = {}
+    for key in ("movies", "containers"):
+        raw = retain.get(key)
+        if raw is None:
+            raw = []
+        if not isinstance(raw, list):
+            raise NextApiError(f"retain.{key} must be a list", 400, code="retain_invalid_body")
+        if len(raw) > RETAIN_MAX_IDS_PER_LIST:
+            raise NextApiError(
+                f"retain.{key} may hold at most {RETAIN_MAX_IDS_PER_LIST} ids",
+                413,
+                code="retain_too_large",
+            )
+        ids: set[uuid.UUID] = set()
+        invalid = 0
+        for item in raw:
+            if not isinstance(item, str):
+                invalid += 1
+                continue
+            try:
+                ids.add(uuid.UUID(item.strip()))
+            except ValueError:
+                invalid += 1
+        if invalid:
+            raise NextApiError(
+                f"{invalid} entries in retain.{key} are not valid ids",
+                400,
+                code="retain_invalid_ids",
+            )
+        parsed[key] = sorted(ids, key=str)
+    parsed["allowEmpty"] = body.get("allowEmpty") is True
+    if not parsed["movies"] and not parsed["containers"] and not parsed["allowEmpty"]:
+        raise NextApiError(
+            "Both retain lists are empty, which would remove every film and container; "
+            "send allowEmpty: true if that is what you mean",
+            400,
+            code="retain_empty",
+        )
+    return parsed

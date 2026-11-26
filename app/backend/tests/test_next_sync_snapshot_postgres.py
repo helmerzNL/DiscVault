@@ -17,14 +17,11 @@ Who may call it is `test_next_sync_library_replace_permission`. Point
 `DATABASE_URL` at a database with every migration applied; without it these skip.
 """
 
-import contextlib
 import os
 import shutil
 import sys
-import tempfile
 import unittest
 import uuid
-from pathlib import Path
 from unittest.mock import patch
 
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -49,96 +46,14 @@ except ModuleNotFoundError as exc:  # pragma: no cover - minimal environments
         raise
     na = None
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-KEY = "sync.replace_library"
-NATIVE_LIST = ["api.read", "collection.view", "collection.add", KEY]
-
-
-class _SnapshotCase(unittest.TestCase):
-    """Fixtures shared by the classes below; it has no tests of its own."""
-
-    def setUp(self):
-        self.client = na.app.test_client()
-        self.tmp = Path(tempfile.mkdtemp(prefix="snapshot-test-"))
-        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
-        self.backup_dir = self.tmp / "backups"
-        self.data_dir = self.tmp / "data"
-        self.data_dir.mkdir()
-        env = patch.dict(
-            os.environ,
-            {
-                "DISCVAULT_NEXT_BACKUP_DIR": str(self.backup_dir),
-                "DISCVAULT_LEGACY_DATA_DIR": str(self.data_dir),
-            },
-        )
-        env.start()
-        self.addCleanup(env.stop)
-
-        self.db = psycopg.connect(DATABASE_URL, row_factory=dict_row, autocommit=True)
-        self.addCleanup(self.db.close)
-        self.run_id = uuid.uuid4().hex[:8]
-        self.owner_id = self._make_user("owner")
-        self.other_id = self._make_user("other")
-        self.addCleanup(self._cleanup_rows)
-        with self.db.cursor() as cur:
-            cur.execute("DELETE FROM sync_library_snapshots")
-
-    # -- fixtures ---------------------------------------------------------
-
-    def _make_user(self, label):
-        with self.db.cursor() as cur:
-            cur.execute(
-                "INSERT INTO users (username) VALUES (%s) RETURNING id",
-                (f"snapshot-test-{label}-{self.run_id}",),
-            )
-            return str(cur.fetchone()["id"])
-
-    def _cleanup_rows(self):
-        with self.db.cursor() as cur:
-            cur.execute("DELETE FROM sync_library_snapshots")
-            cur.execute(
-                "DELETE FROM audit_events WHERE actor_user_id = ANY(%s::uuid[])",
-                ([self.owner_id, self.other_id],),
-            )
-            cur.execute("DELETE FROM users WHERE id = ANY(%s::uuid[])", ([self.owner_id, self.other_id],))
-
-    @contextlib.contextmanager
-    def actor(self, user_id, role="owner", permissions=(KEY,), token_keys=None, auth_enabled=True):
-        who = {"id": user_id, "username": f"snapshot-test-{role}"}
-        if token_keys is not None:
-            who["apiToken"] = {"id": "t", "name": "DiscVault iOS", "permissionKeys": list(token_keys), "scopes": []}
-        with contextlib.ExitStack() as stack:
-            stack.enter_context(patch.object(na, "next_auth_effective_enabled", return_value=auth_enabled))
-            stack.enter_context(patch.object(na, "next_auth_current_user", return_value=who))
-            stack.enter_context(patch.object(na, "next_user_primary_role", return_value=role))
-            stack.enter_context(patch.object(na, "next_user_permission_keys", return_value=set(permissions)))
-            yield
-
-    def post(self, user_id=None, **kwargs):
-        with self.actor(user_id or self.owner_id, **kwargs):
-            return self.client.post("/api/next/sync/snapshot")
-
-    def snapshot_rows(self):
-        with self.db.cursor() as cur:
-            cur.execute("SELECT * FROM sync_library_snapshots ORDER BY created_at")
-            return cur.fetchall()
-
-    def backdate(self, seconds):
-        with self.db.cursor() as cur:
-            cur.execute(
-                "UPDATE sync_library_snapshots SET created_at = created_at - make_interval(secs => %s)",
-                (seconds,),
-            )
-
-    def archives(self):
-        return sorted(p.name for p in self.backup_dir.glob("*.zip")) if self.backup_dir.exists() else []
+from .sync_wizard_support import DATABASE_URL, KEY, NATIVE_LIST, WizardCase, needs_database
 
 
 @unittest.skipUnless(
     DATABASE_URL and psycopg is not None and na is not None,
     "PostgreSQL test database is not configured",
 )
-class SnapshotTests(_SnapshotCase):
+class SnapshotTests(WizardCase):
     # -- creation ---------------------------------------------------------
 
     def test_an_owner_gets_a_snapshot_whose_archive_the_engine_accepts(self):
@@ -273,7 +188,7 @@ class SnapshotTests(_SnapshotCase):
     DATABASE_URL and psycopg is not None and na is not None,
     "PostgreSQL test database is not configured",
 )
-class SnapshotValidationTests(_SnapshotCase):
+class SnapshotValidationTests(WizardCase):
     """`require_valid_snapshot`: the one check behind retain and supersede."""
 
     def validate(self, snapshot_id, user_id=None):
@@ -353,11 +268,10 @@ class AdvertisedToTheNativeClientTests(unittest.TestCase):
     """The native contract says where the route is and who may use it."""
 
     @unittest.skipIf(na is None, "backend dependencies are required")
-    def test_the_contract_advertises_the_snapshot_route(self):
-        self.assertEqual(
-            next_preferences.mobile_endpoint_contract_payload()["sync"]["snapshot"],
-            "/api/next/sync/snapshot",
-        )
+    def test_the_contract_advertises_the_snapshot_and_retain_routes(self):
+        sync = next_preferences.mobile_endpoint_contract_payload()["sync"]
+        self.assertEqual(sync["snapshot"], "/api/next/sync/snapshot")
+        self.assertEqual(sync["retain"], "/api/next/sync/retain")
 
     @unittest.skipIf(na is None, "backend dependencies are required")
     def test_the_native_token_carries_the_key_and_a_profile_token_cannot(self):

@@ -480,6 +480,7 @@ def mobile_endpoint_contract_payload() -> dict[str, Any]:
             "mutations": "/api/next/sync/mutations",
             "reconcile": "/api/next/sync/reconcile",
             "snapshot": "/api/next/sync/snapshot",
+            "retain": "/api/next/sync/retain",
             "userBootstrap": "/api/next/sync/user/bootstrap",
             "userDelta": "/api/next/sync/user/delta",
         },
