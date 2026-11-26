@@ -369,6 +369,8 @@ GET http://localhost:6180/api/next/sync/state?counts=1
 GET http://localhost:6180/api/next/sync/bootstrap
 GET http://localhost:6180/api/next/sync/delta?since=0
 POST http://localhost:6180/api/next/sync/mutations
+POST http://localhost:6180/api/next/sync/snapshot
+POST http://localhost:6180/api/next/sync/retain
 GET http://localhost:6180/api/next/jobs
 POST http://localhost:6180/api/next/jobs
 GET http://localhost:6180/api/next/jobs/<jobId>
@@ -378,6 +380,32 @@ GET http://localhost:6180/api/next/jobs/<jobId>
 live rows (not deleted) a bootstrap would return, for the whole instance and
 not capped by the bootstrap `limit`. Without the parameter the response is
 unchanged. It needs the same sign-in as every other `/api/next` route.
+
+`sync/snapshot` and `sync/retain` are the server half of the link wizard's
+"phone leads" choice (sync-contract §5f), where a linked app replaces what the
+server holds:
+
+- `POST sync/snapshot` takes a safety copy first (a functional backup with the
+  films, containers, people, film artwork including the user's own images, media
+  groups and personal lists) and answers `{snapshotId, createdAt, expiresAt, ...}`.
+  The copy is an ordinary archive in the backup directory, so an administrator
+  restores it from the Backup page; an app never restores anything. One snapshot
+  per instance per 30 seconds, the newest 5 are kept, and it needs free disk
+  space (at least 256 MiB, or 1.5 times the newest snapshot).
+- `POST sync/retain` with `{snapshotId, retain: {movies: [...], containers: [...]}}`
+  removes every other live film and container in one transaction, as ordinary
+  deletes that other devices receive through the delta. It refuses without a
+  valid snapshot of the same user taken in the last 60 minutes, and with both
+  lists empty unless `allowEmpty: true`. It never touches locations, series,
+  discs or any user's personal lists.
+- A mutation in `POST sync/mutations` may carry `supersedeTombstone: true`, and the
+  request a top-level `snapshotId`; only then is a push allowed to bring back a
+  record the server had tombstoned. The response says whether the session was
+  honoured.
+
+All of it needs the `sync.replace_library` permission, held by the owner and
+admin roles only, and refuses on an instance without authentication. Refusals
+carry a stable `errorCode`.
 
 The first migration set creates the PostgreSQL foundation for users/passkeys,
 RBAC, movies, people, containers, media assets, metadata plugins, plugin

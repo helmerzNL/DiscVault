@@ -170,6 +170,54 @@ class TokenActorTests(unittest.TestCase):
         self.assertEqual(ctx.exception.code, "role_not_allowed")
 
 
+class ProfileTokenTests(unittest.TestCase):
+    """The profile page cannot mint a token that carries the key."""
+
+    def test_even_an_owner_cannot_grant_it_to_a_token_they_create(self):
+        from app.backend import next_api_token
+
+        owner = {"id": "user-1", "role": "owner", "permissions": [KEY]}
+        with patch.object(na, "permission_key_catalog", return_value={KEY, "api.read"}):
+            with self.assertRaises(NextApiError) as ctx:
+                next_api_token.normalize_api_token_permissions(MagicMock(), owner, [KEY])
+        self.assertEqual(ctx.exception.status_code, 400)
+        self.assertIn("not valid for API tokens", str(ctx.exception))
+
+    def test_a_wildcard_is_not_a_way_around_it(self):
+        from app.backend import next_api_token
+
+        owner = {"id": "user-1", "role": "owner", "permissions": [KEY]}
+        with patch.object(na, "permission_key_catalog", return_value={KEY, "api.read"}):
+            with self.assertRaises(NextApiError):
+                next_api_token.normalize_api_token_permissions(MagicMock(), owner, ["*"])
+
+
+class ReconcilerTests(unittest.TestCase):
+    """Tokens minted before the key existed pick it up on their next use."""
+
+    def test_an_older_native_token_gains_the_key(self):
+        from app.backend import next_auth
+
+        old_list = ["api.read", "collection.view", "collection.add"]
+        reconciled = next_auth._reconciled_native_token_permissions("ios", old_list)
+        self.assertIn(KEY, reconciled)
+        # The reconciler is the same for everybody, which is why the role half
+        # matters: an ordinary user's token gains the key too and stays refused.
+        self.assertEqual(
+            next_auth._reconciled_native_token_permissions("android", old_list), reconciled
+        )
+
+    def test_an_unscoped_legacy_token_is_left_alone(self):
+        from app.backend import next_auth
+
+        self.assertIsNone(next_auth._reconciled_native_token_permissions("ios", []))
+
+    def test_a_token_that_is_not_native_is_left_alone(self):
+        from app.backend import next_auth
+
+        self.assertIsNone(next_auth._reconciled_native_token_permissions(None, ["api.read"]))
+
+
 class AuditTests(unittest.TestCase):
     def test_a_role_refusal_is_audited(self):
         conn = MagicMock()

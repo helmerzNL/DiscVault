@@ -131,6 +131,65 @@ creates en maakt trede 4 beheersbaar (alleen hier actief).
   de eerste variant in een unique-violation `status: "error"`, en herschreef de tweede de
   verwijderde rij en kondigde dat aan als wijziging.)
 
+### Leiderskeuze bij koppelen: snapshot, retain en `supersedeTombstone`
+
+De serverkant van de keuze "telefoon leidend" (sync-contract §5f). Drie onderdelen, die samen
+voorkomen dat de telefoon zijn eigen films verliest en dat de server zonder kopie wordt leeggemaakt.
+
+**Wie.** Eén permissie, `sync.replace_library` (migratie `096`), alleen voor de rollen owner en
+admin. De native token draagt de sleutel in zijn lijst, maar een token overschrijdt nooit zijn
+gebruiker: token én rol moeten de sleutel toestaan, dus het token van een gewone gebruiker wordt
+geweigerd. Daarbovenop controleert de handler de rol expliciet (een beheerder kan elke permissie aan
+een eigen rol toekennen) en weigert hij op een instance zonder effectieve authenticatie, want dan
+geeft `require_next_permission` iedereen die de server bereikt een owner-actor. De sleutel staat
+bewust niet in `API_TOKEN_GRANTABLE_PERMISSION_KEYS`: de profielpagina kan hem niet aan een eigen
+token geven. Weigeringen dragen een stabiele `errorCode`: `auth_not_enabled`, `permission_missing`,
+`role_not_allowed`.
+
+**`POST /sync/snapshot`.** Maakt synchroon een functionele backup (collectie, mensen, filmartwork
+inclusief eigen foto's, mediagroepen en persoonlijke lijsten; geen mensenartwork en geen accounts),
+valideert hem met `validate_backup_zip` van de backup-engine en legt hem pas dan vast in
+`sync_library_snapshots` (migratie `097`). Een rij bewijst dus dat de kopie bestaat; zij noemt wie
+hem nam. Antwoord 201: `{snapshotId, createdAt, expiresAt, validForSeconds, counts, fileName,
+sizeBytes, sha256}`. Eén snapshot per instance per 30 seconden (`snapshot_rate_limited`), een
+controle op vrije schijfruimte vooraf, minimaal 256 MiB of 1,5 maal de nieuwste snapshot
+(`snapshot_no_space`), de nieuwste 5 blijven staan en de rest wordt met zijn archief verwijderd;
+een handmatige backup in dezelfde map wordt nooit aangeraakt. Terugzetten blijft bij de beheerder
+via de bestaande restore-routes. Synchroon, net als `/backup/create`; de gunicorn-timeout is
+180 seconden.
+
+**`POST /sync/retain`.** Body `{snapshotId, retain: {movies: [entityId...], containers:
+[entityId...]}, allowEmpty?: true}`. De app heeft eerst alles gepusht wat zij heeft en noemt nu de
+id's waar zij mee eindigde. In één transactie krijgt elke andere levende film en container een
+tombstone, via dezelfde helpers als `movie.delete` en `container.delete`, met één `delete`-change en
+één revisie per rij zodat andere toestellen via de delta volgen. Alleen `movies` en `containers`
+worden genoemd: locaties, series, discs, eigen foto's van bewaarde films, lidmaatschappen en
+persoonlijke lijsten blijven staan. Weigert zonder geldig snapshot-id van dezelfde gebruiker
+(`snapshot_required`, `snapshot_unknown`, `snapshot_expired` na 60 minuten, `snapshot_file_missing`),
+bij twee lege lijsten zonder `allowEmpty: true` (`retain_empty`), bij een misvormde body of id
+(`retain_invalid_body`, `retain_invalid_ids`) en bij te grote lijsten of body (`retain_too_large`:
+50.000 id's per lijst, 8 MiB). Idempotent: nog een keer met dezelfde lijsten verandert niets. Het
+snapshot-id wordt door gebruik niet verbruikt, zodat een wizard-run opnieuw kan. Antwoord 200:
+`{snapshotId, tombstoned, retained, ignored, counts, revision}`.
+
+**`supersedeTombstone`.** Een mutatie mag `supersedeTombstone: true` dragen (op mutatieniveau,
+camelCase, zoals `entityId`) en het verzoek een `snapshotId` op het hoogste niveau. Alleen als dat
+id dezelfde validatie als `retain` doorstaat, voor iemand die die snapshot nu nog zou mogen nemen,
+telt de vlag; anders wordt hij genegeerd en geldt Deel 2 ongewijzigd, en het antwoord draagt dan
+`snapshot: {id, honoured: false, errorCode}` zodat een client een geweigerde sessie niet voor een
+toegekende aanziet. Een verzoek zonder `snapshotId` heeft geen `snapshot`-sleutel. De beslissing is
+per mutatie. Als de vlag telt, heft hij de tombstone op elke weg erheen op: een film via `entityId`,
+via token (ook bij een `updated_at` ouder dan de verwijdering) en via barcode; een container via
+`entityId` en via token, wat de containerguard anders weigert. Het id van de tombstone wordt
+hergebruikt, `deleted_at` wordt gewist en een `upsert`-change kondigt het record aan. Het resultaat
+en de audit van de film dragen `supersededTombstone: true`. Idempotentie gaat voor: een retry onder
+een al gebruikt `clientMutationId` krijgt het oude antwoord terug, dus een sessie pusht onder
+nieuwe mutatie-id's.
+
+**Uitrol.** Geen Compose-, `.env`- of andere deployment-wijziging; wel twee migraties (`096`,
+`097`) die bij de start vanzelf draaien. Bestaande native tokens krijgen de nieuwe sleutel bij hun
+volgende gebruik via de token-reconciler, en gebruikers onder de rol admin hoeven niets te doen.
+
 ## Deel 3 — Opschonen bestaande duplicaten (server-side)
 
 Eenmalig merge-script, want de bestaande duplicaten van barcode-films staan juist op de server:
@@ -181,6 +240,8 @@ Alle nieuwe kolommen zijn nullable; oude clients blijven werken.
 | Delta/pull (changes sinds cursor, incl. deletions) | `GET /api/next/sync/delta?since=<rev>&limit=<n>` |
 | First-connect adoptie (read-only match) | `POST /api/next/sync/reconcile` |
 | Bootstrap (volledige snapshot, tombstones uitgesloten) | `GET /api/next/sync/bootstrap` |
+| Veiligheidskopie vóór "telefoon leidend" (alleen eigenaar/admin) | `POST /api/next/sync/snapshot` |
+| Verwijder wat de telefoon niet heeft (alleen eigenaar/admin) | `POST /api/next/sync/retain` |
 
 ### Payload-velden (input) — movie-upsert in `mutations[]`
 
