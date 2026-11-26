@@ -22835,6 +22835,11 @@ class SyncBatchContext:
     """
 
     def __init__(self) -> None:
+        # Set by `POST /sync/mutations` when the request carries a snapshotId that
+        # passed the same validation as `POST /sync/retain` (sync-contract §7,
+        # `supersedeTombstone`). False for every request that does not, so an
+        # upsert's `supersedeTombstone: true` is ignored outside a wizard session.
+        self.supersede_tombstones: bool = False
         self.consumed_client_entity_ids: set[str] = set()
         self.claimed_barcodes: set[str] = set()
         # Persistent per-record clientId -> server id created earlier in this
@@ -23549,6 +23554,7 @@ def apply_movie_upsert(
     idem_key: str,
     mutation: dict[str, Any],
     batch_ctx: "SyncBatchContext | None" = None,
+    supersede_tombstone: bool = False,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
@@ -23570,23 +23576,30 @@ def apply_movie_upsert(
     tmdb_id = clean_text(metadata_payload.get("tmdb_id"))
     duplicate_copy = bool(payload.get("duplicate_copy"))
 
+    # True when this push lifted a tombstone because it carried `supersedeTombstone`
+    # inside a wizard session (sync-contract §7). Always False otherwise.
+    superseded_tombstone = False
     if provided_entity_id is not None:
         provided_entity = movie_entity(conn, provided_entity_id)
         if provided_entity and provided_entity.get("deleted_at") is not None:
-            return tombstoned_movie_upsert_result(
-                conn,
-                client_id=client_id,
-                idem_key=idem_key,
-                mutation=mutation,
-                client_entity_id=client_entity_id,
-                tombstone=provided_entity,
-                matched_by=None,
-                persistent_client_id=persistent_client_id,
-            )
+            if not supersede_tombstone:
+                return tombstoned_movie_upsert_result(
+                    conn,
+                    client_id=client_id,
+                    idem_key=idem_key,
+                    mutation=mutation,
+                    client_entity_id=client_entity_id,
+                    tombstone=provided_entity,
+                    matched_by=None,
+                    persistent_client_id=persistent_client_id,
+                )
+            # The user chose to keep this film: it falls through to the ordinary
+            # write below, which clears `deleted_at` and announces an upsert.
+            superseded_tombstone = True
 
     matched_by: str | None = None
     ladder_entity_id: UUID | None = None
-    resurrect_tombstone = False
+    resurrect_tombstone = superseded_tombstone
     if batch_ctx is not None and provided_entity_id is None:
         # Only run the dedup ladder for genuinely new records. A record already
         # mapped via clientEntityId is a normal idempotent device re-push and
@@ -23664,6 +23677,11 @@ def apply_movie_upsert(
                     and deleted_at is not None
                     and client_ts > deleted_at
                 )
+                if supersede_tombstone:
+                    # Inside a wizard session the user has decided; the
+                    # timestamp tiebreak is for the ordinary stale-device case.
+                    resurrect = True
+                    superseded_tombstone = True
                 if not resurrect:
                     # Delete wins: do not touch the tombstone. Map the client's
                     # temp id to it and return the deleted record so the client
@@ -24032,9 +24050,10 @@ def apply_movie_upsert(
             "changedFields": sorted(
                 key for key in payload if key not in {"id", "clientEntityId", "clientMutationId"}
             ),
+            **({"supersededTombstone": True} if superseded_tombstone else {}),
         },
     )
-    return {
+    result = {
         "clientMutationId": mutation["clientMutationId"],
         "status": "applied",
         "entityType": "movie",
@@ -24047,6 +24066,9 @@ def apply_movie_upsert(
         "matchedBy": matched_by,
         "recordClientId": persistent_client_id,
     }
+    if superseded_tombstone:
+        result["supersededTombstone"] = True
+    return result
 
 
 def emit_movie_delete_change(conn, entity_id, payload: dict[str, Any]) -> int:
@@ -24555,6 +24577,7 @@ def apply_container_upsert(
     idem_key: str,
     mutation: dict[str, Any],
     actor: dict[str, Any] | None = None,
+    supersede_tombstone: bool = False,
 ) -> dict[str, Any]:
     payload = mutation.get("payload")
     if not isinstance(payload, dict):
@@ -24578,19 +24601,26 @@ def apply_container_upsert(
     # explicit entityId, or a clientEntityId mapping, that lands on a deleted
     # container is answered with the deleted signal. Without it the upsert below
     # rewrote the deleted row and announced the change to every device.
+    #
+    # Inside a wizard session (`supersede_tombstone`, sync-contract §7) the user
+    # has chosen to keep this container, so the guards below let it through and the
+    # write lifts the tombstone instead.
+    superseded_tombstone = False
     if entity_id is not None:
         tombstone = tombstoned_container_by_id(conn, entity_id)
         if tombstone is not None:
-            return tombstoned_container_upsert_result(
-                conn,
-                client_id=client_id,
-                idem_key=idem_key,
-                mutation=mutation,
-                client_entity_id=client_entity_id,
-                tombstone=tombstone,
-                matched_by=None,
-                persistent_client_id=clean_text(payload.get("client_id")),
-            )
+            if not supersede_tombstone:
+                return tombstoned_container_upsert_result(
+                    conn,
+                    client_id=client_id,
+                    idem_key=idem_key,
+                    mutation=mutation,
+                    client_entity_id=client_entity_id,
+                    tombstone=tombstone,
+                    matched_by=None,
+                    persistent_client_id=clean_text(payload.get("client_id")),
+                )
+            superseded_tombstone = True
 
     # Persistent per-record identity (contract §4b.1), mirroring the movie
     # upsert's persistent_client_id handling. Trede 3's identifier fields are
@@ -24649,16 +24679,22 @@ def apply_container_upsert(
         # container again (a new live row) and stays one.
         tombstone = find_tombstoned_container_by_client_id(conn, persistent_client_id)
         if tombstone is not None:
-            return tombstoned_container_upsert_result(
-                conn,
-                client_id=client_id,
-                idem_key=idem_key,
-                mutation=mutation,
-                client_entity_id=client_entity_id,
-                tombstone=tombstone,
-                matched_by="clientId",
-                persistent_client_id=persistent_client_id,
-            )
+            if not supersede_tombstone:
+                return tombstoned_container_upsert_result(
+                    conn,
+                    client_id=client_id,
+                    idem_key=idem_key,
+                    mutation=mutation,
+                    client_entity_id=client_entity_id,
+                    tombstone=tombstone,
+                    matched_by="clientId",
+                    persistent_client_id=persistent_client_id,
+                )
+            # Reuse the tombstone's id: minting a fresh one would hit
+            # `uq_containers_client_id`, which ignores `deleted_at`.
+            entity_id = tombstone["id"]
+            matched_by = "clientId"
+            superseded_tombstone = True
 
     entity_id = entity_id or uuid.uuid4()
     existing = container_entity(conn, entity_id)
@@ -24716,6 +24752,18 @@ def apply_container_upsert(
                 Jsonb(json_ready(fields["metadata"])),
             ),
         )
+    if superseded_tombstone:
+        # The upsert above rewrites a deleted row but never clears `deleted_at`;
+        # lifting the tombstone is the whole point of the flag.
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE containers
+                SET deleted_at=NULL, updated_at=now()
+                WHERE id=%s AND deleted_at IS NOT NULL
+                """,
+                (entity_id,),
+            )
 
     # No write path into container_identifiers yet: contract §2b tier 3 is
     # "structurally defined, may have zero live producers initially" -- there
@@ -24754,7 +24802,7 @@ def apply_container_upsert(
             "clientMutationId": mutation["clientMutationId"],
         },
     )
-    return {
+    result = {
         "clientMutationId": mutation["clientMutationId"],
         "status": "applied",
         "entityType": "container",
@@ -24767,6 +24815,9 @@ def apply_container_upsert(
         "matchedBy": matched_by,
         "recordClientId": persistent_client_id,
     }
+    if superseded_tombstone:
+        result["supersededTombstone"] = True
+    return result
 
 
 def apply_container_delete(
@@ -25529,9 +25580,23 @@ def apply_sync_mutation(
         existing["replayed"] = True
         return existing
 
+    # `supersedeTombstone: true` is a per-mutation opt-in that only counts inside a
+    # wizard session: the request carried a snapshotId that validated, which
+    # `sync_mutations` recorded on the batch context. Anywhere else it is ignored
+    # and the tombstone rules apply exactly as before (sync-contract §7).
+    supersede_tombstone = bool(
+        mutation.get("supersedeTombstone") is True
+        and batch_ctx is not None
+        and batch_ctx.supersede_tombstones
+    )
     if entity_type == "movie" and operation == "upsert":
         result = apply_movie_upsert(
-            conn, client_id=client_id, idem_key=key, mutation=mutation, batch_ctx=batch_ctx
+            conn,
+            client_id=client_id,
+            idem_key=key,
+            mutation=mutation,
+            batch_ctx=batch_ctx,
+            supersede_tombstone=supersede_tombstone,
         )
     elif entity_type == "movie" and operation == "delete":
         result = apply_movie_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
@@ -25542,6 +25607,7 @@ def apply_sync_mutation(
             idem_key=key,
             mutation=mutation,
             actor=actor,
+            supersede_tombstone=supersede_tombstone,
         )
     elif entity_type == "container" and operation == "delete":
         result = apply_container_delete(conn, client_id=client_id, idem_key=key, mutation=mutation)
@@ -41743,11 +41809,41 @@ def register_routes(flask_app: Flask) -> None:
 
         results = []
         batch_ctx = SyncBatchContext()
+        snapshot_id = body.get("snapshotId")
+        snapshot_note: dict[str, Any] | None = None
         with connect() as conn:
             actor = require_next_authenticated_user(conn)
             # The batch is the unit the route authenticates, so the actor is
             # attached here and read by every apply_* that audits.
             batch_ctx.actor = actor
+            if snapshot_id not in (None, ""):
+                # A wizard session (sync-contract §5f, §7): the request names the
+                # safety snapshot taken before the library is replaced. Only then
+                # may a mutation's `supersedeTombstone: true` count, and only for
+                # someone who could take that snapshot now (owner or admin, with
+                # the permission, on an instance with authentication) and whose
+                # snapshot it is. Anything else is not an error -- the pushes go
+                # through under the ordinary tombstone rules -- but the response
+                # says the flag was not honoured and why, so a client does not
+                # mistake a refused session for a granted one.
+                refusal: str | None = None
+                try:
+                    require_next_library_replace_actor(conn)
+                    require_valid_snapshot(
+                        conn,
+                        snapshot_id,
+                        actor,
+                        backup_dir=backup_storage_dir(legacy_data_dir()),
+                    )
+                except NextApiError as exc:
+                    refusal = exc.code or "snapshot_invalid"
+                batch_ctx.supersede_tombstones = refusal is None
+                snapshot_note = {
+                    "id": str(snapshot_id)[:64],
+                    "honoured": refusal is None,
+                }
+                if refusal is not None:
+                    snapshot_note["errorCode"] = refusal
             ensure_sync_state(conn)
             for mutation in mutations:
                 client_mutation_id = None
@@ -41781,14 +41877,15 @@ def register_routes(flask_app: Flask) -> None:
                         }
                     )
             revision = current_revision(conn)
-        return response(
-            {
-                "status": "ok",
-                "baseRevision": base_revision,
-                "currentRevision": revision,
-                "results": results,
-            }
-        )
+        payload = {
+            "status": "ok",
+            "baseRevision": base_revision,
+            "currentRevision": revision,
+            "results": results,
+        }
+        if snapshot_note is not None:
+            payload["snapshot"] = snapshot_note
+        return response(payload)
 
     @flask_app.post("/api/next/sync/reconcile")
     def sync_reconcile():
