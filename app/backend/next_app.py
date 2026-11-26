@@ -10579,6 +10579,57 @@ def require_any_next_permission(conn, permission_keys: tuple[str, ...]) -> dict[
     return user
 
 
+#: The one permission behind the link wizard's two destructive routes
+#: (sync-contract §5f): snapshot and retain. Migration 096 grants it to the
+#: owner and admin roles and to nobody else.
+SYNC_LIBRARY_REPLACE_PERMISSION = "sync.replace_library"
+#: Roles that may use those routes, checked in addition to the permission.
+SYNC_LIBRARY_REPLACE_ROLES = frozenset({"owner", "admin"})
+
+
+def require_next_library_replace_actor(conn) -> dict[str, Any]:
+    """Who may snapshot or retain: an owner or an admin, on an instance with auth.
+
+    Three independent refusals, each with its own stable `errorCode`, because the
+    wizard has to tell the user *why* it cannot offer "phone leads":
+
+    * `auth_not_enabled` -- authentication is not effectively on. With it off,
+      `require_next_permission` hands back an owner-level system actor to anybody
+      who can reach the server, so these routes would be open to the network.
+    * `permission_missing` -- the permission is absent from the role or from the
+      token. Both halves have to allow it (`actor_effective_has_permission`), so a
+      token never exceeds its user: a native token of an ordinary user carries
+      the key in its list and is still refused here, because the role lacks it.
+    * `role_not_allowed` -- the permission is present but the primary role is
+      neither owner nor admin. An admin may grant any catalogued permission to a
+      custom role; this keeps D2 ("owner or admin only") true whatever the role
+      matrix says.
+    """
+    if not next_auth_effective_enabled(conn, table_exists):
+        raise NextApiError(
+            "Replacing the library needs authentication to be switched on for this server",
+            403,
+            code="auth_not_enabled",
+        )
+    try:
+        actor = require_next_permission(conn, SYNC_LIBRARY_REPLACE_PERMISSION)
+    except NextApiError as exc:
+        if exc.status_code == 403 and not exc.code:
+            raise NextApiError(str(exc), 403, code="permission_missing") from exc
+        raise
+    if actor.get("role") not in SYNC_LIBRARY_REPLACE_ROLES:
+        message = "Only an owner or an admin may replace the library"
+        audit_permission_denied(
+            conn,
+            actor,
+            required_permissions=(SYNC_LIBRARY_REPLACE_PERMISSION,),
+            reason="library_replace_needs_owner_or_admin",
+            message=message,
+        )
+        raise NextApiError(message, 403, code="role_not_allowed")
+    return actor
+
+
 def actor_collection_visibility_scope(actor: dict[str, Any] | None) -> dict[str, bool]:
     permissions = actor_permission_set(actor)
     if actor and (actor.get("role") == "owner" or "*" in permissions):
