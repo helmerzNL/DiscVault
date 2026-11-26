@@ -51,6 +51,12 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
 # groups.create, groups.invite, collection.delete_*, collection.export_functional,
 # containers.delete, metadata.manage_*, and digital_sources.*. Routes gated
 # solely on those keys are unreachable by token by design.
+#
+# sync.replace_library is the one deliberate exception to "unreachable by token":
+# the link wizard's snapshot and retain routes (sync-contract §5f) are called by
+# the native app with its own token, which carries the key (next_auth). It stays
+# out of this tuple on purpose, so nobody can mint a general-purpose token that
+# can empty the library; the profile page cannot grant it.
 API_TOKEN_GRANTABLE_PERMISSION_KEYS = (
     "api.read",
     "api.write",

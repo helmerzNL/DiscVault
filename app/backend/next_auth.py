@@ -220,6 +220,15 @@ REVIEW_LOGIN_TOKEN_PERMISSIONS = (
 # collection.edit_all, so it described a client permitted to change a movie but
 # not to read one. That went unnoticed while a token's keys were merely added to
 # the role's; it stops being harmless the moment they have to agree.
+#
+# sync.replace_library is the one key here that a user cannot grant a token by
+# hand (it is deliberately absent from API_TOKEN_GRANTABLE_PERMISSION_KEYS): it
+# is what the link wizard's snapshot and retain routes ask for, and those routes
+# are for the native app and nothing else. Carrying it does not widen anyone's
+# authority. issue_mobile_api_token gives it only to an owner or an admin (any
+# other role keeps only the keys it holds), and the gates require the role AND
+# the token to allow it, so an ordinary user's token that does carry the key --
+# the reconciler appends it to every native token -- is still refused.
 MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "api.read",
     "metadata.search",
@@ -232,6 +241,7 @@ MOBILE_AUTH_TOKEN_PERMISSIONS = (
     "containers.view",
     "lending.request",
     "watchlist.manage",
+    "sync.replace_library",
 )
 
 # What a throttled request is told, per throttle scope.

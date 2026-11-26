@@ -152,6 +152,9 @@ try:
     from .next_backup import backup_restore_plan
     from .next_backup import backup_storage_dir
     from .next_backup import export_functional_backup
+    from .next_sync_snapshot import create_library_snapshot
+    from .next_sync_snapshot import require_valid_snapshot
+    from .next_sync_snapshot import snapshot_is_valid
     from .next_scheduled_jobs import load_config as load_scheduled_jobs_config
     from .next_scheduled_jobs import load_state as load_scheduled_jobs_state
     from .next_scheduled_jobs import save_config as save_scheduled_jobs_config
@@ -478,6 +481,9 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_backup import backup_restore_plan
     from next_backup import backup_storage_dir
     from next_backup import export_functional_backup
+    from next_sync_snapshot import create_library_snapshot
+    from next_sync_snapshot import require_valid_snapshot
+    from next_sync_snapshot import snapshot_is_valid
     from next_scheduled_jobs import load_config as load_scheduled_jobs_config
     from next_scheduled_jobs import load_state as load_scheduled_jobs_state
     from next_scheduled_jobs import save_config as save_scheduled_jobs_config
@@ -41293,6 +41299,57 @@ def register_routes(flask_app: Flask) -> None:
                 **({"counts": counts} if counts is not None else {}),
             }
         )
+
+    @flask_app.post("/api/next/sync/snapshot")
+    def sync_snapshot():
+        """Take the server-side safety copy the link wizard needs (sync-contract §5f).
+
+        The id this returns is what `POST /sync/retain` and the
+        `supersedeTombstone` flag insist on, so the order "copy first, then
+        replace" is enforced here rather than trusted to the client. Owner or
+        admin only, never on an instance without authentication, and never
+        restorable from an app: an administrator restores it through the
+        existing backup routes.
+
+        No request body. Answers 201 with
+        `{snapshotId, createdAt, expiresAt, validForSeconds, counts, fileName,
+        sizeBytes, sha256}`; refusals carry a stable `errorCode`
+        (`auth_not_enabled`, `permission_missing`, `role_not_allowed`,
+        `snapshot_rate_limited`, `snapshot_no_space`, `snapshot_failed`).
+        """
+        data_dir = legacy_data_dir()
+        backup_dir = backup_storage_dir(data_dir)
+        with connect() as conn:
+            actor = require_next_library_replace_actor(conn)
+            snapshot = create_library_snapshot(
+                conn,
+                actor=actor,
+                data_dir=data_dir,
+                backup_dir=backup_dir,
+                counts=sync_library_counts(conn),
+                generator={
+                    "service": "DiscVault Next",
+                    "version": build_version(),
+                    "sha": build_sha(),
+                    "description": "Safety copy taken before the library is replaced from a linked app",
+                },
+            )
+            audit_event(
+                conn,
+                event_type="sync.library_snapshot_created",
+                category="sync",
+                actor=actor,
+                target_type="sync_snapshot",
+                target_id=snapshot["snapshotId"],
+                summary="Created a safety snapshot before the library is replaced from a linked app",
+                metadata={
+                    "fileName": snapshot["fileName"],
+                    "sha256": snapshot["sha256"],
+                    "sizeBytes": snapshot["sizeBytes"],
+                    "counts": snapshot["counts"],
+                },
+            )
+        return response({"status": "ok", **snapshot}, 201)
 
     @flask_app.get("/api/next/sync/bootstrap")
     def sync_bootstrap():
