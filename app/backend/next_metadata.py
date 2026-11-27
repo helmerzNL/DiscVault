@@ -3533,6 +3533,27 @@ def should_apply_field(
 METADATA_IDENTITY_ENTRYPOINTS = frozenset({"search_barcode", "movie_details"})
 
 
+def result_names_a_release(result: dict[str, Any]) -> bool:
+    """Whether a source result comes from a catalogue release, not from a title or film match.
+
+    `should_apply_format` takes a `release_priority` and allows a source that is "release-backed" to
+    refine or correct a stored format. The merge derived that flag from the *technical data* a result
+    carries (audio, subtitles, HDR and so on) or from a `release` block, so a release the catalogue
+    holds with nothing but a title and a format -- which is what a box-set member usually is -- was
+    judged as not release-backed. A disc matched by that very release could then never have a wrong
+    format corrected: the refresh read "existing value retained", and reported success.
+
+    MovieVault names the release a result came from (`releaseId`), so that is the signal: a result that
+    names a release is backed by one, whatever else it carries. Used for the format alone. The generic
+    field rules keep the narrower flag, because widening it would change which source wins for every
+    other release field.
+    """
+    raw = result.get("raw")
+    if not isinstance(raw, dict):
+        return False
+    return bool(str(raw.get("releaseId") or "").strip())
+
+
 def should_apply_format(
     *,
     current_value: Any,
@@ -3823,7 +3844,7 @@ def merge_metadata_results(
                     current_value=current_value,
                     incoming_value=value,
                     overwrite_enabled=overwrite_enabled,
-                    release_priority=release_priority,
+                    release_priority=release_priority or result_names_a_release(result),
                     entrypoint=str(result.get("entrypoint") or ""),
                 )
             else:
