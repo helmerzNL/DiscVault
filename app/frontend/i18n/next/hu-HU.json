@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Itt nincs évadhoz kapcsolva, így nincs mit elküldeni.",
   "seriesContribute.notInCatalogue": "Nem szerepel a MovieVault-katalógus e szerveren tárolt másolatában.",
   "seriesContribute.nothingToSend": "Nincs mit elküldeni: minden kiadás egyezik a MovieVaulttal, vagy még nem küldhető el.",
-  "seriesContribute.queued": "Moderálásra elküldött évadjavítások: {count}."
+  "seriesContribute.queued": "Moderálásra elküldött évadjavítások: {count}.",
+  "containerDetail.boxSetRefreshResult": "Metaadatok frissítve. A MovieVaulthoz kapcsolt box set tagjai: {linked}. Nem párosítva: {unmatched}."
 }

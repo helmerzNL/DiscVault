@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Not linked to a season here, so there is nothing to send.",
   "seriesContribute.notInCatalogue": "Not in this server's copy of the MovieVault catalogue.",
   "seriesContribute.nothingToSend": "Nothing to send: every release either matches MovieVault or cannot be sent yet.",
-  "seriesContribute.queued": "{count} season corrections sent for moderation."
+  "seriesContribute.queued": "{count} season corrections sent for moderation.",
+  "containerDetail.boxSetRefreshResult": "Metadata refreshed. Box-set members linked to MovieVault: {linked}. Not matched: {unmatched}."
 }

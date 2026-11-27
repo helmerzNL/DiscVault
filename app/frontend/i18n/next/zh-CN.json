@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "此处未关联任何季，因此没有可发送的内容。",
   "seriesContribute.notInCatalogue": "不在此服务器的 MovieVault 目录副本中。",
   "seriesContribute.nothingToSend": "没有可发送的内容：每个发行版都与 MovieVault 一致，或暂时无法发送。",
-  "seriesContribute.queued": "已发送 {count} 项季更正待审核。"
+  "seriesContribute.queued": "已发送 {count} 项季更正待审核。",
+  "containerDetail.boxSetRefreshResult": "元数据已刷新。 已关联到 MovieVault 的套装成员：{linked}。未匹配：{unmatched}。"
 }

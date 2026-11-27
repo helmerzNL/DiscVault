@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Zde není propojeno s žádnou sezónou, takže není co odeslat.",
   "seriesContribute.notInCatalogue": "Není v kopii katalogu MovieVault na tomto serveru.",
   "seriesContribute.nothingToSend": "Není co odeslat: každé vydání odpovídá MovieVault, nebo ho zatím nelze odeslat.",
-  "seriesContribute.queued": "Opravy sezón odeslané k moderaci: {count}."
+  "seriesContribute.queued": "Opravy sezón odeslané k moderaci: {count}.",
+  "containerDetail.boxSetRefreshResult": "Metadata obnovena. Položky sady box set propojené s MovieVault: {linked}. Nespárováno: {unmatched}."
 }

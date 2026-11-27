@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Nu este asociată cu niciun sezon aici, deci nu există nimic de trimis.",
   "seriesContribute.notInCatalogue": "Nu se află în copia catalogului MovieVault de pe acest server.",
   "seriesContribute.nothingToSend": "Nimic de trimis: fiecare ediție corespunde cu MovieVault sau nu poate fi trimisă încă.",
-  "seriesContribute.queued": "Corecturi de sezoane trimise spre moderare: {count}."
+  "seriesContribute.queued": "Corecturi de sezoane trimise spre moderare: {count}.",
+  "containerDetail.boxSetRefreshResult": "Metadatele au fost reîmprospătate. Membri ai box set-ului asociați cu MovieVault: {linked}. Fără corespondență: {unmatched}."
 }

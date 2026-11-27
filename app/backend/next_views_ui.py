@@ -47609,11 +47609,47 @@ def ui_preview_html(
           body: JSON.stringify({dryRun})
         });
         if (payload.detail) renderContainerDetail(payload.detail);
+        const boxSetRefresh = dryRun ? null : await refreshActiveBoxSetMembers(payload);
         if (!dryRun) await loadAppSnapshot();
-        setContainerDetailMessage(dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed."), "good");
+        let message = dryRun ? tNext("movieDetail.previewReady", "Preview ready. Nothing was changed; details are logged in the browser console.") : tNext("movieDetail.applied", "Metadata refreshed.");
+        let tone = "good";
+        if (boxSetRefresh) {
+          const counts = boxSetRefresh.counts || {};
+          const notMatched = Number(counts.unmatched || 0) + Number(counts.conflict || 0) + Number(counts.no_release_id || 0);
+          message = tNext("containerDetail.boxSetRefreshResult", "Metadata refreshed. Box-set members linked to MovieVault: {linked}. Not matched: {unmatched}.")
+            .replace("{linked}", String(Number(counts.identified || 0)))
+            .replace("{unmatched}", String(notMatched));
+          // A member that could not be matched is not an error, but "success" with nothing said about it
+          // is exactly how a refresh that did nothing used to look.
+          tone = notMatched > 0 ? "" : "good";
+          console.log("box set refresh", boxSetRefresh);
+        }
+        setContainerDetailMessage(message, tone);
         console.log("container metadata refresh", payload);
       } catch (error) {
         setContainerDetailMessage(error.message || String(error), "bad");
+      }
+    }
+    // A box set is also refreshed member by member. A member imported before MovieVault release ids
+    // were kept cannot be refreshed at all until it is matched to its release again, and the
+    // container refresh above never looked at members.
+    async function refreshActiveBoxSetMembers(containerPayload) {
+      if (String(containerPayload?.detail?.container?.container_type || "") !== "box_set") return null;
+      try {
+        const result = await authApiJson(`/api/next/containers/${encodeURIComponent(activeContainerId)}/box-set/refresh`, {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: "{}"
+        });
+        return result.boxSetRefresh || null;
+      } catch (error) {
+        // The container refresh has already succeeded, so a set that cannot be matched (a hand-made one,
+        // one without a barcode, one the catalogue does not know) or a viewer who may not edit it is not
+        // a failure of this click.
+        const code = error?.payload?.errorCode;
+        const notApplicable = ["box_set_refresh_not_a_box_set", "box_set_refresh_no_barcode", "box_set_refresh_no_proposal"];
+        if (notApplicable.includes(code) || error?.status === 403) return null;
+        throw error;
       }
     }
     // The server confirmed these ids are gone; make the client agree right now

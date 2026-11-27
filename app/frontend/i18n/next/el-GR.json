@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Δεν συνδέεται εδώ με κανέναν κύκλο, οπότε δεν υπάρχει τίποτα για αποστολή.",
   "seriesContribute.notInCatalogue": "Δεν υπάρχει στο αντίγραφο του καταλόγου MovieVault σε αυτόν τον διακομιστή.",
   "seriesContribute.nothingToSend": "Τίποτα για αποστολή: κάθε έκδοση ταιριάζει με το MovieVault ή δεν μπορεί να σταλεί ακόμη.",
-  "seriesContribute.queued": "Διορθώσεις κύκλων που στάλθηκαν για έλεγχο: {count}."
+  "seriesContribute.queued": "Διορθώσεις κύκλων που στάλθηκαν για έλεγχο: {count}.",
+  "containerDetail.boxSetRefreshResult": "Τα μεταδεδομένα ανανεώθηκαν. Μέλη του box set που συνδέθηκαν με το MovieVault: {linked}. Χωρίς αντιστοίχιση: {unmatched}."
 }

@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Burada hiçbir sezona bağlı değil, bu yüzden gönderilecek bir şey yok.",
   "seriesContribute.notInCatalogue": "Bu sunucudaki MovieVault kataloğu kopyasında yok.",
   "seriesContribute.nothingToSend": "Gönderilecek bir şey yok: her sürüm MovieVault ile eşleşiyor ya da henüz gönderilemiyor.",
-  "seriesContribute.queued": "Moderasyona gönderilen sezon düzeltmesi: {count}."
+  "seriesContribute.queued": "Moderasyona gönderilen sezon düzeltmesi: {count}.",
+  "containerDetail.boxSetRefreshResult": "Meta veriler yenilendi. MovieVault ile ilişkilendirilen kutu seti üyeleri: {linked}. Eşleşmeyen: {unmatched}."
 }

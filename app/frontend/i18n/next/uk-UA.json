@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Тут не пов'язано з жодним сезоном, тож нічого надсилати.",
   "seriesContribute.notInCatalogue": "Немає в копії каталогу MovieVault на цьому сервері.",
   "seriesContribute.nothingToSend": "Нічого надсилати: кожне видання збігається з MovieVault або його ще не можна надіслати.",
-  "seriesContribute.queued": "Виправлення сезонів надіслано на модерацію: {count}."
+  "seriesContribute.queued": "Виправлення сезонів надіслано на модерацію: {count}.",
+  "containerDetail.boxSetRefreshResult": "Метадані оновлено. Учасники бокс-сета, пов'язані з MovieVault: {linked}. Без відповідності: {unmatched}."
 }

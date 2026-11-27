@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Hier aan geen seizoen gekoppeld, dus er is niets te versturen.",
   "seriesContribute.notInCatalogue": "Niet in de kopie van de MovieVault-catalogus op deze server.",
   "seriesContribute.nothingToSend": "Niets te versturen: elke release komt overeen met MovieVault of kan nog niet worden verstuurd.",
-  "seriesContribute.queued": "{count} seizoenscorrecties ter moderatie verstuurd."
+  "seriesContribute.queued": "{count} seizoenscorrecties ter moderatie verstuurd.",
+  "containerDetail.boxSetRefreshResult": "Metadata vernieuwd. Box-set-leden gekoppeld aan MovieVault: {linked}. Niet gematcht: {unmatched}."
 }
