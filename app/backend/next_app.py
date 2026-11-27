@@ -40345,6 +40345,13 @@ def register_routes(flask_app: Flask) -> None:
                 metadata={
                     "counts": result["counts"],
                     "identified": result["identified"],
+                    "repointed": result["repointed"],
+                    # What a re-point replaced, so it can be undone by hand.
+                    "replacedReleaseIds": {
+                        member["movieId"]: member["previousReleaseIds"]
+                        for member in result["members"]
+                        if member.get("previousReleaseIds")
+                    },
                     "jobsQueued": result["jobsQueued"],
                 },
             )
