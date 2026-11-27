@@ -3441,6 +3441,10 @@ def canonicalize_plugin_result(plugin_id: str, entrypoint: str, result: dict[str
         # show had nothing to be linked to. Who may state one is
         # `metadata_source_policy_result`'s decision, not this function's.
         "series": result.get("series") if isinstance(result.get("series"), dict) else None,
+        # Whether the source names the catalogue release this result came from. Decided here, from the
+        # plugin's own answer, because `metadata_source_policy_result` scrubs `raw` to `{}` for every
+        # MovieVault identity source and the merge only ever sees the scrubbed result.
+        "namesRelease": bool(str(result.get("releaseId") or "").strip()),
         "raw": result,
     }
 
@@ -3543,15 +3547,16 @@ def result_names_a_release(result: dict[str, Any]) -> bool:
     judged as not release-backed. A disc matched by that very release could then never have a wrong
     format corrected: the refresh read "existing value retained", and reported success.
 
-    MovieVault names the release a result came from (`releaseId`), so that is the signal: a result that
-    names a release is backed by one, whatever else it carries. Used for the format alone. The generic
-    field rules keep the narrower flag, because widening it would change which source wins for every
-    other release field.
+    MovieVault names the release a result came from (`releaseId`), so that is the signal. It is read
+    from `namesRelease`, which `canonicalize_plugin_result` sets from the plugin's own answer. It is
+    **not** read from `raw`: by the time the merge runs, `metadata_source_policy_result` has scrubbed
+    `raw` to `{}` for every MovieVault source. An earlier version of this function read `raw` and so
+    never fired in the real pipeline, which its tests could not show because they skipped that step.
+
+    Used for the format alone. The generic field rules keep the narrower flag, because widening it would
+    change which source wins for every other release field.
     """
-    raw = result.get("raw")
-    if not isinstance(raw, dict):
-        return False
-    return bool(str(raw.get("releaseId") or "").strip())
+    return bool(result.get("namesRelease"))
 
 
 def should_apply_format(
