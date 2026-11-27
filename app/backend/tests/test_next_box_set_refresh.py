@@ -5,10 +5,13 @@ scanned while MovieVault still called one disc a Blu-ray. MovieVault was correct
 had been imported without its release id, so its refresh asked MovieVault about a release it could
 not name and reported success. The format never arrived.
 
-A later server showed the second half of the same problem: the member Rocky I carried the id of a
-single-disc Blu-ray release that is not one of the box's four, so the refresh asked about the wrong
-disc. The box names its own releases, so the refresh now replaces such an id (`repointed`) instead of
-reporting a conflict and leaving it.
+A later server showed the second half of the same problem. The member Rocky I held two MovieVault
+ids: the box's own release and, beside it, the id of a single-disc Blu-ray release that is not one of
+the box's four. The refresh takes the first id in `provider_id, identifier_type, identifier` order, which
+was the Blu-ray one, so it asked about the wrong disc and the format never changed. The first version of
+this module counted that member as already linked, because the box's id was among its ids, and the box
+page said "0 linked, 0 not matched". The box names its own releases, so the refresh now removes every
+other MovieVault id of a matched member (`repointed`).
 
 These tests pin four things:
 
@@ -133,6 +136,22 @@ class PlanMemberRepairsTests(unittest.TestCase):
         decision = plan.decisions[0]
         self.assertEqual(decision.outcome, OUTCOME_REPOINTED)
         self.assertEqual(decision.previous_release_ids, (other,))
+
+    def test_the_refresh_would_have_asked_about_the_stale_id_first(self) -> None:
+        # The mechanism behind "already linked, still wrong": identifiers are read in
+        # `provider_id, identifier_type, identifier` order and the first MovieVault one is used. The
+        # stale Blu-ray release sorts before the box's release, so holding the right id was not enough.
+        from app.backend.dedup_identity import select_movievault_identifier
+
+        stale, right = "265825d0-b52b-4014-b32b-9568d3fbd1fa", "5c8b5b9e-3323-4d82-821b-f25f29dabcd2"
+        rows = [
+            {"provider_id": PROVIDER, "identifier_type": "movie_id", "identifier": value}
+            for value in sorted([right, stale])
+        ]
+        self.assertEqual(select_movievault_identifier(rows), stale)
+        plan = plan_member_repairs([stored(1, "Rocky", right, stale)], [proposed(1, "Rocky", right), proposed(2, "Rocky II")])
+        self.assertEqual(plan.decisions[0].outcome, OUTCOME_REPOINTED)
+        self.assertEqual(plan.decisions[0].previous_release_ids, (stale,))
 
     def test_every_stale_id_is_listed(self) -> None:
         one, two = "99999999-0000-0000-0000-000000000001", "99999999-0000-0000-0000-000000000002"

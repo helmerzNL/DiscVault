@@ -4,8 +4,12 @@ A box-set member imported before MovieVault release ids were kept (helmerzNL/Dis
 2026-11-03) carries no identifier at all. Its metadata refresh asks MovieVault about a release it
 cannot name, finds nothing, and reports success. So a format MovieVault has since corrected never
 reaches that member, however often somebody refreshes it. A member can also carry the id of a
-release that is not one of the box's own (a single-disc pressing of the same film): the refresh then
-asks about the wrong disc and gets the wrong answer, with the same silent result.
+release that is not one of the box's own (a single-disc pressing of the same film), either instead of
+the box's id or **beside** it. Beside it is the worse case: a movie that holds two MovieVault ids is
+refreshed with the first in `provider_id, identifier_type, identifier` order
+(`dedup_identity.select_movievault_identifier`), which need not be the right one. The refresh then asks
+about the wrong disc and gets the wrong answer, with the same silent result, while a check of "does the
+member hold the box's id" says yes.
 
 The box is the authority for its members. MovieVault knows a box set by its barcode and names the
 release of every disc in it, so a disc that sits in this box is one of those releases. This module
