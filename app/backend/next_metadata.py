@@ -43,6 +43,8 @@ try:
     from .next_common import table_exists as _shared_table_exists
     from .next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from .next_movievault_v2 import movievault_v2_plugin_context
+    from .next_movievault_v2_artwork import film_poster_for_release
+    from .next_movievault_v2_artwork import media_asset_id_from_local_poster_url
     from .next_packaging import split_legacy_packaging
     from .next_plugin_runtime import discovered_plugin
     from .next_plugin_runtime import run_plugin_entrypoint
@@ -64,6 +66,8 @@ except ImportError:  # pragma: no cover - supports direct module execution
     from next_common import table_exists as _shared_table_exists
     from next_movievault_v2 import MOVIEVAULT_V2_PLUGIN_ID
     from next_movievault_v2 import movievault_v2_plugin_context
+    from next_movievault_v2_artwork import film_poster_for_release
+    from next_movievault_v2_artwork import media_asset_id_from_local_poster_url
     from next_packaging import split_legacy_packaging
     from next_plugin_runtime import discovered_plugin
     from next_plugin_runtime import run_plugin_entrypoint
@@ -2377,7 +2381,9 @@ def image_url_options(*values: Any) -> list[str]:
                     add(value.get(key))
             return
         text = clean_text(value) or ""
-        if not text.startswith(("http://", "https://")):
+        # An image is an absolute address, or the instance's own copy of a MovieVault cover
+        # (`/api/next/movievault-v2/posters/<media asset id>`). No other relative path is one.
+        if not text.startswith(("http://", "https://")) and media_asset_id_from_local_poster_url(text) is None:
             return
         key = text.casefold()
         if key in seen:
@@ -4858,6 +4864,48 @@ def release_read_transaction(conn) -> bool:
     return True
 
 
+def with_film_poster_fallback(
+    conn, plugin_id: str, entrypoint: str, execution: dict[str, Any]
+) -> dict[str, Any]:
+    """Give a MovieVault release without a cover the cover of another edition of the same film.
+
+    The artwork rule (App-Guidance artwork-precedence §2) lets a release without a poster of its own
+    borrow the first other release's of the same film. The plugin answers for one release, so the
+    borrowing happens here, where the instance's catalogue copy and poster cache can be read. Only
+    `movie_details` is asked: a barcode scan or a title search describes a candidate, and a candidate
+    must not show another edition's cover as if it were its own.
+
+    The answer is copied, never edited: a cached execution is shared. A lookup that fails changes
+    nothing, because artwork is never a reason to fail a refresh.
+    """
+    if plugin_id != MOVIEVAULT_V2_PLUGIN_ID or entrypoint != "movie_details":
+        return execution
+    result = execution.get("result")
+    if not isinstance(result, dict) or result.get("status") != "hit" or result.get("posterUrl"):
+        return execution
+    release_id = clean_text(result.get("releaseId") or result.get("id"))
+    if not release_id:
+        return execution
+    try:
+        with conn.transaction():
+            poster = film_poster_for_release(conn, release_id)
+    except Exception:
+        logger.debug("film poster lookup failed for release %s", release_id, exc_info=True)
+        return execution
+    if not poster:
+        return execution
+    return {
+        **execution,
+        "result": {
+            **result,
+            "posterUrl": poster["url"],
+            "posterStatus": "ready",
+            "posterSource": poster["source"],
+            "posterReleaseId": poster["releaseId"],
+        },
+    }
+
+
 def run_cached_plugin_entrypoint(
     conn,
     plugin_id: str,
@@ -5132,6 +5180,7 @@ def run_metadata_source_pipeline(
             executions.append(execution_item)
             if execution.get("status") != "ok":
                 continue
+            execution = with_film_poster_fallback(conn, plugin["id"], entrypoint, execution)
             normalized = canonicalize_plugin_result(
                 plugin["id"],
                 entrypoint,
@@ -5694,6 +5743,24 @@ ENTITY_ARTWORK_TABLES = {
 }
 
 
+def local_media_asset_for_poster_url(conn, source_url: str, kind: str) -> UUID | None:
+    """The instance's own media asset a MovieVault poster path names, if it exists as `kind`.
+
+    The cover of a catalogue release is cached as a `media_assets` row by the poster cache and is
+    reached through `/api/next/movievault-v2/posters/<id>`. It has no remote address to fetch, so it
+    is linked by id. An id that names no such asset is no image at all, never a guess.
+    """
+    media_id = media_asset_id_from_local_poster_url(source_url)
+    if media_id is None or kind != "poster" or not table_exists(conn, "media_assets"):
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM media_assets WHERE id=%s AND kind=%s", (media_id, kind))
+        row = cur.fetchone()
+    if not row:
+        return None
+    return row["id"] if isinstance(row, dict) else row[0]
+
+
 def apply_primary_media_update(
     conn,
     *,
@@ -5718,7 +5785,9 @@ def apply_primary_media_update(
     if not owner_table:
         raise ValueError(f"unknown artwork entity type: {entity_type}")
     movie_id = entity_id
-    media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
+    media_id = local_media_asset_for_poster_url(conn, source_url, kind)
+    if media_id is None:
+        media_id = ensure_remote_media_asset(conn, kind=kind, source_url=source_url, provider_id=provider_id)
     if not media_id or not table_exists(conn, "entity_media"):
         return None
     role = kind
@@ -5914,6 +5983,7 @@ def filter_hidden_artwork_updates(
             hidden_urls[kind].add(source_url)
         if media_id:
             hidden_urls[kind].add(f"/api/next/media/assets/{media_id}")
+            hidden_urls[kind].add(f"/api/next/movievault-v2/posters/{media_id}")
     for kind, urls in hidden_urls.items():
         if not urls:
             continue
