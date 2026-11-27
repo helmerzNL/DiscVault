@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Tu nie je prepojené so žiadnou sezónou, takže nie je čo odoslať.",
   "seriesContribute.notInCatalogue": "Nie je v kópii katalógu MovieVault na tomto serveri.",
   "seriesContribute.nothingToSend": "Nie je čo odoslať: každé vydanie zodpovedá MovieVault alebo ho zatiaľ nemožno odoslať.",
-  "seriesContribute.queued": "Opravy sezón odoslané na moderáciu: {count}."
+  "seriesContribute.queued": "Opravy sezón odoslané na moderáciu: {count}.",
+  "containerDetail.boxSetRefreshResult": "Metaúdaje boli obnovené. Položky box setu prepojené s MovieVault: {linked}. Nespárované: {unmatched}."
 }

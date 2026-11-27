@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Siin pole seotud ühegi hooajaga, seega pole midagi saata.",
   "seriesContribute.notInCatalogue": "Pole selle serveri MovieVaulti kataloogi koopias.",
   "seriesContribute.nothingToSend": "Pole midagi saata: iga väljaanne vastab MovieVaultile või seda ei saa veel saata.",
-  "seriesContribute.queued": "{count} hooajaparandust saadeti modereerimiseks."
+  "seriesContribute.queued": "{count} hooajaparandust saadeti modereerimiseks.",
+  "containerDetail.boxSetRefreshResult": "Metaandmed värskendatud. MovieVaultiga seotud karbikomplekti liikmed: {linked}. Sobitamata: {unmatched}."
 }

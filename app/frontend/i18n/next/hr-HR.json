@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Ovdje nije povezano ni s jednom sezonom, pa nema ništa za slanje.",
   "seriesContribute.notInCatalogue": "Nije u kopiji kataloga MovieVaulta na ovom poslužitelju.",
   "seriesContribute.nothingToSend": "Nema ništa za slanje: svako izdanje odgovara MovieVaultu ili se još ne može poslati.",
-  "seriesContribute.queued": "Ispravke sezona poslane na moderiranje: {count}."
+  "seriesContribute.queued": "Ispravke sezona poslane na moderiranje: {count}.",
+  "containerDetail.boxSetRefreshResult": "Metapodaci su osvježeni. Članovi box seta povezani s MovieVaultom: {linked}. Bez podudaranja: {unmatched}."
 }

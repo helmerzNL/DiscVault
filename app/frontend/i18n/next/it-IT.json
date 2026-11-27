@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Non collegata ad alcuna stagione qui, quindi non c'è nulla da inviare.",
   "seriesContribute.notInCatalogue": "Non presente nella copia del catalogo MovieVault di questo server.",
   "seriesContribute.nothingToSend": "Niente da inviare: ogni edizione corrisponde a MovieVault oppure non può ancora essere inviata.",
-  "seriesContribute.queued": "{count} correzioni delle stagioni inviate in moderazione."
+  "seriesContribute.queued": "{count} correzioni delle stagioni inviate in moderazione.",
+  "containerDetail.boxSetRefreshResult": "Modifiche applicate. Membri del box-set collegati a MovieVault: {linked}. Non abbinati: {unmatched}."
 }

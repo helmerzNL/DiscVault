@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Ikke koblet til en sesong her, så det er ingenting å sende.",
   "seriesContribute.notInCatalogue": "Ikke i denne serverens kopi av MovieVault-katalogen.",
   "seriesContribute.nothingToSend": "Ingenting å sende: hver utgivelse stemmer med MovieVault eller kan ikke sendes ennå.",
-  "seriesContribute.queued": "{count} sesongrettelser sendt til moderering."
+  "seriesContribute.queued": "{count} sesongrettelser sendt til moderering.",
+  "containerDetail.boxSetRefreshResult": "Endringer brukt. Box-set-medlemmer koblet til MovieVault: {linked}. Uten samsvar: {unmatched}."
 }

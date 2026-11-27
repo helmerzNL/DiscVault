@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Čia nesusieta su jokiu sezonu, todėl nėra ko siųsti.",
   "seriesContribute.notInCatalogue": "Nėra šio serverio MovieVault katalogo kopijoje.",
   "seriesContribute.nothingToSend": "Nėra ko siųsti: kiekvienas leidimas atitinka MovieVault arba dar negali būti išsiųstas.",
-  "seriesContribute.queued": "Moderuoti išsiųsta sezonų pataisymų: {count}."
+  "seriesContribute.queued": "Moderuoti išsiųsta sezonų pataisymų: {count}.",
+  "containerDetail.boxSetRefreshResult": "Metaduomenys atnaujinti. Su MovieVault susieti rinkinio nariai: {linked}. Nesutapo: {unmatched}."
 }

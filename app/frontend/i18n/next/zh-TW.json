@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "此處未連結任何季，因此沒有可傳送的內容。",
   "seriesContribute.notInCatalogue": "不在此伺服器的 MovieVault 目錄副本中。",
   "seriesContribute.nothingToSend": "沒有可傳送的內容：每個發行版都與 MovieVault 一致，或暫時無法傳送。",
-  "seriesContribute.queued": "已傳送 {count} 項季更正待審核。"
+  "seriesContribute.queued": "已傳送 {count} 項季更正待審核。",
+  "containerDetail.boxSetRefreshResult": "中繼資料已重新整理。 已連結至 MovieVault 的套裝成員：{linked}。未比對：{unmatched}。"
 }

@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "Šeit nav piesaistīts nevienai sezonai, tāpēc nav ko sūtīt.",
   "seriesContribute.notInCatalogue": "Nav šī servera MovieVault kataloga kopijā.",
   "seriesContribute.nothingToSend": "Nav ko sūtīt: katrs izdevums atbilst MovieVault vai to vēl nevar nosūtīt.",
-  "seriesContribute.queued": "Nosūtīti {count} sezonu labojumi moderēšanai."
+  "seriesContribute.queued": "Nosūtīti {count} sezonu labojumi moderēšanai.",
+  "containerDetail.boxSetRefreshResult": "Metadati atsvaidzināti. Ar MovieVault saistītie komplekta dalībnieki: {linked}. Nesaskaņoti: {unmatched}."
 }

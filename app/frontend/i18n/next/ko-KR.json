@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "여기서는 어떤 시즌에도 연결되어 있지 않아 보낼 것이 없습니다.",
   "seriesContribute.notInCatalogue": "이 서버의 MovieVault 카탈로그 사본에 없습니다.",
   "seriesContribute.nothingToSend": "보낼 것이 없습니다. 모든 릴리스가 MovieVault와 일치하거나 아직 보낼 수 없습니다.",
-  "seriesContribute.queued": "시즌 수정 사항 {count}건을 검토 대기열로 보냈습니다."
+  "seriesContribute.queued": "시즌 수정 사항 {count}건을 검토 대기열로 보냈습니다.",
+  "containerDetail.boxSetRefreshResult": "메타데이터가 새로 고쳐졌습니다. MovieVault에 연결된 박스 세트 구성원: {linked}. 일치하지 않음: {unmatched}."
 }

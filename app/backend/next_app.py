@@ -87,6 +87,7 @@ try:
     from .next_public_http import PublicHttpError
     from .next_public_http import public_url_hostname
     from .next_public_http import validate_public_url
+    from .next_box_set_refresh import refresh_box_set_members
     from .next_metadata import METADATA_REFRESH_JOB_TYPE
     from .next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
     from .next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
@@ -418,6 +419,7 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_public_http import PublicHttpError
     from next_public_http import public_url_hostname
     from next_public_http import validate_public_url
+    from next_box_set_refresh import refresh_box_set_members
     from next_metadata import METADATA_REFRESH_JOB_TYPE
     from next_metadata import MOVIE_ORIGIN_BACKFILL_JOB_TYPE
     from next_metadata import MOVIE_RATING_VOTES_BACKFILL_JOB_TYPE
@@ -40293,6 +40295,60 @@ def register_routes(flask_app: Flask) -> None:
                         },
                     )
         return response({"status": "ok", "metadata": result, "detail": detail, "receiverSummary": receiver_summary})
+
+    @flask_app.post("/api/next/containers/<container_id>/box-set/refresh")
+    def container_box_set_refresh(container_id: str):
+        """Give each member of a box set its MovieVault release back, then refresh it.
+
+        Separate from `container_metadata_refresh` on purpose: that route runs inside one
+        transaction, and this one reaches the metadata sources over the network, so it commits before
+        each provider answers. The PWA calls both from the same button. See
+        `next_box_set_refresh` for what it matches, what it writes and what it refuses to guess.
+        """
+        container_uuid = parse_uuid(container_id, "containerId")
+        with connect() as conn:
+            actor = require_next_permission(conn, "metadata.refresh_one")
+            if not table_exists(conn, "containers") or not table_exists(conn, "container_movies"):
+                raise NextApiError("Container tables are not available", 503)
+            if not actor_can_view_container(conn, actor, container_uuid):
+                raise NextApiError("Container not found", 404)
+            # It writes identifiers onto the member movies, which the identifier route guards by
+            # edit permission, so this one is guarded the same way.
+            if not actor_can_edit_visible_container(conn, actor, container_uuid):
+                raise NextApiError("Permission required: collection.edit_all", 403)
+
+            def box_set_members_for_barcode(lookup_conn, barcode, lookup_actor):
+                metadata_result = lookup_metadata_sources(
+                    lookup_conn, {"barcode": barcode, "detectBoxSets": True}, lookup_actor
+                )
+                proposal = metadata_box_set_proposal(metadata_result)
+                return box_set_proposal_members(proposal) if proposal else []
+
+            result = refresh_box_set_members(
+                conn,
+                container_uuid,
+                actor=actor,
+                lookup_members=box_set_members_for_barcode,
+                create_job=create_background_job,
+                emit_identifiers_change=emit_movie_identifiers_change,
+                job_type=METADATA_REFRESH_JOB_TYPE,
+                provider_id=MOVIEVAULT_V2_PLUGIN_ID,
+            )
+            audit_event(
+                conn,
+                event_type="container.box_set_refreshed",
+                category="metadata",
+                actor=actor,
+                target_type="container",
+                target_id=container_uuid,
+                summary="Refreshed box-set members",
+                metadata={
+                    "counts": result["counts"],
+                    "identified": result["identified"],
+                    "jobsQueued": result["jobsQueued"],
+                },
+            )
+        return response({"status": "ok", "boxSetRefresh": result})
 
     @flask_app.get("/api/next/containers/<container_id>/view")
     @flask_app.get("/api/next/app/containers/<container_id>")

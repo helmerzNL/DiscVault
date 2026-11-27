@@ -3343,5 +3343,6 @@
   "seriesContribute.noSeasons": "ここではどのシーズンにも関連付けられていないため、送信するものはありません。",
   "seriesContribute.notInCatalogue": "このサーバーにある MovieVault カタログのコピーにありません。",
   "seriesContribute.nothingToSend": "送信するものはありません。すべてのリリースが MovieVault と一致しているか、まだ送信できません。",
-  "seriesContribute.queued": "{count} 件のシーズン修正をモデレーションに送信しました。"
+  "seriesContribute.queued": "{count} 件のシーズン修正をモデレーションに送信しました。",
+  "containerDetail.boxSetRefreshResult": "メタデータを更新しました。 MovieVault にリンクされたボックスセットのメンバー: {linked}。照合できなかった項目: {unmatched}。"
 }
