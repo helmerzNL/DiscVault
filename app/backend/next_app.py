@@ -1464,6 +1464,70 @@ def should_reuse_box_set_container_for_import(
     return physical_media_formats_compatible(candidate_format, incoming_format)
 
 
+# The spellings a box-set proposal may carry its cover under, in the order they
+# win. `poster_url` is the container's own key and what an edited or client
+# supplied proposal uses; `posterUrl` is what the metadata plugins emit (the
+# MovieVault plugin forwards the *box set's* cover under it, never a member
+# disc's); bare `poster` is the oldest form. The refresh path reads the same
+# three (`fetch_box_set_artwork_from_sources`), so a cover found on a refresh
+# and a cover arriving with an import agree on what a proposal can say.
+_BOX_SET_PROPOSAL_POSTER_KEYS = ("poster_url", "posterUrl", "poster")
+_BOX_SET_PROPOSAL_BACKDROP_KEYS = ("backdrop_url", "backdropUrl", "backdrop")
+
+
+def box_set_proposal_artwork(proposal: Any) -> dict[str, str]:
+    """The poster and backdrop a box-set import proposal carries, as `poster_url`
+    / `backdrop_url`, with a missing one simply absent.
+
+    The import used to read only `poster_url` and `poster`. The MovieVault
+    plugin answers with `posterUrl`, so a scanned box set was created without
+    the cover MovieVault had just supplied and the page fell back to a member
+    film's poster. Nothing failed - the cover is supplementary - which is why it
+    shipped.
+
+    Only a value a browser can load is returned (`first_usable_image`): a
+    relative path from a source with no known origin would be stored and then
+    never drawn, which reads as a poster that is there."""
+    if not isinstance(proposal, dict):
+        return {}
+    artwork: dict[str, str] = {}
+    poster = first_usable_image(*(proposal.get(key) for key in _BOX_SET_PROPOSAL_POSTER_KEYS))
+    if poster:
+        artwork["poster_url"] = poster
+    backdrop = first_usable_image(*(proposal.get(key) for key in _BOX_SET_PROPOSAL_BACKDROP_KEYS))
+    if backdrop:
+        artwork["backdrop_url"] = backdrop
+    return artwork
+
+
+def box_set_import_artwork_updates(
+    existing_metadata: Any,
+    artwork: dict[str, str],
+) -> dict[str, Any]:
+    """The cover a box set that already exists may take from a re-import.
+
+    Same rule as `refresh_container_metadata`, so the two cannot disagree about
+    one container: the set's own cover from a source (MovieVault) replaces a
+    cover that was only borrowed from a member film (`*_from_members`), but never
+    a cover the container already owns and never one the user locked.
+
+    Returns only keys to write. An import that carries no cover therefore leaves
+    the stored one alone; merging `{"poster_url": None}` over the metadata is a
+    JSON null, and that is how a rescan used to blank a poster."""
+    metadata = existing_metadata if isinstance(existing_metadata, dict) else {}
+    updates: dict[str, Any] = {}
+    for kind in ("poster", "backdrop"):
+        incoming = artwork.get(f"{kind}_url")
+        if not incoming or metadata.get(f"{kind}_locked"):
+            continue
+        owns_cover = bool(clean_text(metadata.get(f"{kind}_url"))) and not metadata.get(f"{kind}_from_members")
+        if owns_cover:
+            continue
+        updates[f"{kind}_url"] = incoming
+        updates[f"{kind}_from_members"] = False
+    return updates
+
+
 def import_container_preview_key(
     container_type: str,
     title: str,
@@ -38287,6 +38351,11 @@ def register_routes(flask_app: Flask) -> None:
         )
         member_source = clean_text(proposal.get("memberSource") or proposal.get("member_source") or provider_label)
         member_confidence = clean_text(proposal.get("memberConfidence") or proposal.get("member_confidence"))
+        # The box set's own cover as the source supplied it (MovieVault's, on a
+        # scanned barcode). Kept apart from `container_metadata` because it is
+        # applied differently to a new container and to an existing one - see
+        # `box_set_import_artwork_updates`.
+        box_set_artwork = box_set_proposal_artwork(proposal)
         container_metadata = {
             "source": provider_label,
             "import_source": "plugin_box_set",
@@ -38298,8 +38367,6 @@ def register_routes(flask_app: Flask) -> None:
             "member_source": member_source,
             "member_confidence": member_confidence,
             "metadata_plugin_fallbacks": proposal.get("metadata_plugin_fallbacks") or [],
-            "poster_url": proposal.get("poster_url") or proposal.get("poster"),
-            "backdrop_url": proposal.get("backdrop_url") or proposal.get("backdrop"),
             "backdrop_urls": proposal.get("backdrop_urls") or proposal.get("backdropUrls") or [],
         }
         existing_container = None
@@ -38308,7 +38375,7 @@ def register_routes(flask_app: Flask) -> None:
         with conn.cursor() as cur:
             if barcode:
                 cur.execute(
-                    "SELECT id FROM containers WHERE container_type='box_set' AND barcode=%s LIMIT 1",
+                    "SELECT id, metadata FROM containers WHERE container_type='box_set' AND barcode=%s LIMIT 1",
                     (barcode,),
                 )
                 existing_container = cur.fetchone()
@@ -38335,6 +38402,12 @@ def register_routes(flask_app: Flask) -> None:
         container_created = False
         if existing_container:
             container_uuid = existing_container["id"]
+            # A cover is only ever *added* to an existing box set (and only where
+            # it has none of its own), so it is merged here rather than carried in
+            # `container_metadata`, whose other keys overwrite what is stored.
+            container_metadata.update(
+                box_set_import_artwork_updates(existing_container.get("metadata"), box_set_artwork)
+            )
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -38360,6 +38433,7 @@ def register_routes(flask_app: Flask) -> None:
             container_uuid = uuid.uuid4()
             container_public_id = f"import-box-set-{container_uuid.hex[:12]}"
             container_created = True
+            container_metadata.update(box_set_artwork)
             with conn.cursor() as cur:
                 cur.execute(
                     """

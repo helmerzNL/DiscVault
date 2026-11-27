@@ -36187,6 +36187,11 @@ def ui_preview_html(
       ));
       document.getElementById("containerDetailIdentifiers").innerHTML = identifiers.join("") || `<div class="preview-empty">${escapeHtml(tNext("containerDetail.noIdentifiers", "No identifiers yet."))}</div>`;
       document.getElementById("containerDetailMetadata").innerHTML = detailFieldRows([
+        // The container's own barcode - the packaging's, not a member disc's. A
+        // scanned box-set is identified by it, so it belongs among the facts the
+        // page lists rather than only in the header chips. Empty for a vault or
+        // collection, and an empty value drops the row.
+        [tNext("containerDetail.fieldBarcode", "Barcode"), container.barcode],
         [tNext("containerDetail.aggregateMovieCount", "Movies in scope"), summary.movieCount || memberMovies.length],
         [tNext("containerDetail.aggregateYearRange", "Year range"), summary.yearRange],
         [tNext("containerDetail.aggregateFormats", "Formats"), summary.formats],
