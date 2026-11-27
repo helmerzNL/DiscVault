@@ -1,22 +1,32 @@
-"""Refresh a box set as a whole: give each member its MovieVault release back, then refresh it.
+"""Refresh a box set as a whole: every member follows the release MovieVault names for it, then is refreshed.
 
 A box-set member imported before MovieVault release ids were kept (helmerzNL/DiscVault#689,
 2026-11-03) carries no identifier at all. Its metadata refresh asks MovieVault about a release it
 cannot name, finds nothing, and reports success. So a format MovieVault has since corrected never
-reaches that member, however often somebody refreshes it.
+reaches that member, however often somebody refreshes it. A member can also carry the id of a
+release that is not one of the box's own (a single-disc pressing of the same film): the refresh then
+asks about the wrong disc and gets the wrong answer, with the same silent result.
 
-This module repairs that for one box set, on request:
+The box is the authority for its members. MovieVault knows a box set by its barcode and names the
+release of every disc in it, so a disc that sits in this box is one of those releases. This module
+makes each member follow that, on request:
 
 1. look the box set's barcode up the way the import does and take the members it names;
 2. match every *stored* member to one of them, inside this box only;
-3. write the release id onto each member that lacks one;
-4. queue the ordinary metadata refresh for the members that now have one.
+3. give each matched member that release as its MovieVault release id: write it when there is none,
+   and replace any other MovieVault release id the member held (`repointed`);
+4. queue the ordinary metadata refresh for every matched member.
 
 Step 4 is the point of the design. The refresh job already knows the rules for every field: user
 locks, source precedence, and the format rule of identity-routing 5a (a source that found the disc
 by identity may correct its format, a combo is never narrowed). Doing the format here as well
 would be a second copy of that rule, and two copies drift. This module therefore never writes a
-format. It only restores the identity the refresh was missing.
+format. It only gives the refresh the identity it was missing or had wrong.
+
+Only a member's MovieVault `movie_id` identifiers are ever changed. The ids a re-point replaces are
+returned per member (`previousReleaseIds`) and written to the audit event, so it can be undone by
+hand. A member that cannot be matched to the box uniquely, or whose proposal names no release, is left
+exactly as it was: the refresh never removes an id without a replacement.
 
 The specification is `projects/discvault/changes/2026-11-27-format-correction-and-box-set-refresh.md`
 in Flux76HQ/App-Guidance, section 4.1.
@@ -42,13 +52,12 @@ except ImportError:  # pragma: no cover - supports direct module execution
 
 OUTCOME_IDENTIFIED = "identified"
 OUTCOME_ALREADY_IDENTIFIED = "already_identified"
-OUTCOME_CONFLICT = "conflict"
+OUTCOME_REPOINTED = "repointed"
 OUTCOME_NO_RELEASE_ID = "no_release_id"
 OUTCOME_UNMATCHED = "unmatched"
 
-# The outcomes that leave a member with a release id MovieVault can be asked about, and so the only
-# ones worth a refresh job.
-REFRESHABLE_OUTCOMES = frozenset({OUTCOME_IDENTIFIED, OUTCOME_ALREADY_IDENTIFIED})
+# The outcomes that leave a member with the box's release id, and so the only ones worth a refresh job.
+REFRESHABLE_OUTCOMES = frozenset({OUTCOME_IDENTIFIED, OUTCOME_ALREADY_IDENTIFIED, OUTCOME_REPOINTED})
 
 MATCHED_BY_TITLE = "title"
 MATCHED_BY_POSITION = "position"
@@ -94,6 +103,8 @@ class MemberDecision:
     matched_by: str = ""
     proposal_position: int | None = None
     proposal_title: str = ""
+    # The MovieVault release ids the member held that are not the box's, which a re-point removes.
+    previous_release_ids: tuple[str, ...] = ()
 
     def as_payload(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
@@ -101,6 +112,10 @@ class MemberDecision:
             "title": self.title,
             "outcome": self.outcome,
         }
+        if self.release_id:
+            payload["releaseId"] = self.release_id
+        if self.previous_release_ids:
+            payload["previousReleaseIds"] = list(self.previous_release_ids)
         if self.matched_by:
             payload["matchedBy"] = self.matched_by
         if self.proposal_position is not None:
@@ -137,7 +152,7 @@ def plan_member_repairs(
     stored: Sequence[StoredMember],
     proposed: Sequence[ProposedMember],
 ) -> RepairPlan:
-    """Match each stored member to a proposed one and decide what to do about its identity.
+    """Match each stored member to a proposed one and decide what its MovieVault identity becomes.
 
     The match runs from the stored side, so a member is only ever paired with one release, and a
     release is only ever claimed once.
@@ -194,14 +209,20 @@ def plan_member_repairs(
             continue
         proposed_index, matched_by = match
         candidate = proposed_members[proposed_index]
+        # Any release id the member holds that is not the box's own. The box names the release of the
+        # disc, so these are the stale ones: another pressing of the film, a release the catalogue has
+        # since merged away. A source that names no release gives nothing to replace them with, so then
+        # nothing is removed.
+        previous = tuple(
+            release_id for release_id in member.release_ids if release_id != candidate.release_id
+        )
         if not candidate.release_id:
             outcome = OUTCOME_NO_RELEASE_ID
+            previous = ()
+        elif previous:
+            outcome = OUTCOME_REPOINTED
         elif candidate.release_id in member.release_ids:
             outcome = OUTCOME_ALREADY_IDENTIFIED
-        elif member.release_ids:
-            # The member already names another release. That may be a deliberate choice, or a stale
-            # one; either way it is not this module's to overwrite.
-            outcome = OUTCOME_CONFLICT
         else:
             outcome = OUTCOME_IDENTIFIED
         decisions.append(
@@ -213,6 +234,7 @@ def plan_member_repairs(
                 matched_by=matched_by,
                 proposal_position=candidate.position,
                 proposal_title=candidate.title,
+                previous_release_ids=previous,
             )
         )
 
@@ -331,7 +353,7 @@ def refresh_box_set_members(
     job_type: str,
     provider_id: str,
 ) -> dict[str, Any]:
-    """Repair the member identities of one box set and queue their refreshes.
+    """Make every member of one box set follow the box's releases and queue their refreshes.
 
     `lookup_members(conn, barcode, actor)` returns the member dicts of the box-set proposal for that
     barcode, as the import would see them. It reaches the network, so the caller's transaction is
@@ -339,7 +361,8 @@ def refresh_box_set_members(
 
     Raises `NextApiError` with a stable code when the container is not a box set (422), has no real
     barcode (422), or the source names fewer than two members (422). It never creates, removes or
-    reorders a member, and it never writes a format.
+    reorders a member, it never writes a format, and the only identifiers it removes are the MovieVault
+    release ids it replaces with the box's own.
     """
     container = _load_box_set(conn, container_id)
     if container["container_type"] != "box_set":
@@ -362,11 +385,23 @@ def refresh_box_set_members(
     plan = plan_member_repairs(stored, proposed)
 
     identified = 0
+    repointed = 0
     queued = 0
     queue_available = _table_exists(conn, "background_jobs")
     for decision in plan.decisions:
-        if decision.outcome == OUTCOME_IDENTIFIED:
+        if decision.outcome in {OUTCOME_IDENTIFIED, OUTCOME_REPOINTED}:
             with conn.cursor() as cur:
+                if decision.previous_release_ids:
+                    cur.execute(
+                        """
+                        DELETE FROM movie_identifiers
+                        WHERE movie_id = %s
+                          AND provider_id = %s
+                          AND identifier_type = 'movie_id'
+                          AND identifier = ANY(%s)
+                        """,
+                        (decision.movie_id, provider_id, list(decision.previous_release_ids)),
+                    )
                 cur.execute(
                     """
                     INSERT INTO movie_identifiers (movie_id, provider_id, identifier_type, identifier)
@@ -376,7 +411,10 @@ def refresh_box_set_members(
                     (decision.movie_id, provider_id, decision.release_id),
                 )
             emit_identifiers_change(conn, decision.movie_id, operation="upsert")
-            identified += 1
+            if decision.outcome == OUTCOME_REPOINTED:
+                repointed += 1
+            else:
+                identified += 1
         if decision.outcome in REFRESHABLE_OUTCOMES and queue_available:
             if not _refresh_pending(conn, job_type, decision.movie_id):
                 create_job(
@@ -400,11 +438,12 @@ def refresh_box_set_members(
         "counts": {
             OUTCOME_IDENTIFIED: counts[OUTCOME_IDENTIFIED],
             OUTCOME_ALREADY_IDENTIFIED: counts[OUTCOME_ALREADY_IDENTIFIED],
-            OUTCOME_CONFLICT: counts[OUTCOME_CONFLICT],
+            OUTCOME_REPOINTED: counts[OUTCOME_REPOINTED],
             OUTCOME_NO_RELEASE_ID: counts[OUTCOME_NO_RELEASE_ID],
             OUTCOME_UNMATCHED: counts[OUTCOME_UNMATCHED],
         },
         "identified": identified,
+        "repointed": repointed,
         "jobsQueued": queued,
         "proposalOnlyTitles": list(plan.proposal_only_titles),
     }

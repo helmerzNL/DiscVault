@@ -1,18 +1,24 @@
-"""A box set can be refreshed as a whole, and a member without a release is matched back to one.
+"""A box set can be refreshed as a whole: every member follows the release the box names for it.
 
 The case behind it: the Italian *Rocky I-IV 4K Knockout Collection* (barcode 5051891191549) was
 scanned while MovieVault still called one disc a Blu-ray. MovieVault was corrected, but the member
 had been imported without its release id, so its refresh asked MovieVault about a release it could
 not name and reported success. The format never arrived.
 
-These tests pin three things:
+A later server showed the second half of the same problem: the member Rocky I carried the id of a
+single-disc Blu-ray release that is not one of the box's four, so the refresh asked about the wrong
+disc. The box names its own releases, so the refresh now replaces such an id (`repointed`) instead of
+reporting a conflict and leaving it.
+
+These tests pin four things:
 
 * the matching: what is paired with what, inside one box, and what is left alone;
-* the identity outcome per member, including the two that must not be guessed (`conflict`,
-  `no_release_id`);
-* that the refresh writes identifiers and queues jobs and does nothing else. In particular it never
-  writes a format: the queued refresh applies the format rule of identity-routing 5a, and a second
-  copy of that rule here would drift from it.
+* the identity outcome per member, including the one that must not be guessed (`no_release_id`: no
+  id is ever removed without a replacement) and the one that replaces (`repointed`);
+* that the refresh writes MovieVault `movie_id` identifiers and queues jobs and does nothing else. In
+  particular it never writes a format: the queued refresh applies the format rule of identity-routing
+  5a, and a second copy of that rule here would drift from it;
+* that a re-point is undoable: the ids it replaced come back in the result.
 """
 
 from __future__ import annotations
@@ -31,9 +37,9 @@ if repo_root not in sys.path:
 from app.backend import next_box_set_refresh as refresh
 from app.backend.next_box_set_refresh import (
     OUTCOME_ALREADY_IDENTIFIED,
-    OUTCOME_CONFLICT,
     OUTCOME_IDENTIFIED,
     OUTCOME_NO_RELEASE_ID,
+    OUTCOME_REPOINTED,
     OUTCOME_UNMATCHED,
     ProposedMember,
     StoredMember,
@@ -111,12 +117,42 @@ class PlanMemberRepairsTests(unittest.TestCase):
         self.assertEqual(plan.decisions[0].outcome, OUTCOME_ALREADY_IDENTIFIED)
         self.assertIn(plan.decisions[0].outcome, refresh.REFRESHABLE_OUTCOMES)
 
-    def test_a_different_stored_release_is_reported_not_overwritten(self) -> None:
+    def test_a_release_outside_the_box_is_replaced_by_the_boxs_own(self) -> None:
+        # Rocky I on a real server: the id of a single-disc Blu-ray, not one of the box's four releases.
         other = "99999999-0000-0000-0000-000000000009"
         library = [stored(1, "Rocky", other), stored(2, "Rocky II"), stored(3, "Rocky III"), stored(4, "Rocky IV")]
         plan = plan_member_repairs(library, ROCKY_PROPOSAL)
-        self.assertEqual(plan.decisions[0].outcome, OUTCOME_CONFLICT)
-        self.assertNotIn(OUTCOME_CONFLICT, refresh.REFRESHABLE_OUTCOMES)
+        self.assertEqual(plan.decisions[0].outcome, OUTCOME_REPOINTED)
+        self.assertEqual(plan.decisions[0].release_id, RELEASE[1])
+        self.assertEqual(plan.decisions[0].previous_release_ids, (other,))
+        self.assertIn(OUTCOME_REPOINTED, refresh.REFRESHABLE_OUTCOMES)
+
+    def test_a_stale_id_beside_the_right_one_is_removed_and_the_right_one_kept(self) -> None:
+        other = "99999999-0000-0000-0000-000000000009"
+        plan = plan_member_repairs([stored(1, "Rocky", other, RELEASE[1])], [proposed(1, "Rocky"), proposed(2, "Rocky II")])
+        decision = plan.decisions[0]
+        self.assertEqual(decision.outcome, OUTCOME_REPOINTED)
+        self.assertEqual(decision.previous_release_ids, (other,))
+
+    def test_every_stale_id_is_listed(self) -> None:
+        one, two = "99999999-0000-0000-0000-000000000001", "99999999-0000-0000-0000-000000000002"
+        plan = plan_member_repairs([stored(1, "Rocky", one, two)], [proposed(1, "Rocky"), proposed(2, "Rocky II")])
+        self.assertEqual(plan.decisions[0].previous_release_ids, (one, two))
+
+    def test_nothing_is_replaced_when_the_source_names_no_release(self) -> None:
+        # An id is never removed without a replacement.
+        other = "99999999-0000-0000-0000-000000000009"
+        plan = plan_member_repairs([stored(1, "Rocky", other)], [ProposedMember(1, "Rocky"), ProposedMember(2, "Rocky II")])
+        decision = plan.decisions[0]
+        self.assertEqual(decision.outcome, OUTCOME_NO_RELEASE_ID)
+        self.assertEqual(decision.previous_release_ids, ())
+
+    def test_a_member_the_box_cannot_be_matched_to_keeps_its_id(self) -> None:
+        other = "99999999-0000-0000-0000-000000000009"
+        plan = plan_member_repairs([stored(1, "Something else", other)], ROCKY_PROPOSAL)
+        decision = plan.decisions[0]
+        self.assertEqual(decision.outcome, OUTCOME_UNMATCHED)
+        self.assertEqual(decision.previous_release_ids, ())
 
     def test_a_source_that_names_no_release_cannot_identify_anyone(self) -> None:
         # The live resolver names members by title and position only. Matching them would be possible and
@@ -283,13 +319,58 @@ class RefreshBoxSetMembersTests(unittest.TestCase):
         self.assertLess(conn.events.index("commit"), conn.events.index("lookup"))
 
     def test_it_never_writes_a_format_or_touches_the_members_themselves(self) -> None:
-        conn = FakeConnection(box_set_container(), [member_row(1, "Rocky"), member_row(2, "Rocky II")])
+        other = "99999999-0000-0000-0000-000000000009"
+        conn = FakeConnection(box_set_container(), [member_row(1, "Rocky", other), member_row(2, "Rocky II")])
         self.run_refresh(conn, self.source()[:2])
         writes = [sql for sql, _ in conn.statements if sql.split(" ", 1)[0] in {"UPDATE", "DELETE", "INSERT"}]
-        self.assertTrue(writes, "expected the identifier inserts")
+        self.assertTrue(writes, "expected the identifier writes")
         for sql in writes:
-            self.assertTrue(sql.startswith("INSERT INTO movie_identifiers"), sql)
+            # The only tables it writes, and only the MovieVault `movie_id` rows of them.
+            self.assertTrue(
+                sql.startswith("INSERT INTO movie_identifiers") or sql.startswith("DELETE FROM movie_identifiers"), sql
+            )
+            self.assertFalse(sql.startswith("UPDATE"), sql)
+        for sql, params in conn.statements:
+            if sql.startswith("DELETE FROM movie_identifiers"):
+                self.assertIn("identifier_type = 'movie_id'", sql)
+                self.assertEqual(params[1], PROVIDER)
         self.assertFalse(any("format" in sql.lower() for sql in writes))
+
+    def test_a_member_that_points_outside_the_box_is_repointed_refreshed_and_announced_once(self) -> None:
+        other = "99999999-0000-0000-0000-000000000009"
+        conn = FakeConnection(
+            box_set_container(),
+            [member_row(1, "Rocky", other), member_row(2, "Rocky II", RELEASE[2]), member_row(3, "Rocky III", RELEASE[3]), member_row(4, "Rocky IV", RELEASE[4])],
+        )
+        result, calls = self.run_refresh(conn, self.source())
+        self.assertEqual(result["repointed"], 1)
+        self.assertEqual(result["identified"], 0)
+        self.assertEqual(result["counts"][OUTCOME_REPOINTED], 1)
+        self.assertEqual(result["counts"][OUTCOME_ALREADY_IDENTIFIED], 3)
+        # Every matched member is refreshed from MovieVault, the re-pointed one included.
+        self.assertEqual(result["jobsQueued"], 4)
+        self.assertEqual(sorted(payload["movieId"] for _, payload in calls["jobs"]), [f"movie-{n}" for n in (1, 2, 3, 4)])
+        # One sync change, for the member whose identifiers changed.
+        self.assertEqual(calls["emitted"], [("movie-1", "upsert")])
+        deletes = [params for sql, params in conn.statements if sql.startswith("DELETE FROM movie_identifiers")]
+        self.assertEqual(deletes, [("movie-1", PROVIDER, [other])])
+        inserts = [params for sql, params in conn.statements if sql.startswith("INSERT INTO movie_identifiers")]
+        self.assertEqual(inserts, [("movie-1", PROVIDER, RELEASE[1])])
+        # The delete comes before the insert, so the member never holds two ids for a moment.
+        order = [sql.split(" ", 1)[0] for sql, _ in conn.statements if sql.startswith(("DELETE FROM movie_identifiers", "INSERT INTO movie_identifiers"))]
+        self.assertEqual(order, ["DELETE", "INSERT"])
+        member = result["members"][0]
+        self.assertEqual((member["outcome"], member["releaseId"], member["previousReleaseIds"]), (OUTCOME_REPOINTED, RELEASE[1], [other]))
+
+    def test_a_correct_set_is_refreshed_without_writing_any_identifier(self) -> None:
+        conn = FakeConnection(
+            box_set_container(),
+            [member_row(n, t, RELEASE[n]) for n, t in ((1, "Rocky"), (2, "Rocky II"), (3, "Rocky III"), (4, "Rocky IV"))],
+        )
+        result, calls = self.run_refresh(conn, self.source())
+        self.assertEqual(result["jobsQueued"], 4)
+        self.assertEqual(calls["emitted"], [])
+        self.assertFalse(any(sql.split(" ", 1)[0] in {"INSERT", "DELETE", "UPDATE"} for sql, _ in conn.statements))
 
     def test_a_member_with_a_refresh_already_pending_is_not_queued_twice(self) -> None:
         conn = FakeConnection(
@@ -299,21 +380,34 @@ class RefreshBoxSetMembersTests(unittest.TestCase):
         )
         result, calls = self.run_refresh(conn, self.source()[:2])
         self.assertEqual(result["identified"], 0)
+        self.assertEqual(result["repointed"], 0)
         self.assertEqual(result["jobsQueued"], 1)
         self.assertEqual([payload["movieId"] for _, payload in calls["jobs"]], ["movie-2"])
         self.assertEqual(calls["emitted"], [])
 
-    def test_unmatched_and_conflicting_members_are_reported_and_not_queued(self) -> None:
+    def test_unmatched_members_are_reported_and_not_queued_and_keep_their_id(self) -> None:
+        other = "99999999-0000-0000-0000-000000000009"
         conn = FakeConnection(
             box_set_container(),
-            [member_row(1, "Rocky", "99999999-0000-0000-0000-000000000009"), member_row(2, "Something else"), member_row(3, "Rocky III")],
+            [member_row(1, "Rocky", other), member_row(2, "Something else", other), member_row(3, "Rocky III")],
         )
         result, calls = self.run_refresh(conn, self.source())
-        self.assertEqual(result["counts"][OUTCOME_CONFLICT], 1)
+        self.assertEqual(result["counts"][OUTCOME_REPOINTED], 1)
         self.assertEqual(result["counts"][OUTCOME_UNMATCHED], 1)
         self.assertEqual(result["counts"][OUTCOME_IDENTIFIED], 1)
-        self.assertEqual(result["jobsQueued"], 1)
+        self.assertEqual(result["jobsQueued"], 2)
         self.assertEqual(result["proposalOnlyTitles"], ["Rocky II", "Rocky IV"])
+        # Only the matched member lost an id; the unmatched one still holds its own.
+        deletes = [params[0] for sql, params in conn.statements if sql.startswith("DELETE FROM movie_identifiers")]
+        self.assertEqual(deletes, ["movie-1"])
+
+    def test_a_source_without_releases_removes_nothing(self) -> None:
+        other = "99999999-0000-0000-0000-000000000009"
+        conn = FakeConnection(box_set_container(), [member_row(1, "Rocky", other), member_row(2, "Rocky II", other)])
+        result, calls = self.run_refresh(conn, [{"position": 1, "title": "Rocky"}, {"position": 2, "title": "Rocky II"}])
+        self.assertEqual(result["counts"][OUTCOME_NO_RELEASE_ID], 2)
+        self.assertEqual(result["jobsQueued"], 0)
+        self.assertFalse(any(sql.split(" ", 1)[0] in {"INSERT", "DELETE", "UPDATE"} for sql, _ in conn.statements))
 
     def test_a_container_that_is_not_a_box_set_is_refused_with_a_stable_code(self) -> None:
         conn = FakeConnection(box_set_container(kind="collection"), [])
@@ -352,6 +446,9 @@ class PwaWiringTests(unittest.TestCase):
         source = open(next_views_ui.__file__, encoding="utf-8").read()
         self.assertIn("/box-set/refresh", source)
         self.assertIn("containerDetail.boxSetRefreshResult", source)
+        # The count of linked members includes the re-pointed ones, and a conflict no longer exists.
+        self.assertIn("counts.repointed", source)
+        self.assertNotIn("counts.conflict", source)
         # The container refresh has already succeeded, so a set that cannot be matched is not an error.
         for code in ("box_set_refresh_no_barcode", "box_set_refresh_no_proposal", "box_set_refresh_not_a_box_set"):
             self.assertIn(code, source)

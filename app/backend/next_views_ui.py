@@ -47615,9 +47615,12 @@ def ui_preview_html(
         let tone = "good";
         if (boxSetRefresh) {
           const counts = boxSetRefresh.counts || {};
-          const notMatched = Number(counts.unmatched || 0) + Number(counts.conflict || 0) + Number(counts.no_release_id || 0);
+          const notMatched = Number(counts.unmatched || 0) + Number(counts.no_release_id || 0);
+          // Every matched member now follows the release the box names, whether it was already linked,
+          // newly linked or re-pointed from another release.
+          const linked = Number(counts.identified || 0) + Number(counts.already_identified || 0) + Number(counts.repointed || 0);
           message = tNext("containerDetail.boxSetRefreshResult", "Metadata refreshed. Box-set members linked to MovieVault: {linked}. Not matched: {unmatched}.")
-            .replace("{linked}", String(Number(counts.identified || 0)))
+            .replace("{linked}", String(linked))
             .replace("{unmatched}", String(notMatched));
           // A member that could not be matched is not an error, but "success" with nothing said about it
           // is exactly how a refresh that did nothing used to look.
