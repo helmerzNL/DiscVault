@@ -5794,7 +5794,7 @@ def apply_primary_media_update(
     with conn.cursor() as cur:
         cur.execute(
             """
-            SELECT ma.id, ma.source_url, ma.storage_key, ma.metadata
+            SELECT ma.id, ma.source_url, ma.storage_key, ma.metadata, ma.provider_id
             FROM entity_media em
             JOIN media_assets ma ON ma.id = em.media_id
             WHERE em.entity_type=%s
@@ -5854,6 +5854,37 @@ def apply_primary_media_update(
                 "sourceUrl": source_url,
                 "providerId": provider_id,
                 "lockedPrimary": True,
+                "option": linked,
+            }
+        # A MovieVault cover, once it is the primary, is not replaced by another provider's image. The
+        # artwork rule puts MovieVault first and lets a provider's image stand in only where MovieVault
+        # has nothing: a refresh in which MovieVault has nothing to offer (the cover is not cached yet,
+        # was withdrawn, or the catalogue could not be read) says nothing about a cover the title already
+        # shows. The image is kept as an option in the gallery. MovieVault's own newer cover still
+        # replaces its older one, and so does the user's choice, which does not come through here.
+        current_provider = (
+            (current["provider_id"] if isinstance(current, dict) else current[4]) if current else None
+        )
+        if (
+            current
+            and current_provider == MOVIEVAULT_V2_PLUGIN_ID
+            and provider_id != MOVIEVAULT_V2_PLUGIN_ID
+        ):
+            linked = link_media_option(
+                conn,
+                entity_type=entity_type,
+                entity_id=movie_id,
+                kind=kind,
+                source_url=source_url,
+                provider_id=provider_id,
+                sort_order=30,
+            )
+            return {
+                "kind": kind,
+                "mediaId": str(media_id),
+                "sourceUrl": source_url,
+                "providerId": provider_id,
+                "keptPrimary": MOVIEVAULT_V2_PLUGIN_ID,
                 "option": linked,
             }
         cur.execute(
