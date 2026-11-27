@@ -5,12 +5,15 @@ scanned while MovieVault still called one disc a Blu-ray. MovieVault was correct
 had been imported without its release id, so its refresh asked MovieVault about a release it could
 not name and reported success. The format never arrived.
 
-A later server showed the second half of the same problem: the member Rocky I carried the id of a
-single-disc Blu-ray release that is not one of the box's four, so the refresh asked about the wrong
-disc. The box names its own releases, so the refresh now replaces such an id (`repointed`) instead of
-reporting a conflict and leaving it.
+A later server showed two more problems. The member Rocky I held one MovieVault id, the stale release of
+a single-disc Blu-ray, written when the box was imported from a catalogue copy that was not yet current.
+The box in the catalogue names another release. The refresh did not move it: the first version asked for
+the box proposal without `force`, so it read the answer the lookup cache had stored for six hours, which
+still named the stale release, and counted the member as already linked. The box page said "0 linked, 0
+not matched". The route now forces the lookup. And because the box names its own releases, the refresh
+removes every other MovieVault id of a matched member (`repointed`) instead of reporting a conflict.
 
-These tests pin four things:
+These tests pin five things:
 
 * the matching: what is paired with what, inside one box, and what is left alone;
 * the identity outcome per member, including the one that must not be guessed (`no_release_id`: no
@@ -18,7 +21,8 @@ These tests pin four things:
 * that the refresh writes MovieVault `movie_id` identifiers and queues jobs and does nothing else. In
   particular it never writes a format: the queued refresh applies the format rule of identity-routing
   5a, and a second copy of that rule here would drift from it;
-* that a re-point is undoable: the ids it replaced come back in the result.
+* that a re-point is undoable: the ids it replaced come back in the result;
+* that the route's lookup bypasses the lookup cache, and why that is needed.
 """
 
 from __future__ import annotations
@@ -133,6 +137,22 @@ class PlanMemberRepairsTests(unittest.TestCase):
         decision = plan.decisions[0]
         self.assertEqual(decision.outcome, OUTCOME_REPOINTED)
         self.assertEqual(decision.previous_release_ids, (other,))
+
+    def test_the_refresh_would_have_asked_about_the_stale_id_first(self) -> None:
+        # The mechanism behind "already linked, still wrong": identifiers are read in
+        # `provider_id, identifier_type, identifier` order and the first MovieVault one is used. The
+        # stale Blu-ray release sorts before the box's release, so holding the right id was not enough.
+        from app.backend.dedup_identity import select_movievault_identifier
+
+        stale, right = "265825d0-b52b-4014-b32b-9568d3fbd1fa", "5c8b5b9e-3323-4d82-821b-f25f29dabcd2"
+        rows = [
+            {"provider_id": PROVIDER, "identifier_type": "movie_id", "identifier": value}
+            for value in sorted([right, stale])
+        ]
+        self.assertEqual(select_movievault_identifier(rows), stale)
+        plan = plan_member_repairs([stored(1, "Rocky", right, stale)], [proposed(1, "Rocky", right), proposed(2, "Rocky II")])
+        self.assertEqual(plan.decisions[0].outcome, OUTCOME_REPOINTED)
+        self.assertEqual(plan.decisions[0].previous_release_ids, (stale,))
 
     def test_every_stale_id_is_listed(self) -> None:
         one, two = "99999999-0000-0000-0000-000000000001", "99999999-0000-0000-0000-000000000002"
@@ -435,6 +455,43 @@ class RefreshBoxSetMembersTests(unittest.TestCase):
         with self.assertRaises(NextApiError) as caught:
             self.run_refresh(FakeConnection(None, []), [])
         self.assertEqual(caught.exception.status_code, 404)
+
+
+class LookupCacheTests(unittest.TestCase):
+    """The route must ask the catalogue, not the cache.
+
+    The cache answers `search_barcode` and `box_set_candidates` for six hours. A box set refreshed
+    from an answer cached before the catalogue copy was current keeps the stale release of a member
+    and still reports success.
+    """
+
+    def test_the_cache_serves_a_stale_answer_unless_the_lookup_is_forced(self) -> None:
+        from unittest import mock
+
+        from app.backend import next_metadata as metadata
+
+        stale = {"status": "ok", "result": {"boxSet": {"members": [{"releaseId": "stale"}]}}}
+        fresh = {"status": "ok", "result": {"boxSet": {"members": [{"releaseId": "fresh"}]}}}
+        for entrypoint in ("box_set_candidates", "search_barcode"):
+            self.assertIn(entrypoint, metadata.CACHEABLE_LOOKUP_ENTRYPOINTS)
+            with mock.patch.object(metadata, "read_metadata_lookup_cache", return_value=stale), \
+                    mock.patch.object(metadata, "write_metadata_lookup_cache"), \
+                    mock.patch.object(metadata, "release_read_transaction"), \
+                    mock.patch.object(metadata, "run_plugin_entrypoint", return_value=fresh) as asked:
+                unforced = metadata.run_cached_plugin_entrypoint(object(), "movievault_v2", entrypoint, {"barcode": "1"}, {})
+                forced = metadata.run_cached_plugin_entrypoint(object(), "movievault_v2", entrypoint, {"barcode": "1"}, {}, force=True)
+            self.assertIs(unforced, stale, entrypoint)
+            self.assertIs(forced, fresh, entrypoint)
+            self.assertEqual(asked.call_count, 1, "only the forced call reached the plugin")
+
+    def test_the_box_set_route_forces_its_lookup(self) -> None:
+        source = open(os.path.join(repo_root, "app", "backend", "next_app.py"), encoding="utf-8").read()
+        start = source.index("def container_box_set_refresh(")
+        end = source.index('@flask_app.get("/api/next/containers/<container_id>/view")', start)
+        route = source[start:end]
+        call = route[route.index("lookup_metadata_sources("):]
+        call = call[: call.index(")") + 1]
+        self.assertIn("force=True", call)
 
 
 class PwaWiringTests(unittest.TestCase):

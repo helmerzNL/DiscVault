@@ -40318,8 +40318,12 @@ def register_routes(flask_app: Flask) -> None:
                 raise NextApiError("Permission required: collection.edit_all", 403)
 
             def box_set_members_for_barcode(lookup_conn, barcode, lookup_actor):
+                # `force`: this is an explicit refresh, so it must not act on an answer the lookup cache
+                # stored (for six hours) before the catalogue copy was current. Without it the route
+                # read the proposal cached by an earlier lookup of the same barcode, kept seeing the
+                # stale release of a member, and reported success.
                 metadata_result = lookup_metadata_sources(
-                    lookup_conn, {"barcode": barcode, "detectBoxSets": True}, lookup_actor
+                    lookup_conn, {"barcode": barcode, "detectBoxSets": True}, lookup_actor, force=True
                 )
                 proposal = metadata_box_set_proposal(metadata_result)
                 return box_set_proposal_members(proposal) if proposal else []
