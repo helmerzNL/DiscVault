@@ -106,6 +106,8 @@ try:
     from .next_metadata import normalize_list_field
     from .next_metadata import ensure_remote_media_asset
     from .next_metadata import ENTITY_ARTWORK_TABLES
+    from .next_metadata import apply_primary_media_update
+    from .next_movievault_v2_artwork import local_poster_url as movievault_local_poster_url
     from .next_metadata import metadata_result_summary
     from .next_metadata import apply_metadata_proposal
     from .next_metadata import preview_movie_metadata
@@ -438,6 +440,8 @@ except ImportError:  # pragma: no cover - supports gunicorn next_app:app
     from next_metadata import normalize_list_field
     from next_metadata import ensure_remote_media_asset
     from next_metadata import ENTITY_ARTWORK_TABLES
+    from next_metadata import apply_primary_media_update
+    from next_movievault_v2_artwork import local_poster_url as movievault_local_poster_url
     from next_metadata import metadata_result_summary
     from next_metadata import apply_metadata_proposal
     from next_metadata import preview_movie_metadata
@@ -22045,11 +22049,42 @@ def _find_v4_cached_poster_for_container(
     return None
 
 
+def apply_movievault_box_set_cover(
+    conn,
+    *,
+    container_id: UUID,
+    source_url: str,
+    provider_id: str = "movievault_v2",
+) -> dict[str, Any] | None:
+    """Make the catalogue's current cover of a box set the box's primary poster.
+
+    The artwork rule (App-Guidance `projects/discvault/specs/artwork-precedence.md` §2.1, last bullet) is
+    the one a title follows: MovieVault's cover replaces an older MovieVault cover, a provider's or a
+    client's cover and one aggregated from the members, and the replaced cover stays in the gallery as an
+    option. The user's choice, a hidden cover and a `poster` lock are never touched; those checks are
+    `apply_primary_media_update`'s and the caller's.
+
+    This used to be `link_local_media_asset_to_container(primary=True)`, which only honours `primary` when
+    the container has no primary poster at all. A box that had ever shown a cover, of any source, kept it
+    for good while the catalogue moved on to the current one.
+    """
+    return apply_primary_media_update(
+        conn,
+        kind="poster",
+        source_url=source_url,
+        provider_id=provider_id,
+        entity_type="container",
+        entity_id=container_id,
+    )
+
+
 def fetch_box_set_artwork_from_sources(
     conn,
     container: dict[str, Any],
     identifiers: list[dict[str, Any]] | None,
     actor: dict[str, Any] | None = None,
+    *,
+    write: bool = True,
 ) -> dict[str, Any]:
     """Pull the box-set's own poster/backdrop (and title/year) from sources.
 
@@ -22073,10 +22108,12 @@ def fetch_box_set_artwork_from_sources(
             movievault_id = movievault_id or clean_text(identifier.get("identifier"))
 
     # Check the v4 local poster cache first — if a ready display poster is
-    # already cached for this box-set's barcode or MovieVault id, link it
-    # directly and skip the external plugin call entirely.
+    # already cached for this box-set's barcode or MovieVault id, make it the
+    # box's cover (it follows the artwork rule: it replaces an older cover that
+    # is not the user's choice) and skip the external plugin call entirely.
+    # Not on a dry run, and not on a box whose poster the user locked.
     container_id_raw = container.get("id")
-    if container_id_raw and (barcode or movievault_id):
+    if write and container_id_raw and (barcode or movievault_id) and not metadata.get("poster_locked"):
         v4_poster = _find_v4_cached_poster_for_container(
             conn, barcode=barcode, movievault_id=movievault_id
         )
@@ -22084,14 +22121,10 @@ def fetch_box_set_artwork_from_sources(
             try:
                 container_uuid = UUID(str(container_id_raw))
                 media_asset_uuid = UUID(v4_poster["media_asset_id"])
-                link_local_media_asset_to_container(
+                apply_movievault_box_set_cover(
                     conn,
                     container_id=container_uuid,
-                    kind="poster",
-                    media_asset_id=media_asset_uuid,
-                    provider_id="movievault_v2",
-                    sort_order=0,
-                    primary=True,
+                    source_url=movievault_local_poster_url(media_asset_uuid),
                 )
             except (ValueError, TypeError):
                 pass  # bad UUID — fall through to external plugin
@@ -22210,7 +22243,7 @@ def refresh_container_metadata(
     summary = container_aggregate_summary(movies, assets, videos)
     metadata = container.get("metadata") if isinstance(container.get("metadata"), dict) else {}
     identifiers = container_identifier_entities(conn, container_id)
-    box_set_artwork = fetch_box_set_artwork_from_sources(conn, container, identifiers, actor)
+    box_set_artwork = fetch_box_set_artwork_from_sources(conn, container, identifiers, actor, write=not dry_run)
     description = clean_text(container.get("description"))
     generated_description = ""
     if summary.get("memberTitles"):
@@ -22278,15 +22311,22 @@ def refresh_container_metadata(
     if box_set_artwork:
         provider_id = clean_text(box_set_artwork.get("provider_id")) or "box_set"
         if box_set_poster:
-            link_container_media_option(
-                conn,
-                container_id=container_id,
-                kind="poster",
-                source_url=box_set_poster,
-                provider_id=provider_id,
-                sort_order=0,
-                primary=not metadata.get("poster_locked"),
-            )
+            if provider_id == "movievault_v2" and not metadata.get("poster_locked"):
+                # MovieVault's own box cover follows the artwork rule, whether the plugin sent an
+                # absolute address or the instance's own path to a cached cover.
+                apply_movievault_box_set_cover(
+                    conn, container_id=container_id, source_url=box_set_poster, provider_id=provider_id
+                )
+            else:
+                link_container_media_option(
+                    conn,
+                    container_id=container_id,
+                    kind="poster",
+                    source_url=box_set_poster,
+                    provider_id=provider_id,
+                    sort_order=0,
+                    primary=not metadata.get("poster_locked"),
+                )
         backdrop_options = []
         if box_set_backdrop:
             backdrop_options.append(box_set_backdrop)
